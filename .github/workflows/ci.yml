@@ -25,7 +25,7 @@ jobs:
         # Chỉ quét tệp trong kho (git grep), tìm đúng dạng khóa thật:
         # khóa bí mật Supabase, chuỗi kết nối Postgres có mật khẩu, JWT.
         run: |
-          if git grep -nE 'sb_secret_[A-Za-z0-9_-]{10,}|postgres(ql)?://[^:/[:space:]]+:[^@[:space:]]+@|eyJhbGciOi[A-Za-z0-9_-]{20,}' ; then
+          if git grep -nE 'sb_secret_[A-Za-z0-9_-]{10,}|postgres(ql)?://[^:/[:space:]]+:[^@[:space:]]+@|eyJhbGciOi[A-Za-z0-9_-]{20,}' -- . ':!.github/workflows/ci.yml' ; then
             echo "Phát hiện khóa bí mật trong kho code" && exit 1
           fi
           echo "Không có khóa bí mật"

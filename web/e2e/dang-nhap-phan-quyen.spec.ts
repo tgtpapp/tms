@@ -181,6 +181,22 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu lý lịch: Vi phạm')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lý lịch hành nghề (1)' })).toBeVisible();
 
+  // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
+  await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  await page.getByLabel('Tuyến của nốt').selectOption({ label: 'Hố Nai – Vũng Tàu (HN-VT)' });
+  await page.getByLabel('Giờ xuất bến').fill('07:00');
+  await page.getByRole('button', { name: 'Thêm nốt' }).click();
+  await expect(page.getByText('Đã thêm nốt 07:00, tạo 8 chuyến')).toBeVisible();
+  await page.getByRole('button', { name: 'Xếp xe 07:00 Hố Nai – Vũng Tàu' }).click();
+  await page.getByRole('combobox', { name: /^Xe/ }).selectOption({ label: '51B-123.45' });
+  await page.getByRole('combobox', { name: /^Lái xe 1/ }).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Lưu xếp xe' }).click();
+  await expect(page.getByText('Cần lưu ý trước khi xếp:')).toBeVisible();
+  await page.getByLabel('Lý do vẫn xếp').fill('Đang bổ sung giấy tờ');
+  await page.getByRole('button', { name: 'Vẫn lưu' }).click();
+  await expect(page.getByText('Đã xếp xe cho chuyến')).toBeVisible();
+  await expect(page.getByText('Đủ xe + lái')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
@@ -205,6 +221,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   await expect(page.getByText('Nguyễn Văn Tài', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  await expect(page.getByText('Đủ xe + lái')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thêm nốt' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Xếp xe/ })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

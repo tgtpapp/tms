@@ -22,6 +22,13 @@ const SALE_SETTINGS = [
 
 type SaleKey = (typeof SALE_SETTINGS)[number]['key'];
 const DOC_WARN = 'giay_to.canh_bao_truoc_ngay';
+/** Điều hành. Giới hạn giờ lái theo Luật TTATGT đường bộ 2024, đã sửa bởi Luật 118/2025 (cần xác minh) → để chỉnh được. */
+const DISPATCH_SETTINGS = [
+  { key: 'chuyen.tao_truoc_ngay', label: 'Tự tạo chuyến trước (ngày, tối đa 365)', min: 1, max: 365 },
+  { key: 'lai_xe.gio_lien_tuc_toi_da', label: 'Giờ lái liên tục tối đa', min: 1, max: 12 },
+  { key: 'lai_xe.gio_ngay_toi_da', label: 'Giờ lái tối đa trong ngày', min: 1, max: 24 },
+  { key: 'lai_xe.gio_tuan_toi_da', label: 'Giờ lái tối đa trong tuần', min: 1, max: 168 },
+] as const;
 
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
 export function SettingsScreen() {
@@ -84,6 +91,22 @@ export function SettingsScreen() {
     await load();
   }
 
+  async function saveDispatch(e: FormEvent) {
+    e.preventDefault();
+    const rows = [];
+    for (const d of DISPATCH_SETTINGS) {
+      const v = Number(sale[d.key]);
+      if (!Number.isInteger(v) || v < d.min || v > d.max) return toast('error', `${d.label}: số nguyên từ ${d.min} đến ${d.max}`);
+      rows.push({ key: d.key, value: v });
+    }
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert(rows, { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu cấu hình điều hành');
+    await load();
+  }
+
   async function saveDoc(e: FormEvent) {
     e.preventDefault();
     const v = Number(sale[DOC_WARN]);
@@ -123,6 +146,17 @@ export function SettingsScreen() {
           ))}
         </div>
         <button className="btn primary" disabled={busy}>Lưu cấu hình bán vé</button>
+      </form>
+      <form className="card form" onSubmit={(e) => void saveDispatch(e)}>
+        <h2>Điều hành</h2>
+        {DISPATCH_SETTINGS.map((d) => (
+          <label key={d.key}>{d.label}
+            <input type="number" inputMode="numeric" min={d.min} max={d.max} step={1}
+                   value={sale[d.key] ?? ''} onChange={(e) => setSale({ ...sale, [d.key]: e.target.value })} required />
+          </label>
+        ))}
+        <p className="muted small">Giới hạn giờ lái: Luật TTATGT đường bộ 2024 (Điều 64), đã được sửa bởi Luật số 118/2025 từ 01/7/2026 – cần xác minh con số đang áp dụng.</p>
+        <button className="btn primary" disabled={busy}>Lưu cấu hình điều hành</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDoc(e)}>
         <h2>Giấy tờ</h2>

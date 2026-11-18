@@ -8,7 +8,7 @@
 | Giai đoạn | Nội dung | Trạng thái |
 | --- | --- | --- |
 | 1 | Phân tích & thiết kế | Đã duyệt 14/11/2026 |
-| 2 | Nền tảng SaaS: đăng nhập, nhà xe, chi nhánh, người dùng, phân quyền | Đang làm |
+| 2 | Nền tảng SaaS: đăng nhập, nhà xe, chi nhánh, người dùng, phân quyền, cấu hình, vai trò, nhật ký | Xong 18/11/2026 (tổ chức + nhà xe tự đăng ký để GĐ 8) |
 | 3 | Tuyến, xe, ghế, chuyến, lái xe, nhân viên, đại lý, hồ sơ giấy tờ | Chưa |
 | 4 | Kho ghế, bán vé quầy, QR chuyển khoản, đổi/hủy/hoàn | Chưa |
 | 5 | Marketplace | Chưa |

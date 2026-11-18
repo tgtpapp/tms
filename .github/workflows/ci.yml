@@ -94,9 +94,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+      - name: Kiểm tra khóa bí mật đã khai báo
+        run: |
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "Thiếu secret SUPABASE_ACCESS_TOKEN"; exit 1; }
+          [ -n "$SUPABASE_DB_PASSWORD" ] || { echo "Thiếu secret SUPABASE_DB_PASSWORD"; exit 1; }
       - name: Kết nối project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
       - name: Đưa migration mới lên (chỉ thêm, không xóa dữ liệu)
-        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --remote -p "$SUPABASE_DB_PASSWORD"
       - name: Đưa Edge Function lên
         run: supabase functions deploy admin-users --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt

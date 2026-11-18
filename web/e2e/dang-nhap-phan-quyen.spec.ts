@@ -77,7 +77,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Mật khẩu', { exact: true }).fill('chub123');
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (1)' })).toBeVisible();
-  await expect(page.getByText('Nhà xe B')).toBeVisible();
+  await expect(page.getByText('Nhà xe B', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Chi nhánh & phòng vé' }).click();
   await expect(page.getByRole('heading', { name: 'Chi nhánh (0)' })).toBeVisible();
 

@@ -8,3 +8,7 @@ major_version = 17
 # Hàm quản lý tài khoản tự kiểm tra phiên đăng nhập bên trong (gọi my_account_context)
 [functions.admin-users]
 verify_jwt = false
+
+# AI đọc giấy tờ: tự kiểm tra phiên đăng nhập + quyền bên trong
+[functions.doc-reader]
+verify_jwt = false

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
-import { errMsg, rpc, supabase } from '../lib/supabase';
+import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { AddVehicle, DOC_COLS, DocAlerts, VEHICLE_COLS, VehicleList, type Doc, type Vehicle } from './VehicleList';
 
 type BodyStyle = 'ghe_ngoi' | 'giuong_nam' | 'limousine' | 'phong_nam' | 'khac';
 type Fuel = 'dau' | 'xang' | 'dien' | 'khi' | 'hybrid';
@@ -24,28 +25,50 @@ const BODY: Record<BodyStyle, string> = {
 const FUEL: Record<Fuel, string> = { dau: 'Dầu diesel', xang: 'Xăng', dien: 'Điện', khi: 'Khí (CNG/LNG)', hybrid: 'Hybrid' };
 const KIND: Record<SeatKind, string> = { ghe: 'ghế', giuong: 'giường' };
 
-export function VehiclesScreen({ perms }: { perms: Permissions }) {
+export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
   const [types, setTypes] = useState<VehicleType[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [warnDays, setWarnDays] = useState(30);
+  const [open, setOpen] = useState<string | null>(null);
   const canEdit = perms.has('vehicle.manage');
 
   const load = useCallback(async () => {
-    const [t, s] = await Promise.all([
+    const [t, s, v, d, w] = await Promise.all([
       supabase.from('vehicle_types').select('id, code, name, brand, model_code, body_style, decks, reg_seats, reg_berths, reg_standing, curb_weight_kg, gross_weight_kg, fuel, amenities, layout_rows, layout_cols, is_active').order('code'),
       supabase.from('vehicle_type_seats').select('vehicle_type_id, label, deck, row_no, col_no, kind, is_priority, is_sellable'),
+      supabase.from('vehicles').select(VEHICLE_COLS).order('plate'),
+      supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'xe'),
+      supabase.from('tenant_settings').select('value').eq('key', 'giay_to.canh_bao_truoc_ngay').maybeSingle(),
     ]);
-    const err = t.error ?? s.error;
+    const err = t.error ?? s.error ?? v.error ?? d.error ?? w.error;
     if (err) return toast('error', err.message);
     setTypes((t.data ?? []) as VehicleType[]);
     setSeats((s.data ?? []) as Seat[]);
+    setVehicles((v.data ?? []) as Vehicle[]);
+    setDocs((d.data ?? []) as Doc[]);
+    setWarnDays(Number(w.data?.value ?? 30) || 30);
   }, [toast]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  return <VehicleTypesSection types={types} seats={seats} canEdit={canEdit} reload={load} />;
+  const tenantId = ctx.tenant_id ?? '';
+  return (
+    <>
+      <DocAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} onOpen={(id) => {
+        setOpen(id);
+        setTimeout(() => document.getElementById(`xe-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
+      }} />
+      {canEdit && <AddVehicle tenantId={tenantId} types={types} reload={load} />}
+      <VehicleList tenantId={tenantId} vehicles={vehicles} types={types} docs={docs} warnDays={warnDays} canEdit={canEdit}
+                   open={open} setOpen={setOpen} reload={load} />
+      <VehicleTypesSection types={types} seats={seats} canEdit={canEdit} reload={load} />
+    </>
+  );
 }
 
 /* ------------------------------------------------------------------ Loại xe */

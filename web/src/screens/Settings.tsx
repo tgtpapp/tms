@@ -21,6 +21,7 @@ const SALE_SETTINGS = [
 ] as const;
 
 type SaleKey = (typeof SALE_SETTINGS)[number]['key'];
+const DOC_WARN = 'giay_to.canh_bao_truoc_ngay';
 
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
 export function SettingsScreen() {
@@ -83,6 +84,18 @@ export function SettingsScreen() {
     await load();
   }
 
+  async function saveDoc(e: FormEvent) {
+    e.preventDefault();
+    const v = Number(sale[DOC_WARN]);
+    if (!Number.isInteger(v) || v < 1 || v > 180) return toast('error', 'Số ngày cảnh báo phải là số nguyên từ 1 đến 180');
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([{ key: DOC_WARN, value: v }], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu cấu hình giấy tờ');
+    await load();
+  }
+
   const setP = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, [k]: e.target.value });
 
   return (
@@ -110,6 +123,14 @@ export function SettingsScreen() {
           ))}
         </div>
         <button className="btn primary" disabled={busy}>Lưu cấu hình bán vé</button>
+      </form>
+      <form className="card form" onSubmit={(e) => void saveDoc(e)}>
+        <h2>Giấy tờ</h2>
+        <label>Cảnh báo giấy tờ sắp hết hạn trước (ngày)
+          <input type="number" inputMode="numeric" min={1} max={180} step={1} value={sale[DOC_WARN] ?? ''}
+                 onChange={(e) => setSale({ ...sale, [DOC_WARN]: e.target.value })} required />
+        </label>
+        <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
     </>
   );

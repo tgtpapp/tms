@@ -67,7 +67,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       <main className="content">
         {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
         {tab === 'routes' && <RoutesScreen perms={perms} />}
-        {tab === 'vehicles' && <VehiclesScreen perms={perms} />}
+        {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
         {tab === 'branches' && <BranchesScreen perms={perms} />}
         {tab === 'roles' && <RolesScreen perms={perms} />}
         {tab === 'settings' && <SettingsScreen />}

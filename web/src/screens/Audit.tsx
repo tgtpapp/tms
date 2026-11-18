@@ -27,6 +27,8 @@ const ENTITY: Record<string, string> = {
   route_fares: 'Giá vé',
   vehicle_types: 'Loại xe',
   vehicle_type_seats: 'Sơ đồ ghế',
+  vehicles: 'Xe',
+  documents: 'Giấy tờ',
 };
 
 const ACTION: Record<AuditRow['action'], string> = { insert: 'Thêm', update: 'Sửa', delete: 'Xóa' };
@@ -35,7 +37,7 @@ const PAGE = 50;
 
 function label(row: AuditRow): string {
   const r = row.detail?.new ?? row.detail?.old ?? {};
-  const pick = r.name ?? r.full_name ?? r.code ?? r.key ?? r.permission_code ?? '';
+  const pick = r.name ?? r.full_name ?? r.plate ?? r.code ?? r.key ?? r.permission_code ?? r.doc_type ?? '';
   return String(pick);
 }
 

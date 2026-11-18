@@ -125,6 +125,38 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu sơ đồ ghế')).toBeVisible();
   await expect(page.getByText('Sơ đồ: 6 giường · 6 chỗ bán · 1 chỗ ưu tiên')).toBeVisible();
 
+  // 5g. Thêm xe: tải ảnh giấy đăng ký (CI không có AI → báo nhập tay), nhập tay, lưu kèm giấy tờ
+  const png = { name: 'giay.png', mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') };
+  const ngay = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  await page.getByLabel('Tải ảnh Đăng ký').setInputFiles(png);
+  await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
+  await page.getByLabel('Đăng ký: Số đăng ký').fill('012345');
+  await page.getByRole('textbox', { name: 'Biển số xe' }).fill('51B-123.45');
+  await page.getByRole('combobox', { name: /^Loại xe/ }).selectOption({ label: 'Giường nằm 6 chỗ (GN6)' });
+  await page.getByRole('spinbutton', { name: 'Năm sản xuất', exact: true }).fill('2020');
+  await page.getByRole('button', { name: 'Lưu xe' }).click();
+  await expect(page.getByText('Đã thêm xe 51B-123.45')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Xe (1)' })).toBeVisible();
+
+  // 5h. Thêm kiểm định sắp hết hạn → cảnh báo; thêm bản mới → bản cũ vào "giấy cũ"
+  await page.getByRole('button', { name: 'Giấy tờ', exact: true }).click();
+  await expect(page.getByText('Số 012345')).toBeVisible();
+  await page.getByRole('button', { name: 'Thêm Kiểm định' }).click();
+  await page.getByLabel('Tải ảnh Kiểm định').setInputFiles(png);
+  await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
+  await page.getByLabel('Kiểm định: Có hiệu lực đến').fill(ngay(10));
+  await page.getByRole('button', { name: 'Lưu giấy tờ' }).click();
+  await expect(page.getByText('Đã lưu Giấy chứng nhận kiểm định (đăng kiểm)')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Cảnh báo giấy tờ/ })).toBeVisible();
+  await expect(page.getByText(/Kiểm định: Sắp hết hạn/)).toBeVisible();
+  await page.getByRole('button', { name: 'Thêm Kiểm định' }).click();
+  await page.getByLabel('Tải ảnh Kiểm định').setInputFiles(png);
+  await page.getByLabel('Kiểm định: Có hiệu lực đến').fill(ngay(200));
+  await page.getByRole('button', { name: 'Lưu giấy tờ' }).click();
+  await expect(page.getByRole('button', { name: 'Hiện giấy cũ (1)' })).toBeVisible();
+  await expect(page.getByText(/Kiểm định: Sắp hết hạn/)).toHaveCount(0);
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
@@ -144,6 +176,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Xe', exact: true }).click();
   await expect(page.getByText('Giường nằm 6 chỗ')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm loại xe' })).toHaveCount(0);
+  await expect(page.getByText('51B-123.45').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thêm xe' })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

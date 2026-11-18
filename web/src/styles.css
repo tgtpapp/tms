@@ -100,3 +100,12 @@ input:focus, select:focus { outline: 2px solid #b6d4f5; border-color: var(--prim
 .seat.selected { outline: 3px solid var(--primary); }
 .seat.sample { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin: 0 4px 0 10px; }
 .warn { margin: 0; padding: 8px 12px 8px 28px; border-radius: 8px; background: #fff8e6; color: #7a5200; }
+
+/* Giấy tờ */
+.upload { border: 2px dashed #b6d4f5; border-radius: 10px; padding: 12px; background: #f5f9fe; color: #1f2328; gap: 8px; }
+.upload input[type='file'] { min-height: auto; border: 0; padding: 0; background: none; }
+.badge.warn-badge { background: #fff1d6; color: #8a5a00; }
+.state-het_han { color: var(--danger); font-weight: 600; }
+.state-sap_het { color: #a86b00; font-weight: 600; }
+.state-thieu { color: var(--muted); }
+.state-con_han, .state-co { color: var(--ok); }

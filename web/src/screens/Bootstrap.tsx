@@ -27,12 +27,23 @@ export function BootstrapScreen({ signedIn, onDone }: { signedIn: boolean; onDon
     if (password !== confirm) return setError('Mật khẩu nhập lại không khớp');
     setBusy(true);
     try {
+      // Email đã có tài khoản (đã đăng ký / đã xác nhận trước đó) → đăng nhập luôn.
+      const signIn = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (signIn.data.session) {
+        await bootstrap();
+        return;
+      }
+      if (signIn.error && /confirm/i.test(signIn.error.message)) {
+        setWaitingEmail(true);
+        return;
+      }
       const { data, error: err } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: { emailRedirectTo: window.location.origin },
       });
-      if (err) throw new Error(err.message);
+      if (err) throw new Error(/already|registered/i.test(err.message)
+        ? 'Email này đã có tài khoản nhưng mật khẩu không đúng' : err.message);
       if (!data.session) setWaitingEmail(true);
       else await bootstrap();
     } catch (e2) {
@@ -74,7 +85,7 @@ export function BootstrapScreen({ signedIn, onDone }: { signedIn: boolean; onDon
     <Centered>
       <form className="card form narrow" onSubmit={submit}>
         <h2>Khởi tạo hệ thống</h2>
-        <p className="muted small">Tạo tài khoản Super Admin (chủ nền tảng). Màn hình này chỉ xuất hiện một lần.</p>
+        <p className="muted small">Tạo tài khoản Super Admin (chủ nền tảng). Nếu email đã đăng ký trước đó, nhập đúng mật khẩu cũ. Màn hình này chỉ xuất hiện một lần.</p>
         <label>
           Email Super Admin
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" required />

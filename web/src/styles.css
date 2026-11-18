@@ -86,3 +86,17 @@ input:focus, select:focus { outline: 2px solid #b6d4f5; border-color: var(--prim
 .stop-row select { flex: 1 1 160px; min-height: 40px; }
 .stop-row input[type='number'] { width: 90px; min-height: 40px; }
 .price-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Sơ đồ ghế */
+.decks { display: flex; gap: 16px; flex-wrap: wrap; }
+.deck { display: flex; flex-direction: column; gap: 6px; }
+.seat-grid { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fafbfc; }
+.seat { height: 44px; border-radius: 8px; border: 1px dashed #d0d7de; background: transparent; font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0; cursor: pointer; color: #1f2328; }
+.seat:disabled { cursor: default; }
+.seat.ghe { border: 1px solid #8cb4e0; background: #e8f1fb; }
+.seat.giuong { border: 1px solid #9fcf9b; background: #e9f6e8; height: 56px; }
+.seat.priority { box-shadow: inset 0 0 0 2px #e3a008; }
+.seat.nosell { background: #eceff2; border-color: #c4cbd2; color: var(--muted); }
+.seat.selected { outline: 3px solid var(--primary); }
+.seat.sample { display: inline-block; width: 16px; height: 16px; vertical-align: middle; margin: 0 4px 0 10px; }
+.warn { margin: 0; padding: 8px 12px 8px 28px; border-radius: 8px; background: #fff8e6; color: #7a5200; }

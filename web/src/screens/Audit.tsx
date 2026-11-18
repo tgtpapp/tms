@@ -21,6 +21,12 @@ const ENTITY: Record<string, string> = {
   role_permissions: 'Quyền của vai trò',
   user_roles: 'Gán vai trò',
   tenant_settings: 'Cấu hình',
+  stops: 'Điểm dừng',
+  routes: 'Tuyến',
+  route_stops: 'Điểm dừng của tuyến',
+  route_fares: 'Giá vé',
+  vehicle_types: 'Loại xe',
+  vehicle_type_seats: 'Sơ đồ ghế',
 };
 
 const ACTION: Record<AuditRow['action'], string> = { insert: 'Thêm', update: 'Sửa', delete: 'Xóa' };

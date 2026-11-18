@@ -104,9 +104,31 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu giá chặng' }).click();
   await expect(page.getByText('BX Hố Nai ⇄ Bà Rịa: 120.000 đ')).toBeVisible();
 
+  // 5f. Loại xe giường nằm + vẽ sơ đồ ghế bằng "Tạo nhanh", đánh dấu chỗ ưu tiên
+  await page.getByRole('button', { name: 'Xe', exact: true }).click();
+  await page.getByLabel('Mã loại xe').fill('GN6');
+  await page.getByLabel('Tên loại xe').fill('Giường nằm 6 chỗ');
+  await page.getByLabel('Kiểu xe').selectOption({ label: 'Giường nằm' });
+  await page.getByLabel('Chỗ ngồi', { exact: true }).fill('1');
+  await page.getByLabel('Chỗ nằm', { exact: true }).fill('6');
+  await page.getByRole('button', { name: 'Thêm loại xe' }).click();
+  await expect(page.getByText('Đã thêm loại xe Giường nằm 6 chỗ')).toBeVisible();
+  await page.getByRole('button', { name: 'Sơ đồ ghế', exact: true }).click();
+  await page.getByRole('button', { name: 'Sửa sơ đồ' }).click();
+  await page.getByLabel('Số hàng', { exact: true }).fill('3');
+  await page.getByLabel('Số cột', { exact: true }).fill('3');
+  await page.getByLabel('Cột lối đi').fill('2');
+  await page.getByRole('button', { name: 'Tạo nhanh' }).click();
+  await page.getByRole('button', { name: 'Chỗ ưu tiên' }).click();
+  await page.getByRole('button', { name: /^Tầng 1 hàng 1 cột 1/ }).click();
+  await page.getByRole('button', { name: 'Lưu sơ đồ' }).click();
+  await expect(page.getByText('Đã lưu sơ đồ ghế')).toBeVisible();
+  await expect(page.getByText('Sơ đồ: 6 giường · 6 chỗ bán · 1 chỗ ưu tiên')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
+  await expect(page.getByText('Sửa Sơ đồ ghế').first()).toBeVisible();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
 
   // 6. Nhân viên đăng nhập: thấy chi nhánh, không có mục Người dùng, không thêm được chi nhánh
@@ -119,6 +141,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Tuyến', exact: true }).click();
   await expect(page.getByText('Hố Nai – Vũng Tàu')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm tuyến' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Xe', exact: true }).click();
+  await expect(page.getByText('Giường nằm 6 chỗ')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thêm loại xe' })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

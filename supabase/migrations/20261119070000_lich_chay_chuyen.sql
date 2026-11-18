@@ -472,6 +472,7 @@ declare
   v_age int;
   v_other numeric;
   v_docname text;
+  v_life int;
 begin
   if v_tid is null or not app.has_permission('trip.manage') then
     raise exception 'Không có quyền điều hành' using errcode = '42501';
@@ -511,9 +512,9 @@ begin
       v_block := v_block || format('Xe %s chỉ đăng ký chạy hợp đồng, không chạy tuyến cố định', v_veh.plate);
     end if;
     -- Niên hạn (NĐ 158/2024): tuyến > 300 km: 15 năm; còn lại 20 năm (cách tính năm cuối: cần xác minh)
+    v_life := case when coalesce(v_route.distance_km, 0) > 300 then 15 else 20 end;
     if v_veh.manufacture_year is not null
-       and extract(year from v_trip.service_date) > v_veh.manufacture_year
-                                                   + case when coalesce(v_route.distance_km, 0) > 300 then 15 else 20 end then
+       and extract(year from v_trip.service_date) > v_veh.manufacture_year + v_life then
       v_block := v_block || format('Xe %s quá niên hạn chạy tuyến này (sản xuất năm %s)', v_veh.plate, v_veh.manufacture_year);
     end if;
     for d in select code, name from public.document_types where code in ('kiem_dinh', 'bh_tnds', 'phu_hieu') order by sort loop
@@ -585,7 +586,8 @@ begin
       select birth_date, gender into v_birth, v_gender from public.staff_private where staff_id = v_s.id and tenant_id = v_tid;
       if v_need = 'D' and v_birth is not null and v_gender is not null then
         v_age := extract(year from age(v_trip.service_date, v_birth));
-        if v_age >= case v_gender when 'nam' then 57 else 55 end then
+        v_life := case v_gender when 'nam' then 57 else 55 end;   -- tuổi tối đa
+        if v_age >= v_life then
           v_block := v_block || format('%s đã %s tuổi, quá tuổi lái xe trên 29 chỗ / giường nằm', v_s.full_name, v_age);
         end if;
       end if;

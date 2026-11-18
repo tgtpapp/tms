@@ -52,7 +52,8 @@ const stamp = () => {
 /** Tải tệp lên Storage. Tên tệp chuẩn: BIENSO_loaigiay_ngaygio_stt.ext */
 export async function uploadFiles(tenantId: string, ownerKind: 'xe', ownerId: string, plate: string, docType: string,
                                   files: PreparedFile[]): Promise<string[]> {
-  const base = `${plateKey(plate) || 'XE-MOI'}_${docType}_${stamp()}`;
+  // thêm 4 ký tự ngẫu nhiên để 2 lần tải trong cùng 1 giây không trùng tên
+  const base = `${plateKey(plate) || 'XE-MOI'}_${docType}_${stamp()}_${crypto.randomUUID().slice(0, 4)}`;
   const paths: string[] = [];
   for (let i = 0; i < files.length; i++) {
     const path = `${tenantId}/${ownerKind}/${ownerId}/${base}_${i + 1}.${files[i].ext}`;

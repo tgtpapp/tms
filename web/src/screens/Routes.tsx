@@ -321,6 +321,12 @@ function FareSection(props: { route: Route; data: Data; canFare: boolean; saved:
     .map((k) => { const [a, b] = k.split('|'); return currentFare(fares, route.id, a, b); })
     .filter((f): f is Fare => !!f && f.price != null);
   const upcoming = fares.filter((f) => f.effective_from > today());
+  // Hiện cặp điểm theo thứ tự chiều đi của tuyến (database lưu cặp theo mã, không theo chiều)
+  const seqOf = (id: string | null) => saved.find((s) => s.stop_id === id)?.seq ?? 0;
+  const pairName = (f: Fare) => {
+    const [a, b] = seqOf(f.from_stop_id) <= seqOf(f.to_stop_id) ? [f.from_stop_id, f.to_stop_id] : [f.to_stop_id, f.from_stop_id];
+    return `${stopName(a)} ⇄ ${stopName(b)}`;
+  };
 
   async function setFare(from: string | null, to: string | null, price: number | null, date: string, ok: string) {
     setBusy(true);
@@ -346,7 +352,7 @@ function FareSection(props: { route: Route; data: Data; canFare: boolean; saved:
         <ul className="list">
           {pairsNow.map((f) => (
             <li key={f.id} className="price-row">
-              <span>{stopName(f.from_stop_id)} ⇄ {stopName(f.to_stop_id)}: <b>{money(f.price)}</b></span>
+              <span>{pairName(f)}: <b>{money(f.price)}</b></span>
               {canFare && (
                 <button className="btn small" disabled={busy}
                         onClick={() => void setFare(f.from_stop_id, f.to_stop_id, null, today(), 'Đã bỏ giá riêng, chặng này dùng giá toàn tuyến')}>Bỏ giá riêng</button>
@@ -356,7 +362,7 @@ function FareSection(props: { route: Route; data: Data; canFare: boolean; saved:
         </ul>
       )}
       {upcoming.length > 0 && (
-        <p className="muted small">Sắp áp dụng: {upcoming.map((f) => `${f.from_stop_id ? `${stopName(f.from_stop_id)} ⇄ ${stopName(f.to_stop_id)}` : 'Toàn tuyến'} ${money(f.price)} từ ${fmtDate(f.effective_from)}`).join('; ')}</p>
+        <p className="muted small">Sắp áp dụng: {upcoming.map((f) => `${f.from_stop_id ? pairName(f) : 'Toàn tuyến'} ${money(f.price)} từ ${fmtDate(f.effective_from)}`).join('; ')}</p>
       )}
       {canFare && (
         <>
@@ -398,7 +404,7 @@ function FareSection(props: { route: Route; data: Data; canFare: boolean; saved:
         <ul className="list small">
           {fares.map((f) => (
             <li key={f.id} className="muted">
-              {fmtDate(f.effective_from)} · {f.from_stop_id ? `${stopName(f.from_stop_id)} ⇄ ${stopName(f.to_stop_id)}` : 'Toàn tuyến'} · {f.price == null ? 'bỏ giá riêng' : money(f.price)}
+              {fmtDate(f.effective_from)} · {f.from_stop_id ? pairName(f) : 'Toàn tuyến'} · {f.price == null ? 'bỏ giá riêng' : money(f.price)}
             </li>
           ))}
         </ul>

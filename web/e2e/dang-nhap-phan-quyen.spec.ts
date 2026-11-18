@@ -203,7 +203,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('51B-123.45').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm xe' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
-  await expect(page.getByText('Nguyễn Văn Tài')).toBeVisible();
+  await expect(page.getByText('Nguyễn Văn Tài', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' })).toHaveCount(0);
 
   // 7. Sai mật khẩu

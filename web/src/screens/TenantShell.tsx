@@ -4,10 +4,13 @@ import { config } from '../config';
 import { loadPermissions, type Permissions } from '../lib/permissions';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { AccountScreen } from './Account';
+import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
+import { RolesScreen } from './Roles';
+import { SettingsScreen } from './Settings';
 import { UsersScreen } from './Users';
 
-type Tab = 'users' | 'branches' | 'account';
+type Tab = 'users' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -35,6 +38,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: 'users', label: 'Người dùng', show: perms.hasAnywhere('user.read') || perms.hasAnywhere('user.manage') },
     { key: 'branches', label: 'Chi nhánh & phòng vé', show: true },
+    { key: 'roles', label: 'Vai trò', show: perms.has('role.manage') },
+    { key: 'settings', label: 'Cấu hình', show: perms.has('settings.manage') },
+    { key: 'audit', label: 'Nhật ký', show: perms.has('audit.read') },
     { key: 'account', label: 'Tài khoản của tôi', show: true },
   ];
 
@@ -57,6 +63,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       <main className="content">
         {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
         {tab === 'branches' && <BranchesScreen perms={perms} />}
+        {tab === 'roles' && <RolesScreen perms={perms} />}
+        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'audit' && <AuditScreen />}
         {tab === 'account' && <AccountScreen ctx={ctx} />}
       </main>
     </div>

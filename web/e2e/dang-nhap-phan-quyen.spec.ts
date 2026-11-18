@@ -57,6 +57,24 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (2)' })).toBeVisible();
   await expect(page.getByText('Bán vé · Toàn nhà xe')).toBeVisible();
+
+  // 5b. Cấu hình bán vé: mặc định 5 phút → đổi 7 phút
+  await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await expect(page.getByLabel('Giữ ghế tại quầy (phút)')).toHaveValue('5');
+  await page.getByLabel('Giữ ghế tại quầy (phút)').fill('7');
+  await page.getByRole('button', { name: 'Lưu cấu hình bán vé' }).click();
+  await expect(page.getByText('Đã lưu cấu hình bán vé')).toBeVisible();
+
+  // 5c. Tạo vai trò tùy chỉnh
+  await page.getByRole('button', { name: 'Vai trò', exact: true }).click();
+  await page.getByLabel('Tên vai trò').fill('Thu ngân');
+  await page.getByLabel('Xem người dùng').check();
+  await page.getByRole('button', { name: 'Tạo vai trò' }).click();
+  await expect(page.getByText('Đã tạo vai trò Thu ngân')).toBeVisible();
+
+  // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
+  await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
+  await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
 
   // 6. Nhân viên đăng nhập: thấy chi nhánh, không có mục Người dùng, không thêm được chi nhánh
@@ -64,6 +82,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Chi nhánh (1)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Người dùng' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Thêm chi nhánh' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Cấu hình', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Nhật ký', exact: true })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

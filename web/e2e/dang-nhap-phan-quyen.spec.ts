@@ -171,6 +171,15 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/GPLX: Chưa có/)).toBeVisible();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
   await expect(page.getByText('Số 079123456789')).toBeVisible();
+  // 5j. Hạng bằng theo loại xe + ghi lý lịch hành nghề (vi phạm)
+  await expect(page.getByRole('heading', { name: /^Loại xe được lái/ })).toBeVisible();
+  await expect(page.getByText(/Giường nằm 6 chỗ.*Chưa có GPLX hoặc chưa nhập hạng/)).toBeVisible();
+  await page.getByRole('button', { name: 'Thêm vào lý lịch' }).click();
+  await page.getByLabel('Vi phạm: Ngày vi phạm').fill(ngay(-30));
+  await page.getByLabel('Vi phạm: Hành vi vi phạm').fill('Dừng đỗ sai quy định');
+  await page.getByRole('button', { name: 'Lưu lý lịch' }).click();
+  await expect(page.getByText('Đã lưu lý lịch: Vi phạm')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lý lịch hành nghề (1)' })).toBeVisible();
 
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();

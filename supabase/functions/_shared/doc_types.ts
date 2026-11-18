@@ -14,6 +14,7 @@ export type OwnerKind = 'xe' | 'nhan_su';
 export interface DocTypeDef {
   code: string; owner: OwnerKind; name: string; hasExpiry: boolean; required: boolean; fields: DocField[];
   sides?: string[];   // giấy có nhiều mặt: mỗi mặt một ô tải ảnh riêng (vd: mặt trước, mặt sau)
+  record?: boolean;   // giấy của 1 dòng lý lịch hành nghề (không phải giấy tờ hiện hành)
 }
 
 const f = (key: string, label: string, kind: FieldKind = 'text'): DocField => ({ key, label, kind });
@@ -99,6 +100,26 @@ export const DOC_TYPES: DocTypeDef[] = [
              f('chuc_danh', 'Chức danh / công việc'), f('ngay_cap', 'Ngày ký', 'date'), f('hieu_luc_tu', 'Từ ngày', 'date'),
              f('het_han', 'Đến ngày (trống nếu không xác định thời hạn)', 'date')],
   },
+  // ------------------------------------------------------------ Lý lịch hành nghề lái xe (Phụ lục II, TT 36/2024)
+  // Khóa: ngay → ngày của dòng lý lịch, so_giay → số biên bản / quyết định, noi_dung → nội dung chính
+  { code: 'll_suc_khoe', owner: 'nhan_su', record: true, name: 'Theo dõi sức khỏe', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày khám', 'date'), f('noi_dung', 'Kết luận sức khỏe'), f('co_so', 'Cơ sở y tế'), f('ghi_chu', 'Bệnh / lưu ý')] },
+  { code: 'll_vi_pham', owner: 'nhan_su', record: true, name: 'Vi phạm', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày vi phạm', 'date'), f('so_giay', 'Số biên bản / quyết định xử phạt'), f('noi_dung', 'Hành vi vi phạm'),
+             f('xe.bien_so', 'Biển số xe'), f('hinh_thuc', 'Hình thức xử phạt'), f('so_tien', 'Số tiền phạt (đồng)', 'money'),
+             f('tru_diem', 'Số điểm GPLX bị trừ', 'int'), f('co_quan', 'Cơ quan xử lý')] },
+  { code: 'll_tai_nan', owner: 'nhan_su', record: true, name: 'Tai nạn giao thông', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày xảy ra', 'date'), f('so_giay', 'Số biên bản'), f('noi_dung', 'Mô tả vụ việc'), f('xe.bien_so', 'Biển số xe'),
+             f('dia_diem', 'Địa điểm'), f('thiet_hai', 'Thiệt hại'), f('trach_nhiem', 'Kết luận trách nhiệm')] },
+  { code: 'll_khen_thuong', owner: 'nhan_su', record: true, name: 'Khen thưởng', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày quyết định', 'date'), f('so_giay', 'Số quyết định'), f('noi_dung', 'Nội dung khen thưởng'),
+             f('hinh_thuc', 'Hình thức khen thưởng'), f('so_tien', 'Tiền thưởng (đồng)', 'money')] },
+  { code: 'll_ky_luat', owner: 'nhan_su', record: true, name: 'Kỷ luật', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày quyết định', 'date'), f('so_giay', 'Số quyết định'), f('noi_dung', 'Lý do kỷ luật'),
+             f('hinh_thuc', 'Hình thức kỷ luật')] },
+  { code: 'll_dao_tao', owner: 'nhan_su', record: true, name: 'Đào tạo / tập huấn', hasExpiry: false, required: false,
+    fields: [f('ngay', 'Ngày hoàn thành', 'date'), f('so_giay', 'Số giấy chứng nhận'), f('noi_dung', 'Nội dung đào tạo / tập huấn'),
+             f('co_so', 'Đơn vị tổ chức'), f('het_han', 'Có giá trị đến', 'date')] },
 ];
 
 export const docTypeOf = (code: string): DocTypeDef | undefined => DOC_TYPES.find((d) => d.code === code);

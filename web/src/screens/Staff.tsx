@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  DOC_COLS, DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
+  DOC_COLS, DocFields, DocRow, docState, FilesButton, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
+  type Values,
 } from '../components/Documents';
 import { DOC_TYPES, docTypeOf, type DocTypeDef } from '../lib/docTypes';
+import type { FieldValue } from '../lib/documents';
 import { uploadFiles } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
@@ -18,13 +20,20 @@ interface Staff {
 }
 interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; contract_type: Contract | null; note: string | null }
 interface Option { id: string; label: string }
+type RecordKind = 'suc_khoe' | 'vi_pham' | 'tai_nan' | 'khen_thuong' | 'ky_luat' | 'dao_tao';
+interface StaffRecord {
+  id: string; staff_id: string; kind: RecordKind; occurred_on: string; doc_no: string | null; title: string;
+  vehicle_id: string | null; data: Record<string, FieldValue>; files: string[];
+}
+interface LicenseRow { staff_id: string; license_class: string | null; license_expires: string | null; vehicle_type_id: string; need: string; ok: boolean; reason: string | null }
 
 const POSITION: Record<Position, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
 const CONTRACT: Record<Contract, string> = {
   khong_xac_dinh: 'Không xác định thời hạn', xac_dinh: 'Xác định thời hạn', thu_viec: 'Thử việc', thoi_vu: 'Thời vụ',
   khoan_viec: 'Khoán việc', khac: 'Khác',
 };
-const STAFF_DOCS = DOC_TYPES.filter((d) => d.owner === 'nhan_su');
+const STAFF_DOCS = DOC_TYPES.filter((d) => d.owner === 'nhan_su' && !d.record);
+const RECORD_DOCS = DOC_TYPES.filter((d) => d.owner === 'nhan_su' && d.record);
 /** Giấy bắt buộc theo chức danh (lái xe kinh doanh vận tải: GPLX, khám sức khỏe, tập huấn – cần xác minh đủ danh mục). */
 const REQUIRED: Record<Position, string[]> = {
   lai_xe: ['cccd', 'gplx', 'kham_suc_khoe', 'tap_huan'], phu_xe: ['cccd'], nhan_vien: ['cccd'],
@@ -63,18 +72,24 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [branches, setBranches] = useState<Option[]>([]);
   const [warnDays, setWarnDays] = useState(30);
   const [open, setOpen] = useState<string | null>(null);
+  const [records, setRecords] = useState<StaffRecord[]>([]);
+  const [types, setTypes] = useState<Option[]>([]);
+  const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const canEdit = perms.has('staff.manage');
 
   const load = useCallback(async () => {
-    const [s, p, d, u, b, w] = await Promise.all([
+    const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
       supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active').order('full_name'),
       supabase.from('staff_private').select('staff_id, birth_date, gender, address, contract_type, note'),
       supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
       supabase.from('branches').select('id, name').order('name'),
       supabase.from('tenant_settings').select('value').eq('key', 'giay_to.canh_bao_truoc_ngay').maybeSingle(),
+      supabase.from('staff_records').select('id, staff_id, kind, occurred_on, doc_no, title, vehicle_id, data, files').order('occurred_on', { ascending: false }),
+      supabase.from('vehicle_types').select('id, name').eq('is_active', true).order('name'),
+      supabase.rpc('license_matrix'),
     ]);
-    const err = s.error ?? p.error ?? d.error ?? b.error ?? w.error;
+    const err = s.error ?? p.error ?? d.error ?? b.error ?? w.error ?? r.error ?? vt.error ?? lm.error;
     if (err) return toast('error', err.message);
     setStaff((s.data ?? []) as Staff[]);
     setPriv((p.data ?? []) as StaffPrivate[]);
@@ -82,6 +97,9 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     setUsers(((u.data ?? []) as { id: string; full_name: string; phone: string }[]).map((x) => ({ id: x.id, label: `${x.full_name} · ${x.phone}` })));
     setBranches(((b.data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, label: x.name })));
     setWarnDays(Number(w.data?.value ?? 30) || 30);
+    setRecords((r.data ?? []) as StaffRecord[]);
+    setTypes(((vt.data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, label: x.name })));
+    setLicenses((lm.data ?? []) as LicenseRow[]);
   }, [toast]);
 
   useEffect(() => {
@@ -89,7 +107,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   }, [load]);
 
   const tenantId = ctx.tenant_id ?? '';
-  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, reload: load };
+  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load };
   return (
     <>
       {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} onOpen={(id) => {
@@ -134,7 +152,7 @@ function applyToForm(f: Form, v: Values): Form {
 interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
 interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
-  reload: () => Promise<void>;
+  records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
 }
 
 function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
@@ -345,7 +363,160 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
         ))}
       </ul>
       <OldDocs docs={mine} />
+      {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
+      <Records {...props} s={s} />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Hạng GPLX theo loại xe */
+
+function LicenseCheck({ rows, types }: { rows: LicenseRow[]; types: Option[] }) {
+  if (rows.length === 0) return null;
+  const hang = rows[0].license_class;
+  return (
+    <>
+      <h3>Loại xe được lái {hang ? `(GPLX hạng ${hang})` : ''}</h3>
+      <ul className="list small">
+        {rows.map((r) => (
+          <li key={r.vehicle_type_id} className={r.ok ? 'state-con_han' : 'state-het_han'}>
+            {r.ok ? '✓' : '✗'} {types.find((t) => t.id === r.vehicle_type_id)?.label ?? '?'} <span className="muted">(cần hạng {r.need})</span>
+            {r.reason && ` – ${r.reason}`}
+          </li>
+        ))}
+      </ul>
+      <p className="muted small">Hạng cần theo số chỗ trên giấy kiểm định (đã trừ chỗ người lái); quy đổi GPLX cấp trước 2025: cần xác minh.</p>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ Lý lịch hành nghề */
+
+const KIND_OF: Record<string, RecordKind> = {
+  ll_suc_khoe: 'suc_khoe', ll_vi_pham: 'vi_pham', ll_tai_nan: 'tai_nan', ll_khen_thuong: 'khen_thuong', ll_ky_luat: 'ky_luat', ll_dao_tao: 'dao_tao',
+};
+const defOfKind = (k: RecordKind) => RECORD_DOCS.find((d) => KIND_OF[d.code] === k)!;
+
+function recordValues(def: DocTypeDef, r: StaffRecord): Values {
+  const v: Values = {};
+  for (const x of def.fields) {
+    const raw = x.key === 'ngay' ? r.occurred_on : x.key === 'so_giay' ? r.doc_no : x.key === 'noi_dung' ? r.title
+      : x.key === 'xe.bien_so' ? r.data?.bien_so : r.data?.[x.key];
+    v[x.key] = raw == null ? '' : String(raw);
+  }
+  return v;
+}
+
+function Records(props: Common & { s: Staff }) {
+  const { s, records, canEdit, tenantId, reload } = props;
+  const toast = useToast();
+  const [filter, setFilter] = useState<RecordKind | ''>('');
+  const [form, setForm] = useState<{ id: string | null; code: string; values: Values; scanned: Scanned | null; req: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const mine = records.filter((r) => r.staff_id === s.id);
+  const shown = mine.filter((r) => !filter || r.kind === filter);
+
+  async function save() {
+    if (!form) return;
+    const def = docTypeOf(form.code)!;
+    const v = form.values;
+    if (!v.ngay) return toast('error', 'Nhập ngày');
+    if (!(v.noi_dung ?? '').trim()) return toast('error', `Nhập ${def.fields.find((x) => x.key === 'noi_dung')?.label.toLowerCase()}`);
+    setBusy(true);
+    try {
+      const data: Record<string, FieldValue> = {};
+      for (const x of def.fields) {
+        if (['ngay', 'so_giay', 'noi_dung', 'xe.bien_so'].includes(x.key)) continue;
+        const t = (v[x.key] ?? '').trim();
+        data[x.key] = t === '' ? null : x.kind === 'int' || x.kind === 'money' ? Number(t.replace(/[^0-9]/g, '')) : t;
+      }
+      const paths = !form.id && form.scanned?.files.length
+        ? await uploadFiles(tenantId, 'nhan_su', s.id, s.full_name, form.code, form.scanned.files) : [];
+      await rpc('save_staff_record', {
+        p_id: form.id, p_staff_id: s.id, p_kind: KIND_OF[form.code], p_occurred_on: v.ngay, p_doc_no: v.so_giay || null,
+        p_title: v.noi_dung, p_plate: v['xe.bien_so'] || null, p_data: data, p_files: paths, p_request_id: form.req,
+      });
+      toast('ok', `Đã lưu lý lịch: ${def.name}`);
+      setForm(null);
+      await reload();
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const def = form ? docTypeOf(form.code)! : null;
+  return (
+    <>
+      <div className="item-head">
+        <h3>Lý lịch hành nghề ({mine.length})</h3>
+        {canEdit && !form && (
+          <button className="btn small" onClick={() => setForm({ id: null, code: 'll_vi_pham', values: {}, scanned: null, req: crypto.randomUUID() })}>
+            Thêm vào lý lịch
+          </button>
+        )}
+      </div>
+      {form && def && (
+        <div className="sub form">
+          {!form.id && (
+            <select aria-label="Mục lý lịch" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value, values: {}, scanned: null })}>
+              {RECORD_DOCS.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+            </select>
+          )}
+          {!form.id && (
+            <Scanner key={form.code} def={def} onScanned={(sc) => {
+              if (sc.files.length === 0) return toast('error', sc.aiNote);
+              const values = { ...form.values };
+              for (const [k, v] of Object.entries(sc.values)) if (v) values[k] = v;
+              setForm({ ...form, values, scanned: sc });
+            }} />
+          )}
+          {!form.id && <p className="muted small">{form.scanned ? `${form.scanned.aiNote} · ${form.scanned.files.length} tệp` : 'Có biên bản / quyết định thì tải lên để AI đọc; không có thì nhập tay.'}</p>}
+          {form.scanned && form.scanned.warnings.length > 0 && <ul className="warn small">{form.scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+          <DocFields def={def} values={form.values} onChange={(values) => setForm({ ...form, values })} />
+          <div className="actions">
+            <button type="button" className="btn small primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu lý lịch'}</button>
+            <button type="button" className="btn small link" onClick={() => setForm(null)}>Hủy</button>
+          </div>
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="chips" role="group" aria-label="Lọc lý lịch">
+          <button type="button" className={filter === '' ? 'btn small primary' : 'btn small'} onClick={() => setFilter('')}>Tất cả</button>
+          {RECORD_DOCS.map((d) => {
+            const k = KIND_OF[d.code];
+            const n = mine.filter((r) => r.kind === k).length;
+            return n > 0 && (
+              <button key={d.code} type="button" className={filter === k ? 'btn small primary' : 'btn small'} onClick={() => setFilter(k)}>
+                {d.name} ({n})
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <ul className="list small">
+        {shown.map((r) => {
+          const d = defOfKind(r.kind);
+          return (
+            <li key={r.id} className="item">
+              <div className="item-head">
+                <div>
+                  <b>{fmtDate(r.occurred_on)} · {d.name}</b>{r.doc_no ? ` · Số ${r.doc_no}` : ''}
+                  <div>{r.title}{r.data?.bien_so ? ` · xe ${r.data.bien_so}` : ''}
+                    {r.data?.hinh_thuc ? ` · ${r.data.hinh_thuc}` : ''}
+                    {typeof r.data?.so_tien === 'number' ? ` · ${r.data.so_tien.toLocaleString('vi-VN')} đ` : ''}</div>
+                </div>
+                <div className="actions">
+                  <FilesButton files={r.files} />
+                  {canEdit && <button className="btn small" onClick={() => setForm({ id: r.id, code: d.code, values: recordValues(d, r), scanned: null, req: crypto.randomUUID() })}>Sửa</button>}
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 

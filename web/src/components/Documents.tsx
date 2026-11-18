@@ -1,6 +1,6 @@
 // Bộ phận giấy tờ dùng chung (xe, lái xe, nhân viên…): ô nhập theo loại giấy, chọn ảnh + AI đọc,
 // dòng giấy tờ (xem / sửa / thêm bản mới), giấy cũ, trạng thái hạn.
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { docTypeOf, type DocTypeDef, type OwnerKind } from '../lib/docTypes';
 import { prepareFile, readByAI, signedUrl, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
 import { errMsg, rpc } from '../lib/supabase';
@@ -93,6 +93,8 @@ export interface Scanned { files: PreparedFile[]; values: Values; aiNote: string
 export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Scanned) => void }) {
   const [busy, setBusy] = useState<{ on: boolean; sec: number }>({ on: false, sec: 0 });
   const [sides, setSides] = useState<(PreparedFile | null)[]>(() => (def.sides ?? []).map(() => null));
+  // Giữ bản mới nhất ngoài state: chọn 2 mặt liên tiếp thật nhanh vẫn không mất mặt trước
+  const sidesRef = useRef(sides);
   const short = SHORT[def.code] ?? def.name;
 
   async function read(files: PreparedFile[]) {
@@ -125,7 +127,8 @@ export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Sc
     if (!file) return;
     try {
       const prepared = await prepareFile(file);
-      const next = sides.map((x, k) => (k === i ? prepared : x));
+      const next = sidesRef.current.map((x, k) => (k === i ? prepared : x));
+      sidesRef.current = next;
       setSides(next);
       if (next.every(Boolean)) await read(next as PreparedFile[]);
     } catch (e) {

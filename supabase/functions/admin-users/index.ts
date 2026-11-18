@@ -119,7 +119,8 @@ async function handle(req: Request): Promise<Response> {
     case 'create_tenant_owner': {
       if (!ctx.is_platform_admin) throw new HttpError(403, 'Chỉ Super Admin được tạo Chủ nhà xe');
       const tenantId = requireString(body, 'tenant_id');
-      const { data: tenant } = await admin.from('tenants').select('id, code').eq('id', tenantId).maybeSingle();
+      const { data: tenant, error: tErr } = await admin.from('tenants').select('id, code').eq('id', tenantId).maybeSingle();
+      if (tErr) throw new HttpError(500, `Lỗi đọc dữ liệu nhà xe: ${tErr.message}`);
       if (!tenant) throw new HttpError(404, 'Không tìm thấy nhà xe');
       const userId = await createMember(admin, tenant.id, tenant.code,
         validatePhone(requireString(body, 'phone')), requireString(body, 'full_name'),
@@ -149,7 +150,8 @@ async function handle(req: Request): Promise<Response> {
     case 'reset_password': {
       if (!ctx.tenant_id || !ctx.can_manage_users) throw new HttpError(403, 'Không có quyền quản lý người dùng');
       const userId = requireString(body, 'user_id');
-      const { data: target } = await admin.from('app_users').select('id, tenant_id').eq('id', userId).maybeSingle();
+      const { data: target, error: uErr } = await admin.from('app_users').select('id, tenant_id').eq('id', userId).maybeSingle();
+      if (uErr) throw new HttpError(500, `Lỗi đọc dữ liệu người dùng: ${uErr.message}`);
       if (!target || target.tenant_id !== ctx.tenant_id) throw new HttpError(404, 'Không tìm thấy người dùng');
       const { error } = await admin.auth.admin.updateUserById(userId, {
         password: validatePassword(requireString(body, 'password')),

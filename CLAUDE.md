@@ -34,7 +34,7 @@ Tệp này là "hiến pháp" của dự án. Mọi phiên làm việc phải đ
 - Mọi bảng nghiệp vụ có `tenant_id uuid not null`; mọi index bắt đầu bằng `tenant_id`.
 - Khóa ngoại giữa bảng nghiệp vụ là khóa kép `(tenant_id, x_id)`.
 - Bật `ENABLE ROW LEVEL SECURITY` trên mọi bảng tenant (không dùng FORCE: hàm SECURITY DEFINER của chủ bảng cần đọc/ghi để kiểm tra quyền; app không bao giờ kết nối bằng chủ bảng). Policy xác định nhà xe từ phiên đăng nhập (`auth.uid()` → `app.current_tenant_id()`), không bao giờ từ tham số client.
-- Bảng mới không tự mở cho API; cấp quyền tường minh.
+- Bảng mới không tự mở cho API; cấp quyền tường minh cho `authenticated` **và** `service_role` (project thật tắt tự cấp quyền; không dựa vào quyền mặc định của Supabase local).
 - Trình duyệt **không được** INSERT/UPDATE/DELETE trực tiếp bảng ghế và bảng tiền; chỉ qua hàm RPC có kiểm tra quyền.
 - Truy cập sai tenant phải trả "không tìm thấy". Mỗi module mới phải có kiểm thử truy cập chéo tenant.
 - Super Admin không mặc nhiên đọc dữ liệu cá nhân / tài chính của nhà xe.

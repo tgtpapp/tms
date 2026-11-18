@@ -60,6 +60,11 @@ jobs:
         run: deno check supabase/functions/admin-users/index.ts supabase/tests/e2e/admin_users.e2e.ts
       - name: Khởi động Supabase local
         run: supabase start -x studio,imgproxy,logflare,vector
+      - name: Mô phỏng project thật (không tự cấp quyền service_role)
+        run: |
+          DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          psql "$DB" -v ON_ERROR_STOP=1 -c "revoke all on all tables in schema public from service_role; revoke all on all sequences in schema public from service_role;"
+          psql "$DB" -v ON_ERROR_STOP=1 -f supabase/migrations/20261118150000_quyen_service_role.sql
       - name: Chạy Edge Function
         run: |
           nohup supabase functions serve > functions.log 2>&1 &
@@ -91,6 +96,11 @@ jobs:
           node-version: 22
       - name: Khởi động Supabase local
         run: supabase start -x studio,imgproxy,logflare,vector
+      - name: Mô phỏng project thật (không tự cấp quyền service_role)
+        run: |
+          DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          psql "$DB" -v ON_ERROR_STOP=1 -c "revoke all on all tables in schema public from service_role; revoke all on all sequences in schema public from service_role;"
+          psql "$DB" -v ON_ERROR_STOP=1 -f supabase/migrations/20261118150000_quyen_service_role.sql
       - name: Chạy Edge Function
         run: |
           nohup supabase functions serve > functions.log 2>&1 &

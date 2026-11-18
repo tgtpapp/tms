@@ -62,12 +62,7 @@ export function PlatformScreen() {
           <h2>Nhà xe ({tenants.length})</h2>
           {tenants.length === 0 && <p className="muted">Chưa có nhà xe nào.</p>}
           <ul className="list">
-            {tenants.map((t) => (
-              <li key={t.id}>
-                <b>{t.name}</b> <span className="muted">· {t.code}</span>
-                <span className={`badge ${t.status}`}>{t.status === 'active' ? 'Hoạt động' : t.status}</span>
-              </li>
-            ))}
+            {tenants.map((t) => <TenantItem key={t.id} tenant={t} />)}
           </ul>
         </section>
         <form className="card form" onSubmit={submit}>
@@ -92,5 +87,53 @@ export function PlatformScreen() {
         </form>
       </main>
     </div>
+  );
+}
+
+/** Một nhà xe trong danh sách + nút thêm Chủ nhà xe (khi tạo nhà xe xong mà chưa tạo được chủ). */
+function TenantItem({ tenant }: { tenant: TenantRow }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ name: '', phone: '', password: '' });
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!PHONE_RE.test(f.phone)) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
+    if (f.password.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    setBusy(true);
+    try {
+      await adminUsers({ action: 'create_tenant_owner', tenant_id: tenant.id, phone: f.phone,
+                         full_name: f.name, password: f.password });
+      toast('ok', `Đã tạo Chủ nhà xe cho ${tenant.name}`);
+      setF({ name: '', phone: '', password: '' });
+      setOpen(false);
+    } catch (e2) {
+      toast('error', errMsg(e2));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="item">
+      <div className="item-head">
+        <div>
+          <b>{tenant.name}</b> <span className="muted">· {tenant.code}</span>
+          <span className={`badge ${tenant.status}`}>{tenant.status === 'active' ? 'Hoạt động' : tenant.status}</span>
+        </div>
+        <button className="btn small" onClick={() => setOpen(!open)}>Thêm Chủ nhà xe</button>
+      </div>
+      {open && (
+        <form className="form" onSubmit={submit}>
+          <div className="grid2">
+            <label>Họ tên<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
+            <label>Số điện thoại<input value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.trim() })} inputMode="tel" required /></label>
+            <label>Mật khẩu ban đầu<input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoComplete="new-password" required /></label>
+          </div>
+          <button className="btn primary" disabled={busy}>{busy ? 'Đang tạo…' : 'Tạo Chủ nhà xe'}</button>
+        </form>
+      )}
+    </li>
   );
 }

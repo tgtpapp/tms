@@ -87,8 +87,9 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      # Mã project Supabase (công khai). Đổi máy chủ: sửa dòng này.
+      # Mã project + vùng Supabase (công khai). Đổi máy chủ: sửa 2 dòng này.
       SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
@@ -99,8 +100,21 @@ jobs:
           [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "Thiếu secret SUPABASE_ACCESS_TOKEN"; exit 1; }
           [ -n "$SUPABASE_DB_PASSWORD" ] || { echo "Thiếu secret SUPABASE_DB_PASSWORD"; exit 1; }
       - name: Kết nối project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Tìm cổng kết nối IPv4 (Session pooler) của vùng
+        run: |
+          PW=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            url="postgresql://postgres.${SUPABASE_PROJECT_REF}:${PW}@${host}:5432/postgres"
+            if psql "$url" -tAc 'select 1' >/dev/null 2>&1; then
+              echo "::add-mask::$url"
+              echo "SUPABASE_DB_URL=$url" >> "$GITHUB_ENV"
+              echo "Dùng cổng: $host"
+              exit 0
+            fi
+          done
+          echo "Không kết nối được database qua Session pooler"; exit 1
       - name: Đưa migration mới lên (chỉ thêm, không xóa dữ liệu)
-        run: supabase db push --remote -p "$SUPABASE_DB_PASSWORD"
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
       - name: Đưa Edge Function lên
         run: supabase functions deploy admin-users --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt

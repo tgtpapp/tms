@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -30,3 +29,18 @@ jobs:
             echo "Phát hiện khóa bí mật trong kho code" && exit 1
           fi
           echo "Không có khóa bí mật"
+
+  db:
+    name: Kiểm thử database (phân quyền, cách ly nhà xe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Khởi động Postgres của Supabase (chạy migration)
+        run: supabase db start
+      - name: Chạy lại toàn bộ migration từ đầu
+        run: supabase db reset
+      - name: Chạy kiểm thử pgTAP
+        run: supabase test db

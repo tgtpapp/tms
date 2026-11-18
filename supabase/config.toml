@@ -1,0 +1,6 @@
+# Cấu hình Supabase CLI cho máy phát triển / CI (không chứa khóa bí mật).
+project_id = "tms"
+
+[db]
+port = 54322
+major_version = 17

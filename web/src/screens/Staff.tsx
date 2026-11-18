@@ -1,0 +1,386 @@
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  DOC_COLS, DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
+} from '../components/Documents';
+import { DOC_TYPES, docTypeOf, type DocTypeDef } from '../lib/docTypes';
+import { uploadFiles } from '../lib/documents';
+import type { Permissions } from '../lib/permissions';
+import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
+import { useToast } from '../lib/toast';
+
+type Position = 'lai_xe' | 'phu_xe' | 'nhan_vien';
+type Gender = 'nam' | 'nu';
+type Contract = 'khong_xac_dinh' | 'xac_dinh' | 'thu_viec' | 'thoi_vu' | 'khoan_viec' | 'khac';
+
+interface Staff {
+  id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
+  joined_on: string; left_on: string | null; is_active: boolean;
+}
+interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; contract_type: Contract | null; note: string | null }
+interface Option { id: string; label: string }
+
+const POSITION: Record<Position, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
+const CONTRACT: Record<Contract, string> = {
+  khong_xac_dinh: 'Không xác định thời hạn', xac_dinh: 'Xác định thời hạn', thu_viec: 'Thử việc', thoi_vu: 'Thời vụ',
+  khoan_viec: 'Khoán việc', khac: 'Khác',
+};
+const STAFF_DOCS = DOC_TYPES.filter((d) => d.owner === 'nhan_su');
+/** Giấy bắt buộc theo chức danh (lái xe kinh doanh vận tải: GPLX, khám sức khỏe, tập huấn – cần xác minh đủ danh mục). */
+const REQUIRED: Record<Position, string[]> = {
+  lai_xe: ['cccd', 'gplx', 'kham_suc_khoe', 'tap_huan'], phu_xe: ['cccd'], nhan_vien: ['cccd'],
+};
+
+/* ------------------------------------------------------------------ Tuổi, thâm niên */
+
+function yearsBetween(from: string, to: string): number {
+  const [y1, m1, d1] = from.split('-').map(Number);
+  const [y2, m2, d2] = to.split('-').map(Number);
+  return y2 - y1 - (m2 < m1 || (m2 === m1 && d2 < d1) ? 1 : 0);
+}
+function seniority(joined: string, left: string | null): string {
+  const end = left ?? today();
+  const months = Math.max(0, (Number(end.slice(0, 4)) - Number(joined.slice(0, 4))) * 12 + Number(end.slice(5, 7)) - Number(joined.slice(5, 7)));
+  return months >= 12 ? `${Math.floor(months / 12)} năm ${months % 12} tháng` : `${months} tháng`;
+}
+/** Tuổi tối đa lái xe chở người trên 29 chỗ, xe giường nằm: 57 (nam), 55 (nữ) – Luật TTATGT đường bộ 2024, Điều 59. */
+function ageCheck(p: StaffPrivate | undefined, position: Position): { text: string; state: 'het_han' | 'sap_het' } | null {
+  if (position !== 'lai_xe' || !p?.birth_date || !p.gender) return null;
+  const limit = p.gender === 'nam' ? 57 : 55;
+  const age = yearsBetween(p.birth_date, today());
+  if (age >= limit) return { text: `${age} tuổi – đã quá tuổi lái xe trên 29 chỗ / giường nằm (tối đa ${limit})`, state: 'het_han' };
+  if (age >= limit - 1) return { text: `${age} tuổi – sắp đến tuổi tối đa lái xe trên 29 chỗ / giường nằm (${limit})`, state: 'sap_het' };
+  return null;
+}
+
+/* ------------------------------------------------------------------ Màn hình */
+
+export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
+  const toast = useToast();
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [priv, setPriv] = useState<StaffPrivate[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [users, setUsers] = useState<Option[]>([]);
+  const [branches, setBranches] = useState<Option[]>([]);
+  const [warnDays, setWarnDays] = useState(30);
+  const [open, setOpen] = useState<string | null>(null);
+  const canEdit = perms.has('staff.manage');
+
+  const load = useCallback(async () => {
+    const [s, p, d, u, b, w] = await Promise.all([
+      supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active').order('full_name'),
+      supabase.from('staff_private').select('staff_id, birth_date, gender, address, contract_type, note'),
+      supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
+      supabase.from('app_users').select('id, full_name, phone').order('full_name'),
+      supabase.from('branches').select('id, name').order('name'),
+      supabase.from('tenant_settings').select('value').eq('key', 'giay_to.canh_bao_truoc_ngay').maybeSingle(),
+    ]);
+    const err = s.error ?? p.error ?? d.error ?? b.error ?? w.error;
+    if (err) return toast('error', err.message);
+    setStaff((s.data ?? []) as Staff[]);
+    setPriv((p.data ?? []) as StaffPrivate[]);
+    setDocs((d.data ?? []) as Doc[]);
+    setUsers(((u.data ?? []) as { id: string; full_name: string; phone: string }[]).map((x) => ({ id: x.id, label: `${x.full_name} · ${x.phone}` })));
+    setBranches(((b.data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, label: x.name })));
+    setWarnDays(Number(w.data?.value ?? 30) || 30);
+  }, [toast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const tenantId = ctx.tenant_id ?? '';
+  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, reload: load };
+  return (
+    <>
+      {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} onOpen={(id) => {
+        setOpen(id);
+        setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
+      }} />}
+      {canEdit && <StaffForm key="new" {...common} staff={staff} />}
+      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ Thêm / sửa hồ sơ */
+
+const EMPTY = {
+  full_name: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
+  user_id: '', birth_date: '', gender: '' as Gender | '', address: '', contract_type: '' as Contract | '', note: '',
+};
+type Form = typeof EMPTY;
+
+function formOf(s: Staff, p: StaffPrivate | undefined): Form {
+  return {
+    full_name: s.full_name, position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
+    left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
+    gender: p?.gender ?? '', address: p?.address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
+  };
+}
+
+/** Điền hồ sơ từ CCCD / GPLX đọc được (chỉ ô đọc được). */
+function applyToForm(f: Form, v: Values): Form {
+  const pick = (k: string) => (v[k] ?? '').trim();
+  const next = { ...f };
+  if (pick('nv.ho_ten')) next.full_name = pick('nv.ho_ten');
+  if (pick('nv.ngay_sinh')) next.birth_date = pick('nv.ngay_sinh');
+  if (pick('nv.noi_thuong_tru')) next.address = pick('nv.noi_thuong_tru');
+  const g = pick('nv.gioi_tinh').toLowerCase();
+  if (g.startsWith('nam') || g === 'male') next.gender = 'nam';
+  else if (g.startsWith('nữ') || g.startsWith('nu') || g === 'female') next.gender = 'nu';
+  return next;
+}
+
+interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
+interface Common {
+  tenantId: string; priv: StaffPrivate[]; docs: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
+  reload: () => Promise<void>;
+}
+
+function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
+  const { tenantId, users, branches, staff, editing, onDone, reload } = props;
+  const toast = useToast();
+  const [f, setF] = useState<Form>(() => (editing ? formOf(editing, props.priv.find((p) => p.staff_id === editing.id)) : EMPTY));
+  const [scanType, setScanType] = useState('cccd');
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [id] = useState(() => editing?.id ?? crypto.randomUUID());
+  const set = (k: keyof Form) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const linked = new Set(staff.filter((s) => s.user_id && s.id !== editing?.id).map((s) => s.user_id));
+
+  function onScanned(def: DocTypeDef, s: Scanned) {
+    if (s.files.length === 0) return toast('error', s.aiNote);
+    setPending((p) => [...p.filter((x) => x.def.code !== def.code), { key: crypto.randomUUID(), def, scanned: s }]);
+    setF((cur) => applyToForm(cur, s.values));
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!f.full_name.trim()) return toast('error', 'Nhập họ tên');
+    if (!f.joined_on) return toast('error', 'Nhập ngày vào công ty');
+    if (f.phone && !/^0[0-9]{9}$/.test(f.phone.trim())) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
+    setBusy(true);
+    try {
+      await rpc('save_staff', { p_id: id, p: { ...f, full_name: f.full_name.trim(), phone: f.phone.trim(), is_active: !f.left_on } });
+    } catch (err) {
+      setBusy(false);
+      return toast('error', errMsg(err));
+    }
+    let failed = 0;
+    for (const p of pending) {
+      try {
+        const paths = await uploadFiles(tenantId, 'nhan_su', id, f.full_name, p.def.code, p.scanned.files);
+        await rpc('add_staff_document', { p_staff_id: id, p_doc_type: p.def.code, ...toRpc(p.def, p.scanned.values),
+                                          p_files: paths, p_note: null, p_request_id: p.key });
+      } catch (err) {
+        failed++;
+        toast('error', `${p.def.name}: ${errMsg(err)}`);
+      }
+    }
+    setBusy(false);
+    const name = f.full_name.trim();
+    toast('ok', failed ? `Đã lưu ${name}, còn ${failed} giấy tờ chưa lưu – thêm lại ở mục Giấy tờ` : editing ? `Đã lưu hồ sơ ${name}` : `Đã thêm ${name}`);
+    await reload();
+    if (editing) onDone?.();
+    else {
+      setF(EMPTY);
+      setPending([]);
+    }
+  }
+
+  const scanDef = docTypeOf(scanType)!;
+  const Wrap = editing ? 'div' : 'section';
+
+  return (
+    <Wrap className={editing ? 'form' : 'card form'}>
+      {!editing && <h2>Thêm lái xe / nhân viên</h2>}
+      {!editing && (
+        <div className="sub">
+          <b className="small">Đọc nhanh từ giấy tờ</b>
+          <select aria-label="Loại giấy để đọc" value={scanType} onChange={(e) => setScanType(e.target.value)}>
+            {STAFF_DOCS.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
+          </select>
+          <Scanner key={scanDef.code} def={scanDef} onScanned={(s) => onScanned(scanDef, s)} />
+          {pending.map((p) => (
+            <div key={p.key} className="item sub-item">
+              <div className="item-head">
+                <b>{p.def.name}</b>
+                <button type="button" className="btn small link" onClick={() => setPending(pending.filter((x) => x !== p))}>Bỏ giấy này</button>
+              </div>
+              <p className="muted small">{p.scanned.aiNote} · {p.scanned.files.length} tệp</p>
+              {p.scanned.warnings.length > 0 && <ul className="warn small">{p.scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
+              <DocFields def={p.def} values={p.scanned.values}
+                         onChange={(v) => setPending(pending.map((x) => (x === p ? { ...x, scanned: { ...x.scanned, values: v } } : x)))} />
+            </div>
+          ))}
+        </div>
+      )}
+      <form className="form" onSubmit={submit}>
+        <div className="grid2">
+          <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
+          <label>Chức danh
+            <select value={f.position} onChange={set('position')}>
+              {Object.entries(POSITION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+          <label>Ngày vào công ty<input type="date" value={f.joined_on} onChange={set('joined_on')} max={today()} required /></label>
+          <label>Số điện thoại<input value={f.phone} onChange={set('phone')} inputMode="tel" /></label>
+          <label>Chi nhánh
+            <select value={f.branch_id} onChange={set('branch_id')}>
+              <option value="">—</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+          </label>
+          <label>Ngày sinh<input type="date" value={f.birth_date} onChange={set('birth_date')} /></label>
+          <label>Giới tính
+            <select value={f.gender} onChange={set('gender')}>
+              <option value="">—</option>
+              <option value="nam">Nam</option>
+              <option value="nu">Nữ</option>
+            </select>
+          </label>
+          <label>Nơi thường trú<input value={f.address} onChange={set('address')} /></label>
+          <label>Hình thức hợp đồng lao động
+            <select value={f.contract_type} onChange={set('contract_type')}>
+              <option value="">—</option>
+              {Object.entries(CONTRACT).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
+          <label>Tài khoản đăng nhập (nếu có)
+            <select value={f.user_id} onChange={set('user_id')}>
+              <option value="">Không liên kết</option>
+              {users.filter((u) => !linked.has(u.id)).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+            </select>
+          </label>
+          {editing && <label>Ngày nghỉ việc<input type="date" value={f.left_on} onChange={set('left_on')} /></label>}
+          <label>Ghi chú<input value={f.note} onChange={set('note')} /></label>
+        </div>
+        <p className="muted small">Ngày sinh, giới tính, nơi thường trú, giấy tờ cá nhân: chỉ người quản lý nhân sự và chính người đó xem được.</p>
+        <div className="actions">
+          <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : editing ? 'Lưu hồ sơ' : 'Lưu nhân viên'}</button>
+          {editing && <button type="button" className="btn link" onClick={onDone}>Hủy</button>}
+        </div>
+      </form>
+    </Wrap>
+  );
+}
+
+/* ------------------------------------------------------------------ Danh sách */
+
+function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void }) {
+  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches } = props;
+  const [showLeft, setShowLeft] = useState(false);
+  const left = staff.filter((s) => !s.is_active).length;
+
+  return (
+    <section className="card">
+      <div className="item-head">
+        <h2>Lái xe & nhân viên ({staff.filter((s) => s.is_active).length})</h2>
+        {left > 0 && (
+          <button className="btn small" onClick={() => setShowLeft(!showLeft)}>
+            {showLeft ? 'Ẩn người đã nghỉ' : `Hiện người đã nghỉ (${left})`}
+          </button>
+        )}
+      </div>
+      {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
+      <ul className="list">
+        {staff.filter((s) => showLeft || s.is_active).map((s) => {
+          const mine = s.user_id === myUserId;
+          const canOpen = canEdit || mine;
+          const p = priv.find((x) => x.staff_id === s.id);
+          const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
+          const bad = canEdit ? problems(s, p, docs, warnDays).length : 0;
+          return (
+            <li key={s.id} id={`nv-${s.id}`} className="item">
+              <div className="item-head">
+                <div>
+                  <b>{s.full_name}</b> <span className="muted small">· {POSITION[s.position]}{gplx?.data?.hang ? ` · GPLX hạng ${gplx.data.hang}` : ''}
+                    {s.phone ? ` · ${s.phone}` : ''}{s.branch_id ? ` · ${branches.find((b) => b.id === s.branch_id)?.label ?? ''}` : ''}</span>
+                  {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                  {mine && <span className="badge">Tôi</span>}
+                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+                  <div className="muted small">Vào công ty {fmtDate(s.joined_on)} · thâm niên {seniority(s.joined_on, s.left_on)}</div>
+                </div>
+                {canOpen && (
+                  <button className="btn small" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(open === s.id ? null : s.id)}>
+                    {open === s.id ? 'Đóng' : 'Hồ sơ'}
+                  </button>
+                )}
+              </div>
+              {open === s.id && canOpen && <StaffDetail {...props} s={s} p={p} />}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined }) {
+  const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
+  const [editing, setEditing] = useState(false);
+  const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
+  const age = ageCheck(p, s.position);
+  const required = REQUIRED[s.position];
+
+  if (editing) return <div className="sub"><StaffForm {...props} editing={s} onDone={() => setEditing(false)} /></div>;
+
+  return (
+    <div className="sub">
+      <dl className="info small">
+        <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
+        <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
+        <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
+        <dt>Hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
+        {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
+      </dl>
+      {age && <p className={`small state-${age.state}`}>{age.text}</p>}
+      {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button></div>}
+      <h3>Giấy tờ</h3>
+      <ul className="list">
+        {STAFF_DOCS.map((def) => (
+          <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
+                  owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
+                  required={required.includes(def.code)} reload={reload} />
+        ))}
+      </ul>
+      <OldDocs docs={mine} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Cảnh báo */
+
+function problems(s: Staff, p: StaffPrivate | undefined, docs: Doc[], warnDays: number): { text: string; state: DocState }[] {
+  const out: { text: string; state: DocState }[] = [];
+  if (!s.is_active) return out;
+  for (const def of STAFF_DOCS) {
+    const req = REQUIRED[s.position].includes(def.code);
+    const st = docState(def, docs.find((d) => d.staff_id === s.id && d.doc_type === def.code && d.is_current), warnDays, req);
+    if (st.state === 'het_han' || st.state === 'sap_het' || (st.state === 'thieu' && req)) out.push({ text: `${SHORT[def.code]}: ${st.text}`, state: st.state });
+  }
+  const age = ageCheck(p, s.position);
+  if (age) out.push({ text: age.text, state: age.state });
+  return out;
+}
+
+function StaffAlerts(props: { staff: Staff[]; priv: StaffPrivate[]; docs: Doc[]; warnDays: number; onOpen: (id: string) => void }) {
+  const { staff, priv, docs, warnDays, onOpen } = props;
+  const order: Record<DocState, number> = { het_han: 0, sap_het: 1, thieu: 2, con_han: 3, co: 4 };
+  const rows = staff.flatMap((s) => problems(s, priv.find((x) => x.staff_id === s.id), docs, warnDays).map((r) => ({ s, ...r })))
+    .sort((a, b) => order[a.state] - order[b.state]);
+  if (rows.length === 0) return null;
+  return (
+    <section className="card">
+      <h2>Cảnh báo lái xe & nhân viên ({rows.length})</h2>
+      <ul className="list small">
+        {rows.slice(0, 50).map((r, i) => (
+          <li key={i}>
+            <button className="btn small link" onClick={() => onOpen(r.s.id)}>{r.s.full_name}</button>
+            <span className={`state-${r.state}`}>{r.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

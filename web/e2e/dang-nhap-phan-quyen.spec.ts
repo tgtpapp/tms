@@ -157,6 +157,21 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('button', { name: 'Hiện giấy cũ (1)' })).toBeVisible();
   await expect(page.getByText(/Kiểm định: Sắp hết hạn/)).toHaveCount(0);
 
+  // 5i. Lái xe: tải CCCD mặt trước + mặt sau, nhập tay (CI không có AI), có ngày vào công ty
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByLabel('Tải ảnh CCCD – Mặt trước').setInputFiles(png);
+  await page.getByLabel('Tải ảnh CCCD – Mặt sau').setInputFiles(png);
+  await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
+  await page.getByLabel('CCCD: Số CCCD / số định danh cá nhân').fill('079123456789');
+  await page.getByLabel('Họ tên', { exact: true }).fill('Nguyễn Văn Tài');
+  await page.getByLabel('Ngày vào công ty').fill('2020-03-15');
+  await page.getByRole('button', { name: 'Lưu nhân viên' }).click();
+  await expect(page.getByText('Đã thêm Nguyễn Văn Tài')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lái xe & nhân viên (1)' })).toBeVisible();
+  await expect(page.getByText(/GPLX: Chưa có/)).toBeVisible();
+  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await expect(page.getByText('Số 079123456789')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
@@ -178,6 +193,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Thêm loại xe' })).toHaveCount(0);
   await expect(page.getByText('51B-123.45').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm xe' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await expect(page.getByText('Nguyễn Văn Tài')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

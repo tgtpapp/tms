@@ -64,7 +64,7 @@ const KIND_HINT = { text: 'chuỗi', date: 'ngày dạng YYYY-MM-DD', int: 'số
 export function buildPrompt(def: DocTypeDef): string {
   const lines = def.fields.map((x) => `- "${x.key}": ${x.label} (${KIND_HINT[x.kind]})`).join('\n');
   return [
-    `Đây là ảnh/tệp "${def.name}" của Việt Nam. Hãy đọc chính xác các thông tin in trên giấy.`,
+    `Đây là ảnh/tệp "${def.name}" của Việt Nam${def.sides ? ` (gồm ${def.sides.join(', ').toLowerCase()} theo thứ tự ảnh)` : ''}. Hãy đọc chính xác các thông tin in trên giấy.`,
     'Chỉ trả về MỘT đối tượng JSON với đúng các khóa sau:',
     lines,
     'Quy tắc: không đọc được hoặc giấy không có thì để null; không đoán, không bịa;',
@@ -167,6 +167,10 @@ export function normalize(def: DocTypeDef, raw: Record<string, unknown>): { fiel
   if (typeof plate === 'string' && !PLATE_RE.test(plateKey(plate))) issues.push('Biển số đọc được không đúng dạng');
   const vin = fields['xe.so_khung'];
   if (typeof vin === 'string' && plateKey(vin).length !== 17) issues.push('Số khung đọc được không đủ 17 ký tự');
+  const so = fields['so_giay'];
+  if (def.code === 'cccd' && typeof so === 'string' && !/^[0-9]{12}$/.test(so.replace(/\s/g, ''))) {
+    issues.push('Số CCCD đọc được không đủ 12 chữ số');
+  }
   const from = (fields['hieu_luc_tu'] ?? fields['ngay_cap']) as string | null;
   const to = fields['het_han'] as string | null;
   if (from && to && to < from) issues.push('Ngày hết hạn trước ngày cấp / hiệu lực');

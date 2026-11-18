@@ -5,11 +5,16 @@
 // Quy ước khóa:
 //   so_giay, noi_cap, ngay_cap, hieu_luc_tu, het_han  → cột chính của giấy tờ
 //   xe.*                                              → thông tin xe (điền sẵn hồ sơ xe, đối chiếu biển số)
+//   nv.*                                              → thông tin nhân viên (điền sẵn hồ sơ lái xe / nhân viên)
 //   còn lại                                           → lưu thêm trong data của giấy tờ
 
 export type FieldKind = 'text' | 'date' | 'int' | 'money';
 export interface DocField { key: string; label: string; kind: FieldKind }
-export interface DocTypeDef { code: string; owner: 'xe'; name: string; hasExpiry: boolean; required: boolean; fields: DocField[] }
+export type OwnerKind = 'xe' | 'nhan_su';
+export interface DocTypeDef {
+  code: string; owner: OwnerKind; name: string; hasExpiry: boolean; required: boolean; fields: DocField[];
+  sides?: string[];   // giấy có nhiều mặt: mỗi mặt một ô tải ảnh riêng (vd: mặt trước, mặt sau)
+}
 
 const f = (key: string, label: string, kind: FieldKind = 'text'): DocField => ({ key, label, kind });
 
@@ -58,6 +63,42 @@ export const DOC_TYPES: DocTypeDef[] = [
   { code: 'cai_tao', owner: 'xe', name: 'Giấy chứng nhận cải tạo', hasExpiry: false, required: false,
     fields: [f('so_giay', 'Số giấy chứng nhận'), ...XE_CO_BAN, f('noi_dung_cai_tao', 'Nội dung cải tạo'),
              f('noi_cap', 'Cơ quan cấp'), f('ngay_cap', 'Ngày cấp', 'date')] },
+  // ------------------------------------------------------------ Giấy tờ cá nhân
+  {
+    code: 'cccd', owner: 'nhan_su', name: 'Căn cước / Căn cước công dân', hasExpiry: true, required: true,
+    sides: ['Mặt trước', 'Mặt sau'],
+    fields: [
+      f('so_giay', 'Số CCCD / số định danh cá nhân'), f('nv.ho_ten', 'Họ và tên'), f('nv.ngay_sinh', 'Ngày sinh', 'date'),
+      f('nv.gioi_tinh', 'Giới tính'), f('quoc_tich', 'Quốc tịch'), f('que_quan', 'Quê quán / nơi đăng ký khai sinh'),
+      f('nv.noi_thuong_tru', 'Nơi thường trú / nơi cư trú'), f('het_han', 'Có giá trị đến', 'date'),
+      f('dac_diem_nhan_dang', 'Đặc điểm nhân dạng'), f('ngay_cap', 'Ngày cấp', 'date'), f('noi_cap', 'Nơi cấp / cơ quan cấp'),
+    ],
+  },
+  {
+    code: 'gplx', owner: 'nhan_su', name: 'Giấy phép lái xe', hasExpiry: true, required: false,
+    sides: ['Mặt trước', 'Mặt sau'],
+    fields: [
+      f('so_giay', 'Số giấy phép lái xe'), f('hang', 'Hạng (vd: D, D2, C)'), f('nv.ho_ten', 'Họ và tên'),
+      f('nv.ngay_sinh', 'Ngày sinh', 'date'), f('noi_cap', 'Nơi cấp'), f('ngay_cap', 'Ngày cấp', 'date'),
+      f('ngay_trung_tuyen', 'Ngày trúng tuyển', 'date'), f('het_han', 'Có giá trị đến', 'date'),
+    ],
+  },
+  {
+    code: 'kham_suc_khoe', owner: 'nhan_su', name: 'Giấy khám sức khỏe lái xe', hasExpiry: true, required: false,
+    fields: [f('noi_cap', 'Cơ sở y tế'), f('nv.ho_ten', 'Họ và tên'), f('ngay_cap', 'Ngày khám', 'date'),
+             f('hang_du_dieu_kien', 'Đủ điều kiện lái xe hạng'), f('ket_luan', 'Kết luận'), f('het_han', 'Có giá trị đến', 'date')],
+  },
+  {
+    code: 'tap_huan', owner: 'nhan_su', name: 'Giấy chứng nhận tập huấn nghiệp vụ', hasExpiry: true, required: false,
+    fields: [f('so_giay', 'Số giấy chứng nhận'), f('nv.ho_ten', 'Họ và tên'), f('noi_cap', 'Đơn vị tổ chức tập huấn'),
+             f('ngay_cap', 'Ngày cấp', 'date'), f('het_han', 'Có giá trị đến', 'date')],
+  },
+  {
+    code: 'hop_dong_ld', owner: 'nhan_su', name: 'Hợp đồng lao động', hasExpiry: true, required: false,
+    fields: [f('so_giay', 'Số hợp đồng'), f('loai_hop_dong', 'Loại hợp đồng'), f('nv.ho_ten', 'Họ và tên người lao động'),
+             f('chuc_danh', 'Chức danh / công việc'), f('ngay_cap', 'Ngày ký', 'date'), f('hieu_luc_tu', 'Từ ngày', 'date'),
+             f('het_han', 'Đến ngày (trống nếu không xác định thời hạn)', 'date')],
+  },
 ];
 
 export const docTypeOf = (code: string): DocTypeDef | undefined => DOC_TYPES.find((d) => d.code === code);

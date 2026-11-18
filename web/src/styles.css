@@ -109,3 +109,6 @@ input:focus, select:focus { outline: 2px solid #b6d4f5; border-color: var(--prim
 .state-sap_het { color: #a86b00; font-weight: 600; }
 .state-thieu { color: var(--muted); }
 .state-con_han, .state-co { color: var(--ok); }
+.sides { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 640px) { .sides { grid-template-columns: 1fr 1fr; } }
+.upload.done { border-color: #9fcf9b; background: #eef8ed; }

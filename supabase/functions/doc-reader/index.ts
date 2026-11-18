@@ -18,7 +18,7 @@ const CORS = {
 const MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_FILES = 4;
 const MAX_B64 = 8 * 1024 * 1024;   // tổng ~6 MB tệp gốc
-const PERM_BY_OWNER: Record<string, string> = { xe: 'vehicle.manage' };
+const PERM_BY_OWNER: Record<string, string> = { xe: 'vehicle.manage', nhan_su: 'staff.manage' };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' } });

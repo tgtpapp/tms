@@ -1,8 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import {
+  DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
+} from '../components/Documents';
 import { DOC_TYPES, docTypeOf, plateKey, PLATE_RE, type DocTypeDef } from '../lib/docTypes';
-import { prepareFile, readByAI, signedUrl, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
+import { uploadFiles } from '../lib/documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+
+export { DOC_COLS, type Doc } from '../components/Documents';
 
 /* ------------------------------------------------------------------ Kiểu dữ liệu */
 
@@ -14,38 +19,11 @@ export interface Vehicle {
   business_type: 'tuyen_co_dinh' | 'hop_dong' | 'ca_hai'; gsht_provider: string | null; gsht_device_no: string | null;
   camera_provider: string | null; camera_device_no: string | null; note: string | null; is_active: boolean;
 }
-export interface Doc {
-  id: string; vehicle_id: string; doc_type: string; doc_no: string | null; issuer: string | null; issued_on: string | null;
-  valid_from: string | null; expires_on: string | null; data: Record<string, FieldValue>; files: string[]; note: string | null;
-  is_current: boolean; created_at: string;
-}
 export const VEHICLE_COLS = 'id, plate, vehicle_type_id, chassis_no, engine_no, owner_name, color, country_of_origin, manufacture_year, condition, ownership, acquired_on, business_type, gsht_provider, gsht_device_no, camera_provider, camera_device_no, note, is_active';
-export const DOC_COLS = 'id, vehicle_id, doc_type, doc_no, issuer, issued_on, valid_from, expires_on, data, files, note, is_current, created_at';
 
 const OWNERSHIP = { so_huu: 'Xe của nhà xe', thue: 'Xe thuê', hop_tac: 'Hợp tác kinh doanh', xa_vien: 'Xe của xã viên HTX' } as const;
 const BUSINESS = { tuyen_co_dinh: 'Tuyến cố định', hop_dong: 'Hợp đồng', ca_hai: 'Tuyến cố định + hợp đồng' } as const;
-const SHORT: Record<string, string> = {
-  dang_ky: 'Đăng ký', kiem_dinh: 'Kiểm định', bh_tnds: 'BH TNDS', bh_vat_chat: 'BH vật chất', bh_hanh_khach: 'BH hành khách',
-  phu_hieu: 'Phù hiệu', hop_dong_thue: 'HĐ thuê', cai_tao: 'Cải tạo',
-};
 const VEHICLE_DOCS = DOC_TYPES.filter((d) => d.owner === 'xe');
-
-// Ngày theo giờ Việt Nam
-export const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
-const fmtDate = (d: string | null) => (d ? d.split('-').reverse().join('/') : '—');
-const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
-
-/* ------------------------------------------------------------------ Trạng thái giấy tờ, niên hạn */
-
-export type DocState = 'thieu' | 'het_han' | 'sap_het' | 'con_han' | 'co';
-export function docState(def: DocTypeDef, doc: Doc | undefined, warnDays: number): { state: DocState; text: string } {
-  if (!doc) return { state: 'thieu', text: def.required ? 'Chưa có' : 'Chưa có (không bắt buộc)' };
-  if (!doc.expires_on) return { state: 'co', text: def.hasExpiry ? 'Chưa nhập ngày hết hạn' : 'Đã có' };
-  const left = daysBetween(today(), doc.expires_on);
-  if (left < 0) return { state: 'het_han', text: `Hết hạn ${fmtDate(doc.expires_on)}` };
-  if (left <= warnDays) return { state: 'sap_het', text: `Sắp hết hạn ${fmtDate(doc.expires_on)} (còn ${left} ngày)` };
-  return { state: 'con_han', text: `Còn hạn đến ${fmtDate(doc.expires_on)}` };
-}
 
 /** Niên hạn xe khách theo NĐ 158/2024 (Điều 13): tuyến > 300 km 15 năm, ≤ 300 km 20 năm (cần xác minh cách tính năm cuối). */
 export function lifeLimit(year: number | null): { text: string; state: 'het_han' | 'sap_het' | 'con_han' } | null {
@@ -55,95 +33,6 @@ export function lifeLimit(year: number | null): { text: string; state: 'het_han'
   const y20 = year + 20;
   const text = `Niên hạn: tuyến trên 300 km đến hết ${y15}, tuyến từ 300 km trở xuống đến hết ${y20}`;
   return { text, state: now > y20 ? 'het_han' : now > y15 || now === y20 ? 'sap_het' : 'con_han' };
-}
-
-/* ------------------------------------------------------------------ Ô nhập theo loại giấy */
-
-type Values = Record<string, string>;
-const CORE: Record<string, keyof Pick<Doc, 'doc_no' | 'issuer' | 'issued_on' | 'valid_from' | 'expires_on'>> = {
-  so_giay: 'doc_no', noi_cap: 'issuer', ngay_cap: 'issued_on', hieu_luc_tu: 'valid_from', het_han: 'expires_on',
-};
-
-function valuesFromAi(def: DocTypeDef, fields: Record<string, FieldValue>): Values {
-  const v: Values = {};
-  for (const x of def.fields) v[x.key] = fields[x.key] == null ? '' : String(fields[x.key]);
-  return v;
-}
-function valuesFromDoc(def: DocTypeDef, d: Doc): Values {
-  const v: Values = {};
-  for (const x of def.fields) {
-    const raw = CORE[x.key] ? d[CORE[x.key]] : d.data?.[x.key];
-    v[x.key] = raw == null ? '' : String(raw);
-  }
-  return v;
-}
-function toRpc(def: DocTypeDef, v: Values) {
-  const data: Record<string, FieldValue> = {};
-  for (const x of def.fields) {
-    if (CORE[x.key]) continue;
-    const s = (v[x.key] ?? '').trim();
-    data[x.key] = s === '' ? null : x.kind === 'int' || x.kind === 'money' ? Number(s.replace(/[^0-9]/g, '')) : s;
-  }
-  const g = (k: string) => (v[k] ?? '').trim() || null;
-  return { p_doc_no: g('so_giay'), p_issuer: g('noi_cap'), p_issued_on: g('ngay_cap'), p_valid_from: g('hieu_luc_tu'),
-           p_expires_on: g('het_han'), p_data: data };
-}
-
-function DocFields({ def, values, onChange }: { def: DocTypeDef; values: Values; onChange: (v: Values) => void }) {
-  const short = SHORT[def.code] ?? def.name;
-  return (
-    <div className="grid2">
-      {def.fields.map((x) => (
-        <label key={x.key}>{x.label}
-          <input aria-label={`${short}: ${x.label}`} value={values[x.key] ?? ''}
-                 type={x.kind === 'date' ? 'date' : x.kind === 'text' ? 'text' : 'number'}
-                 inputMode={x.kind === 'int' || x.kind === 'money' ? 'numeric' : undefined}
-                 onChange={(e) => onChange({ ...values, [x.key]: e.target.value })} />
-          {x.kind === 'money' && values[x.key] && <span className="muted small">{Number(values[x.key]).toLocaleString('vi-VN')} đ</span>}
-        </label>
-      ))}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ Chọn ảnh + AI đọc */
-
-interface Scanned { files: PreparedFile[]; values: Values; aiNote: string; warnings: string[] }
-
-function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Scanned) => void }) {
-  const [state, setState] = useState<{ busy: boolean; sec: number }>({ busy: false, sec: 0 });
-  const short = SHORT[def.code] ?? def.name;
-
-  async function pick(list: FileList | null) {
-    if (!list || list.length === 0) return;
-    const t0 = Date.now();
-    setState({ busy: true, sec: 0 });
-    const tick = setInterval(() => setState({ busy: true, sec: Math.round((Date.now() - t0) / 1000) }), 1000);
-    let files: PreparedFile[] = [];
-    try {
-      files = await Promise.all(Array.from(list).slice(0, 4).map(prepareFile));
-      try {
-        const r = await readByAI(def.code, files);
-        onScanned({ files, values: valuesFromAi(def, r.fields), warnings: r.warnings,
-                    aiNote: `AI đã đọc xong (${((Date.now() - t0) / 1000).toFixed(1)} giây). Kiểm tra lại trước khi lưu.` });
-      } catch (e) {
-        onScanned({ files, values: valuesFromAi(def, {}), warnings: [], aiNote: errMsg(e) });
-      }
-    } catch (e) {
-      onScanned({ files: [], values: valuesFromAi(def, {}), warnings: [], aiNote: errMsg(e) });
-    } finally {
-      clearInterval(tick);
-      setState({ busy: false, sec: 0 });
-    }
-  }
-
-  return (
-    <label className="upload">
-      <span>{state.busy ? `AI đang đọc… ${state.sec} giây` : `Chụp / tải ảnh ${def.name} (tối đa 4 ảnh hoặc PDF)`}</span>
-      <input type="file" accept="image/*,application/pdf" multiple disabled={state.busy} aria-label={`Tải ảnh ${short}`}
-             onChange={(e) => { void pick(e.target.files); e.target.value = ''; }} />
-    </label>
-  );
 }
 
 /* ------------------------------------------------------------------ Thêm xe (đọc nhanh từ giấy tờ) */
@@ -254,7 +143,7 @@ export function AddVehicle(props: { tenantId: string; types: VehicleTypeLite[]; 
             {VEHICLE_DOCS.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
           </select>
         </div>
-        <Scanner def={scanDef} onScanned={(s) => onScanned(scanDef, s)} />
+        <Scanner key={scanDef.code} def={scanDef} onScanned={(s) => onScanned(scanDef, s)} />
         {pending.map((p) => (
           <div key={p.key} className="item sub-item">
             <div className="item-head">
@@ -379,9 +268,7 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState<VehicleForm>(() => vehicleFormOf(vehicle));
-  const [showOld, setShowOld] = useState(false);
   const mine = useMemo(() => docs.filter((d) => d.vehicle_id === vehicle.id), [docs, vehicle.id]);
-  const old = mine.filter((d) => !d.is_current).sort((a, b) => b.created_at.localeCompare(a.created_at));
   const life = lifeLimit(vehicle.manufacture_year);
 
   async function saveVehicle(e: FormEvent) {
@@ -437,133 +324,12 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
       <ul className="list">
         {VEHICLE_DOCS.map((def) => (
           <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)}
-                  tenantId={tenantId} vehicle={vehicle} warnDays={warnDays} canEdit={canEdit} reload={reload} />
+                  tenantId={tenantId} owner={{ kind: 'xe', id: vehicle.id, label: vehicle.plate }} warnDays={warnDays}
+                  canEdit={canEdit} reload={reload} check={(v) => <PlateCheck docPlate={v['xe.bien_so']} plate={vehicle.plate} />} />
         ))}
       </ul>
-      {old.length > 0 && (
-        <button className="btn small link" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn giấy cũ' : `Hiện giấy cũ (${old.length})`}</button>
-      )}
-      {showOld && (
-        <ul className="list small">
-          {old.map((d) => (
-            <li key={d.id} className="muted">
-              {docTypeOf(d.doc_type)?.name ?? d.doc_type} · {d.doc_no ?? 'không số'} · {d.expires_on ? `hết hạn ${fmtDate(d.expires_on)}` : 'không thời hạn'}
-              <FilesButton files={d.files} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <OldDocs docs={mine} />
     </div>
-  );
-}
-
-function FilesButton({ files }: { files: string[] }) {
-  const toast = useToast();
-  async function open() {
-    try {
-      for (const p of files) window.open(await signedUrl(p), '_blank', 'noopener');
-    } catch (e) {
-      toast('error', errMsg(e));
-    }
-  }
-  if (files.length === 0) return null;
-  return <button type="button" className="btn small link" onClick={() => void open()}>Xem {files.length} tệp</button>;
-}
-
-function DocRow(props: { def: DocTypeDef; doc?: Doc; tenantId: string; vehicle: Vehicle; warnDays: number; canEdit: boolean; reload: () => Promise<void> }) {
-  const { def, doc, tenantId, vehicle, warnDays, canEdit, reload } = props;
-  const toast = useToast();
-  const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view');
-  const [scanned, setScanned] = useState<Scanned | null>(null);
-  const [values, setValues] = useState<Values>({});
-  const [busy, setBusy] = useState(false);
-  const [reqId, setReqId] = useState(() => crypto.randomUUID());
-  const st = docState(def, doc, warnDays);
-  const short = SHORT[def.code] ?? def.name;
-
-  async function saveNew() {
-    if (!scanned || scanned.files.length === 0) return toast('error', 'Hãy tải lên ảnh giấy tờ');
-    setBusy(true);
-    try {
-      const paths = await uploadFiles(tenantId, 'xe', vehicle.id, vehicle.plate, def.code, scanned.files);
-      await rpc('add_vehicle_document', { p_vehicle_id: vehicle.id, p_doc_type: def.code, ...toRpc(def, values),
-                                          p_files: paths, p_note: null, p_request_id: reqId });
-      toast('ok', `Đã lưu ${def.name}`);
-      setMode('view');
-      setScanned(null);
-      setReqId(crypto.randomUUID());
-      await reload();
-    } catch (e) {
-      toast('error', errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveEdit() {
-    if (!doc) return;
-    setBusy(true);
-    try {
-      const r = toRpc(def, values);
-      await rpc('update_document', { p_id: doc.id, p_doc_no: r.p_doc_no, p_issuer: r.p_issuer, p_issued_on: r.p_issued_on,
-                                     p_valid_from: r.p_valid_from, p_expires_on: r.p_expires_on, p_data: r.p_data, p_note: doc.note });
-      toast('ok', `Đã sửa ${def.name}`);
-      setMode('view');
-      await reload();
-    } catch (e) {
-      toast('error', errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <li className="item">
-      <div className="item-head">
-        <div>
-          <b>{def.name}</b>
-          <div className={`small state-${st.state}`}>{st.text}{doc?.doc_no ? ` · Số ${doc.doc_no}` : ''}{doc?.issuer ? ` · ${doc.issuer}` : ''}</div>
-        </div>
-        <div className="actions">
-          {doc && <FilesButton files={doc.files} />}
-          {canEdit && mode === 'view' && (
-            <>
-              {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
-              <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setMode('add'); }}>
-                {doc ? 'Thêm bản mới' : 'Thêm'}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      {mode !== 'view' && (
-        <div className="sub">
-          {mode === 'add' && (
-            <>
-              <Scanner def={def} onScanned={(s) => {
-                if (s.files.length === 0) return toast('error', s.aiNote);
-                setScanned(s);
-                setValues((cur) => {
-                  const next = { ...cur };
-                  for (const [k, v] of Object.entries(s.values)) if (v) next[k] = v;
-                  return next;
-                });
-              }} />
-              {scanned && <p className="muted small">{scanned.aiNote} · {scanned.files.length} tệp</p>}
-              {scanned && scanned.warnings.length > 0 && <ul className="warn small">{scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
-              {doc && <p className="muted small">Lưu bản mới thì bản hiện tại chuyển sang giấy cũ (vẫn giữ lại).</p>}
-            </>
-          )}
-          <DocFields def={def} values={values} onChange={setValues} />
-          <PlateCheck docPlate={values['xe.bien_so']} plate={vehicle.plate} />
-          <div className="actions">
-            <button type="button" className="btn small primary" disabled={busy || (mode === 'add' && !scanned)}
-                    onClick={() => void (mode === 'add' ? saveNew() : saveEdit())}>{busy ? 'Đang lưu…' : 'Lưu giấy tờ'}</button>
-            <button type="button" className="btn small link" onClick={() => setMode('view')}>Hủy</button>
-          </div>
-        </div>
-      )}
-    </li>
   );
 }
 

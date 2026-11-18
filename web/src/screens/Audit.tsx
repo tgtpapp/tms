@@ -29,6 +29,8 @@ const ENTITY: Record<string, string> = {
   vehicle_type_seats: 'Sơ đồ ghế',
   vehicles: 'Xe',
   documents: 'Giấy tờ',
+  staff_members: 'Lái xe / nhân viên',
+  staff_private: 'Thông tin cá nhân',
 };
 
 const ACTION: Record<AuditRow['action'], string> = { insert: 'Thêm', update: 'Sửa', delete: 'Xóa' };

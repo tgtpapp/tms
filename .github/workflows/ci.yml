@@ -6,7 +6,7 @@ on:
 
 # Phiên bản Supabase CLI cố định: không phải hỏi GitHub "bản mới nhất" (hay bị giới hạn lượt).
 env:
-  SUPABASE_CLI_VERSION: latest
+  SUPABASE_CLI_VERSION: 3.2.0
 
 jobs:
   web:
@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: web/package.json
       - name: Cài thư viện
         run: npm install --no-audit --no-fund
       - name: Typecheck + build
@@ -109,7 +109,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: web/package.json
       - name: Khởi động Supabase local
         run: .github/scripts/supabase-start.sh full
       - name: Mô phỏng project thật (không tự cấp quyền service_role)
@@ -130,7 +130,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package.json') }}
       - name: Cài thư viện + trình duyệt
         working-directory: web
         run: |

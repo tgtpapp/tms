@@ -72,6 +72,38 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Tạo vai trò' }).click();
   await expect(page.getByText('Đã tạo vai trò Thu ngân')).toBeVisible();
 
+  // 5e. Tuyến: 3 điểm dừng, tuyến Hố Nai – Vũng Tàu, giá toàn tuyến + giá chặng
+  await page.getByRole('button', { name: 'Tuyến', exact: true }).click();
+  for (const [code, name, kind] of [['HN', 'BX Hố Nai', 'Bến xe'], ['BR', 'Bà Rịa', 'Điểm đón trả'], ['VT', 'BX Vũng Tàu', 'Bến xe']]) {
+    await page.getByLabel('Mã điểm').fill(code);
+    await page.getByLabel('Tên điểm').fill(name);
+    await page.getByLabel('Loại điểm').selectOption({ label: kind });
+    await page.getByRole('button', { name: 'Thêm điểm dừng' }).click();
+    await expect(page.getByText(`Đã thêm điểm dừng ${name}`)).toBeVisible();
+  }
+  await page.getByLabel('Mã tuyến').fill('HN-VT');
+  await page.getByLabel('Tên tuyến').fill('Hố Nai – Vũng Tàu');
+  await page.getByRole('button', { name: 'Thêm tuyến' }).click();
+  await expect(page.getByRole('heading', { name: 'Tuyến (1)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Chi tiết' }).click();
+  await page.getByRole('button', { name: 'Sửa điểm dừng' }).click();
+  await page.getByLabel('Điểm dừng thứ 1').selectOption({ label: 'BX Hố Nai' });
+  await page.getByLabel('Điểm dừng thứ 2').selectOption({ label: 'Bà Rịa' });
+  await page.getByLabel('Phút từ điểm đầu, điểm 2').fill('60');
+  await page.getByRole('button', { name: '+ Thêm điểm' }).click();
+  await page.getByLabel('Điểm dừng thứ 3').selectOption({ label: 'BX Vũng Tàu' });
+  await page.getByLabel('Phút từ điểm đầu, điểm 3').fill('90');
+  await page.getByRole('button', { name: 'Lưu điểm dừng', exact: true }).click();
+  await expect(page.getByText('Đã lưu điểm dừng của tuyến')).toBeVisible();
+  await page.getByLabel('Giá toàn tuyến').fill('150000');
+  await page.getByRole('button', { name: 'Lưu giá toàn tuyến' }).click();
+  await expect(page.getByText('Đã lưu giá toàn tuyến')).toBeVisible();
+  await page.getByLabel('Chặng từ').selectOption({ label: 'BX Hố Nai' });
+  await page.getByLabel('Chặng đến').selectOption({ label: 'Bà Rịa' });
+  await page.getByLabel('Giá chặng').fill('120000');
+  await page.getByRole('button', { name: 'Lưu giá chặng' }).click();
+  await expect(page.getByText('BX Hố Nai ⇄ Bà Rịa: 120.000 đ')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
@@ -84,6 +116,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Thêm chi nhánh' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Cấu hình', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Nhật ký', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Tuyến', exact: true }).click();
+  await expect(page.getByText('Hố Nai – Vũng Tàu')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thêm tuyến' })).toHaveCount(0);
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();

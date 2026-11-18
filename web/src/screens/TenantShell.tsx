@@ -7,10 +7,11 @@ import { AccountScreen } from './Account';
 import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
 import { RolesScreen } from './Roles';
+import { RoutesScreen } from './Routes';
 import { SettingsScreen } from './Settings';
 import { UsersScreen } from './Users';
 
-type Tab = 'users' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'users' | 'routes' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -37,6 +38,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: 'users', label: 'Người dùng', show: perms.hasAnywhere('user.read') || perms.hasAnywhere('user.manage') },
+    { key: 'routes', label: 'Tuyến', show: true },
     { key: 'branches', label: 'Chi nhánh & phòng vé', show: true },
     { key: 'roles', label: 'Vai trò', show: perms.has('role.manage') },
     { key: 'settings', label: 'Cấu hình', show: perms.has('settings.manage') },
@@ -62,6 +64,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       </nav>
       <main className="content">
         {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
+        {tab === 'routes' && <RoutesScreen perms={perms} />}
         {tab === 'branches' && <BranchesScreen perms={perms} />}
         {tab === 'roles' && <RolesScreen perms={perms} />}
         {tab === 'settings' && <SettingsScreen />}

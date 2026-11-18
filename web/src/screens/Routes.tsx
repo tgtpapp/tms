@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast';
 
 type StopKind = 'ben_xe' | 'van_phong' | 'diem_don_tra' | 'tram_dung';
 interface Stop { id: string; code: string; name: string; kind: StopKind; province: string | null; address: string | null; is_active: boolean }
-interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; is_active: boolean }
+interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number; allow_pickup: boolean; allow_dropoff: boolean }
 interface Fare { id: string; route_id: string; from_stop_id: string | null; to_stop_id: string | null; price: number | null; effective_from: string }
 
@@ -34,7 +34,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
   const load = useCallback(async () => {
     const [s, r, rs, f] = await Promise.all([
       supabase.from('stops').select('id, code, name, kind, province, address, is_active').order('code'),
-      supabase.from('routes').select('id, code, name, registered_code, distance_km, is_active').order('code'),
+      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start, allow_pickup, allow_dropoff').order('seq'),
       supabase.from('route_fares').select('id, route_id, from_stop_id, to_stop_id, price, effective_from').order('effective_from', { ascending: false }),
     ]);
@@ -147,7 +147,7 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
 
 /* ------------------------------------------------------------------ Tuyến */
 
-const EMPTY_ROUTE = { code: '', name: '', registered_code: '', distance_km: '' };
+const EMPTY_ROUTE = { code: '', name: '', registered_code: '', distance_km: '', itinerary: '' };
 
 function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean; reload: () => Promise<void> }) {
   const { data, canRoute, reload } = props;
@@ -161,7 +161,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
     setBusy(true);
     const { error } = await supabase.from('routes').insert({
       code: f.code.trim(), name: f.name.trim(), registered_code: f.registered_code.trim() || null,
-      distance_km: f.distance_km ? Number(f.distance_km) : null,
+      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null,
     });
     setBusy(false);
     if (error) return toast('error', error.code === '23505' ? 'Mã tuyến đã có' : error.message);
@@ -181,6 +181,9 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
             <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
             <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
           </div>
+          <label>Hành trình chạy xe (in trên lệnh vận chuyển)
+            <textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} placeholder="vd: BX Biên Hòa - QL1A - BX Vũng Tàu và ngược lại" />
+          </label>
           <button className="btn primary" disabled={busy}>Thêm tuyến</button>
         </form>
       )}
@@ -199,6 +202,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                 </div>
                 <button className="btn small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Đóng' : 'Chi tiết'}</button>
               </div>
+              {open === r.id && canRoute && <RouteInfo route={r} reload={reload} />}
               {open === r.id && <RouteDetail route={r} {...props} />}
             </li>
           ))}
@@ -209,6 +213,44 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
 }
 
 interface EditStop { stop_id: string; minutes_from_start: string; allow_pickup: boolean; allow_dropoff: boolean }
+
+/** Thông tin tuyến in trên lệnh vận chuyển: mã số tuyến, cự ly, hành trình chạy xe */
+function RouteInfo({ route, reload }: { route: Route; reload: () => Promise<void> }) {
+  const toast = useToast();
+  const [f, setF] = useState({ registered_code: route.registered_code ?? '', distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '' });
+  const [edit, setEdit] = useState(false);
+  async function save() {
+    const { error } = await supabase.from('routes').update({
+      registered_code: f.registered_code.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
+      itinerary: f.itinerary.trim() || null,
+    }).eq('id', route.id);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu thông tin tuyến');
+    setEdit(false);
+    await reload();
+  }
+  if (!edit) {
+    return (
+      <div className="small">
+        <span className="muted">Hành trình chạy xe:</span> {route.itinerary || 'chưa nhập'}{' '}
+        <button className="btn small link" onClick={() => setEdit(true)}>Sửa thông tin tuyến</button>
+      </div>
+    );
+  }
+  return (
+    <div className="form">
+      <div className="grid2">
+        <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
+        <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
+      </div>
+      <label>Hành trình chạy xe<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
+      <div className="actions">
+        <button className="btn small primary" onClick={() => void save()}>Lưu thông tin tuyến</button>
+        <button className="btn small link" onClick={() => setEdit(false)}>Hủy</button>
+      </div>
+    </div>
+  );
+}
 
 function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFare: boolean; reload: () => Promise<void> }) {
   const { route, data, canRoute, canFare, reload } = props;

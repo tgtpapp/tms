@@ -35,6 +35,7 @@ const ENTITY: Record<string, string> = {
   schedules: 'Nốt (lịch chạy)',
   trips: 'Chuyến',
   trip_crew: 'Lái xe / phụ xe của chuyến',
+  transport_orders: 'Lệnh vận chuyển',
 };
 
 const ACTION: Record<AuditRow['action'], string> = { insert: 'Thêm', update: 'Sửa', delete: 'Xóa' };
@@ -43,7 +44,7 @@ const PAGE = 50;
 
 function label(row: AuditRow): string {
   const r = row.detail?.new ?? row.detail?.old ?? {};
-  const pick = r.name ?? r.full_name ?? r.plate ?? r.code ?? r.key ?? r.permission_code ?? r.doc_type ?? '';
+  const pick = r.name ?? r.full_name ?? r.plate ?? r.order_no ?? r.code ?? r.key ?? r.permission_code ?? r.doc_type ?? '';
   return String(pick);
 }
 

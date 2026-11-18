@@ -71,12 +71,12 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       <main className="content">
         {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
         {tab === 'routes' && <RoutesScreen perms={perms} />}
-        {tab === 'trips' && <TripsScreen perms={perms} />}
+        {tab === 'trips' && <TripsScreen ctx={ctx} perms={perms} />}
         {tab === 'staff' && <StaffScreen ctx={ctx} perms={perms} />}
         {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
         {tab === 'branches' && <BranchesScreen perms={perms} />}
         {tab === 'roles' && <RolesScreen perms={perms} />}
-        {tab === 'settings' && <SettingsScreen />}
+        {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} />}
         {tab === 'audit' && <AuditScreen />}
         {tab === 'account' && <AccountScreen ctx={ctx} />}
       </main>

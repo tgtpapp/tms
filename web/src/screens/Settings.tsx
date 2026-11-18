@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { signatureUrl, uploadSignature } from '../lib/documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -31,7 +32,7 @@ const DISPATCH_SETTINGS = [
 ] as const;
 
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
-export function SettingsScreen() {
+export function SettingsScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [sale, setSale] = useState<Record<string, string>>({});
@@ -91,6 +92,38 @@ export function SettingsScreen() {
     await load();
   }
 
+  const [sign, setSign] = useState<string | null>(null);
+  useEffect(() => {
+    if (tenantId) void signatureUrl(tenantId, 'giam_doc').then(setSign);
+  }, [tenantId]);
+
+  async function saveOrder(e: FormEvent) {
+    e.preventDefault();
+    const suffix = (sale['lenh.hau_to'] ?? '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{1,10}$/.test(suffix)) return toast('error', 'Hậu tố số lệnh: 1–10 chữ in hoa hoặc số, không dấu (vd TGTP)');
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([
+      { key: 'lenh.hau_to', value: suffix },
+      { key: 'cong_ty.giam_doc', value: (sale['cong_ty.giam_doc'] ?? '').trim() },
+      { key: 'cong_ty.chuc_danh_ky', value: (sale['cong_ty.chuc_danh_ky'] ?? '').trim() || 'Giám đốc' },
+    ], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu cấu hình lệnh vận chuyển');
+    await load();
+  }
+
+  async function pickSign(file: File | undefined) {
+    if (!file) return;
+    try {
+      await uploadSignature(tenantId, 'giam_doc', file);
+      setSign(await signatureUrl(tenantId, 'giam_doc'));
+      toast('ok', 'Đã lưu chữ ký + dấu Giám đốc');
+    } catch (err) {
+      toast('error', errMsg(err));
+    }
+  }
+
   async function saveDispatch(e: FormEvent) {
     e.preventDefault();
     const rows = [];
@@ -146,6 +179,25 @@ export function SettingsScreen() {
           ))}
         </div>
         <button className="btn primary" disabled={busy}>Lưu cấu hình bán vé</button>
+      </form>
+      <form className="card form" onSubmit={(e) => void saveOrder(e)}>
+        <h2>Lệnh vận chuyển</h2>
+        <p className="muted small">Số lệnh: giờ chạy – ngày tháng năm / LVC – hậu tố, vd 0700-191126/LVC-TGTP. Tên công ty in trên lệnh lấy theo "Tên pháp lý" ở trên.</p>
+        <label>Hậu tố số lệnh (viết tắt công ty)
+          <input value={sale['lenh.hau_to'] ?? ''} maxLength={10} onChange={(e) => setSale({ ...sale, 'lenh.hau_to': e.target.value.toUpperCase() })} placeholder="vd: TGTP" required />
+        </label>
+        <label>Chức danh người ký lệnh
+          <input value={sale['cong_ty.chuc_danh_ky'] ?? ''} onChange={(e) => setSale({ ...sale, 'cong_ty.chuc_danh_ky': e.target.value })} placeholder="Giám đốc" />
+        </label>
+        <label>Họ tên người ký lệnh
+          <input value={sale['cong_ty.giam_doc'] ?? ''} onChange={(e) => setSale({ ...sale, 'cong_ty.giam_doc': e.target.value })} placeholder="vd: Hà Văn Thịnh" />
+        </label>
+        <label className="upload">
+          <span>{sign ? 'Đổi ảnh chữ ký + dấu' : 'Tải ảnh chữ ký + dấu (nên là PNG nền trong suốt)'}</span>
+          <input type="file" accept="image/*" aria-label="Ảnh chữ ký và dấu người ký lệnh" onChange={(e) => { void pickSign(e.target.files?.[0]); e.target.value = ''; }} />
+        </label>
+        {sign && <img src={sign} alt="Chữ ký và dấu người ký lệnh" className="sign-preview" />}
+        <button className="btn primary" disabled={busy}>Lưu cấu hình lệnh vận chuyển</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDispatch(e)}>
         <h2>Điều hành</h2>

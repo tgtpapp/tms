@@ -197,6 +197,21 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã xếp xe cho chuyến')).toBeVisible();
   await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
 
+  // 5l. In lệnh vận chuyển: cấu hình hậu tố TGTP, bấm "In lệnh" → bản in đúng mẫu, số lệnh theo quy ước
+  await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByLabel('Hậu tố số lệnh (viết tắt công ty)').fill('TGTP');
+  await page.getByLabel('Họ tên người ký lệnh').fill('Hà Văn Thịnh');
+  await page.getByRole('button', { name: 'Lưu cấu hình lệnh vận chuyển' }).click();
+  await expect(page.getByText('Đã lưu cấu hình lệnh vận chuyển')).toBeVisible();
+  await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  await page.evaluate(() => { window.print = () => {}; });
+  await page.getByRole('button', { name: 'In lệnh 07:00 Hố Nai – Vũng Tàu' }).click();
+  await expect(page.getByRole('heading', { name: 'LỆNH VẬN CHUYỂN' })).toBeVisible();
+  await expect(page.getByText(/Số: 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
+  await expect(page.locator('.lenh').getByText('51B-123.45')).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(page.getByText(/Lệnh số 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import QRCode from 'qrcode';
 import { fmtDate, today } from '../components/Documents';
+import { TransportOrderPrint, type OrderPrintData } from '../components/TransportOrder';
+import { signatureUrl } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
-import { errMsg, rpc, supabase } from '../lib/supabase';
+import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 type Dir = 'di' | 've';
-interface Route { id: string; code: string; name: string; is_active: boolean }
+interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number }
 interface Stop { id: string; name: string }
 interface Schedule {
@@ -19,7 +22,9 @@ interface Trip {
 interface Crew { trip_id: string; role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe'; staff_id: string; active: boolean }
 interface Vehicle { id: string; plate: string; vehicle_type_id: string; is_active: boolean }
 interface Staff { id: string; full_name: string; position: 'lai_xe' | 'phu_xe' | 'nhan_vien'; is_active: boolean }
-interface License { staff_id: string; vehicle_type_id: string; ok: boolean; reason: string | null }
+interface License { staff_id: string; vehicle_type_id: string; license_class: string | null; ok: boolean; reason: string | null }
+interface VType { id: string; reg_seats: number; reg_berths: number }
+interface Order { trip_id: string; order_no: string; valid_from: string; valid_to: string; issued_at: string }
 
 const DAYS = [[1, 'T2'], [2, 'T3'], [3, 'T4'], [4, 'T5'], [5, 'T6'], [6, 'T7'], [7, 'CN']] as const;
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -34,7 +39,7 @@ function daysText(days: number[]): string {
   return DAYS.filter(([n]) => days.includes(n)).map(([, t]) => t).join(', ');
 }
 
-export function TripsScreen({ perms }: { perms: Permissions }) {
+export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
   const canEdit = perms.has('trip.manage');
   const [day, setDay] = useState(today());
@@ -47,10 +52,13 @@ export function TripsScreen({ perms }: { perms: Permissions }) {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [licenses, setLicenses] = useState<License[]>([]);
+  const [vtypes, setVtypes] = useState<VType[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [printing, setPrinting] = useState<OrderPrintData | null>(null);
 
   const load = useCallback(async () => {
-    const [r, rs, st, sc, tr, v, sf, lm] = await Promise.all([
-      supabase.from('routes').select('id, code, name, is_active').order('code'),
+    const [r, rs, st, sc, tr, v, sf, lm, vt] = await Promise.all([
+      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start').order('seq'),
       supabase.from('stops').select('id, name'),
       supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note').order('depart_time'),
@@ -59,14 +67,21 @@ export function TripsScreen({ perms }: { perms: Permissions }) {
       supabase.from('vehicles').select('id, plate, vehicle_type_id, is_active').order('plate'),
       supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name'),
       supabase.rpc('license_matrix'),
+      supabase.from('vehicle_types').select('id, reg_seats, reg_berths'),
     ]);
-    const err = r.error ?? rs.error ?? st.error ?? sc.error ?? tr.error ?? v.error ?? sf.error ?? lm.error;
+    const err = r.error ?? rs.error ?? st.error ?? sc.error ?? tr.error ?? v.error ?? sf.error ?? lm.error ?? vt.error;
     if (err) return toast('error', err.message);
     const tripList = (tr.data ?? []) as Trip[];
-    const c = tripList.length
-      ? await supabase.from('trip_crew').select('trip_id, role, staff_id, active').in('trip_id', tripList.map((t) => t.id))
-      : { data: [], error: null };
-    if (c.error) return toast('error', c.error.message);
+    const ids = tripList.map((t) => t.id);
+    const [c, o] = ids.length
+      ? await Promise.all([
+        supabase.from('trip_crew').select('trip_id, role, staff_id, active').in('trip_id', ids),
+        supabase.from('transport_orders').select('trip_id, order_no, valid_from, valid_to, issued_at').in('trip_id', ids),
+      ])
+      : [{ data: [], error: null }, { data: [], error: null }];
+    if (c.error || o.error) return toast('error', (c.error ?? o.error)!.message);
+    setOrders((o.data ?? []) as Order[]);
+    setVtypes((vt.data ?? []) as VType[]);
     setRoutes((r.data ?? []) as Route[]);
     setRstops((rs.data ?? []) as RouteStop[]);
     setStops((st.data ?? []) as Stop[]);
@@ -91,9 +106,58 @@ export function TripsScreen({ perms }: { perms: Permissions }) {
     return dir === 'di' ? `${a} → ${b}` : `${b} → ${a}`;
   }, [rstops, stops]);
 
-  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, canEdit, ends, reload: load };
+  /** Cấp lệnh (giữ số nếu đã cấp) rồi mở bản in đúng mẫu */
+  const printOrder = useCallback(async (t: Trip) => {
+    try {
+      const order = await rpc<Order>('issue_transport_order', { p_trip_id: t.id });
+      const tid = account.tenant_id ?? '';
+      const [tn, ss, ret] = await Promise.all([
+        supabase.from('tenants').select('name, legal_name').maybeSingle(),
+        supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky']),
+        supabase.from('trips').select('depart_at, service_date').eq('vehicle_id', t.vehicle_id ?? '').eq('status', 'mo')
+          .neq('direction', t.direction).gte('depart_at', t.arrive_at).lte('service_date', order.valid_to).order('depart_at').limit(1),
+      ]);
+      const setting = (k: string) => ((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value as string | undefined;
+      const route = routes.find((x) => x.id === t.route_id);
+      const veh = vehicles.find((x) => x.id === t.vehicle_id);
+      const vt = vtypes.find((x) => x.id === veh?.vehicle_type_id);
+      const mine = crew.filter((c) => c.trip_id === t.id && c.active);
+      const who = (role: Crew['role']) => {
+        const id = mine.find((c) => c.role === role)?.staff_id;
+        if (!id) return null;
+        return { name: staff.find((s) => s.id === id)?.full_name ?? '', hang: licenses.find((l) => l.staff_id === id)?.license_class ?? null };
+      };
+      const [a, b] = ends(t.route_id, t.direction).split(' → ');
+      const r0 = (ret.data ?? [])[0] as { depart_at: string; service_date: string } | undefined;
+      const [signerImg, dispatcherImg, qr] = await Promise.all([
+        signatureUrl(tid, 'giam_doc'),
+        account.user_id ? signatureUrl(tid, account.user_id) : Promise.resolve(null),
+        QRCode.toDataURL(`LVC ${order.order_no} | ${veh?.plate ?? ''} | ${route?.name ?? ''} | ${hhmm(t.depart_at)} ${fmtDate(t.service_date)}`,
+                         { margin: 0, width: 240 }),
+      ]);
+      const tnRow = (tn.data ?? {}) as { name?: string; legal_name?: string | null };
+      setPrinting({
+        orderNo: order.order_no, issueDate: new Date(order.issued_at).toLocaleDateString('sv-SE', { timeZone: TZ }),
+        validFrom: order.valid_from, validTo: order.valid_to, company: tnRow.legal_name || tnRow.name || '',
+        signerTitle: setting('cong_ty.chuc_danh_ky') || 'Giám đốc', signerName: setting('cong_ty.giam_doc') ?? '', signerImg,
+        driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: who('phu_xe')?.name ?? null,
+        plate: veh?.plate ?? '', seats: vt ? vt.reg_seats + vt.reg_berths : null,
+        routeName: route?.name ?? '', distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,
+        itinerary: route?.itinerary ?? null, fromStop: a ?? '', toStop: b ?? '',
+        departTime: hhmm(t.depart_at), departDate: t.service_date,
+        ret: r0 ? { time: hhmm(r0.depart_at), date: r0.service_date } : null,
+        dispatcherName: account.full_name, dispatcherImg, qr,
+      });
+      await load();
+    } catch (e) {
+      toast('error', errMsg(e));
+    }
+  }, [account, routes, vehicles, vtypes, crew, staff, licenses, ends, load, toast]);
+
+  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, canEdit, ends, printOrder, reload: load };
   return (
     <>
+      {printing && <TransportOrderPrint data={printing} onClose={() => setPrinting(null)} />}
       <TripDay {...ctx} day={day} setDay={setDay} />
       <Schedules {...ctx} />
     </>
@@ -102,7 +166,8 @@ export function TripsScreen({ perms }: { perms: Permissions }) {
 
 interface Ctx {
   routes: Route[]; schedules: Schedule[]; trips: Trip[]; crew: Crew[]; vehicles: Vehicle[]; staff: Staff[]; licenses: License[];
-  canEdit: boolean; ends: (routeId: string, dir: Dir) => string; reload: () => Promise<void>;
+  orders: Order[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
+  reload: () => Promise<void>;
 }
 
 /* ------------------------------------------------------------------ Nốt */
@@ -221,7 +286,7 @@ function Schedules(props: Ctx) {
 /* ------------------------------------------------------------------ Chuyến theo ngày */
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
-  const { routes, trips, crew, vehicles, staff, canEdit, ends, reload, day, setDay } = props;
+  const { routes, trips, crew, vehicles, staff, orders, canEdit, ends, printOrder, reload, day, setDay } = props;
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
@@ -314,9 +379,13 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
                     {mine.find((c) => c.role === 'phu_xe') && ` · Phụ xe: ${person(mine.find((c) => c.role === 'phu_xe')!.staff_id)}`}
                   </div>
                   {t.assign_note && <div className="muted small">Lý do xếp khi có cảnh báo: {t.assign_note}</div>}
+                  {orders.find((o) => o.trip_id === t.id) && <div className="muted small">Lệnh số {orders.find((o) => o.trip_id === t.id)!.order_no}</div>}
                 </div>
                 {canEdit && open !== t.id && (
                   <div className="actions">
+                    {(ok || orders.some((o) => o.trip_id === t.id)) && (
+                      <button className="btn small" aria-label={`In lệnh ${label}`} onClick={() => void printOrder(t)}>In lệnh</button>
+                    )}
                     {t.status === 'mo' && <button className="btn small" aria-label={`Xếp xe ${label}`} onClick={() => setOpen(t.id)}>Xếp xe</button>}
                     {t.status === 'huy' && day >= today() && <Reopen tripId={t.id} reload={reload} />}
                   </div>

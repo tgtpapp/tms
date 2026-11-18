@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
-import { supabase, type AccountContext } from '../lib/supabase';
+import { signatureUrl, uploadSignature } from '../lib/documents';
+import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
@@ -16,6 +17,22 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
     void supabase.from('app_users').select('phone').eq('id', ctx.user_id).maybeSingle()
       .then(({ data }) => setPhone((data as { phone: string } | null)?.phone ?? ''));
   }, [ctx.user_id]);
+
+  const [sign, setSign] = useState<string | null>(null);
+  useEffect(() => {
+    if (ctx.tenant_id && ctx.user_id) void signatureUrl(ctx.tenant_id, ctx.user_id).then(setSign);
+  }, [ctx.tenant_id, ctx.user_id]);
+
+  async function pickSign(file: File | undefined) {
+    if (!file || !ctx.tenant_id || !ctx.user_id) return;
+    try {
+      await uploadSignature(ctx.tenant_id, ctx.user_id, file);
+      setSign(await signatureUrl(ctx.tenant_id, ctx.user_id));
+      toast('ok', 'Đã lưu chữ ký của tôi');
+    } catch (err) {
+      toast('error', errMsg(err));
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -40,6 +57,17 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
           <dt>Nhà xe</dt><dd>{ctx.tenant_name}</dd>
         </dl>
       </section>
+      {ctx.tenant_id && (
+        <section className="card form">
+          <h2>Chữ ký của tôi</h2>
+          <p className="muted small">Dùng khi in lệnh vận chuyển (ô Cán bộ điều hành). Nên chụp chữ ký trên giấy trắng hoặc dùng ảnh PNG nền trong suốt.</p>
+          <label className="upload">
+            <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
+            <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { void pickSign(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          {sign && <img src={sign} alt="Chữ ký của tôi" className="sign-preview" />}
+        </section>
+      )}
       <form className="card form" onSubmit={submit}>
         <h2>Đổi mật khẩu</h2>
         <label>Mật khẩu mới

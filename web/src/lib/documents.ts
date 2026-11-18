@@ -91,3 +91,34 @@ export async function signedUrl(path: string): Promise<string> {
   if (error || !data) throw new Error(error?.message ?? 'Không mở được tệp');
   return data.signedUrl;
 }
+
+/* ------------------------------------------------------------------ Chữ ký (in lệnh vận chuyển) */
+
+/** Ảnh chữ ký: giữ nền trong suốt (PNG), cạnh dài tối đa 800px. */
+async function preparePng(file: File): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh (nên dùng PNG nền trong suốt)');
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Trình duyệt không xử lý được ảnh');
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close();
+  return new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Không xử lý được ảnh'))), 'image/png'));
+}
+
+/** who: 'giam_doc' (chữ ký + dấu Giám đốc) hoặc user_id (chữ ký của chính mình). */
+export async function uploadSignature(tenantId: string, who: string, file: File): Promise<void> {
+  const blob = await preparePng(file);
+  const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/${who}.png`, blob, { contentType: 'image/png', upsert: true });
+  if (error) throw new Error(`Không tải được chữ ký: ${error.message}`);
+}
+
+/** Link ảnh chữ ký (10 phút), null nếu chưa có hoặc không có quyền xem. */
+export async function signatureUrl(tenantId: string, who: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(`${tenantId}/chu_ky/${who}.png`, 600);
+  return error || !data ? null : `${data.signedUrl}&t=${Date.now()}`;
+}

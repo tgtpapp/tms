@@ -137,7 +137,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('spinbutton', { name: 'Năm sản xuất', exact: true }).fill('2020');
   await page.getByRole('button', { name: 'Lưu xe' }).click();
   await expect(page.getByText('Đã thêm xe 51B-123.45')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Xe (1)' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Xe (1)', exact: true })).toBeVisible();
 
   // 5h. Thêm kiểm định sắp hết hạn → cảnh báo; thêm bản mới → bản cũ vào "giấy cũ"
   await page.getByRole('button', { name: 'Giấy tờ', exact: true }).click();

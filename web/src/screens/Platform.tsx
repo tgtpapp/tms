@@ -37,7 +37,7 @@ export function PlatformScreen() {
       const tenantId = await rpc<string>('create_tenant', { p_code: form.code, p_name: form.name });
       await adminUsers({ action: 'create_tenant_owner', tenant_id: tenantId, phone: form.ownerPhone,
                          full_name: form.ownerName, password: form.ownerPassword });
-      toast('ok', `Đã tạo nhà xe ${form.name} và Chủ nhà xe`);
+      toast('ok', `Đã tạo nhà xe ${form.name}. Mã đăng nhập: ${form.code.trim().toLowerCase()}`);
       setForm({ code: '', name: '', ownerName: '', ownerPhone: '', ownerPassword: '' });
       await load();
     } catch (e2) {

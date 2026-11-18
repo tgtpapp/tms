@@ -4,7 +4,7 @@ async function login(page: Page, phone: string, password: string) {
   await expect(page.getByRole('heading', { name: 'Đăng nhập' })).toBeVisible();
   await page.getByLabel('Số điện thoại', { exact: true }).fill(phone);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
 }
 
 test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên → nhân viên đăng nhập đúng quyền', async ({ page }) => {
@@ -26,6 +26,15 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Mật khẩu ban đầu').fill('chu123');
   await page.getByRole('button', { name: 'Tạo nhà xe' }).click();
   await expect(page.getByRole('heading', { name: 'Nhà xe (1)' })).toBeVisible();
+
+  // 2b. Tạo thêm nhà xe B (không cần tạo project / địa chỉ mới)
+  await page.getByLabel('Mã nhà xe (chữ thường, số, gạch ngang)').fill('nha-xe-b');
+  await page.getByLabel('Tên nhà xe').fill('Nhà xe B');
+  await page.getByLabel('Họ tên chủ nhà xe').fill('Chủ nhà xe B');
+  await page.getByLabel('Số điện thoại chủ nhà xe').fill('0903000003');
+  await page.getByLabel('Mật khẩu ban đầu').fill('chub123');
+  await page.getByRole('button', { name: 'Tạo nhà xe' }).click();
+  await expect(page.getByRole('heading', { name: 'Nhà xe (2)' })).toBeVisible();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
 
   // 3. Chủ nhà xe đăng nhập bằng số điện thoại
@@ -59,5 +68,20 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
   await login(page, '0902000002', 'sai-mat-khau');
-  await expect(page.getByText('Sai số điện thoại hoặc mật khẩu')).toBeVisible();
+  await expect(page.getByText('Sai mã nhà xe, số điện thoại hoặc mật khẩu')).toBeVisible();
+
+  // 8. Chủ nhà xe B đăng nhập cùng địa chỉ bằng mã nhà xe; chỉ thấy dữ liệu nhà xe B
+  await page.getByRole('button', { name: 'Đăng nhập nhà xe khác' }).click();
+  await page.getByLabel('Mã nhà xe', { exact: true }).fill('nha-xe-b');
+  await page.getByLabel('Số điện thoại', { exact: true }).fill('0903000003');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('chub123');
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Người dùng (1)' })).toBeVisible();
+  await expect(page.getByText('Nhà xe B')).toBeVisible();
+  await page.getByRole('button', { name: 'Chi nhánh & phòng vé' }).click();
+  await expect(page.getByRole('heading', { name: 'Chi nhánh (0)' })).toBeVisible();
+
+  // 9. Máy nhớ mã nhà xe: đăng xuất ra vẫn hiện sẵn mã nha-xe-b
+  await page.getByRole('button', { name: 'Đăng xuất' }).click();
+  await expect(page.getByLabel('Mã nhà xe', { exact: true })).toHaveValue('nha-xe-b');
 });

@@ -8,7 +8,7 @@ export interface AppConfig {
   appEnv: AppEnv;
   supabaseUrl: string;
   supabasePublishableKey: string;
-  /** Mã nhà xe của trang web này (vd: thinh-phat) – dùng khi đăng nhập bằng số điện thoại */
+  /** Mã nhà xe mặc định của trang (vd: thinh-phat). Trống = người dùng tự nhập mã nhà xe khi đăng nhập */
   tenantCode: string;
   /** Tên miền email nội bộ để đăng nhập bằng số điện thoại (không gửi thư) */
   loginEmailDomain: string;
@@ -49,7 +49,7 @@ export function loadConfig(): ConfigResult {
     appEnv,
     supabaseUrl: read('VITE_SUPABASE_URL', missing),
     supabasePublishableKey: read('VITE_SUPABASE_PUBLISHABLE_KEY', missing),
-    tenantCode: read('VITE_TENANT_CODE', missing).toLowerCase(),
+    tenantCode: read('VITE_TENANT_CODE', null).toLowerCase(),
     loginEmailDomain: read('VITE_LOGIN_EMAIL_DOMAIN', null) || 'login.tms.invalid',
   };
 

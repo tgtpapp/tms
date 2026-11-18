@@ -44,7 +44,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Họ tên', { exact: true }).fill('Nhân viên bán vé');
   await page.getByLabel('Số điện thoại', { exact: true }).fill('0902000002');
   await page.getByLabel('Mật khẩu ban đầu').fill('nv1234');
-  await page.getByLabel('Vai trò', { exact: true }).selectOption({ label: 'Bán vé' });
+  await page.getByRole('combobox', { name: /^Vai trò/ }).selectOption({ label: 'Bán vé' });
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (2)' })).toBeVisible();
   await expect(page.getByText('Bán vé · Toàn nhà xe')).toBeVisible();

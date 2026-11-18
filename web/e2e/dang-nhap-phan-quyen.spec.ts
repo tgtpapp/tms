@@ -174,7 +174,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Hố Nai – Vũng Tàu')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm tuyến' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Xe', exact: true }).click();
-  await expect(page.getByText('Giường nằm 6 chỗ')).toBeVisible();
+  await expect(page.getByText('Giường nằm 6 chỗ', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm loại xe' })).toHaveCount(0);
   await expect(page.getByText('51B-123.45').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm xe' })).toHaveCount(0);

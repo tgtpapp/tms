@@ -21,6 +21,13 @@ select ok(not has_table_privilege('authenticated', 'public.app_users', 'INSERT')
 select ok(not has_table_privilege('authenticated', 'public.user_roles', 'INSERT'), 'Trình duyệt không gán vai trò thẳng vào bảng');
 select ok(not has_table_privilege('authenticated', 'public.audit_logs', 'INSERT'), 'Trình duyệt không ghi được nhật ký');
 
+-- Không hàm nội bộ svc_* nào gọi được từ trình duyệt
+select is((
+  select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname like 'svc\_%'
+    and (has_function_privilege('authenticated', p.oid, 'EXECUTE') or has_function_privilege('anon', p.oid, 'EXECUTE'))
+), 0, 'Không hàm svc_* nào mở cho trình duyệt');
+
 -- Mọi câu GRANT cho service_role phải nằm trong migration (không phụ thuộc mặc định)
 select ok(exists (
   select 1 from supabase_migrations.schema_migrations where name = 'quyen_service_role'

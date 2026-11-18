@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    name: Kiểm tra giao diện (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cài thư viện
+        run: npm install --no-audit --no-fund
+      - name: Typecheck + build
+        run: npm run check
+      - name: Không để lộ khóa bí mật
+        working-directory: .
+        run: |
+          if grep -RInE "service_role|sb_secret_|postgres(ql)?://" --exclude-dir=.git --exclude=ci.yml --exclude=CLAUDE.md . ; then
+            echo "Phát hiện khóa bí mật trong kho code" && exit 1
+          fi

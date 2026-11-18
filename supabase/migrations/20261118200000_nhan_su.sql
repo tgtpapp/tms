@@ -177,6 +177,8 @@ revoke execute on function public.save_staff(uuid, jsonb) from public, anon, aut
 grant execute on function public.save_staff(uuid, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------- Giấy tờ cá nhân
+alter table public.document_types drop constraint document_types_owner_kind_check;
+alter table public.document_types add check (owner_kind in ('xe', 'nhan_su'));
 insert into public.document_types (code, owner_kind, name, has_expiry, required, sort) values
   ('cccd',          'nhan_su', 'Căn cước / Căn cước công dân',           true, false, 110),
   ('gplx',          'nhan_su', 'Giấy phép lái xe',                       true, false, 120),
@@ -184,9 +186,6 @@ insert into public.document_types (code, owner_kind, name, has_expiry, required,
   ('tap_huan',      'nhan_su', 'Giấy chứng nhận tập huấn nghiệp vụ',     true, false, 140),
   ('hop_dong_ld',   'nhan_su', 'Hợp đồng lao động',                      true, false, 150);
 -- (bắt buộc hay không tùy chức danh: lái xe cần GPLX, khám sức khỏe, tập huấn – xử lý ở giao diện)
-
-alter table public.document_types drop constraint document_types_owner_kind_check;
-alter table public.document_types add check (owner_kind in ('xe', 'nhan_su'));
 
 alter table public.documents add column staff_id uuid;
 alter table public.documents add foreign key (tenant_id, staff_id) references public.staff_members (tenant_id, id);

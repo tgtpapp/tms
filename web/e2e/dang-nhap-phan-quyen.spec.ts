@@ -195,7 +195,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Lý do vẫn xếp').fill('Đang bổ sung giấy tờ');
   await page.getByRole('button', { name: 'Vẫn lưu' }).click();
   await expect(page.getByText('Đã xếp xe cho chuyến')).toBeVisible();
-  await expect(page.getByText('Đủ xe + lái')).toBeVisible();
+  await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
 
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
@@ -222,7 +222,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Nguyễn Văn Tài', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
-  await expect(page.getByText('Đủ xe + lái')).toBeVisible();
+  await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Thêm nốt' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Xếp xe/ })).toHaveCount(0);
 

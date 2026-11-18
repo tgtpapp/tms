@@ -70,7 +70,7 @@ select throws_ok($$ select public.update_tenant_profile('Đổi tên', null, nul
   'Nhân viên không sửa được thông tin doanh nghiệp');
 with u as (update public.tenant_settings set value = '60'::jsonb where key = 'ban_ve.giu_ghe_quay_phut' returning 1)
 select is(count(*)::int, 0, 'Nhân viên không sửa được cấu hình') from u;
-select is((select count(*)::int from public.tenant_settings), 4, 'Nhân viên đọc được cấu hình nhà xe mình');
+select is((select count(*)::int from public.tenant_settings), 8, 'Nhân viên đọc được cấu hình nhà xe mình');
 select is((select count(*)::int from public.audit_logs), 0, 'Nhân viên không có quyền xem nhật ký');
 reset role;
 
@@ -79,7 +79,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select value from public.tenant_settings where key = 'ban_ve.giu_ghe_quay_phut'), '5'::jsonb,
   'Chủ B thấy cấu hình của nhà xe B (không bị ảnh hưởng bởi nhà xe A)');
-select is((select count(*)::int from public.tenant_settings), 4, 'Chủ B chỉ thấy 4 cấu hình của nhà xe B');
+select is((select count(*)::int from public.tenant_settings), 8, 'Chủ B chỉ thấy 8 cấu hình của nhà xe B');
 select is((select count(*)::int from public.roles where code = 'thu_ngan'), 0, 'Chủ B không thấy vai trò của nhà xe A');
 select ok(not exists (select 1 from public.audit_logs where tenant_id = (select v from t.ids where k = 'A')),
   'Chủ B không đọc nhật ký nhà xe A');

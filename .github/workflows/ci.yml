@@ -38,9 +38,65 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Khởi động Postgres của Supabase (chạy migration)
+      - name: Khởi động Postgres của Supabase
         run: supabase db start
       - name: Chạy lại toàn bộ migration từ đầu
         run: supabase db reset
       - name: Chạy kiểm thử pgTAP
         run: supabase test db
+
+  e2e:
+    name: Kiểm thử đầu-cuối (đăng nhập, tạo tài khoản)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Kiểm tra kiểu Edge Function
+        run: deno check supabase/functions/admin-users/index.ts supabase/tests/e2e/admin_users.e2e.ts
+      - name: Khởi động Supabase local
+        run: supabase start -x studio,imgproxy,logflare,vector
+      - name: Chạy Edge Function
+        run: |
+          nohup supabase functions serve > functions.log 2>&1 &
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS http://127.0.0.1:54321/functions/v1/admin-users || true)
+            [ "$code" = "200" ] && echo "Edge Function sẵn sàng" && exit 0
+            sleep 2
+          done
+          cat functions.log; exit 1
+      - name: Chạy kịch bản đầu-cuối
+        run: |
+          supabase status -o env > status.env
+          set -a; . ./status.env; set +a
+          deno run -A supabase/tests/e2e/admin_users.e2e.ts
+      - name: Log Edge Function khi lỗi
+        if: failure()
+        run: cat functions.log || true
+
+  deploy:
+    name: Đưa database + Edge Function lên Supabase (bản chạy thật)
+    needs: [web, db, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: deploy-production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # Mã project Supabase (công khai). Đổi máy chủ: sửa dòng này.
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Kết nối project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
+      - name: Đưa migration mới lên (chỉ thêm, không xóa dữ liệu)
+        run: supabase db push -p "$SUPABASE_DB_PASSWORD"
+      - name: Đưa Edge Function lên
+        run: supabase functions deploy admin-users --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt

@@ -4,3 +4,7 @@ project_id = "tms"
 [db]
 port = 54322
 major_version = 17
+
+# Hàm quản lý tài khoản tự kiểm tra phiên đăng nhập bên trong (gọi my_account_context)
+[functions.admin-users]
+verify_jwt = false

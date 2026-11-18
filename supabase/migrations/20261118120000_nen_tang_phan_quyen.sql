@@ -203,8 +203,27 @@ as $$
     and ur.scope_type = 'tenant'
 $$;
 
+-- Được xem người dùng p_user? (chính mình; có user.read toàn nhà xe;
+-- hoặc có user.read ở chi nhánh / phòng vé mà người đó được gán vai trò)
+create function app.can_read_user(p_user uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select p_user = auth.uid()
+      or app.has_permission('user.read')
+      or exists (
+        select 1 from public.user_roles ur
+        where ur.tenant_id = app.current_tenant_id()
+          and ur.user_id = p_user
+          and ur.scope_type <> 'tenant'
+          and app.has_permission('user.read',
+                case when ur.scope_type = 'branch' then ur.scope_id end,
+                case when ur.scope_type = 'ticket_office' then ur.scope_id end)
+      )
+$$;
+
 grant execute on function app.current_tenant_id(), app.is_platform_admin(),
-  app.has_permission(text, uuid, uuid), app.my_tenant_permissions() to authenticated;
+  app.has_permission(text, uuid, uuid), app.my_tenant_permissions(), app.can_read_user(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
 -- 3. TRIGGER: updated_at + nhật ký thao tác
@@ -301,7 +320,7 @@ create policy platform_admins_select on public.platform_admins for select to aut
 -- Người dùng: luôn thấy chính mình; thấy người khác khi có quyền user.read
 create policy app_users_select on public.app_users for select to authenticated
   using (id = auth.uid()
-         or (tenant_id = app.current_tenant_id() and app.has_permission('user.read')));
+         or (tenant_id = app.current_tenant_id() and app.can_read_user(id)));
 
 -- Chi nhánh
 create policy branches_select on public.branches for select to authenticated
@@ -332,8 +351,7 @@ create policy role_permissions_select on public.role_permissions for select to a
 
 -- Gán vai trò: thấy của mình, hoặc của người khác khi có user.read
 create policy user_roles_select on public.user_roles for select to authenticated
-  using (tenant_id = app.current_tenant_id()
-         and (user_id = auth.uid() or app.has_permission('user.read')));
+  using (tenant_id = app.current_tenant_id() and app.can_read_user(user_id));
 
 -- Cấu hình nhà xe
 create policy tenant_settings_select on public.tenant_settings for select to authenticated

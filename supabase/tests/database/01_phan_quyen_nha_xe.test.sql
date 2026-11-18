@@ -11,6 +11,7 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a2', 'x@test.local'),
   ('00000000-0000-0000-0000-0000000000b1', 'ua@test.local'),
   ('00000000-0000-0000-0000-0000000000b2', 'ua2@test.local'),
+  ('00000000-0000-0000-0000-0000000000b3', 'ua3@test.local'),
   ('00000000-0000-0000-0000-0000000000c1', 'ub@test.local');
 
 create schema t;
@@ -39,6 +40,8 @@ select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-
   (select v from t.ids where k = 'A'), '0900000001', 'Chủ A', 'owner') $$, 'Đăng ký Chủ nhà xe A');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b2',
   (select v from t.ids where k = 'A'), '0900000002', 'Nhân viên A2', null) $$, 'Đăng ký nhân viên A2');
+select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b3',
+  (select v from t.ids where k = 'A'), '0900000004', 'Nhân viên bán vé A3', null) $$, 'Đăng ký nhân viên A3');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000c1',
   (select v from t.ids where k = 'B'), '0900000003', 'Chủ B', 'owner') $$, 'Đăng ký Chủ nhà xe B');
 select throws_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000a2',
@@ -54,7 +57,7 @@ select throws_ok($$ insert into public.branches (tenant_id, code, name)
   values ((select v from t.ids where k = 'B'), 'X1', 'Giả mạo') $$, '42501', null,
   'Chủ A không tạo được chi nhánh cho nhà xe B');
 select is((select count(*)::int from public.branches), 2, 'Chủ A thấy đúng 2 chi nhánh của mình');
-select is((select count(*)::int from public.app_users), 2, 'Chủ A thấy 2 người dùng nhà xe A');
+select is((select count(*)::int from public.app_users), 3, 'Chủ A thấy 3 người dùng nhà xe A');
 reset role;
 
 insert into t.ids select 'A1', id from public.branches where code = 'A1' and tenant_id = (select v from t.ids where k = 'A');
@@ -95,6 +98,9 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","r
 select lives_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b2',
   (select id from public.roles where code = 'branch_manager'), 'branch', (select v from t.ids where k = 'A1')) $$,
   'Chủ A giao quản lý chi nhánh A1 cho nhân viên A2');
+select lives_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b3',
+  (select id from public.roles where code = 'seller'), 'branch', (select v from t.ids where k = 'A1')) $$,
+  'Chủ A giao bán vé tại chi nhánh A1 cho nhân viên A3');
 select throws_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b1',
   (select id from public.roles where code = 'admin')) $$, '42501', null, 'Không tự gán vai trò cho chính mình');
 select throws_ok($$ select public.set_user_status('00000000-0000-0000-0000-0000000000b1', 'locked') $$, '42501', null,
@@ -115,7 +121,9 @@ select throws_ok($$ insert into public.ticket_offices (branch_id, code, name)
   'Quản lý A1 không tạo được phòng vé ở chi nhánh A2');
 with u as (update public.branches set name = 'Đổi tên' where id = (select v from t.ids where k = 'A1') returning 1)
 select is(count(*)::int, 0, 'Quản lý chi nhánh không có quyền sửa thông tin chi nhánh') from u;
-select is((select count(*)::int from public.app_users), 2, 'Quản lý chi nhánh có quyền xem người dùng');
+select is((select count(*)::int from public.app_users), 2, 'Quản lý A1 thấy mình và nhân viên chi nhánh A1');
+select is((select count(*)::int from public.app_users where id = '00000000-0000-0000-0000-0000000000b1'), 0,
+  'Quản lý A1 không thấy người ngoài chi nhánh (Chủ A)');
 reset role;
 
 -- ---------------------------------------------------------------- Khóa tài khoản

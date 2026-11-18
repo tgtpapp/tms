@@ -22,9 +22,11 @@ npm run dev
 
 ## Môi trường
 
-| Môi trường | Database | Cấu hình |
-| --- | --- | --- |
-| production | Supabase (Singapore) | `web/.env.production` |
-| staging | Neon (Singapore) | khai báo khi dựng bản thử |
+| Môi trường | Địa chỉ | Database | Cấu hình |
+| --- | --- | --- | --- |
+| production | https://tms-ebj.pages.dev | Supabase (Singapore) | `web/.env.production` |
+| staging | (chưa dựng) | Neon (Singapore) | khai báo khi dựng bản thử |
+
+Cloudflare Pages tự dựng lại trang mỗi khi có code mới trên nhánh `main` (root `web`, lệnh `npm install && npm run build`, thư mục `dist`, `NODE_VERSION=22`).
 
 Đổi máy chủ chỉ cần đổi cấu hình, không sửa code (xem `CLAUDE.md` mục 3).

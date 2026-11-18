@@ -8,6 +8,10 @@ export interface AppConfig {
   appEnv: AppEnv;
   supabaseUrl: string;
   supabasePublishableKey: string;
+  /** Mã nhà xe của trang web này (vd: thinh-phat) – dùng khi đăng nhập bằng số điện thoại */
+  tenantCode: string;
+  /** Tên miền email nội bộ để đăng nhập bằng số điện thoại (không gửi thư) */
+  loginEmailDomain: string;
 }
 
 export interface ConfigResult {
@@ -23,13 +27,15 @@ const RAW = {
   VITE_APP_ENV: import.meta.env.VITE_APP_ENV as string | undefined,
   VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL as string | undefined,
   VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined,
+  VITE_TENANT_CODE: import.meta.env.VITE_TENANT_CODE as string | undefined,
+  VITE_LOGIN_EMAIL_DOMAIN: import.meta.env.VITE_LOGIN_EMAIL_DOMAIN as string | undefined,
 };
 
 type RawKey = keyof typeof RAW;
 
-function read(key: RawKey, missing: string[]): string {
+function read(key: RawKey, missing: string[] | null): string {
   const value = RAW[key]?.trim() ?? '';
-  if (!value) missing.push(key);
+  if (!value && missing) missing.push(key);
   return value;
 }
 
@@ -43,6 +49,8 @@ export function loadConfig(): ConfigResult {
     appEnv,
     supabaseUrl: read('VITE_SUPABASE_URL', missing),
     supabasePublishableKey: read('VITE_SUPABASE_PUBLISHABLE_KEY', missing),
+    tenantCode: read('VITE_TENANT_CODE', missing).toLowerCase(),
+    loginEmailDomain: read('VITE_LOGIN_EMAIL_DOMAIN', null) || 'login.tms.invalid',
   };
 
   return { config, missing };

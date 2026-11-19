@@ -44,3 +44,14 @@ for (const m of models) {
   await call(m, 'ảnh, budget0', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }, true);
   await call(m, 'ảnh, mặc định', { temperature: 0, responseMimeType: 'application/json' }, true);
 }
+
+// Chạy đúng đường đọc giấy tờ của app (lõi doc_reader) với cấu hình thật, ảnh thử 1x1
+import { readDocument } from '../supabase/functions/_shared/doc_reader.ts';
+const t1 = Date.now();
+try {
+  const r = await readDocument({ docType: 'cccd', files: [{ mime: 'image/png', data: PNG }], providers: ps, timeoutMs: 25000 });
+  console.log(`Đường đọc của app: dùng ${r.provider} sau ${Date.now() - t1} ms; các lần: ${r.attempts.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
+} catch (e) {
+  const at = (e as { attempts?: { provider: string; ms: number; error?: string }[] }).attempts ?? [];
+  console.log(`Đường đọc của app: LỖI sau ${Date.now() - t1} ms: ${(e as Error).message}; các lần: ${at.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
+}

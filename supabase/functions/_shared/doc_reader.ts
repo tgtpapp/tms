@@ -66,10 +66,10 @@ export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<str
     const ver = (n: string) => Number(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
     const list = (j.models ?? []).filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
       .map((m) => String(m.name ?? '').replace(/^models\//, ''))
-      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|thinking|exp|embed/i.test(n))
+      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|thinking|exp|embed|preview/i.test(n))
       .sort((a, b) => ver(b) - ver(a) || Number(/lite/.test(a)) - Number(/lite/.test(b))
         || Number(/preview/.test(a)) - Number(/preview/.test(b)) || a.length - b.length)
-      .slice(0, 4);
+      .slice(0, 8);
     discovered.set(base, { t: Date.now(), list });
     return list;
   } catch {
@@ -78,6 +78,15 @@ export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<str
 }
 
 const deadModels = new Set<string>();
+
+// Thứ tự dự phòng (đã đo bằng khóa thật 19/11/2026: 3.5 Flash và 3.1 Flash-Lite trả lời 1–2 giây;
+// bản mới nhất và "latest" hay quá tải 503 / chậm). Chỉ dùng model Google còn liệt kê; danh sách đổi được trong cấu hình (model).
+const PREFERRED = ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+async function geminiFallbacks(p: Provider, fetchFn: FetchFn): Promise<string[]> {
+  const found = await discoverGemini(p, fetchFn);
+  const pref = found.length ? PREFERRED.filter((m) => found.includes(m) || /latest/.test(m)) : PREFERRED;
+  return [...new Set([...pref, ...found])].filter((m) => !deadModels.has(m));
+}
 
 // Luân phiên khóa: mỗi lần dùng AI nào thì lấy khóa kế tiếp của AI đó.
 const cursors = new Map<string, number>();
@@ -257,7 +266,7 @@ export async function readDocument(opts: {
   const queue: Provider[] = [];
   for (const p of candidates) {
     if (p.type === 'gemini' && p.model === 'auto') {
-      const list = [...new Set(['gemini-flash-latest', ...await discoverGemini(p, fetchFn)])].slice(0, 3);
+      const list = (await geminiFallbacks(p, fetchFn)).slice(0, 4);
       queue.push(...list.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
     } else queue.push({ ...p, name: p.name ?? `${p.type}:${p.model}` });
   }
@@ -265,7 +274,7 @@ export async function readDocument(opts: {
   const t00 = Date.now();
   const addAlternatives = async (p: Provider, i: number) => {
     // Giống app cũ: tên chung "gemini-flash-latest" (Google tự trỏ tới bản Flash ổn định) rồi các bản tìm được, cuối cùng bản Lite
-    const more = [...new Set(['gemini-flash-latest', ...await discoverGemini(p, fetchFn), 'gemini-flash-lite-latest'])].filter((m) => !tried.has(`gemini|${m}|${p.base_url ?? ''}`) && !queue.slice(i + 1).some((q) => q.model === m)).slice(0, 4);
+    const more = (await geminiFallbacks(p, fetchFn)).filter((m) => !tried.has(`gemini|${m}|${p.base_url ?? ''}`) && !queue.slice(i + 1).some((q) => q.model === m)).slice(0, 4);
     queue.splice(i + 1, 0, ...more.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
   };
   for (let i = 0; i < queue.length; i++) {
@@ -286,7 +295,7 @@ export async function readDocument(opts: {
         raw = await callProvider(p, def, opts.files, fetchFn, opts.timeoutMs);
       } catch (e) {
         // Model không nhận tham số "suy nghĩ" → gửi lại không kèm
-        if (p.type === 'gemini' && e instanceof Error && /^HTTP 400.*think/i.test(e.message)) {
+        if (p.type === 'gemini' && e instanceof Error && /^HTTP 400/.test(e.message)) {
           raw = await callProvider(p, def, opts.files, fetchFn, opts.timeoutMs, true);
         } else throw e;
       }

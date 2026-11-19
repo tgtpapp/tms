@@ -191,3 +191,17 @@ input:focus, select:focus, textarea:focus { outline: 2px solid #b6d4f5; border-c
 label.check { flex-direction: row; align-items: center; gap: 6px; }
 label.check input { min-height: auto; width: auto; }
 .small-select { min-height: 32px; padding: 4px 8px; font-size: 0.85rem; margin-left: 6px; }
+
+/* Ô ảnh (logo, giấy tờ công ty, chữ ký, con dấu) */
+.section-title { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--line); color: #0f766e; font-size: 0.85rem; text-transform: uppercase; letter-spacing: .3px; }
+.img-slot { display: flex; flex-direction: column; gap: 6px; }
+.img-slot-label { font-size: 0.9rem; color: var(--muted); }
+.img-slot-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.img-slot-box { width: 96px; height: 96px; border: 1px dashed #b6d4f5; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+                overflow: hidden; background: repeating-conic-gradient(#f3f4f6 0% 25%, #fff 0% 50%) 50% / 12px 12px; }
+.img-slot-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.topbar-logo { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; vertical-align: middle; margin-right: 6px; }
+.sign-stack { position: relative; height: 80px; display: flex; align-items: center; justify-content: center; }
+.sign-stack img { max-height: 80px; max-width: 100%; }
+.sign-stack img.seal { position: absolute; left: 8%; top: -6px; height: 92px; max-height: 92px; opacity: .92; }
+.ve-logo { height: 14mm; object-fit: contain; }

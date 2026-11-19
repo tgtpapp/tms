@@ -10,7 +10,7 @@
 
 export type FieldKind = 'text' | 'date' | 'int' | 'money';
 export interface DocField { key: string; label: string; kind: FieldKind }
-export type OwnerKind = 'xe' | 'nhan_su';
+export type OwnerKind = 'xe' | 'nhan_su' | 'cong_ty';
 export interface DocTypeDef {
   code: string; owner: OwnerKind; name: string; hasExpiry: boolean; required: boolean; fields: DocField[];
   sides?: string[];   // giấy có nhiều mặt: mỗi mặt một ô tải ảnh riêng (vd: mặt trước, mặt sau)
@@ -120,6 +120,11 @@ export const DOC_TYPES: DocTypeDef[] = [
   { code: 'll_dao_tao', owner: 'nhan_su', record: true, name: 'Đào tạo / tập huấn', hasExpiry: false, required: false,
     fields: [f('ngay', 'Ngày hoàn thành', 'date'), f('so_giay', 'Số giấy chứng nhận'), f('noi_dung', 'Nội dung đào tạo / tập huấn'),
              f('co_so', 'Đơn vị tổ chức'), f('het_han', 'Có giá trị đến', 'date')] },
+  // ------------------------------------------------------------ Giấy tờ công ty (Cấu hình → Thông tin công ty)
+  { code: 'gpkd_van_tai', owner: 'cong_ty', name: 'Giấy phép kinh doanh vận tải bằng xe ô tô', hasExpiry: false, required: false,
+    fields: [f('so_giay', 'Số giấy phép'), f('ten_don_vi', 'Tên đơn vị kinh doanh'), f('nguoi_dai_dien', 'Người đại diện theo pháp luật'),
+             f('dia_chi', 'Địa chỉ trụ sở'), f('loai_hinh', 'Loại hình kinh doanh được phép'), f('ngay_cap', 'Ngày cấp', 'date'),
+             f('noi_cap', 'Cơ quan cấp')] },
 ];
 
 export const docTypeOf = (code: string): DocTypeDef | undefined => DOC_TYPES.find((d) => d.code === code);

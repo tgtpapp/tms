@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { TicketPrint, type TicketPrintData } from '../components/TicketPrint';
+import { companyFileUrl } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -54,6 +55,10 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [tripId, setTripId] = useState<string | null>(null);
   const [footer, setFooter] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+  const [logo, setLogo] = useState<string | null>(null);
+  useEffect(() => {
+    if (ctx.tenant_id) void companyFileUrl(ctx.tenant_id, 'logo.png').then(setLogo);
+  }, [ctx.tenant_id]);
   useEffect(() => {
     void supabase.from('tenant_settings').select('value').eq('key', 've.ghi_chu').maybeSingle()
       .then(({ data }) => setFooter(((data as { value: unknown } | null)?.value as string | undefined) || null));
@@ -134,7 +139,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                   stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                   seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                   otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
-                  footer={footer} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }} />
+                  footer={footer} logo={logo} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }} />
       )}
     </>
   );
@@ -234,7 +239,7 @@ function TripSell(props: TripSellProps) {
   const bookingOf = (id: string) => bookings.find((b) => b.id === id);
   const ticketData = (list: Ticket[], code: string): TicketPrintData => ({
     code, tenant: ctx.tenant_name ?? '', routeName: props.routeName, departAt: trip.depart_at, plate: props.plate, seller: ctx.full_name ?? '',
-    footer: props.footer,
+    footer: props.footer, logo: props.logo,
     tickets: list.map((t) => ({
       seat: t.seat_label, from: stopName(t.from_stop_id), to: stopName(t.to_stop_id), price: t.price,
       name: t.passenger_name, phone: t.passenger_phone, pickup: t.pickup_note, dropoff: t.dropoff_note,

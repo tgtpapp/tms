@@ -199,6 +199,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5l. In lệnh vận chuyển: cấu hình hậu tố TGTP, bấm "In lệnh" → bản in đúng mẫu, số lệnh theo quy ước
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByLabel('Tên pháp lý (theo đăng ký kinh doanh)').fill('Công ty TNHH MTV Tường Gia Thịnh Phát');
+  await page.getByLabel('Số CCCD giám đốc').fill('031073026942');
+  await page.getByLabel('Số GPKD vận tải').fill('1265/GPKDVT');
+  await page.getByLabel('Ảnh Chữ ký giám đốc').setInputFiles(png);
+  await expect(page.getByText('Đã lưu ảnh')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bỏ ảnh' })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Lưu thông tin công ty' }).click();
+  await expect(page.getByText('Đã lưu thông tin công ty')).toBeVisible();
   await page.getByLabel('Hậu tố số lệnh (viết tắt công ty)').fill('TGTP');
   await page.getByLabel('Họ tên người ký lệnh').fill('Hà Văn Thịnh');
   await page.getByRole('button', { name: 'Lưu cấu hình lệnh vận chuyển' }).click();
@@ -209,6 +217,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'LỆNH VẬN CHUYỂN' })).toBeVisible();
   await expect(page.getByText(/Số: 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
   await expect(page.locator('.lenh').getByText('51B-123.45')).toBeVisible();
+  await expect(page.locator('.lenh').getByText('CÔNG TY TNHH MTV TƯỜNG GIA THỊNH PHÁT')).toBeVisible();
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText(/Lệnh số 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
 

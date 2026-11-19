@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { signatureUrl, uploadSignature } from '../lib/documents';
-import { errMsg, rpc, supabase } from '../lib/supabase';
+import { CompanyInfo } from './CompanyInfo';
+import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-
-interface Profile {
-  name: string;
-  legal_name: string;
-  tax_code: string;
-  transport_license_no: string;
-  address: string;
-  phone: string;
-}
-
-const EMPTY_PROFILE: Profile = { name: '', legal_name: '', tax_code: '', transport_license_no: '', address: '', phone: '' };
 
 /** Cấu hình nghiệp vụ hiển thị trên màn hình. Giá trị mặc định nằm trong database. */
 const SALE_SETTINGS = [
@@ -34,21 +23,12 @@ const DISPATCH_SETTINGS = [
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
 export function SettingsScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
-  const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [sale, setSale] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [t, s] = await Promise.all([
-      supabase.from('tenants').select('name, legal_name, tax_code, transport_license_no, address, phone').maybeSingle(),
-      supabase.from('tenant_settings').select('key, value'),
-    ]);
-    if (t.error || s.error) return toast('error', (t.error ?? s.error)!.message);
-    const row = (t.data ?? {}) as Partial<Record<keyof Profile, string | null>>;
-    setProfile({
-      name: row.name ?? '', legal_name: row.legal_name ?? '', tax_code: row.tax_code ?? '',
-      transport_license_no: row.transport_license_no ?? '', address: row.address ?? '', phone: row.phone ?? '',
-    });
+    const s = await supabase.from('tenant_settings').select('key, value');
+    if (s.error) return toast('error', s.error.message);
     const values: Record<string, string> = {};
     for (const r of (s.data ?? []) as { key: string; value: unknown }[]) values[r.key] = String(r.value);
     setSale(values);
@@ -57,23 +37,6 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-
-  async function saveProfile(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await rpc('update_tenant_profile', {
-        p_name: profile.name, p_legal_name: profile.legal_name, p_tax_code: profile.tax_code,
-        p_transport_license_no: profile.transport_license_no, p_address: profile.address, p_phone: profile.phone,
-      });
-      toast('ok', 'Đã lưu thông tin doanh nghiệp');
-      await load();
-    } catch (err) {
-      toast('error', errMsg(err));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function saveSale(e: FormEvent) {
     e.preventDefault();
@@ -92,11 +55,6 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     await load();
   }
 
-  const [sign, setSign] = useState<string | null>(null);
-  useEffect(() => {
-    if (tenantId) void signatureUrl(tenantId, 'giam_doc').then(setSign);
-  }, [tenantId]);
-
   async function saveOrder(e: FormEvent) {
     e.preventDefault();
     const suffix = (sale['lenh.hau_to'] ?? '').trim().toUpperCase();
@@ -111,17 +69,6 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     if (error) return toast('error', error.message);
     toast('ok', 'Đã lưu cấu hình lệnh vận chuyển');
     await load();
-  }
-
-  async function pickSign(file: File | undefined) {
-    if (!file) return;
-    try {
-      await uploadSignature(tenantId, 'giam_doc', file);
-      setSign(await signatureUrl(tenantId, 'giam_doc'));
-      toast('ok', 'Đã lưu chữ ký + dấu Giám đốc');
-    } catch (err) {
-      toast('error', errMsg(err));
-    }
   }
 
   async function saveBooking(e: FormEvent) {
@@ -168,22 +115,10 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     await load();
   }
 
-  const setP = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) => setProfile({ ...profile, [k]: e.target.value });
 
   return (
     <>
-      <form className="card form" onSubmit={saveProfile}>
-        <h2>Thông tin doanh nghiệp</h2>
-        <div className="grid2">
-          <label>Tên nhà xe<input value={profile.name} onChange={setP('name')} required /></label>
-          <label>Tên pháp lý (theo đăng ký kinh doanh)<input value={profile.legal_name} onChange={setP('legal_name')} /></label>
-          <label>Mã số thuế<input value={profile.tax_code} onChange={setP('tax_code')} inputMode="numeric" /></label>
-          <label>Số giấy phép kinh doanh vận tải<input value={profile.transport_license_no} onChange={setP('transport_license_no')} /></label>
-          <label>Địa chỉ<input value={profile.address} onChange={setP('address')} /></label>
-          <label>Điện thoại<input value={profile.phone} onChange={setP('phone')} inputMode="tel" /></label>
-        </div>
-        <button className="btn primary" disabled={busy}>Lưu thông tin</button>
-      </form>
+      <CompanyInfo tenantId={tenantId} />
       <form className="card form" onSubmit={saveSale}>
         <h2>Bán vé</h2>
         <div className="grid2">
@@ -225,11 +160,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
         <label>Họ tên người ký lệnh
           <input value={sale['cong_ty.giam_doc'] ?? ''} onChange={(e) => setSale({ ...sale, 'cong_ty.giam_doc': e.target.value })} placeholder="vd: Hà Văn Thịnh" />
         </label>
-        <label className="upload">
-          <span>{sign ? 'Đổi ảnh chữ ký + dấu' : 'Tải ảnh chữ ký + dấu (nên là PNG nền trong suốt)'}</span>
-          <input type="file" accept="image/*" aria-label="Ảnh chữ ký và dấu người ký lệnh" onChange={(e) => { void pickSign(e.target.files?.[0]); e.target.value = ''; }} />
-        </label>
-        {sign && <img src={sign} alt="Chữ ký và dấu người ký lệnh" className="sign-preview" />}
+        <p className="muted small">Chữ ký giám đốc và con dấu: tải ở phần "Hồ sơ pháp lý & chữ ký" bên trên.</p>
         <button className="btn primary" disabled={busy}>Lưu cấu hình lệnh vận chuyển</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDispatch(e)}>

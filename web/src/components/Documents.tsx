@@ -183,7 +183,7 @@ export function FilesButton({ files }: { files: string[] }) {
 /* ------------------------------------------------------------------ Một dòng giấy tờ của 1 chủ */
 
 export interface DocOwner { kind: OwnerKind; id: string; label: string }
-const ADD_RPC: Record<OwnerKind, { fn: string; idParam: string }> = {
+const ADD_RPC: Partial<Record<OwnerKind, { fn: string; idParam: string }>> = {
   xe: { fn: 'add_vehicle_document', idParam: 'p_vehicle_id' },
   nhan_su: { fn: 'add_staff_document', idParam: 'p_staff_id' },
 };
@@ -208,6 +208,7 @@ export function DocRow(props: {
     try {
       const paths = await uploadFiles(tenantId, owner.kind, owner.id, owner.label, def.code, scanned.files);
       const r = ADD_RPC[owner.kind];
+      if (!r) throw new Error('Loại giấy tờ này lưu ở Cấu hình công ty');
       await rpc(r.fn, { [r.idParam]: owner.id, p_doc_type: def.code, ...toRpc(def, values), p_files: paths, p_note: null, p_request_id: reqId });
       toast('ok', `Đã lưu ${def.name}`);
       setMode('view');

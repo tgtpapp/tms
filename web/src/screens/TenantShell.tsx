@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Centered } from '../components/Centered';
 import { config } from '../config';
+import { companyFileUrl } from '../lib/documents';
 import { loadPermissions, type Permissions } from '../lib/permissions';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { AccountScreen } from './Account';
@@ -58,6 +59,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     <div className="page">
       <header className="topbar">
         <div>
+          <Logo tenantId={ctx.tenant_id} />
           <b>{ctx.tenant_name ?? config.appName}</b>
           <span className="muted"> · {ctx.full_name}</span>
         </div>
@@ -85,4 +87,24 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       </main>
     </div>
   );
+}
+
+/** Logo công ty trên thanh trên cùng + biểu tượng tab trình duyệt (đổi logo: tải lại trang để cập nhật) */
+function Logo({ tenantId }: { tenantId: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tenantId) return;
+    void companyFileUrl(tenantId, 'logo.png').then((u) => {
+      setUrl(u);
+      if (!u) return;
+      let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = u;
+    });
+  }, [tenantId]);
+  return url ? <img src={url} alt="" className="topbar-logo" /> : null;
 }

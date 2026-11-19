@@ -39,9 +39,13 @@ select is((select value from public.tenant_settings where tenant_id = (select v 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok($$ select public.update_tenant_profile('Nhà xe Thịnh Phát', 'Công ty TNHH Thịnh Phát', '0312345678',
-  'GP-01', 'Biên Hòa, Đồng Nai', '0251000000') $$, 'Chủ A sửa thông tin doanh nghiệp');
+  'GP-01', '2026-06-11', 'Sở Xây dựng Đồng Nai', 'Biên Hòa, Đồng Nai', '0251000000', '031073026942') $$, 'Chủ A sửa thông tin doanh nghiệp');
+select is((select transport_license_issuer from public.tenants), 'Sở Xây dựng Đồng Nai', 'Lưu nơi cấp giấy phép kinh doanh vận tải');
+select is((select director_id_no from public.tenant_private), '031073026942', 'Chủ xem được số CCCD giám đốc');
+select throws_ok($$ select public.update_tenant_profile('X', null, null, null, null, null, null, null, '0310') $$, '22023', null,
+  'Số CCCD giám đốc phải đủ 12 số');
 select is((select name from public.tenants), 'Nhà xe Thịnh Phát', 'Tên nhà xe đã đổi');
-select throws_ok($$ select public.update_tenant_profile('  ', null, null, null, null, null) $$, '22023', null,
+select throws_ok($$ select public.update_tenant_profile('  ', null, null, null, null, null, null, null, null) $$, '22023', null,
   'Không cho để trống tên nhà xe');
 
 select lives_ok($$ update public.tenant_settings set value = '7'::jsonb where key = 'ban_ve.giu_ghe_quay_phut' $$,
@@ -66,7 +70,8 @@ reset role;
 -- ---------------------------------------------------------------- Nhân viên A (bán vé)
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
-select throws_ok($$ select public.update_tenant_profile('Đổi tên', null, null, null, null, null) $$, '42501', null,
+select is((select count(*)::int from public.tenant_private), 0, 'Nhân viên không xem được CCCD giám đốc');
+select throws_ok($$ select public.update_tenant_profile('Đổi tên', null, null, null, null, null, null, null, null) $$, '42501', null,
   'Nhân viên không sửa được thông tin doanh nghiệp');
 with u as (update public.tenant_settings set value = '60'::jsonb where key = 'ban_ve.giu_ghe_quay_phut' returning 1)
 select is(count(*)::int, 0, 'Nhân viên không sửa được cấu hình') from u;

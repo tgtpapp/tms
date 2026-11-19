@@ -114,11 +114,12 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       const tid = account.tenant_id ?? '';
       const [tn, ss, ret] = await Promise.all([
         supabase.from('tenants').select('name, legal_name').maybeSingle(),
-        supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky']),
+        supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'in.chu_ky_giam_doc', 'in.con_dau']),
         supabase.from('trips').select('depart_at, service_date').eq('vehicle_id', t.vehicle_id ?? '').eq('status', 'mo')
           .neq('direction', t.direction).gte('depart_at', t.arrive_at).lte('service_date', order.valid_to).order('depart_at').limit(1),
       ]);
-      const setting = (k: string) => ((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value as string | undefined;
+      const raw = (k: string) => ((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value;
+      const setting = (k: string) => raw(k) as string | undefined;
       const route = routes.find((x) => x.id === t.route_id);
       const veh = vehicles.find((x) => x.id === t.vehicle_id);
       const vt = vtypes.find((x) => x.id === veh?.vehicle_type_id);
@@ -130,8 +131,9 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       };
       const [a, b] = ends(t.route_id, t.direction).split(' → ');
       const r0 = (ret.data ?? [])[0] as { depart_at: string; service_date: string } | undefined;
-      const [signerImg, dispatcherImg, qr] = await Promise.all([
-        signatureUrl(tid, 'giam_doc'),
+      const [signerImg, sealImg, dispatcherImg, qr] = await Promise.all([
+        raw('in.chu_ky_giam_doc') === false ? Promise.resolve(null) : signatureUrl(tid, 'giam_doc'),
+        raw('in.con_dau') === false ? Promise.resolve(null) : signatureUrl(tid, 'con_dau'),
         account.user_id ? signatureUrl(tid, account.user_id) : Promise.resolve(null),
         QRCode.toDataURL(`LVC ${order.order_no} | ${veh?.plate ?? ''} | ${route?.name ?? ''} | ${hhmm(t.depart_at)} ${fmtDate(t.service_date)}`,
                          { margin: 0, width: 240 }),
@@ -140,7 +142,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       setPrinting({
         orderNo: order.order_no, issueDate: new Date(order.issued_at).toLocaleDateString('sv-SE', { timeZone: TZ }),
         validFrom: order.valid_from, validTo: order.valid_to, company: tnRow.legal_name || tnRow.name || '',
-        signerTitle: setting('cong_ty.chuc_danh_ky') || 'Giám đốc', signerName: setting('cong_ty.giam_doc') ?? '', signerImg,
+        signerTitle: setting('cong_ty.chuc_danh_ky') || 'Giám đốc', signerName: setting('cong_ty.giam_doc') ?? '', signerImg, sealImg,
         driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: who('phu_xe')?.name ?? null,
         plate: veh?.plate ?? '', seats: vt ? vt.reg_seats + vt.reg_berths : null,
         routeName: route?.name ?? '', distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,

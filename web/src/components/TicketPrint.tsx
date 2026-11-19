@@ -10,6 +10,7 @@ export interface TicketPrintData {
   plate: string | null;
   seller: string;
   footer: string | null;   // ghi chú quy định in cuối vé (Cấu hình → Bán vé)
+  logo: string | null;
   tickets: {
     seat: string; from: string; to: string; price: number; name: string | null; phone: string | null;
     pickup: string | null; dropoff: string | null; paid: boolean; holdUntil: string | null;
@@ -65,6 +66,7 @@ export function TicketPrint({ data, onClose }: { data: TicketPrintData; onClose:
       <div className={`ve-list w${width}`}>
         {data.tickets.map((t, i) => (
           <div key={i} className="ve">
+            {data.logo && <div className="c"><img src={data.logo} alt="" className="ve-logo" /></div>}
             <div className="c"><b>{data.tenant.toUpperCase()}</b></div>
             <div className="c ve-title">VÉ XE KHÁCH</div>
             <div className="c">Mã vé: <b>{data.code}</b>{data.tickets.length > 1 ? ` (${i + 1}/${data.tickets.length})` : ''}</div>

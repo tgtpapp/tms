@@ -10,6 +10,7 @@ export interface OrderPrintData {
   signerTitle: string;
   signerName: string;
   signerImg: string | null;
+  sealImg: string | null;
   driver1: { name: string; hang: string | null } | null;
   driver2: { name: string; hang: string | null } | null;
   assistant: string | null;
@@ -112,7 +113,10 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
               </td>
               <td className="c lenh-sign">
                 <i><b>{data.signerTitle}</b><br />(Ký tên và đóng dấu)</i>
-                <div className="sign-box">{data.signerImg && <img src={data.signerImg} alt="" />}</div>
+                <div className="sign-stack">
+                  {data.signerImg && <img src={data.signerImg} alt="" />}
+                  {data.sealImg && <img src={data.sealImg} alt="" className="seal" />}
+                </div>
                 <b><i>{data.signerName}</i></b>
               </td>
             </tr>

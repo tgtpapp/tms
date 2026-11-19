@@ -94,9 +94,9 @@ export async function signedUrl(path: string): Promise<string> {
 
 /* ------------------------------------------------------------------ Chữ ký (in lệnh vận chuyển) */
 
-/** Ảnh chữ ký: giữ nền trong suốt (PNG), cạnh dài tối đa 800px. */
-async function preparePng(file: File): Promise<Blob> {
-  if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh (nên dùng PNG nền trong suốt)');
+/** Ảnh PNG cạnh dài tối đa 800px. removeWhite: tách nền trắng (chữ ký, con dấu chụp trên giấy trắng). */
+async function preparePng(file: File, removeWhite: boolean): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh');
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement('canvas');
@@ -106,19 +106,53 @@ async function preparePng(file: File): Promise<Blob> {
   if (!ctx) throw new Error('Trình duyệt không xử lý được ảnh');
   ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
   bmp.close();
+  if (removeWhite) {
+    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const p = img.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const lum = (p[i] + p[i + 1] + p[i + 2]) / 3;
+      const sat = Math.max(p[i], p[i + 1], p[i + 2]) - Math.min(p[i], p[i + 1], p[i + 2]);
+      // Nền giấy: sáng và gần như không màu → trong suốt; viền chuyển dần cho mịn
+      if (lum > 215 && sat < 40) p[i + 3] = 0;
+      else if (lum > 170 && sat < 40) p[i + 3] = Math.round(p[i + 3] * (215 - lum) / 45);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Không xử lý được ảnh'))), 'image/png'));
 }
 
-/** who: 'giam_doc' (chữ ký + dấu Giám đốc) hoặc user_id (chữ ký của chính mình). */
+/** who: 'giam_doc' (chữ ký giám đốc), 'con_dau' (con dấu công ty) hoặc user_id (chữ ký của chính mình). Tự tách nền trắng. */
 export async function uploadSignature(tenantId: string, who: string, file: File): Promise<void> {
-  const blob = await preparePng(file);
+  const blob = await preparePng(file, true);
   const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/${who}.png`, blob, { contentType: 'image/png', upsert: true });
-  if (error) throw new Error(`Không tải được chữ ký: ${error.message}`);
+  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
 }
 
-/** Link ảnh chữ ký (10 phút), null nếu chưa có hoặc không có quyền xem. */
+/** Link ảnh chữ ký / con dấu (10 phút), null nếu chưa có hoặc không có quyền xem. */
 export async function signatureUrl(tenantId: string, who: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(`${tenantId}/chu_ky/${who}.png`, 600);
+  return fileUrl(`${tenantId}/chu_ky/${who}.png`);
+}
+
+/* ------------------------------------------------------------------ Tệp công ty (logo, hồ sơ pháp lý) */
+
+/** path trong thư mục công ty, vd 'logo.png', 'ho_so/giay_phep.jpg' */
+export async function uploadCompanyFile(tenantId: string, path: string, blob: Blob, contentType: string): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/cong_ty/${path}`, blob, { contentType, upsert: true });
+  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
+}
+export async function uploadLogo(tenantId: string, file: File): Promise<void> {
+  await uploadCompanyFile(tenantId, 'logo.png', await preparePng(file, false), 'image/png');
+}
+export const companyFileUrl = (tenantId: string, path: string) => fileUrl(`${tenantId}/cong_ty/${path}`);
+
+/** Xóa ảnh ("Bỏ ảnh"). full: đường dẫn đầy đủ trong bucket. */
+export async function removeFile(full: string): Promise<void> {
+  const { error } = await supabase.storage.from(BUCKET).remove([full]);
+  if (error) throw new Error(`Không bỏ được ảnh: ${error.message}`);
+}
+
+async function fileUrl(full: string): Promise<string | null> {
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(full, 600);
   return error || !data ? null : `${data.signedUrl}&t=${Date.now()}`;
 }

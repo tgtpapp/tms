@@ -200,7 +200,7 @@ jobs:
         run: |
           if [ -n "$AI_PROVIDERS" ]; then
             if supabase secrets set "AI_PROVIDERS=$AI_PROVIDERS" --yes >/dev/null 2>/tmp/err; then echo "Đã chép AI_PROVIDERS từ GitHub sang Supabase"
-            else echo "::warning::Không chép được AI_PROVIDERS sang Supabase: $(head -c 300 /tmp/err)"; fi
+            else echo "::warning::Không chép được AI_PROVIDERS sang Supabase: $(grep -v "^Target:" /tmp/err | tr "\n" " " | head -c 400)"; fi
           else
             echo "GitHub không có secret AI_PROVIDERS (bỏ qua)"
           fi

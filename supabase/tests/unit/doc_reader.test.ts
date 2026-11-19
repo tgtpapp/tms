@@ -78,6 +78,39 @@ Deno.test('Chuẩn hóa: số tiền có dấu chấm, ngày sai bị bỏ, cấ
   assertEquals(r.issues.includes('Hết hạn ngày: ngày không hợp lệ'), true);
   assertEquals(parseProviders(''), []);
   let threw = false;
-  try { parseProviders('[{"type":"openai","model":"m","keys":["k"]}]'); } catch { threw = true; }
+  try { parseProviders('[{"type":"openai","keys":["k"]}]'); } catch { threw = true; }
   assertEquals(threw, true);
+  assertEquals(parseProviders('[{"type":"gemini","keys":["k"]}]')[0].model, 'auto');
+});
+
+Deno.test('Gemini bị khai tử (404) → tự hỏi danh sách model, dùng model Flash mới nhất', async () => {
+  const urls: string[] = [];
+  const r = await readDocument({ docType: 'kiem_dinh', files: IMG, providers: [{ type: 'gemini', model: 'gemini-2.5-flash', keys: ['k'], base_url: 'https://g.test' }],
+    timeoutMs: 1000, fetchFn: (u) => {
+      urls.push(u);
+      if (u.includes('/models?')) {
+        return Promise.resolve(new Response(JSON.stringify({ models: [
+          { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-3.8-flash-image', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-3.6-flash-lite', supportedGenerationMethods: ['generateContent'] },
+        ] }), { status: 200 }));
+      }
+      if (u.includes('gemini-2.5-flash')) return Promise.resolve(new Response(JSON.stringify({ error: { message: 'no longer available' } }), { status: 404 }));
+      return Promise.resolve(geminiReply(GOOD));
+    } });
+  assertEquals(r.provider, 'gemini:gemini-3.8-flash');
+  assertEquals(r.attempts[0].error, 'HTTP 404: no longer available');
+  assertEquals(urls.some((u) => u.includes('image')), false);
+});
+
+Deno.test('Claude đọc được, gửi ảnh dạng base64', async () => {
+  let body = '';
+  const r = await readDocument({ docType: 'kiem_dinh', files: IMG, providers: [{ type: 'claude', model: 'claude-x', keys: ['c'] }], timeoutMs: 1000,
+    fetchFn: (u, i) => {
+      body = String(i.body);
+      assertEquals(u, 'https://api.anthropic.com/v1/messages');
+      return Promise.resolve(new Response(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(GOOD) }] }), { status: 200 }));
+    } });
+  assertEquals(r.provider, 'claude:claude-x');
+  assertEquals(body.includes('"type":"image"'), true);
 });

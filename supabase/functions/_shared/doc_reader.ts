@@ -9,9 +9,9 @@
 import { docTypeOf, PLATE_RE, plateKey, type DocTypeDef } from './doc_types.ts';
 
 export interface Provider {
-  type: 'gemini' | 'openai';   // openai = mọi dịch vụ dùng chuẩn OpenAI (Groq, OpenRouter, Mistral…)
+  type: 'gemini' | 'openai' | 'claude';   // openai = ChatGPT và mọi dịch vụ chuẩn OpenAI (Groq, OpenRouter, Mistral…)
   name?: string;
-  model: string;
+  model: string;               // gemini: "auto" = tự hỏi Google các model Flash còn dùng được (model cũ bị khai tử không phải sửa cấu hình)
   base_url?: string;
   keys: string[];
   pdf?: boolean;               // đọc được PDF (mặc định: chỉ gemini)
@@ -30,6 +30,8 @@ export class ReaderError extends Error {
 type FetchFn = (input: string, init: RequestInit) => Promise<Response>;
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const OPENAI_URL = 'https://api.openai.com/v1';
+const CLAUDE_URL = 'https://api.anthropic.com/v1';
 
 export function parseProviders(raw: string | undefined | null): Provider[] {
   if (!raw || !raw.trim()) return [];
@@ -42,12 +44,37 @@ export function parseProviders(raw: string | undefined | null): Provider[] {
   if (!Array.isArray(list)) throw new ReaderError(500, 'Cấu hình AI_PROVIDERS phải là danh sách');
   return list.map((p, i) => {
     const o = p as Partial<Provider>;
-    if ((o.type !== 'gemini' && o.type !== 'openai') || !o.model || !Array.isArray(o.keys) || o.keys.length === 0
-        || (o.type === 'openai' && !o.base_url)) {
-      throw new ReaderError(500, `Cấu hình AI thứ ${i + 1} thiếu type / model / keys / base_url`);
+    if ((o.type !== 'gemini' && o.type !== 'openai' && o.type !== 'claude') || (!o.model && o.type !== 'gemini')
+        || !Array.isArray(o.keys) || o.keys.length === 0) {
+      throw new ReaderError(500, `Cấu hình AI thứ ${i + 1} thiếu type (gemini / openai / claude) / model / keys`);
     }
-    return { ...o, name: o.name ?? `${o.type}:${o.model}` } as Provider;
+    const model = o.model || 'auto';
+    return { ...o, model, name: o.name ?? `${o.type}:${model}` } as Provider;
   });
+}
+
+// Gemini: hỏi Google danh sách model Flash còn dùng được, mới nhất trước (nhớ 6 giờ trong máy chủ).
+const discovered = new Map<string, { t: number; list: string[] }>();
+export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<string[]> {
+  const base = p.base_url ?? GEMINI_URL;
+  const hit = discovered.get(base);
+  if (hit && Date.now() - hit.t < 6 * 3600e3 && hit.list.length) return hit.list;
+  try {
+    const r = await fetchFn(`${base}/models?pageSize=200`, { method: 'GET', headers: { 'x-goog-api-key': p.keys[0] } });
+    if (!r.ok) return [];
+    const j = await r.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
+    const ver = (n: string) => Number(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
+    const list = (j.models ?? []).filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+      .map((m) => String(m.name ?? '').replace(/^models\//, ''))
+      .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|audio|live|thinking|exp|embed/i.test(n))
+      .sort((a, b) => ver(b) - ver(a) || Number(/lite/.test(a)) - Number(/lite/.test(b))
+        || Number(/preview/.test(a)) - Number(/preview/.test(b)) || a.length - b.length)
+      .slice(0, 4);
+    discovered.set(base, { t: Date.now(), list });
+    return list;
+  } catch {
+    return [];
+  }
 }
 
 // Luân phiên khóa: mỗi lần dùng AI nào thì lấy khóa kế tiếp của AI đó.
@@ -83,7 +110,7 @@ function extractJson(text: string): Record<string, unknown> {
 }
 
 async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fetchFn: FetchFn,
-                            timeoutMs: number): Promise<Record<string, unknown>> {
+                            timeoutMs: number, noThink = false): Promise<Record<string, unknown>> {
   const key = nextKey(p);
   const prompt = buildPrompt(def);
   const ctrl = new AbortController();
@@ -100,13 +127,30 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
           generationConfig: {
             temperature: 0, responseMimeType: 'application/json',
             // Dòng Flash mặc định "suy nghĩ" trước khi trả lời (chậm 10–30 giây); đọc giấy tờ không cần → tắt / tối thiểu
-            ...(/2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } }
+            ...(noThink ? {} : /2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } }
               : /gemini-[3-9][\d.]*-flash/.test(p.model) ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}),
           },
         }),
       });
+    } else if (p.type === 'claude') {
+      res = await fetchFn(`${(p.base_url ?? CLAUDE_URL).replace(/\/$/, '')}/messages`, {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: p.model,
+          max_tokens: 2048,
+          temperature: 0,
+          messages: [{
+            role: 'user',
+            content: [...files.map((x) => ({ type: x.mime === 'application/pdf' ? 'document' : 'image',
+                                             source: { type: 'base64', media_type: x.mime, data: x.data } })),
+                      { type: 'text', text: prompt }],
+          }],
+        }),
+      });
     } else {
-      res = await fetchFn(`${p.base_url!.replace(/\/$/, '')}/chat/completions`, {
+      res = await fetchFn(`${(p.base_url ?? OPENAI_URL).replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
@@ -134,8 +178,10 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
     }
     const j = JSON.parse(body);
     const text: string = p.type === 'gemini'
-      ? (j?.candidates?.[0]?.content?.parts ?? []).map((x: { text?: string }) => x.text ?? '').join('')
-      : (j?.choices?.[0]?.message?.content ?? '');
+      ? (j?.candidates?.[0]?.content?.parts ?? []).filter((x: { thought?: boolean }) => !x.thought).map((x: { text?: string }) => x.text ?? '').join('')
+      : p.type === 'claude'
+        ? (j?.content ?? []).map((x: { text?: string }) => x.text ?? '').join('')
+        : (j?.choices?.[0]?.message?.content ?? '');
     return extractJson(text);
   } catch (e) {
     if (ctrl.signal.aborted) throw new Error(`quá ${timeoutMs / 1000} giây`);
@@ -198,24 +244,50 @@ export async function readDocument(opts: {
   if (!def) throw new ReaderError(400, 'Loại giấy tờ không hợp lệ');
   if (opts.providers.length === 0) throw new ReaderError(503, 'Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay');
   const isPdf = opts.files.some((x) => x.mime === 'application/pdf');
-  const candidates = opts.providers.filter((p) => !isPdf || (p.pdf ?? p.type === 'gemini'));
+  const candidates = opts.providers.filter((p) => !isPdf || (p.pdf ?? p.type !== 'openai'));
   if (candidates.length === 0) throw new ReaderError(422, 'Chưa có AI đọc được PDF, hãy chụp ảnh giấy tờ');
 
   const fetchFn = opts.fetchFn ?? ((u: string, i: RequestInit) => fetch(u, i));
   const attempts: Attempt[] = [];
   let best: { fields: Record<string, FieldValue>; issues: string[]; provider: string } | null = null;
 
+  // Hàng đợi: Gemini "auto" hoặc model bị khai tử (404) → thêm các model Flash Google còn cho dùng
+  const queue: Provider[] = [];
   for (const p of candidates) {
+    if (p.type === 'gemini' && p.model === 'auto') {
+      const list = await discoverGemini(p, fetchFn);
+      if (list.length === 0) attempts.push({ provider: p.name!, ok: false, ms: 0, error: 'không lấy được danh sách model (kiểm tra khóa Google)' });
+      queue.push(...list.slice(0, 3).map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
+    } else queue.push(p);
+  }
+  const tried = new Set<string>();
+  for (let i = 0; i < queue.length; i++) {
+    const p = queue[i];
+    if (tried.has(`${p.type}|${p.model}|${p.base_url ?? ''}`)) continue;
+    tried.add(`${p.type}|${p.model}|${p.base_url ?? ''}`);
     const t0 = Date.now();
     try {
-      const raw = await callProvider(p, def, opts.files, fetchFn, opts.timeoutMs);
+      let raw: Record<string, unknown>;
+      try {
+        raw = await callProvider(p, def, opts.files, fetchFn, opts.timeoutMs);
+      } catch (e) {
+        // Model không nhận tham số "suy nghĩ" → gửi lại không kèm
+        if (p.type === 'gemini' && e instanceof Error && /^HTTP 400.*think/i.test(e.message)) {
+          raw = await callProvider(p, def, opts.files, fetchFn, opts.timeoutMs, true);
+        } else throw e;
+      }
       const r = normalize(def, raw);
       const empty = r.issues.includes('Không đọc được thông tin nào');
       attempts.push({ provider: p.name!, ok: r.issues.length === 0, ms: Date.now() - t0, error: r.issues.join('; ') || undefined });
       if (r.issues.length === 0) return { fields: r.fields, provider: p.name!, warnings: [], attempts };
       if (!empty && (!best || r.issues.length < best.issues.length)) best = { ...r, provider: p.name! };
     } catch (e) {
-      attempts.push({ provider: p.name!, ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) });
+      const msg = e instanceof Error ? e.message : String(e);
+      attempts.push({ provider: p.name!, ok: false, ms: Date.now() - t0, error: msg });
+      if (p.type === 'gemini' && /^HTTP 404/.test(msg)) {
+        const more = (await discoverGemini(p, fetchFn)).filter((m) => m !== p.model).slice(0, 2);
+        queue.splice(i + 1, 0, ...more.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
+      }
     }
   }
   if (best) return { fields: best.fields, provider: best.provider, warnings: best.issues, attempts };

@@ -197,8 +197,6 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       {slot('giay_phep', 'Giấy phép kinh doanh vận tải', 'Tải ảnh chụp hoặc quét giấy phép – AI tự đọc số, ngày cấp, nơi cấp')}
       {slot('cccd_truoc', 'CCCD giám đốc (mặt trước)', 'AI tự đọc số CCCD')}
       {slot('cccd_sau', 'CCCD giám đốc (mặt sau)')}
-        </div>
-      )}
       <label className="check">
         <input type="checkbox" checked={flags.sign} onChange={(e) => setFlags({ ...flags, sign: e.target.checked })} />
         In chữ ký giám đốc vào toàn bộ văn bản

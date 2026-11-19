@@ -820,3 +820,6 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .sc-info { display: flex; flex-direction: column; gap: 2px; }
 .sc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .sc-open { position: absolute; top: 10px; right: 10px; }
+.staff-tabs { padding: 0; margin-bottom: 6px; }
+.staff-table td { vertical-align: middle; }
+.staff-row.off { opacity: .6; }

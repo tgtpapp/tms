@@ -651,7 +651,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
       {Array.from({ length: type.decks }, (_, i) => i + 1).map((d) => (
         <div key={d} className="deck">
           {type.decks > 1 && <div className="muted small">Tầng {d === 1 ? 'dưới' : 'trên'}</div>}
-          <div className="vx-seats" style={{ gridTemplateColumns: `repeat(${type.layout_cols}, minmax(120px, 1fr))` }}>
+          <div className="vx-seats" style={{ gridTemplateColumns: `repeat(${type.layout_cols}, minmax(0, 1fr))` }}>
             {Array.from({ length: type.layout_rows * type.layout_cols }, (_, idx) => {
               const r = Math.floor(idx / type.layout_cols) + 1;
               const c = (idx % type.layout_cols) + 1;

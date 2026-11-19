@@ -744,8 +744,37 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .vxs .printed { display: inline-flex; color: #1d4ed8; }
 .vxs-fix { display: flex; align-items: center; justify-content: center; font-size: 1.6rem; font-weight: 800; color: #111827; min-height: 128px; letter-spacing: .02em; }
 .pd-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
-@media (max-width: 600px) { .pd-cols { grid-template-columns: 1fr; } .vx-trips { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .pd-cols { grid-template-columns: 1fr; } }
 .pd-group { margin-bottom: 8px; }
 .vx-body .seat-dot.dat { background: #fde2e2; } .vx-body .seat-dot.da_tt { background: #dcfce7; } .vx-body .seat-dot.boarded { background: #86efac; }
 .vxs.boarded { background: #86efac; }
 .vx-right { scroll-margin-top: 8px; }
+
+/* Bán vé trên điện thoại (theo CSS app cũ): không tràn ngang, 3 cột chuyến, ghế 3 cột co theo màn hình */
+.vx { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .vx { grid-template-columns: 300px minmax(0, 1fr); } }
+.vx-left, .vx-right, .vx-head, .vx-body, .vx-h2 > div { min-width: 0; }
+.vx-h1 { flex-wrap: wrap; }
+.vx-h1 > span { min-width: 0; overflow-wrap: anywhere; }
+.vxs { position: relative; }
+.vxs-tag { position: absolute; right: 0; top: 0; border-radius: 0 3px 0 6px; padding: 1px 10px; }
+.vxs.dat { background: #fecaca; border-color: #fca5a5; }
+.vxs.da_tt { background: #bbf7d0; border-color: #86efac; }
+.vx-body .seat-dot.dat { background: #fecaca; } .vx-body .seat-dot.da_tt { background: #bbf7d0; }
+@media (max-width: 640px) {
+  .vx-seats { gap: 5px; padding: 4px; }
+  .vxs { min-height: 68px; padding: 3px 5px; font-size: 10.5px; border-radius: 5px; gap: 1px; }
+  .vxs-h > b { font-size: 11px; }
+  .vxs-tag { font-size: 9.5px; padding: 0 6px; }
+  .vxs-n, .vxs-s { font-size: 9.5px; }
+  .vxs-fix { min-height: 68px; font-size: 13px; background: #d1d5db; border-radius: 5px; color: #475467; }
+  .vx-trip { padding: 5px 6px; }
+  .vx-time { font-size: 15px; }
+  .vx-head { padding: 8px 10px; }
+  .vx-h1 { font-size: .95rem; }
+  .vx-tabs > button { padding: 9px 8px; font-size: .85rem; }
+  .vx-leg { margin-left: 0; width: 100%; padding: 4px 0 6px; }
+  .vx-leg select { flex: 1; max-width: none; }
+  .vx-tabs { flex-wrap: wrap; }
+  .vx-tool .btn { padding: 0 10px; }
+}

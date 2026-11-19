@@ -1,6 +1,6 @@
 // Edge Function: AI đọc giấy tờ và trả về các ô để điền sẵn (người dùng kiểm tra rồi mới lưu).
 // - Chỉ người đăng nhập có quyền quản lý loại giấy tờ đó mới gọi được.
-// - Danh sách AI + khóa: secret AI_PROVIDERS (JSON). Thời gian chờ mỗi AI: AI_TIMEOUT_MS (mặc định 10000).
+// - Danh sách AI + khóa: secret AI_PROVIDERS (JSON). Thời gian chờ mỗi AI: AI_TIMEOUT_MS (mặc định 25000).
 // - Không lưu ảnh ở đây; ảnh được lưu vào Storage từ trình duyệt.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       docType: def.code,
       files,
       providers: parseProviders(Deno.env.get('AI_PROVIDERS')),
-      timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 10000) || 10000,
+      timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 25000) || 25000,
     });
     return json(200, result);
   } catch (e) {

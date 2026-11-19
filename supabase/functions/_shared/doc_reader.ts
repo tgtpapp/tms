@@ -60,7 +60,7 @@ export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<str
   const hit = discovered.get(base);
   if (hit && Date.now() - hit.t < 6 * 3600e3 && hit.list.length) return hit.list;
   try {
-    const r = await fetchFn(`${base}/models?pageSize=200`, { method: 'GET', headers: { 'x-goog-api-key': p.keys[0] } });
+    const r = await fetchFn(`${base}/models?pageSize=200`, { method: 'GET', headers: { 'x-goog-api-key': p.keys[0] }, signal: AbortSignal.timeout(5000) });
     if (!r.ok) return [];
     const j = await r.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
     const ver = (n: string) => Number(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] ?? 0);
@@ -76,6 +76,8 @@ export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<str
     return [];
   }
 }
+
+const deadModels = new Set<string>();
 
 // Luân phiên khóa: mỗi lần dùng AI nào thì lấy khóa kế tiếp của AI đó.
 const cursors = new Map<string, number>();
@@ -261,8 +263,20 @@ export async function readDocument(opts: {
     } else queue.push({ ...p, name: p.name ?? `${p.type}:${p.model}` });
   }
   const tried = new Set<string>();
+  const t00 = Date.now();
+  const addAlternatives = async (p: Provider, i: number) => {
+    const more = (await discoverGemini(p, fetchFn)).filter((m) => !tried.has(`gemini|${m}|${p.base_url ?? ''}`) && !queue.slice(i + 1).some((q) => q.model === m)).slice(0, 3);
+    queue.splice(i + 1, 0, ...more.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
+  };
   for (let i = 0; i < queue.length; i++) {
     const p = queue[i];
+    if (Date.now() - t00 > 100_000) break;   // không bắt người dùng chờ quá lâu
+    // Model đã bị Google khai tử (biết từ lần trước): bỏ qua, dùng model còn hoạt động
+    if (p.type === 'gemini' && deadModels.has(p.model)) {
+      tried.add(`${p.type}|${p.model}|${p.base_url ?? ''}`);
+      await addAlternatives(p, i);
+      continue;
+    }
     if (tried.has(`${p.type}|${p.model}|${p.base_url ?? ''}`)) continue;
     tried.add(`${p.type}|${p.model}|${p.base_url ?? ''}`);
     const t0 = Date.now();
@@ -284,10 +298,9 @@ export async function readDocument(opts: {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       attempts.push({ provider: p.name!, ok: false, ms: Date.now() - t0, error: msg });
-      if (p.type === 'gemini' && /^HTTP 404/.test(msg)) {
-        const more = (await discoverGemini(p, fetchFn)).filter((m) => m !== p.model).slice(0, 2);
-        queue.splice(i + 1, 0, ...more.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
-      }
+      if (p.type === 'gemini' && /^HTTP 404/.test(msg)) deadModels.add(p.model);
+      // Gemini lỗi (khai tử, quá tải 503, hết lượt, quá giờ) → thử các model Flash khác còn dùng được
+      if (p.type === 'gemini' && /^HTTP (404|500|503)|hết lượt|quá \d+ giây/.test(msg)) await addAlternatives(p, i);
     }
   }
   if (best) return { fields: best.fields, provider: best.provider, warnings: best.issues, attempts };

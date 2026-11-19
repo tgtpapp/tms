@@ -145,7 +145,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 5g. Thêm xe: tải ảnh giấy đăng ký (CI không có AI → báo nhập tay), nhập tay, lưu kèm giấy tờ
   const png = { name: 'giay.png', mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') };
-  const ngay = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  // ngày theo giờ Việt Nam (UTC+7), không theo giờ UTC của máy chạy kiểm thử
+  const ngay = (n: number) => new Date(Date.now() + 7 * 3600000 + n * 86400000).toISOString().slice(0, 10);
   await page.getByLabel('Tải ảnh Đăng ký').setInputFiles(png);
   await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
   await page.getByLabel('Đăng ký: Số đăng ký').fill('012345');

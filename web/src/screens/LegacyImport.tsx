@@ -136,6 +136,8 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
             if (!s.match) {
               await rpc('save_staff', { p_id: s.id, p: s.staff });
               staffNew++;
+            } else if (s.staff.job_title) {
+              await rpc('set_staff_job_title', { p_id: s.id, p_title: s.staff.job_title });   // người đã có: chỉ điền chức vụ khi đang trống
             }
             docs += await importDocs('nhan_su', s.id, s.name, s.docs, plan.ex, log);
             // Chữ ký nhân viên (trường chuKy của app cũ: ảnh PNG đã tách nền); đã có chữ ký trong TMS thì giữ nguyên

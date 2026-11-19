@@ -30,7 +30,10 @@ select ok(public.storage_usage() ? 'db_bytes' and (public.storage_usage() ->> 'd
 -- Chữ ký có sẵn họ tên
 select lives_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b1', true) $$, 'Tự đặt chữ ký của mình đã có họ tên');
 select lives_ok($$ select public.set_signature_has_name('giam_doc', true) $$, 'Chủ đặt cho chữ ký giám đốc');
-select lives_ok($$ select public.save_staff(gen_random_uuid(), '{"full_name":"Lái xe X","joined_on":"2026-01-01"}') $$, 'Thêm lái xe');
+select lives_ok($$ select public.save_staff(gen_random_uuid(), '{"full_name":"Lái xe X","joined_on":"2026-01-01","job_title":"Tổ trưởng lái xe"}') $$, 'Thêm lái xe');
+select is((select job_title from public.staff_members where full_name = 'Lái xe X'), 'Tổ trưởng lái xe', 'Lưu chức vụ');
+select lives_ok(format('select public.set_staff_job_title(%L, %L)', (select id from public.staff_members where full_name = 'Lái xe X'), 'Khác'), 'Điền chức vụ khi trống');
+select is((select job_title from public.staff_members where full_name = 'Lái xe X'), 'Tổ trưởng lái xe', 'Đã có chức vụ thì không ghi đè');
 select lives_ok(format('select public.set_signature_has_name(%L, true)', 'nv_' || (select id from public.staff_members limit 1)), 'Quản lý đặt cho chữ ký lái xe');
 select ok(app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Quản lý tải được chữ ký lái xe');
 select ok(not app.can_write_signature('nv_00000000-0000-0000-0000-000000000099.png'), 'Không tải chữ ký cho nhân viên không thuộc nhà xe');

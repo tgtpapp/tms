@@ -20,7 +20,7 @@ type Contract = 'khong_xac_dinh' | 'xac_dinh' | 'thu_viec' | 'thoi_vu' | 'khoan_
 
 interface Staff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
-  joined_on: string; left_on: string | null; is_active: boolean;
+  joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null;
 }
 interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; contract_type: Contract | null; note: string | null }
 interface Option { id: string; label: string }
@@ -83,7 +83,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
-      supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active').order('full_name'),
+      supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title').order('full_name'),
       supabase.from('staff_private').select('staff_id, birth_date, gender, address, contract_type, note'),
       supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
@@ -127,14 +127,14 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 /* ------------------------------------------------------------------ Thêm / sửa hồ sơ */
 
 const EMPTY = {
-  full_name: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
+  full_name: '', job_title: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
   user_id: '', birth_date: '', gender: '' as Gender | '', address: '', contract_type: '' as Contract | '', note: '',
 };
 type Form = typeof EMPTY;
 
 function formOf(s: Staff, p: StaffPrivate | undefined): Form {
   return {
-    full_name: s.full_name, position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
+    full_name: s.full_name, job_title: s.job_title ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
     left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
     gender: p?.gender ?? '', address: p?.address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
   };
@@ -240,7 +240,9 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
       <form className="form" onSubmit={submit}>
         <div className="grid2">
           <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
-          <label>Chức danh
+          <label>Chức vụ<input value={f.job_title} onChange={set('job_title')} list="chuc-vu" maxLength={80} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe" /></label>
+          <datalist id="chuc-vu">{['Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ'].map((x) => <option key={x} value={x} />)}</datalist>
+          <label>Nhóm (để xếp chuyến, giấy tờ bắt buộc)
             <select value={f.position} onChange={set('position')}>
               {Object.entries(POSITION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
@@ -305,39 +307,49 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
         )}
       </div>
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
-      <ul className="list">
+      <div className="staff-cards">
         {staff.filter((s) => showLeft || s.is_active).map((s) => {
           const mine = s.user_id === myUserId;
           const canOpen = canEdit || mine;
           const p = priv.find((x) => x.staff_id === s.id);
           const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
           const bad = canEdit ? problems(s, p, docs, warnDays).length : 0;
+          const ini = s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() ?? '').join('');
           return (
-            <li key={s.id} id={`nv-${s.id}`} className="item">
-              <div className="item-head">
-                <div>
-                  <b>{s.full_name}</b> <span className="muted small">· {POSITION[s.position]}{gplx?.data?.hang ? ` · GPLX hạng ${gplx.data.hang}` : ''}
-                    {s.phone ? ` · ${s.phone}` : ''}{s.branch_id ? ` · ${branches.find((b) => b.id === s.branch_id)?.label ?? ''}` : ''}</span>
-                  {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
-                  {mine && <span className="badge">Tôi</span>}
-                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
-                  <div className="muted small">Vào công ty {fmtDate(s.joined_on)} · thâm niên {seniority(s.joined_on, s.left_on)}</div>
+            <div key={s.id} id={`nv-${s.id}`} className={`staff-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
+              <div className="sc-top">
+                <span className="sc-ava" aria-hidden="true">{ini}</span>
+                <div className="sc-name">
+                  <b>{s.full_name}</b>
+                  <span className="sc-job">{s.job_title || POSITION[s.position]}</span>
                 </div>
-                {canOpen && (
-                  <button className="btn small" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>
-                    {canEdit ? 'Sửa' : 'Hồ sơ'}
-                  </button>
-                )}
               </div>
+              <div className="sc-info small">
+                {s.phone && <span>📞 <a href={`tel:${s.phone}`}>{s.phone}</a></span>}
+                {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
+                {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
+                <span className="muted">Vào {fmtDate(s.joined_on)} · {seniority(s.joined_on, s.left_on)}</span>
+              </div>
+              <div className="sc-badges">
+                <span className="badge">{POSITION[s.position]}</span>
+                {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                {mine && <span className="badge">Tôi</span>}
+                {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+              </div>
+              {canOpen && (
+                <button className="btn small sc-open" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>
+                  {canEdit ? 'Sửa' : 'Hồ sơ'}
+                </button>
+              )}
               {open === s.id && canOpen && (
                 <Modal wide title={`Hồ sơ ${s.full_name}`} onClose={() => setOpen(null)}>
                   <StaffDetail {...props} s={s} p={p} />
                 </Modal>
               )}
-            </li>
+            </div>
           );
         })}
-      </ul>
+      </div>
     </section>
   );
 }

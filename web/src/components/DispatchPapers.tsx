@@ -51,14 +51,14 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
         const note = `Lưu từ Điều hành (${data.rows.length} chuyến)`;
         if (pc) {
           await savePdf(monthPath(d, 'Bảng phân công lịch tài & xe'), `Bảng phân công lịch tài & xe ngày ${fmtDate(d)}`, `Bang phan cong ${d}.pdf`,
-            assignPages(data).map((html) => ({ html, land: true })), note);
+            assignPages(data).map((html) => ({ html, land: true })), note, `pc:${d}`);
           okPc++;
         }
         if (nt) {
           for (const x of driversOf(data)) {
             setBusy(`Ngày ${fmtDate(d)}: nghiệm thu ${x.p.name}…`);
             await savePdf(monthPath(d, 'Nghiệm thu an toàn'), `Nghiệm thu an toàn ${fmtDate(d)} · ${x.p.name}`,
-              `${x.no.replace(/\//g, '_')}.pdf`, [{ html: safetyPage(data, x), land: false }], `${x.rows.length} chuyến · Kết luận: ĐẠT`);
+              `${x.no.replace(/\//g, '_')}.pdf`, [{ html: safetyPage(data, x), land: false }], `${x.rows.length} chuyến · Kết luận: ĐẠT`, `ntat:${d}:${x.p.id}`);
             okNt++;
           }
         }

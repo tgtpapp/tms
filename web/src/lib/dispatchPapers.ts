@@ -194,11 +194,17 @@ export async function ensurePath(names: string[]): Promise<string> {
 export const monthPath = (day: string, kind: string) => [day.slice(0, 4), '08. Điều hành xe', kind, `Tháng ${day.slice(5, 7)}-${day.slice(0, 4)}`];
 
 /** Tạo PDF từ các trang rồi lưu vào thư mục; có hồ sơ cùng tên thì thay bản mới (bản cũ ẩn). */
-export async function savePdf(path: string[], name: string, fileName: string, pages: { html: string; land: boolean }[], note: string): Promise<void> {
+export async function savePdf(path: string[], name: string, fileName: string, pages: { html: string; land: boolean }[], note: string, key: string): Promise<void> {
   const imgs = [];
   for (const p of pages) imgs.push(await pageImg(p.html, p.land));
   const data = bytesToBase64(makePdf(imgs));
   const folder = await ensurePath(path);
-  const old = (await supabase.from('archive_items').select('id').eq('folder_id', folder).eq('name', name).eq('is_old', false).limit(1)).data?.[0] as { id: string } | undefined;
-  await drive({ action: 'put', folder_id: folder, name, file_name: fileName, mime: 'application/pdf', data, expires_on: null, note, replace_id: old?.id ?? null });
+  // Mỗi giấy có 1 mã cố định (ghi cuối ghi chú): lưu lại thì thay bản cũ, không sinh thêm bản thứ hai
+  const tag = `[${key}]`;
+  const cur = ((await supabase.from('archive_items').select('id, name, note').eq('folder_id', folder).eq('is_old', false)).data ?? []) as { id: string; name: string; note: string | null }[];
+  const same = cur.filter((x) => (x.note ?? '').includes(tag) || (!(x.note ?? '').includes('[') && x.name === name));
+  const r = await drive<{ id: string }>({ action: 'put', folder_id: folder, name, file_name: fileName, mime: 'application/pdf', data, expires_on: null,
+    note: `${note} ${tag}`, replace_id: same[0]?.id ?? null });
+  const extra = same.slice(1).map((x) => x.id).filter((id) => id !== r.id);
+  if (extra.length) await supabase.from('archive_items').update({ is_old: true, replaced_by: r.id }).in('id', extra);
 }

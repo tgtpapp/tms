@@ -15,6 +15,7 @@ export function DriveSettings() {
   const [ping, setPing] = useState<Ping | null>(null);
   const [busy, setBusy] = useState(false);
   const [showCode, setShowCode] = useState(false);
+  const [showKey, setShowKey] = useState(false);
 
   const load = useCallback(async () => {
     try { setSt(await rpc<St>('drive_status')); } catch (e) { toast('error', errMsg(e)); }
@@ -29,6 +30,7 @@ export function DriveSettings() {
       setF({ url: '', key: '' });
       setPing(null);
       await load();
+      if (url) await test();
     } catch (e) {
       toast('error', errMsg(e));
     } finally {
@@ -61,8 +63,15 @@ export function DriveSettings() {
           <a href={ping.folder} target="_blank" rel="noopener noreferrer">{ping.name}</a></p>
       )}
       <div className="grid2">
-        <label>Địa chỉ Web app<input value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} placeholder="https://script.google.com/macros/s/…/exec" /></label>
-        <label>Mã kết nối{st?.configured ? ' (để trống = giữ mã cũ)' : ''}<input type="password" autoComplete="off" value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })} /></label>
+        <label>Địa chỉ Web app<input value={f.url} autoComplete="off" onChange={(e) => setF({ ...f, url: e.target.value.trim() })} placeholder="https://script.google.com/macros/s/…/exec" /></label>
+        <label>Mã kết nối{st?.configured ? ' (để trống = giữ mã cũ)' : ''}
+          {/* new-password: trình duyệt không tự điền mật khẩu đăng nhập vào ô này */}
+          <span className="inline-form">
+            <input type={showKey ? 'text' : 'password'} name="ma-ket-noi-drive" autoComplete="new-password" spellCheck={false}
+                   value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })} placeholder="đúng như MA_KET_NOI trong Apps Script" />
+            <button type="button" className="btn small" onClick={() => setShowKey(!showKey)}>{showKey ? 'Ẩn' : 'Hiện'}</button>
+          </span>
+        </label>
       </div>
       <div className="actions">
         <button type="button" className="btn primary" disabled={busy || !f.url.trim()} onClick={() => void save(f.url, f.key, 'Đã lưu kết nối Google Drive')}>Lưu kết nối</button>

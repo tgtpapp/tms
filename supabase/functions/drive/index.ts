@@ -32,7 +32,14 @@ async function gas(cfg: { url: string; key: string }, body: Record<string, unkno
   const text = await r.text();
   let j: Record<string, unknown>;
   try { j = JSON.parse(text); } catch { throw new HttpError(502, 'Apps Script trả về không đúng. Kiểm tra địa chỉ Web app và quyền truy cập "Bất kỳ ai"'); }
-  if (!j.ok) throw new HttpError(502, `Apps Script: ${String(j.description ?? 'lỗi không rõ')}`);
+  if (!j.ok) {
+    const d = String(j.description ?? 'lỗi không rõ');
+    if (/sai mã kết nối/i.test(d)) {
+      throw new HttpError(401, 'Sai mã kết nối: mã đã lưu ở TMS khác dòng MA_KET_NOI trong Apps Script. Kiểm tra lại mã (bấm "Hiện" để xem), '
+        + 'nếu vừa sửa MA_KET_NOI thì phải Triển khai → Quản lý bản triển khai → bút chì → Phiên bản: Phiên bản mới → Triển khai.');
+    }
+    throw new HttpError(502, `Apps Script: ${d}`);
+  }
   return j;
 }
 

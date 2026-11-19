@@ -15,6 +15,7 @@ const SALE_SETTINGS = [
 
 type SaleKey = (typeof SALE_SETTINGS)[number]['key'];
 const DOC_WARN = 'giay_to.canh_bao_truoc_ngay';
+const DEFAULT_TYPE = 'chuyen.loai_xe_mac_dinh';
 /** Điều hành. Giới hạn giờ lái theo Luật TTATGT đường bộ 2024, đã sửa bởi Luật 118/2025 (cần xác minh) → để chỉnh được. */
 const DISPATCH_SETTINGS = [
   { key: 'chuyen.tao_truoc_ngay', label: 'Tự tạo chuyến trước (ngày, tối đa 365)', min: 1, max: 365 },
@@ -30,11 +31,14 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
+  const [vtypes, setVtypes] = useState<{ id: string; name: string; reg_seats: number; reg_berths: number }[]>([]);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const s = await supabase.from('tenant_settings').select('key, value');
+    const [s, vt] = await Promise.all([supabase.from('tenant_settings').select('key, value'),
+      supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths').eq('is_active', true).order('name')]);
     if (s.error) return toast('error', s.error.message);
+    setVtypes((vt.data ?? []) as { id: string; name: string; reg_seats: number; reg_berths: number }[]);
     const values: Record<string, string> = {};
     for (const r of (s.data ?? []) as { key: string; value: unknown }[]) values[r.key] = typeof r.value === 'object' ? JSON.stringify(r.value) : String(r.value);
     setSale(values);
@@ -146,6 +150,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
       if (!Number.isInteger(v) || v < d.min || v > d.max) return toast('error', `${d.label}: số nguyên từ ${d.min} đến ${d.max}`);
       rows.push({ key: d.key, value: v });
     }
+    rows.push({ key: DEFAULT_TYPE, value: sale[DEFAULT_TYPE] ?? '' });
     setBusy(true);
     const { error } = await supabase.from('tenant_settings').upsert(rows, { onConflict: 'tenant_id,key' });
     setBusy(false);
@@ -269,6 +274,13 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
                    value={sale[d.key] ?? ''} onChange={(e) => setSale({ ...sale, [d.key]: e.target.value })} required />
           </label>
         ))}
+        <label>Sơ đồ ghế mặc định khi chuyến chưa xếp xe
+          <select value={sale[DEFAULT_TYPE] ?? ''} onChange={(e) => setSale({ ...sale, [DEFAULT_TYPE]: e.target.value })}>
+            <option value="">Tự chọn loại xe 16 chỗ</option>
+            {vtypes.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.reg_seats + t.reg_berths} chỗ)</option>)}
+          </select>
+        </label>
+        <p className="muted small">Xếp xe nào cho chuyến thì bán vé tự theo sơ đồ ghế của xe đó.</p>
         <p className="muted small">Giới hạn giờ lái: Luật TTATGT đường bộ 2024 (Điều 64), đã được sửa bởi Luật số 118/2025 từ 01/7/2026 – cần xác minh con số đang áp dụng.</p>
         <button className="btn primary" disabled={busy}>Lưu cấu hình điều hành</button>
       </form>

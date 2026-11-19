@@ -125,5 +125,27 @@ select is((public.save_timetable((select id from public.routes where code = 'BHV
 select ok((select count(*) > 0 from public.trips t join public.routes r on r.id = t.route_id where r.code = 'BHVT' and t.direction = 've'), 'Đã tạo chuyến chiều về');
 reset role;
 
+-- Sơ đồ mặc định: chuyến chưa xếp xe dùng loại xe 16 chỗ; cấu hình chọn loại khác thì theo cấu hình
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ insert into public.vehicle_types (code, name, reg_seats, reg_berths) values ('L16', 'Limousine 16', 16, 0), ('G29B', 'Ghế 29 B', 29, 0) $$, 'Thêm loại xe 16 và 29 chỗ');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select lives_ok($$ select public.save_timetable((select id from public.routes where code = 'BHVT'), 'di', null, null, null,
+  jsonb_build_array(jsonb_build_object('depart_time', '11:00')), null) $$, 'Thêm giờ chiều đi');
+select is((select distinct vt.code from public.trips t join public.routes r on r.id = t.route_id join public.vehicle_types vt on vt.id = t.vehicle_type_id
+           where r.code = 'BHVT' and t.direction = 'di'), 'L16', 'Chuyến chưa xếp xe tự dùng sơ đồ xe 16 chỗ');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ insert into public.tenant_settings (key, value) values ('chuyen.loai_xe_mac_dinh', to_jsonb((select id::text from public.vehicle_types where code = 'G29B'))) $$,
+  'Chọn sơ đồ mặc định 29 chỗ');
+select lives_ok($$ select public.save_timetable((select id from public.routes where code = 'BHVT'), 'di', null, null, null,
+  jsonb_build_array(jsonb_build_object('depart_time', '11:00'), jsonb_build_object('depart_time', '12:00')), null) $$, 'Thêm giờ 12:00');
+select is((select distinct vt.code from public.trips t join public.routes r on r.id = t.route_id join public.schedules s on s.id = t.schedule_id
+           join public.vehicle_types vt on vt.id = t.vehicle_type_id where r.code = 'BHVT' and s.depart_time = '12:00'), 'G29B', 'Theo cấu hình sơ đồ mặc định');
+reset role;
+
 select * from finish();
 rollback;

@@ -10,6 +10,8 @@ import { useToast } from '../lib/toast';
 import { Transfers } from './Transfers';
 
 type Dir = 'di' | 've';
+/** Từ số chỗ này trở lên mới hiện ô lái xe 2 và phụ xe khi xếp xe */
+const CREW_BIG_SEATS = 30;
 interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; name_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number }
 interface Stop { id: string; name: string }
@@ -523,7 +525,7 @@ function Reopen({ tripId, reload }: { tripId: string; reload: () => Promise<void
 }
 
 function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
-  const { trip, crew, vehicles, staff, licenses, reload, onClose } = props;
+  const { trip, crew, vehicles, vtypes, staff, licenses, reload, onClose } = props;
   const toast = useToast();
   const cur = (role: Crew['role']) => crew.find((c) => c.trip_id === trip.id && c.role === role && c.active)?.staff_id ?? '';
   const [f, setF] = useState({ vehicle: trip.vehicle_id ?? '', d1: cur('lai_xe_1'), d2: cur('lai_xe_2'), px: cur('phu_xe') });
@@ -532,6 +534,10 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
   const [cancel, setCancel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const vType = vehicles.find((v) => v.id === f.vehicle)?.vehicle_type_id;
+  // Xe từ 30 chỗ trở lên mới cần lái xe 2 / phụ xe; xe 16, 29 chỗ chỉ 1 tài xế (quy định tổ lái theo số chỗ: cần xác minh)
+  const vt = vtypes.find((t) => t.id === vType);
+  const big = !!vt && vt.reg_seats + vt.reg_berths >= CREW_BIG_SEATS;
+  const showExtra = big || !!f.d2 || !!f.px;
   const drivers = staff.filter((s) => s.is_active && s.position === 'lai_xe');
   const helpers = staff.filter((s) => s.is_active);
   const hint = useMemo(() => (id: string) => {
@@ -544,8 +550,8 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
     setBusy(true);
     try {
       const r = await rpc<{ saved: boolean; warnings: string[] }>('assign_trip', {
-        p_trip_id: trip.id, p_vehicle_id: f.vehicle || null, p_driver1: f.d1 || null, p_driver2: f.d2 || null,
-        p_assistant: f.px || null, p_reason: withReason ? reason : null,
+        p_trip_id: trip.id, p_vehicle_id: f.vehicle || null, p_driver1: f.d1 || null, p_driver2: showExtra ? f.d2 || null : null,
+        p_assistant: showExtra ? f.px || null : null, p_reason: withReason ? reason : null,
       });
       if (!r.saved) {
         setWarnings(r.warnings);
@@ -588,6 +594,7 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
             {drivers.map((s) => <option key={s.id} value={s.id}>{s.full_name}{hint(s.id)}</option>)}
           </select>
         </label>
+        {showExtra && <>
         <label>Lái xe 2
           <select value={f.d2} onChange={(e) => { setF({ ...f, d2: e.target.value }); setWarnings(null); }}>
             <option value="">Không có</option>
@@ -600,7 +607,9 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
             {helpers.filter((s) => s.id !== f.d1 && s.id !== f.d2).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
           </select>
         </label>
+        </>}
       </div>
+      {vt && <p className="muted small">Xe {vt.name} ({vt.reg_seats + vt.reg_berths} chỗ): {big ? 'xếp thêm lái xe 2, phụ xe nếu cần' : '1 tài xế'} · bán vé theo sơ đồ ghế của xe này</p>}
       {warnings && (
         <div className="warn small">
           <b>Cần lưu ý trước khi xếp:</b>

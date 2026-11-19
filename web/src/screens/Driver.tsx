@@ -5,6 +5,7 @@ import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { MyTransfers } from './Transfers';
 import { ParcelRow, SHIP_COLS, type Shipment } from './Parcels';
+import { MyCharters } from './Charters';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -88,6 +89,7 @@ export function DriverScreen() {
         </div>
       </section>
       <MyTransfers day={day} />
+      <MyCharters />
       {open && trips.find((t) => t.trip_id === open) && (
         <TripRun trip={trips.find((t) => t.trip_id === open)!} stopName={(id) => stops[id] ?? '?'} reload={load} />
       )}

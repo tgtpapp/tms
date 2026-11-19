@@ -9,6 +9,7 @@ import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
 import { DriverScreen } from './Driver';
 import { ParcelsScreen } from './Parcels';
+import { ChartersScreen } from './Charters';
 import { RolesScreen } from './Roles';
 import { RoutesScreen } from './Routes';
 import { SettingsScreen } from './Settings';
@@ -18,7 +19,7 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'driver' | 'parcels' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'driver' | 'parcels' | 'charters' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -53,6 +54,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('ticket.sell') },
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.manage') },
+    { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('trip.manage') },
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: true },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: true },
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: true },
@@ -113,6 +115,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
         <main className="content">
           {tab === 'driver' && <DriverScreen />}
           {tab === 'parcels' && <ParcelsScreen />}
+          {tab === 'charters' && <ChartersScreen />}
           {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
           {tab === 'routes' && <RoutesScreen perms={perms} />}
           {tab === 'sell' && <SellScreen ctx={ctx} perms={perms} />}

@@ -412,3 +412,7 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .drv-board b { font-size: 1.05rem; min-width: 2.5em; }
 .drv-call { font-weight: 600; white-space: nowrap; }
 .drv-info { min-width: 0; }
+
+/* In hợp đồng: chỉ hiện khi in */
+.charter-print { display: none; }
+@media print { .charter-print { display: block; } }

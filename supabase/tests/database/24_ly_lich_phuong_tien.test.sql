@@ -38,18 +38,43 @@ select lives_ok($$ select public.save_repair((select id from public.repair_order
 select is((select count(*)::int from public.repair_items), 1, 'Hạng mục được thay');
 select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-10-06'), '[]') $$, 'Phiếu 2');
 select is((select max(code) from public.repair_orders), 'PSX0002', 'Phiếu 2 số PSX0002');
+-- Nhiên liệu: nhập bồn, cấp từ bồn, đổ ngoài; số phiếu theo loại
+select lives_ok($$ insert into public.fuel_settings (tank_name, opening_l, opening_price) values ('Bồn A', 1000, 20000) $$, 'Thiết lập bồn');
+select lives_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'nhap', 'entry_date', '2026-10-01', 'liters', 2000, 'unit_price', 21000, 'supplier', 'Petrolimex')) $$, 'Nhập bồn');
+select lives_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'bon', 'entry_date', '2026-10-02', 'vehicle_id', (select id from public.vehicles), 'liters', 60, 'odo_km', 150500)) $$, 'Cấp dầu từ bồn');
+select lives_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'bon', 'entry_date', '2026-10-03', 'vehicle_id', (select id from public.vehicles), 'liters', 55.5)) $$, 'Cấp dầu lần 2');
+select lives_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'ngoai', 'entry_date', '2026-10-04', 'vehicle_id', (select id from public.vehicles), 'liters', 40, 'unit_price', 22000)) $$, 'Đổ ngoài');
+select is((select array_agg(code order by code) from public.fuel_entries), array['DN00001', 'ND00001', 'XD00001', 'XD00002'], 'Số phiếu ND / XD / DN tự tăng');
+select throws_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'bon', 'entry_date', '2026-10-02', 'liters', 10)) $$, '22023', 'Chọn xe', 'Cấp dầu phải có xe');
+select throws_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'nhap', 'entry_date', '2026-10-02', 'liters', 10)) $$, '22023', null, 'Nhập bồn phải có giá');
+select throws_ok($$ select public.save_fuel((select id from public.fuel_entries where code = 'XD00001'), jsonb_build_object('kind', 'ngoai', 'entry_date', '2026-10-02', 'vehicle_id', (select id from public.vehicles), 'liters', 10)) $$,
+  '22023', null, 'Không đổi loại phiếu');
+-- Chuyển từ app cũ: giữ số phiếu, nhập lại không trùng
+select is(public.import_legacy_ops(
+  jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01', 'items', '[{"content":"Vá lốp","qty":1,"unit_price":50000}]'::jsonb)),
+  jsonb_build_array(jsonb_build_object('code', 'XD00099', 'kind', 'bon', 'entry_date', '2026-09-01', 'vehicle_id', (select id from public.vehicles), 'liters', 30))) - 'errors',
+  '{"repairs":1,"fuel":1,"same":0}'::jsonb, 'Chuyển phiếu app cũ');
+select is(public.import_legacy_ops(
+  jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01')),
+  jsonb_build_array(jsonb_build_object('code', 'XD00099', 'kind', 'bon', 'entry_date', '2026-09-01', 'vehicle_id', (select id from public.vehicles), 'liters', 30))) ->> 'same',
+  '2', 'Nhập lại không trùng');
+select is((select code from public.fuel_entries where kind = 'bon' order by created_at desc, code desc limit 1), 'XD00099', 'Giữ số phiếu app cũ');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
 select is((select count(*)::int from public.vehicle_incidents), 0, 'Bán vé không xem sự cố xe');
 select is((select count(*)::int from public.repair_orders), 0, 'Bán vé không xem phiếu sửa chữa');
 select throws_ok($$ select public.save_repair(null, '{}', '[]') $$, '42501', null, 'Bán vé không lưu phiếu được');
+select is((select count(*)::int from public.fuel_entries), 0, 'Bán vé không xem phiếu nhiên liệu');
+select throws_ok($$ select public.save_fuel(null, '{}') $$, '42501', null, 'Bán vé không lưu phiếu nhiên liệu');
 select throws_ok($$ insert into public.vehicle_incidents (vehicle_id, occurred_on, summary) values (gen_random_uuid(), '2026-10-02', 'x') $$, '42501', null, 'Bán vé không ghi được');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.vehicle_incidents), 0, 'Nhà xe B không thấy sự cố của A');
 select is((select count(*)::int from public.repair_orders), 0, 'Nhà xe B không thấy phiếu sửa chữa của A');
+select is((select count(*)::int from public.fuel_entries), 0, 'Nhà xe B không thấy phiếu nhiên liệu của A');
+select is((select count(*)::int from public.fuel_settings), 0, 'Nhà xe B không thấy bồn dầu của A');
 reset role;
 select * from finish();
 rollback;

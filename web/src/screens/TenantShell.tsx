@@ -12,6 +12,7 @@ import { ParcelsScreen } from './Parcels';
 import { ChartersScreen } from './Charters';
 import { ArchiveScreen } from './Archive';
 import { RepairsScreen } from './Repairs';
+import { FuelScreen } from './Fuel';
 import { RolesScreen } from './Roles';
 import { RoutesScreen } from './Routes';
 import { SettingsScreen } from './Settings';
@@ -21,7 +22,7 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'repairs' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'repairs' | 'fuel' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -63,6 +64,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: true },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: true },
     { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('vehicle.manage') || perms.has('trip.manage') },
+    { key: 'fuel', label: 'Nhiên liệu', icon: 'gas-pump', group: 'Danh mục', show: perms.has('vehicle.manage') || perms.has('trip.manage') },
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: true },
     { key: 'staff', label: 'Lái xe & nhân viên', icon: 'id-badge', group: 'Danh mục', show: true },
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: true },
@@ -119,6 +121,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'charters' && <ChartersScreen />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
           {tab === 'repairs' && <RepairsScreen ctx={ctx} perms={perms} />}
+          {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} />}
           {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
           {tab === 'routes' && <RoutesScreen perms={perms} />}
           {tab === 'sell' && <SellScreen ctx={ctx} perms={perms} />}

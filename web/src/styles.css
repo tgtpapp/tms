@@ -621,3 +621,9 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .vp-tbl th, .vp-tbl td { border: 1px solid #333; padding: 5px; font-size: 12px; vertical-align: top; }
 .vp-tbl th { background: #e2e8f0; }
 .vp-blank td { height: 30px; }
+/* Nhiên liệu: thanh tồn bồn */
+.fuel-tank { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0 12px; }
+.fuel-bar { width: 160px; height: 14px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.fuel-bar i { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
+.fuel-bar.low i { background: var(--danger); }
+.ok-text { color: var(--ok); }

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { today } from '../components/Documents';
 import { uploadFiles } from '../lib/documents';
 import {
-  mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
+  day, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -262,6 +262,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
         </>
       )}
       {legacy && legacy.trips.length > 0 && !busy && <LegacyTrips legacy={legacy} />}
+      {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0) && !busy && <LegacyOps legacy={legacy} />}
       {result && (
         <ul className="queue-list small">
           {result.map((r, i) => <li key={i} className={i ? 'error-text' : ''}>{r}</li>)}
@@ -363,6 +364,89 @@ function LegacyTrips({ legacy }: { legacy: LegacyBackup }) {
       {busy && <p className="upload">{busy}</p>}
       <div className="actions"><button type="button" className="btn primary" disabled={!!busy || !list.length} onClick={() => void run()}>Chuyển {list.length} chuyến</button></div>
       {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i && !x.startsWith('Đã tạo') ? 'error-text' : ''}>{x}</li>)}</ul>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Chuyển phiếu sửa chữa + nhiên liệu từ app cũ */
+
+function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [out, setOut] = useState<string[] | null>(null);
+  const numOf = (r: Record<string, unknown>, k: string) => { const n = Number(String(r[k] ?? '').replace(/[^\d.-]/g, '')); return Number.isFinite(n) && n > 0 ? n : null; };
+
+  async function run() {
+    setBusy('Đang chuẩn bị…');
+    setOut(null);
+    const log: string[] = [];
+    try {
+      const [v, s] = await Promise.all([supabase.from('vehicles').select('id, plate, fuel_norm'), supabase.from('staff_members').select('id, full_name')]);
+      const vehs = (v.data ?? []) as { id: string; plate: string; fuel_norm: number | null }[];
+      const vehByKey = new Map(vehs.map((x) => [plateKey(x.plate), x.id]));
+      const staff = (s.data ?? []) as { id: string; full_name: string }[];
+      const drv = (name: string) => { const c = name ? staff.filter((x) => norm(x.full_name) === norm(name)) : []; return c.length === 1 ? c[0].id : null; };
+      let noVeh = 0;
+      const repairs = legacy.repairs.flatMap((r) => {
+        const vehicle_id = vehByKey.get(plateKey(str(r, 'xe'))) ?? null;
+        const d = day(str(r, 'ngay'));
+        if (!vehicle_id || !d) { noVeh++; return []; }
+        const items = (Array.isArray(r.items) ? r.items : []).filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+          .map((x) => ({ content: str(x, 'nd') || str(x, 'noiDung'), qty: numOf(x, 'sl') ?? 1, unit_price: Math.round(numOf(x, 'gia') ?? 0) }));
+        return [{ code: str(r, 'so') || null, vehicle_id, repaired_on: d, odo_km: numOf(r, 'km'), workshop: str(r, 'donVi'), note: str(r, 'ghiChu'), items }];
+      });
+      const fuel = legacy.fuel.flatMap((r) => {
+        const kind = str(r, 'loai') === 'nhap' ? 'nhap' : str(r, 'nguon') === 'ngoai' ? 'ngoai' : 'bon';
+        const vehicle_id = kind === 'nhap' ? null : vehByKey.get(plateKey(str(r, 'xe'))) ?? null;
+        const d = day(str(r, 'ngay'));
+        if ((kind !== 'nhap' && !vehicle_id) || !d || !numOf(r, 'lit')) { noVeh++; return []; }
+        const gia = numOf(r, 'gia');
+        return [{ code: str(r, 'so') || null, kind, entry_date: d, entry_time: /^\d{1,2}:\d{2}/.test(str(r, 'gio')) ? str(r, 'gio').slice(0, 5) : null,
+          vehicle_id, driver_id: drv(str(r, 'lai')), odo_km: numOf(r, 'km'), liters: numOf(r, 'lit'),
+          unit_price: kind === 'bon' && r.giaAuto !== false ? null : gia == null ? (kind === 'nhap' ? 0 : null) : Math.round(gia),
+          supplier: str(r, 'cayXang') || str(r, 'ncc') || str(r, 'nhaCC') || str(r, 'nhaCungCap'), invoice_no: str(r, 'soHD'), note: str(r, 'ghiChu') }];
+      });
+      let rep = 0, fu = 0, same = 0;
+      for (let i = 0; i < Math.max(repairs.length, fuel.length); i += 400) {
+        setBusy(`Đang chuyển phiếu ${Math.min(i + 400, Math.max(repairs.length, fuel.length))}…`);
+        const res = await rpc<{ repairs: number; fuel: number; same: number; errors: { code: string; error: string }[] }>('import_legacy_ops',
+          { p_repairs: repairs.slice(i, i + 400), p_fuel: fuel.slice(i, i + 400) });
+        rep += res.repairs; fu += res.fuel; same += res.same;
+        for (const e of res.errors) log.push(`${e.code}: ${e.error}`);
+      }
+      // Thiết lập bồn + định mức theo xe
+      const st = legacy.fuelSet;
+      if (st) {
+        const cur = await supabase.from('fuel_settings').select('tenant_id').maybeSingle();
+        if (!cur.data) {
+          const u = await supabase.from('fuel_settings').insert({ tank_name: str(st, 'tenBon') || 'Bồn dầu công ty', fuel_type: str(st, 'loaiNL') || 'Dầu DO 0,05S',
+            capacity_l: numOf(st, 'sucChua') ?? 5000, opening_l: Number(st.tonDau) || 0, opening_price: Math.round(Number(st.giaDau) || 0),
+            opening_on: day(str(st, 'ngayTonDau')), alert_l: numOf(st, 'nguong') ?? 500 });
+          if (u.error) log.push(`Thiết lập bồn: ${u.error.message}`);
+        }
+        const dm = st.dm && typeof st.dm === 'object' ? (st.dm as Record<string, unknown>) : {};
+        for (const [bks, val] of Object.entries(dm)) {
+          const id = vehByKey.get(plateKey(bks)), n = Number(val);
+          if (id && n > 0 && n < 100 && !vehs.find((x) => x.id === id)?.fuel_norm) await supabase.from('vehicles').update({ fuel_norm: n }).eq('id', id);
+        }
+      }
+      const msg = `Đã chuyển ${rep} phiếu sửa chữa, ${fu} phiếu nhiên liệu${same ? `, ${same} phiếu đã có (bỏ qua)` : ''}${noVeh ? `, ${noVeh} phiếu không khớp xe / thiếu ngày` : ''}`;
+      toast(log.length ? 'error' : 'ok', msg);
+      setOut([msg, ...log.slice(0, 50)]);
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="sub form">
+      <h3 className="section-title">Sửa chữa, nhiên liệu trong file: {legacy.repairs.length} phiếu sửa chữa, {legacy.fuel.length} phiếu nhiên liệu</h3>
+      <p className="muted small">Giữ nguyên số phiếu của app cũ, nhập lại không trùng. Kèm thiết lập bồn dầu và định mức tiêu hao từng xe (nếu TMS chưa có). Nên nhập xe ở trên trước.</p>
+      {busy && <p className="upload">{busy}</p>}
+      <div className="actions"><button type="button" className="btn primary" disabled={!!busy} onClick={() => void run()}>Chuyển phiếu sửa chữa, nhiên liệu</button></div>
+      {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i ? 'error-text' : ''}>{x}</li>)}</ul>}
     </div>
   );
 }

@@ -281,3 +281,51 @@ async function fileUrl(full: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(full, 600);
   return error || !data ? null : `${data.signedUrl}&t=${Date.now()}`;
 }
+
+/* ------------------------------------------------------------------ Ảnh đại diện nhân viên / lái xe */
+
+const avatarPath = (tenantId: string, staffId: string) => `${tenantId}/anh_dai_dien/${staffId}.jpg`;
+
+/** Thu ảnh về khung vuông 320px (cắt giữa), JPEG ~20-40 KB. */
+async function prepareAvatar(file: Blob): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh');
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const S = Math.min(320, side);
+  const canvas = document.createElement('canvas');
+  canvas.width = S; canvas.height = S;
+  const g = canvas.getContext('2d');
+  if (!g) throw new Error('Trình duyệt không xử lý được ảnh');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
+  g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, S, S);
+  bmp.close();
+  return new Promise((ok, bad) => canvas.toBlob((b) => (b ? ok(b) : bad(new Error('Không nén được ảnh'))), 'image/jpeg', 0.85));
+}
+
+export async function uploadAvatar(tenantId: string, staffId: string, file: Blob): Promise<void> {
+  const blob = await prepareAvatar(file);
+  const { error } = await supabase.storage.from(BUCKET).upload(avatarPath(tenantId, staffId), blob, { contentType: 'image/jpeg', upsert: true });
+  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
+  window.dispatchEvent(new Event('tms-avatar'));
+}
+
+export async function removeAvatar(tenantId: string, staffId: string): Promise<void> {
+  await removeFile(avatarPath(tenantId, staffId));
+  window.dispatchEvent(new Event('tms-avatar'));
+}
+
+/** Link ảnh đại diện của mọi nhân viên trong nhà xe (1 lần liệt kê + 1 lần ký link), theo staff_id. */
+export async function avatarUrls(tenantId: string): Promise<Record<string, string>> {
+  const dir = `${tenantId}/anh_dai_dien`;
+  const { data: files, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
+  if (error || !files?.length) return {};
+  const jpg = files.filter((f) => /^[0-9a-f-]{36}\.jpg$/.test(f.name));
+  if (!jpg.length) return {};
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrls(jpg.map((f) => `${dir}/${f.name}`), 3600);
+  const out: Record<string, string> = {};
+  (data ?? []).forEach((d, i) => {
+    const f = jpg[i];
+    if (d.signedUrl && f) out[f.name.slice(0, 36)] = `${d.signedUrl}&v=${encodeURIComponent(f.updated_at ?? '')}`;
+  });
+  return out;
+}

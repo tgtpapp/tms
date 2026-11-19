@@ -38,6 +38,9 @@ select lives_ok(format('select public.set_signature_has_name(%L, true)', 'nv_' |
 select ok(app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Quản lý tải được chữ ký lái xe');
 select ok(not app.can_write_signature('nv_00000000-0000-0000-0000-000000000099.png'), 'Không tải chữ ký cho nhân viên không thuộc nhà xe');
 select is((select count(*)::int from public.signature_settings where has_name), 3, 'Đã lưu 3 cài đặt');
+select ok(app.can_write_avatar((select id from public.staff_members where full_name = 'Lái xe X') || '.jpg'), 'Quản lý tải được ảnh đại diện lái xe');
+select ok(not app.can_write_avatar('00000000-0000-0000-0000-000000000099.jpg'), 'Không tải ảnh đại diện cho người không thuộc nhà xe');
+select ok(not app.can_write_avatar((select id from public.staff_members where full_name = 'Lái xe X') || '.png'), 'Chỉ nhận tên tệp .jpg chuẩn');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
@@ -48,11 +51,13 @@ select throws_ok($$ select public.set_signature_has_name('00000000-0000-0000-000
 select throws_ok($$ select public.set_signature_has_name('giam_doc', false) $$, '42501', null, 'Bán vé không đổi chữ ký giám đốc');
 select is((select count(*)::int from public.signature_settings), 3, 'Cùng nhà xe đọc được cài đặt chữ ký');
 select ok(not app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Bán vé không tải chữ ký lái xe');
+select ok(not app.can_write_avatar((select id from public.staff_members where full_name = 'Lái xe X') || '.jpg'), 'Bán vé không đổi ảnh đại diện người khác');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is(jsonb_array_length(public.report_transport('2026-10-01', '2026-10-31') -> 'vehicles'), 0, 'Nhà xe B không thấy số liệu của A');
 select is((select count(*)::int from public.signature_settings), 0, 'Nhà xe B không thấy cài đặt chữ ký của A');
+select ok(not app.can_write_avatar((select id::text from public.staff_members where full_name = 'Lái xe X') || '.jpg'), 'Nhà xe B không ghi ảnh đại diện của A');
 reset role;
 select * from finish();
 rollback;

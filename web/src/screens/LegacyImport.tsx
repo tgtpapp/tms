@@ -5,7 +5,7 @@ import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { useState } from 'react';
 import { LegacyMore } from './LegacyMore';
 import { today } from '../components/Documents';
-import { BUCKET, signatureUrl, uploadFiles } from '../lib/documents';
+import { BUCKET, avatarUrls, signatureUrl, uploadAvatar, uploadFiles } from '../lib/documents';
 import {
   day, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
@@ -125,7 +125,8 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     const missing = pick.vehicles && plan.vehicles.some((v) => !v.match && !v.bad && !typeOf[v.group]);
     if (missing) return toast('error', 'Chọn loại xe TMS cho từng nhóm xe cũ');
     const log: string[] = [];
-    let staffNew = 0, vehNew = 0, docs = 0, typesNew = 0, signs = 0;
+    let staffNew = 0, vehNew = 0, docs = 0, typesNew = 0, signs = 0, avatars = 0;
+    const avas = await avatarUrls(tenantId);
     const total = (pick.staff ? plan.staff.length : 0) + (pick.vehicles ? plan.vehicles.length : 0);
     let i = 0;
     try {
@@ -151,6 +152,16 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
                 signs++;
               } catch (e) {
                 log.push(`${s.name}: không chuyển được chữ ký (${errMsg(e)})`);
+              }
+            }
+            // Ảnh đại diện (trường avatar của app cũ); đã có ảnh trong TMS thì giữ nguyên
+            const av = raw ? str(raw, 'avatar') : '';
+            if (/^(data:image\/|https?:)/.test(av) && !avas[s.id]) {
+              try {
+                await uploadAvatar(tenantId, s.id, await (await fetch(av)).blob());
+                avatars++;
+              } catch (e) {
+                log.push(`${s.name}: không chuyển được ảnh đại diện (${errMsg(e)})`);
               }
             }
           } catch (e) {
@@ -213,7 +224,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     } finally {
       setBusy(null);
     }
-    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe${typesNew ? ` (tạo ${typesNew} loại xe)` : ''}, ${docs} giấy tờ, ${signs} chữ ký`;
+    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe${typesNew ? ` (tạo ${typesNew} loại xe)` : ''}, ${docs} giấy tờ, ${signs} chữ ký, ${avatars} ảnh đại diện`;
     toast(log.length ? 'error' : 'ok', log.length ? `${msg} · ${log.length} mục lỗi` : msg);
     setResult([msg, ...log]);
     setPlan(null);

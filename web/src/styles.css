@@ -821,5 +821,6 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .sc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .sc-open { position: absolute; top: 10px; right: 10px; }
 .staff-tabs { padding: 0; margin-bottom: 6px; }
-.staff-table td { vertical-align: middle; }
-.staff-row.off { opacity: .6; }
+img.sc-ava { object-fit: cover; background: #e5e7eb; }
+.ava-field { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.ava-act { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

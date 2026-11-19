@@ -1,5 +1,6 @@
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
+import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -297,6 +298,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   const left = staff.filter((s) => !s.is_active).length;
 
   const [tab, setTab] = useState<'lx' | 'nv'>('lx');
+  const avas = useAvatars(props.tenantId);
   return (
     <section className="card">
       <div className="item-head">
@@ -315,46 +317,53 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           </button>
         ))}
       </div>
-      <div className="table-wrap">
-        <table className="plist staff-table">
-          <thead><tr><th>Họ tên</th><th>Chức vụ</th><th>Điện thoại</th>{tab === 'lx' && <th>GPLX</th>}<th>Chi nhánh</th><th>Vào công ty</th><th /></tr></thead>
-          <tbody>
-            {staff.filter((s) => (showLeft || s.is_active) && (tab === 'lx') === (s.position !== 'nhan_vien')).map((s) => {
-              const mine = s.user_id === myUserId;
-              const canOpen = canEdit || mine;
-              const p = priv.find((x) => x.staff_id === s.id);
-              const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
-              const bad = canEdit ? problems(s, p, docs, warnDays).length : 0;
-              return (
-                <tr key={s.id} id={`nv-${s.id}`} className={`staff-row${s.is_active ? '' : ' off'}`}>
-                  <td><b>{s.full_name}</b>
-                    {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
-                    {mine && <span className="badge">Tôi</span>}
-                    {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}</td>
-                  <td>{s.job_title || POSITION[s.position]}</td>
-                  <td>{s.phone ? <a href={`tel:${s.phone}`}>{s.phone}</a> : ''}</td>
-                  {tab === 'lx' && <td>{s.position === 'lai_xe' ? `GPLX: ${gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}` : ''}</td>}
-                  <td>{s.branch_id ? branches.find((b) => b.id === s.branch_id)?.label ?? '' : ''}</td>
-                  <td className="small">{fmtDate(s.joined_on)}<div className="muted">{seniority(s.joined_on, s.left_on)}</div></td>
-                  <td className="hs-act">
-                    {canOpen && <button className="btn small" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>{canEdit ? 'Sửa' : 'Hồ sơ'}</button>}
-                    {open === s.id && canOpen && (
-                      <Modal wide title={`Hồ sơ ${s.full_name}`} onClose={() => setOpen(null)}>
-                        <StaffDetail {...props} s={s} p={p} />
-                      </Modal>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="staff-cards">
+        {staff.filter((s) => (showLeft || s.is_active) && (tab === 'lx') === (s.position !== 'nhan_vien')).map((s) => {
+          const mine = s.user_id === myUserId;
+          const canOpen = canEdit || mine;
+          const p = priv.find((x) => x.staff_id === s.id);
+          const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
+          const bad = canEdit ? problems(s, p, docs, warnDays).length : 0;
+          return (
+            <div key={s.id} id={`nv-${s.id}`} className={`staff-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
+              <div className="sc-top">
+                <Avatar name={s.full_name} url={avas[s.id]} />
+                <div className="sc-name">
+                  <b>{s.full_name}</b>
+                  <span className="sc-job">{s.job_title || POSITION[s.position]}</span>
+                </div>
+              </div>
+              <div className="sc-info small">
+                {s.phone && <span>📞 <a href={`tel:${s.phone}`}>{s.phone}</a></span>}
+                {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
+                {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
+                <span className="muted">Vào {fmtDate(s.joined_on)} · {seniority(s.joined_on, s.left_on)}</span>
+              </div>
+              <div className="sc-badges">
+                <span className="badge">{POSITION[s.position]}</span>
+                {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                {mine && <span className="badge">Tôi</span>}
+                {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+              </div>
+              {canOpen && (
+                <button className="btn small sc-open" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>
+                  {canEdit ? 'Sửa' : 'Hồ sơ'}
+                </button>
+              )}
+              {open === s.id && canOpen && (
+                <Modal wide title={`Hồ sơ ${s.full_name}`} onClose={() => setOpen(null)}>
+                  <StaffDetail {...props} s={s} p={p} mine={mine} />
+                </Modal>
+              )}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined }) {
+function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   const [editing, setEditing] = useState(false);
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
@@ -365,6 +374,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
 
   return (
     <div className="sub">
+      <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit || props.mine} />
       <dl className="info small">
         <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
         <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>

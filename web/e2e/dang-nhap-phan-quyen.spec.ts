@@ -82,7 +82,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
     await expect(page.getByText(`Đã thêm điểm dừng ${name}`)).toBeVisible();
   }
   await page.getByLabel('Mã tuyến').fill('HN-VT');
-  await page.getByLabel('Tên tuyến').fill('Hố Nai – Vũng Tàu');
+  await page.getByLabel('Tên tuyến', { exact: true }).fill('Hố Nai – Vũng Tàu');
   await page.getByRole('button', { name: 'Thêm tuyến' }).click();
   await expect(page.getByRole('heading', { name: 'Tuyến (1)' })).toBeVisible();
   await page.getByRole('button', { name: 'Chi tiết' }).click();

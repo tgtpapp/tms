@@ -1,7 +1,8 @@
 -- =====================================================================
 -- Tuyến dùng được ngay, không bắt khai báo trước:
--- - Tạo tuyến mà chưa có điểm dừng → tự tạo điểm đầu / điểm cuối theo tên tuyến
---   ("Biên Hòa - Vũng Tàu" → "Biên Hòa", "Vũng Tàu"; trùng tên điểm có sẵn thì dùng lại).
+-- - Tạo tuyến mà chưa có điểm dừng → tự tạo 2 bến xe đầu / cuối: lấy từ hành trình đã cấp ("BX Biên Hòa - ... - BX Vũng Tàu"),
+--   không có hành trình thì theo tên tuyến ("Biên Hòa - Vũng Tàu" → "BX Biên Hòa", "BX Vũng Tàu"); trùng tên bến có sẵn thì dùng lại.
+--   Điểm đón / trả dọc lộ trình đã cấp: ghi tại lúc bán vé, không phải khai trước.
 -- - Thời gian chạy chưa khai → tự ước tính: cự ly ÷ 40 km/h (làm tròn 5 phút), không có cự ly thì 120 phút.
 --   Sau này sửa điểm dừng / số phút ở mục Tuyến thì dùng số đã sửa.
 -- =====================================================================
@@ -38,13 +39,22 @@ declare
   k int;
 begin
   if exists (select 1 from public.route_stops where tenant_id = p_tenant and route_id = p_route) then return; end if;
-  select code, name into r from public.routes where tenant_id = p_tenant and id = p_route;
+  select code, name, itinerary into r from public.routes where tenant_id = p_tenant and id = p_route;
   if not found then return; end if;
-  v_parts := array(select trim(x) from regexp_split_to_table(r.name, '\s+[-–—]\s+') x where trim(x) <> '');
-  if coalesce(array_length(v_parts, 1), 0) < 2 or lower(v_parts[1]) = lower(v_parts[array_length(v_parts, 1)]) then
-    v_parts := array[r.name || ' (điểm đầu)', r.name || ' (điểm cuối)'];
-  else
+  -- 1) Hai đầu hành trình đã cấp
+  v_parts := array(select trim(x) from regexp_split_to_table(regexp_replace(coalesce(r.itinerary, ''), '\s*(và|,)?\s*ngược lại\.?\s*$', '', 'i'),
+                   '\s+[-–—]\s+') x where trim(x) <> '');
+  if coalesce(array_length(v_parts, 1), 0) >= 2 and lower(v_parts[1]) <> lower(v_parts[array_length(v_parts, 1)]) then
     v_parts := array[v_parts[1], v_parts[array_length(v_parts, 1)]];
+  else
+    -- 2) Hai đầu tên tuyến, thêm "BX "
+    v_parts := array(select trim(x) from regexp_split_to_table(r.name, '\s+[-–—]\s+') x where trim(x) <> '');
+    if coalesce(array_length(v_parts, 1), 0) < 2 or lower(v_parts[1]) = lower(v_parts[array_length(v_parts, 1)]) then
+      v_parts := array[r.name || ' (điểm đầu)', r.name || ' (điểm cuối)'];
+    else
+      v_parts := array[v_parts[1], v_parts[array_length(v_parts, 1)]];
+      v_parts := array(select case when x ~* '^(bx|bến xe)\s' then x else 'BX ' || x end from unnest(v_parts) with ordinality u(x, o) order by o);
+    end if;
   end if;
   for i in 1..2 loop
     v_name := v_parts[i];
@@ -56,7 +66,7 @@ begin
         exit when not exists (select 1 from public.stops where tenant_id = p_tenant and code = v_code);
         k := k + 2;
       end loop;
-      insert into public.stops (tenant_id, code, name, kind) values (p_tenant, v_code, v_name, 'diem_don_tra') returning id into v_id;
+      insert into public.stops (tenant_id, code, name, kind) values (p_tenant, v_code, v_name, 'ben_xe') returning id into v_id;
     end if;
     v_ids := v_ids || v_id;
     v_id := null;

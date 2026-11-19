@@ -7,7 +7,7 @@ const SEP = /\s+([-–—])\s+/;
 export function reverseName(s: string): string {
   const sep = SEP.exec(s)?.[1];
   if (!sep) return s;
-  return s.split(SEP).filter((x, i) => i % 2 === 0).reverse().join(` ${sep} `);
+  return s.split(SEP).filter((_x, i) => i % 2 === 0).reverse().join(` ${sep} `);
 }
 
 /** Tên tuyến theo chiều */

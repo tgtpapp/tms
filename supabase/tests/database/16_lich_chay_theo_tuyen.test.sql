@@ -111,7 +111,10 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok($$ insert into public.routes (code, name, distance_km) values ('BHVT', 'Biên Hòa - Vũng Tàu', 112) $$, 'Tạo tuyến chỉ có tên + cự ly');
 select is((select string_agg(st.name, ' → ' order by rs.seq) from public.route_stops rs join public.stops st on st.id = rs.stop_id
-           join public.routes r on r.id = rs.route_id where r.code = 'BHVT'), 'Biên Hòa → Vũng Tàu', 'Tự có điểm đầu / cuối theo tên tuyến');
+           join public.routes r on r.id = rs.route_id where r.code = 'BHVT'), 'BX Biên Hòa → BX Vũng Tàu', 'Tự có 2 bến xe đầu / cuối theo tên tuyến');
+select lives_ok($$ insert into public.routes (code, name, itinerary) values ('HT', 'Hố Nai - Tân Thành', 'BX Hố Nai Mới - QL51 - BX Tân Thành và ngược lại') $$, 'Tạo tuyến có hành trình');
+select is((select string_agg(st.name, ' → ' order by rs.seq) from public.route_stops rs join public.stops st on st.id = rs.stop_id
+           join public.routes r on r.id = rs.route_id where r.code = 'HT'), 'BX Hố Nai Mới → BX Tân Thành', 'Bến đầu / cuối lấy theo hành trình đã cấp');
 select is((select max(minutes_from_start) from public.route_stops rs join public.routes r on r.id = rs.route_id where r.code = 'BHVT'), 170,
   'Tự ước tính thời gian chạy 112 km ≈ 170 phút');
 reset role;

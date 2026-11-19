@@ -3,7 +3,7 @@
 // - Danh sách AI + khóa: secret AI_PROVIDERS (JSON). Thời gian chờ mỗi AI: AI_TIMEOUT_MS (mặc định 25000).
 // - Không lưu ảnh ở đây; ảnh được lưu vào Storage từ trình duyệt.
 
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { docTypeOf } from '../_shared/doc_types.ts';
 import { parseProviders, readDocument, ReaderError, type InputFile } from '../_shared/doc_reader.ts';
 

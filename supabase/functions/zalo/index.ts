@@ -5,7 +5,7 @@
 // Secret (đặt trên Supabase, không trong code): ZALO_APP_ID, ZALO_APP_SECRET; tùy chọn ZALO_REDIRECT_URI.
 // Mã truy cập Zalo chỉ đọc / ghi bằng service_role, không bao giờ trả về trình duyệt.
 
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { authorizeUrl, exchangeCode, isTokenError, oaInfo, pkceChallenge, randomToken, refreshTokens, sendZns, ZaloError } from '../_shared/zalo.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';

@@ -1,6 +1,6 @@
 // Kiểm thử đầu-cuối Giai đoạn 2.2 (chạy trong CI với Supabase local + Edge Function).
 // Biến môi trường: API_URL, ANON_KEY, SERVICE_ROLE_KEY (từ `supabase status -o env`).
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { loginEmail } from '../../functions/_shared/login.ts';
 
 const API_URL = Deno.env.get('API_URL') ?? 'http://127.0.0.1:54321';

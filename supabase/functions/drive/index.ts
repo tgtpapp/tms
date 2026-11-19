@@ -2,7 +2,7 @@
 // - Địa chỉ Web app + mã kết nối của nhà xe đọc ở bảng tenant_drive bằng service_role (trình duyệt không thấy mã).
 // - Quyền: ping (settings.manage / archive.manage), get (archive.view), put / del / del_folder (archive.manage).
 // - Dữ liệu hồ sơ ghi bằng phiên đăng nhập của người dùng (RLS nhà xe + quyền áp dụng như thường).
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';

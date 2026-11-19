@@ -365,8 +365,9 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .crop-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .6); display: flex; align-items: center; justify-content: center; padding: 12px; }
 .crop-card { background: var(--surface); color: var(--text); border-radius: var(--radius); padding: 16px; width: min(560px, 100%); max-height: 100%; overflow: auto;
   display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 40px -12px rgba(0, 0, 0, .4); }
-.crop-area { position: relative; touch-action: none; user-select: none; cursor: crosshair; align-self: center; max-width: 100%; }
-.crop-area img { display: block; max-width: 100%; max-height: 60vh; pointer-events: none; }
+/* Kích thước ảnh theo màn hình (vw/vh), không theo % khung → ảnh luôn hiện, khung chọn khớp ảnh */
+.crop-area { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; align-self: center; line-height: 0; }
+.crop-area img { display: block; width: auto; height: auto; max-width: min(528px, calc(100vw - 56px)); max-height: 55vh; pointer-events: none; }
 .crop-box { position: absolute; border: 2px solid var(--primary); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45); }
 
 /* Nút × bỏ ảnh (chữ ký, con dấu, logo…) */

@@ -9,6 +9,7 @@ export function Cropper({ file, title, onDone, onCancel }: {
 }) {
   const [url, setUrl] = useState('');
   const [box, setBox] = useState<Box | null>(null);
+  const [bad, setBad] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const area = useRef<HTMLDivElement>(null);
 
@@ -55,9 +56,10 @@ export function Cropper({ file, title, onDone, onCancel }: {
         <b>{title}</b>
         <p className="muted small">Kéo ngón tay (hoặc chuột) quanh phần cần giữ, bỏ phần thừa như viền đen, thanh điện thoại. Nền giấy trắng sẽ tự được xóa.</p>
         <div ref={area} className="crop-area" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
-          {url && <img src={url} alt="" draggable={false} />}
+          {url && <img src={url} alt="" draggable={false} onError={() => setBad(true)} />}
           {box && <div className="crop-box" style={{ left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` }} />}
         </div>
+        {bad && <p className="error-text small">Trình duyệt không hiển thị được ảnh này (vd ảnh HEIC của iPhone). Chụp lại hoặc chọn ảnh JPG / PNG.</p>}
         <div className="actions">
           <button type="button" className="btn primary" disabled={!ok} onClick={() => void crop()}>Dùng vùng đã chọn</button>
           <button type="button" className="btn" onClick={() => onDone(file)}>Dùng cả ảnh</button>

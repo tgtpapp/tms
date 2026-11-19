@@ -376,3 +376,22 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
   box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
 .img-x-btn:hover { filter: brightness(.9); }
 @media (pointer: coarse) { .img-x-btn { width: 34px; height: 34px; } }
+
+/* Lịch chạy theo tuyến */
+.grid3 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 720px) { .grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tt-gen { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--radius-s); background: var(--surface-2); }
+.tt-gen .inline-form { align-items: flex-end; }
+.tt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--radius-s); }
+.tt { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 760px; }
+.tt th { position: sticky; top: 0; background: var(--surface-2); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .05em; text-align: left; padding: 9px 8px; white-space: nowrap; }
+.tt td { padding: 6px 8px; border-top: 1px solid var(--line-soft); vertical-align: top; }
+.tt tbody tr:nth-child(even) td { background: var(--surface-2); }
+.tt tr.new td { background: var(--primary-soft); }
+.tt input, .tt select { min-height: 40px; padding: 6px 8px; width: 100%; }
+.tt td:nth-child(2) { width: 120px; } .tt td:nth-child(3) { width: 90px; }
+.tt-time { display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; font-weight: 700; border-radius: 8px; padding: 8px 10px; white-space: nowrap; }
+.tt-time button { border: 0; background: rgba(255, 255, 255, .2); color: #fff; width: 22px; height: 22px; border-radius: 50%; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.tt-days { margin-top: 6px; }
+.route-dir { margin-top: 4px; color: var(--text); }
+.route-dir .badge { margin: 0 6px 0 0; background: var(--primary-soft); color: var(--primary); }

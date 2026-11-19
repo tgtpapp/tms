@@ -187,10 +187,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
-  await page.getByLabel('Tuyến của nốt').selectOption({ label: 'Hố Nai – Vũng Tàu (HN-VT)' });
+  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'BX Hố Nai – BX Vũng Tàu (HN-VT)' });
   await page.getByLabel('Giờ xuất bến').fill('07:00');
-  await page.getByRole('button', { name: 'Thêm nốt' }).click();
-  await expect(page.getByText('Đã thêm nốt 07:00, tạo 8 chuyến')).toBeVisible();
+  await page.getByRole('button', { name: 'Thêm giờ chạy' }).click();
+  await page.getByRole('button', { name: 'Lưu lịch chạy' }).click();
+  await expect(page.getByText('Đã lưu lịch chạy: 1 giờ, tạo 8 chuyến')).toBeVisible();
   await page.getByRole('button', { name: 'Xếp xe 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('combobox', { name: /^Xe/ }).selectOption({ label: '51B-123.45' });
   await page.getByRole('combobox', { name: /^Lái xe 1/ }).selectOption({ index: 1 });
@@ -228,8 +229,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5m. Bán vé: gắn loại xe cho nốt → bán vé ngày mai ghế A01, thu tiền mặt, in vé, danh sách khách
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'BX Hố Nai – BX Vũng Tàu (HN-VT)' });
   await page.getByLabel('Loại xe nốt 07:00').selectOption({ label: 'Giường nằm 6 chỗ' });
-  await expect(page.getByText('Đã đổi loại xe của nốt')).toBeVisible();
+  await page.getByRole('button', { name: 'Lưu lịch chạy' }).click();
+  await expect(page.getByText('Đã lưu lịch chạy: 1 giờ, tạo 0 chuyến')).toBeVisible();
   await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
   await page.getByRole('button', { name: 'Ngày sau' }).click();
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
@@ -355,7 +358,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
   await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Thêm nốt' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Lưu lịch chạy' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Xếp xe/ })).toHaveCount(0);
 
   // 7. Sai mật khẩu

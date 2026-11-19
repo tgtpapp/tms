@@ -149,6 +149,17 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
 
 const EMPTY_ROUTE = { code: '', name: '', registered_code: '', distance_km: '', itinerary: '' };
 
+/** "BX Hố Nai → Bà Rịa (+60') → BX Vũng Tàu (+90')" theo chiều (chiều về = điểm dừng ngược lại) */
+function directionPath(data: Data, routeId: string, dir: 'di' | 've'): string {
+  const list = data.routeStops.filter((x) => x.route_id === routeId).sort((a, b) => a.seq - b.seq);
+  if (list.length < 2) return '';
+  const total = list[list.length - 1].minutes_from_start;
+  const name = (id: string) => data.stops.find((x) => x.id === id)?.name ?? '?';
+  const seq = dir === 'di' ? list.map((x) => ({ n: name(x.stop_id), m: x.minutes_from_start }))
+    : [...list].reverse().map((x) => ({ n: name(x.stop_id), m: total - x.minutes_from_start }));
+  return seq.map((x) => `${x.n}${x.m ? ` (+${x.m}')` : ''}`).join(' → ');
+}
+
 function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean; reload: () => Promise<void> }) {
   const { data, canRoute, reload } = props;
   const toast = useToast();
@@ -199,6 +210,10 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                   <div className="muted small">
                     Giá toàn tuyến: {money(currentFare(data.fares, r.id, null, null)?.price ?? null)}
                   </div>
+                  {(['di', 've'] as const).map((d) => {
+                    const p = directionPath(data, r.id, d);
+                    return p ? <div key={d} className="route-dir small"><span className="badge">{d === 'di' ? 'Chiều đi' : 'Chiều về'}</span> {p}</div> : null;
+                  })}
                 </div>
                 <button className="btn small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Đóng' : 'Chi tiết'}</button>
               </div>

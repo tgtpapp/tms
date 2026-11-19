@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { fmtDate, today } from '../components/Documents';
 import { TransportOrderPrint, type OrderPrintData } from '../components/TransportOrder';
@@ -14,6 +14,7 @@ interface Stop { id: string; name: string }
 interface Schedule {
   id: string; route_id: string; direction: Dir; depart_time: string; days_of_week: number[]; valid_from: string;
   valid_to: string | null; is_active: boolean; note: string | null; vehicle_type_id: string | null;
+  registered_time: string | null; trip_no: string | null; day_rule: 'thu' | 'chan' | 'le'; business_type: 'tuyen_co_dinh' | 'hop_dong';
 }
 interface Trip {
   id: string; route_id: string; direction: Dir; schedule_id: string | null; service_date: string; depart_at: string; arrive_at: string;
@@ -35,10 +36,6 @@ const addDays = (d: string, n: number) => {
   x.setUTCDate(x.getUTCDate() + n);
   return x.toISOString().slice(0, 10);
 };
-function daysText(days: number[]): string {
-  if (days.length === 7) return 'Hằng ngày';
-  return DAYS.filter(([n]) => days.includes(n)).map(([, t]) => t).join(', ');
-}
 
 export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
@@ -62,7 +59,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start').order('seq'),
       supabase.from('stops').select('id, name'),
-      supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note, vehicle_type_id').order('depart_time'),
+      supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note, vehicle_type_id, registered_time, trip_no, day_rule, business_type').order('depart_time'),
       supabase.from('trips').select('id, route_id, direction, schedule_id, service_date, depart_at, arrive_at, status, vehicle_id, cancel_reason, assign_note, note, vehicle_type_id')
         .eq('service_date', day).order('depart_at'),
       supabase.from('vehicles').select('id, plate, vehicle_type_id, is_active').order('plate'),
@@ -105,6 +102,16 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
     const name = (id: string) => stops.find((s) => s.id === id)?.name ?? '?';
     const [a, b] = [name(list[0].stop_id), name(list[list.length - 1].stop_id)];
     return dir === 'di' ? `${a} → ${b}` : `${b} → ${a}`;
+  }, [rstops, stops]);
+
+  /** "BX Hố Nai (0') → Bà Rịa (+60') → BX Vũng Tàu (+90')" theo chiều */
+  const path = useCallback((routeId: string, dir: Dir) => {
+    const list = rstops.filter((x) => x.route_id === routeId).sort((a, b) => a.seq - b.seq);
+    const total = list.length ? list[list.length - 1].minutes_from_start : 0;
+    const name = (id: string) => stops.find((x) => x.id === id)?.name ?? '?';
+    const seq = dir === 'di' ? list.map((x) => ({ n: name(x.stop_id), m: x.minutes_from_start }))
+      : [...list].reverse().map((x) => ({ n: name(x.stop_id), m: total - x.minutes_from_start }));
+    return seq.map((x) => `${x.n}${x.m ? ` (+${x.m}')` : ''}`).join(' → ');
   }, [rstops, stops]);
 
   /** Cấp lệnh (giữ số nếu đã cấp) rồi mở bản in đúng mẫu */
@@ -157,7 +164,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
     }
   }, [account, routes, vehicles, vtypes, crew, staff, licenses, ends, load, toast]);
 
-  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, printOrder, reload: load };
+  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, path, printOrder, reload: load };
   return (
     <>
       {printing && <TransportOrderPrint data={printing} onClose={() => setPrinting(null)} />}
@@ -169,43 +176,93 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 
 interface Ctx {
   routes: Route[]; schedules: Schedule[]; trips: Trip[]; crew: Crew[]; vehicles: Vehicle[]; staff: Staff[]; licenses: License[];
-  orders: Order[]; vtypes: VType[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
+  orders: Order[]; vtypes: VType[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; path: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
   reload: () => Promise<void>;
 }
 
-/* ------------------------------------------------------------------ Nốt */
+/* ------------------------------------------------------------------ Lịch chạy theo tuyến (kiểu Vexere) */
+
+interface Row {
+  key: string; id: string | null; depart_time: string; registered_time: string; trip_no: string; vehicle_type_id: string;
+  day_rule: 'tat_ca' | 'thu' | 'chan' | 'le'; days: number[]; business_type: 'tuyen_co_dinh' | 'hop_dong';
+}
+const RULES: [Row['day_rule'], string][] = [['tat_ca', 'Tất cả các ngày'], ['chan', 'Ngày chẵn'], ['le', 'Ngày lẻ'], ['thu', 'Chọn thứ…']];
+const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const toHHMM = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+const rowOf = (s: Schedule): Row => ({
+  key: s.id, id: s.id, depart_time: s.depart_time.slice(0, 5), registered_time: s.registered_time?.slice(0, 5) ?? '', trip_no: s.trip_no ?? '',
+  vehicle_type_id: s.vehicle_type_id ?? '', business_type: s.business_type,
+  day_rule: s.day_rule === 'thu' && s.days_of_week.length === 7 ? 'tat_ca' : s.day_rule, days: s.days_of_week,
+});
+const blankRow = (t: string, like?: Row): Row => ({
+  key: crypto.randomUUID(), id: null, depart_time: t, registered_time: '', trip_no: '', vehicle_type_id: like?.vehicle_type_id ?? '',
+  day_rule: like?.day_rule ?? 'tat_ca', days: like?.days ?? [1, 2, 3, 4, 5, 6, 7], business_type: like?.business_type ?? 'tuyen_co_dinh',
+});
 
 function Schedules(props: Ctx) {
-  const { routes, schedules, vtypes, canEdit, ends, reload } = props;
+  const { routes, schedules, vtypes, canEdit, ends, path, reload } = props;
   const toast = useToast();
-  const [f, setF] = useState({ route_id: '', direction: 'di' as Dir, time: '', days: [1, 2, 3, 4, 5, 6, 7] as number[], from: today(), to: '', note: '', type: '' });
-  const typeName = (id: string | null) => vtypes.find((v) => v.id === id)?.name;
-  async function setType(id: string, type: string) {
-    try {
-      await rpc('set_schedule_vehicle_type', { p_schedule_id: id, p_vehicle_type_id: type || null });
-      toast('ok', 'Đã đổi loại xe của nốt (áp cho các chuyến chưa có sơ đồ ghế)');
-      await reload();
-    } catch (err) {
-      toast('error', errMsg(err));
-    }
-  }
-  const [showOld, setShowOld] = useState(false);
-  const [stopping, setStopping] = useState<{ id: string; from: string; reason: string } | null>(null);
+  const opts = routes.filter((r) => r.is_active).flatMap((r) => (['di', 've'] as Dir[]).map((d) => ({ key: `${r.id}|${d}`, r, d })));
+  const [sel, setSel] = useState('');
+  const cur = opts.find((o) => o.key === sel) ?? null;
+  const [rows, setRows] = useState<Row[]>([]);
+  const [removed, setRemoved] = useState<string[]>([]);
+  const [head, setHead] = useState({ from: today(), to: '', note: '' });
+  const [gen, setGen] = useState({ start: '', end: '', every: '' });
+  const [one, setOne] = useState('');
   const [busy, setBusy] = useState(false);
-  const routeName = (id: string) => routes.find((r) => r.id === id)?.name ?? '?';
+  const [showOld, setShowOld] = useState(false);
 
-  async function add(e: FormEvent) {
-    e.preventDefault();
-    if (!f.route_id || !f.time) return toast('error', 'Chọn tuyến và giờ xuất bến');
+  const mine = useMemo(() => (cur ? schedules.filter((s) => s.route_id === cur.r.id && s.direction === cur.d) : []), [schedules, cur]);
+  const active = mine.filter((s) => s.is_active && (!s.valid_to || s.valid_to >= today()));
+  const old = mine.filter((s) => !active.includes(s));
+  useEffect(() => {
+    setRows(active.map(rowOf).sort((a, b) => a.depart_time.localeCompare(b.depart_time)));
+    setRemoved([]);
+    setHead({ from: today(), to: active[0]?.valid_to ?? '', note: '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, schedules]);
+
+  const label = (r: Route, d: Dir) => `${ends(r.id, d) ? ends(r.id, d).replace(' → ', ' – ') : `${r.name} (${d === 'di' ? 'chiều đi' : 'chiều về'})`}`;
+  const addTimes = (times: string[]) => {
+    const have = new Set(rows.map((r) => r.depart_time));
+    const add = times.filter((t) => !have.has(t)).map((t) => blankRow(t, rows[rows.length - 1]));
+    if (add.length === 0) return toast('error', 'Các giờ này đã có');
+    setRows([...rows, ...add].sort((a, b) => a.depart_time.localeCompare(b.depart_time)));
+  };
+  function generate() {
+    const a = gen.start ? toMin(gen.start) : NaN, b = gen.end ? toMin(gen.end) : NaN, k = Number(gen.every);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b < a) return toast('error', 'Nhập giờ bắt đầu, giờ kết thúc (sau giờ bắt đầu)');
+    if (!Number.isInteger(k) || k < 5 || k > 720) return toast('error', 'Tần suất từ 5 đến 720 phút/chuyến');
+    const list: string[] = [];
+    for (let t = a; t <= b && list.length < 100; t += k) list.push(toHHMM(t));
+    addTimes(list);
+  }
+  const set = (key: string, o: Partial<Row>) => setRows(rows.map((r) => (r.key === key ? { ...r, ...o } : r)));
+  const drop = (r: Row) => {
+    setRows(rows.filter((x) => x.key !== r.key));
+    if (r.id) setRemoved([...removed, r.id]);
+  };
+  const applyAll = (r: Row) => {
+    setRows(rows.map((x) => ({ ...x, vehicle_type_id: r.vehicle_type_id, day_rule: r.day_rule, days: r.days, business_type: r.business_type })));
+    toast('ok', `Đã chép loại xe, ngày chạy, loại hình của giờ ${r.depart_time} cho tất cả các giờ (chưa lưu)`);
+  };
+
+  async function save() {
+    if (!cur) return;
     setBusy(true);
     try {
-      const r = await rpc<{ id: string; created_trips: number }>('save_schedule', {
-        p_id: null, p_route_id: f.route_id, p_direction: f.direction, p_depart_time: f.time, p_days: f.days,
-        p_valid_from: f.from || null, p_valid_to: f.to || null, p_note: f.note || null,
+      const res = await rpc<{ saved: number; stopped: number; created_trips: number; cancelled_trips: number }>('save_timetable', {
+        p_route_id: cur.r.id, p_direction: cur.d, p_valid_from: head.from || null, p_valid_to: head.to || null, p_note: head.note || null,
+        p_items: rows.map((r) => ({
+          id: r.id, depart_time: r.depart_time, registered_time: r.registered_time || null, trip_no: r.trip_no || null,
+          vehicle_type_id: r.vehicle_type_id || null, day_rule: r.day_rule === 'tat_ca' ? 'thu' : r.day_rule,
+          days: r.day_rule === 'tat_ca' ? [1, 2, 3, 4, 5, 6, 7] : r.days, business_type: r.business_type,
+        })),
+        p_stop_ids: removed,
       });
-      if (f.type) await rpc('set_schedule_vehicle_type', { p_schedule_id: r.id, p_vehicle_type_id: f.type });
-      toast('ok', `Đã thêm nốt ${f.time}, tạo ${r.created_trips} chuyến`);
-      setF({ ...f, time: '', note: '' });
+      toast('ok', `Đã lưu lịch chạy: ${res.saved} giờ${res.stopped ? `, bỏ ${res.stopped} giờ` : ''}, tạo ${res.created_trips} chuyến`
+        + (res.cancelled_trips ? `, hủy ${res.cancelled_trips} chuyến không còn đúng ngày chạy` : ''));
       await reload();
     } catch (err) {
       toast('error', errMsg(err));
@@ -214,97 +271,98 @@ function Schedules(props: Ctx) {
     }
   }
 
-  async function stop() {
-    if (!stopping) return;
-    try {
-      const n = await rpc<number>('stop_schedule', { p_id: stopping.id, p_from: stopping.from, p_reason: stopping.reason || null });
-      toast('ok', `Đã ngừng nốt, hủy ${n} chuyến từ ${fmtDate(stopping.from)}`);
-      setStopping(null);
-      await reload();
-    } catch (err) {
-      toast('error', errMsg(err));
-    }
-  }
-
-  const active = schedules.filter((s) => s.is_active && (!s.valid_to || s.valid_to >= today()));
-  const old = schedules.filter((s) => !active.includes(s));
-
   return (
     <section className="card">
-      <h2>Lịch chạy cố định – nốt ({active.length})</h2>
-      {canEdit && (
-        <form className="form sub" onSubmit={add}>
-          <h3>Thêm nốt</h3>
-          <div className="grid2">
-            <label>Tuyến
-              <select aria-label="Tuyến của nốt" value={f.route_id} onChange={(e) => setF({ ...f, route_id: e.target.value })} required>
-                <option value="">Chọn tuyến</option>
-                {routes.filter((r) => r.is_active).map((r) => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)}
-              </select>
-            </label>
-            <label>Chiều
-              <select aria-label="Chiều của nốt" value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value as Dir })}>
-                <option value="di">Chiều đi{f.route_id && ends(f.route_id, 'di') ? `: ${ends(f.route_id, 'di')}` : ''}</option>
-                <option value="ve">Chiều về{f.route_id && ends(f.route_id, 've') ? `: ${ends(f.route_id, 've')}` : ''}</option>
-              </select>
-            </label>
-            <label>Giờ xuất bến<input type="time" value={f.time} onChange={(e) => setF({ ...f, time: e.target.value })} required /></label>
-            <label>Chạy từ ngày<input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
-            <label>Đến ngày (để trống nếu chạy lâu dài)<input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
-            <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
-            <label>Loại xe (sơ đồ ghế để bán vé)
-              <select aria-label="Loại xe của nốt" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
-                <option value="">Chưa chọn</option>
-                {vtypes.filter((v) => v.is_active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-            </label>
-          </div>
-          <div className="chips" role="group" aria-label="Ngày chạy trong tuần">
-            {DAYS.map(([n, t]) => (
-              <button key={n} type="button" aria-pressed={f.days.includes(n)} className={f.days.includes(n) ? 'btn small primary' : 'btn small'}
-                      onClick={() => setF({ ...f, days: f.days.includes(n) ? f.days.filter((x) => x !== n) : [...f.days, n] })}>{t}</button>
-            ))}
-          </div>
-          <button className="btn primary" disabled={busy}>Thêm nốt</button>
-        </form>
-      )}
-      {active.length === 0 && <p className="muted">Chưa có nốt.</p>}
-      <ul className="list">
-        {active.map((s) => (
-          <li key={s.id} className="item">
-            <div className="item-head">
-              <div>
-                <b>{s.depart_time.slice(0, 5)}</b> · {routeName(s.route_id)} <span className="muted small">· {ends(s.route_id, s.direction) || (s.direction === 'di' ? 'Chiều đi' : 'Chiều về')}</span>
-                <div className="muted small">{daysText(s.days_of_week)} · từ {fmtDate(s.valid_from)}{s.valid_to ? ` đến ${fmtDate(s.valid_to)}` : ''}{s.note ? ` · ${s.note}` : ''}
-                  {' · '}{typeName(s.vehicle_type_id) ?? 'chưa chọn loại xe'}</div>
-                {canEdit && (
-                  <select aria-label={`Loại xe nốt ${s.depart_time.slice(0, 5)}`} className="small-select" value={s.vehicle_type_id ?? ''} onChange={(e) => void setType(s.id, e.target.value)}>
-                    <option value="">Loại xe…</option>
-                    {vtypes.filter((v) => v.is_active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
-                )}
+      <h2>Lịch chạy theo tuyến</h2>
+      <label>Tuyến – chiều
+        <select aria-label="Tuyến lịch chạy" value={sel} onChange={(e) => setSel(e.target.value)}>
+          <option value="">Chọn tuyến</option>
+          {opts.map((o) => <option key={o.key} value={o.key}>{label(o.r, o.d)} ({o.r.code})</option>)}
+        </select>
+      </label>
+      {cur && (
+        <div className="form timetable">
+          <p className="muted small">{path(cur.r.id, cur.d) || 'Tuyến chưa có điểm dừng: khai ở mục Tuyến'}</p>
+          {canEdit && (
+            <>
+              <div className="grid3">
+                <label>Hiệu lực từ ngày<input type="date" value={head.from} onChange={(e) => setHead({ ...head, from: e.target.value })} /></label>
+                <label>Đến ngày (trống = lâu dài)<input type="date" value={head.to} onChange={(e) => setHead({ ...head, to: e.target.value })} /></label>
+                <label>Ghi chú<input value={head.note} onChange={(e) => setHead({ ...head, note: e.target.value })} /></label>
               </div>
-              {canEdit && stopping?.id !== s.id && (
-                <button className="btn small" onClick={() => setStopping({ id: s.id, from: addDays(today(), 1), reason: '' })}>Ngừng nốt</button>
-              )}
+              <div className="tt-gen">
+                <b className="small">Tạo giờ hàng loạt</b>
+                <div className="inline-form">
+                  <label>Bắt đầu<input type="time" aria-label="Giờ bắt đầu" value={gen.start} onChange={(e) => setGen({ ...gen, start: e.target.value })} /></label>
+                  <label>Kết thúc<input type="time" aria-label="Giờ kết thúc" value={gen.end} onChange={(e) => setGen({ ...gen, end: e.target.value })} /></label>
+                  <label>Tần suất (phút/chuyến)<input type="number" inputMode="numeric" min={5} max={720} value={gen.every} onChange={(e) => setGen({ ...gen, every: e.target.value })} /></label>
+                  <button type="button" className="btn primary" onClick={generate}>Tạo giờ</button>
+                </div>
+                <div className="inline-form">
+                  <label>Thêm 1 giờ<input type="time" aria-label="Giờ xuất bến" value={one} onChange={(e) => setOne(e.target.value)} /></label>
+                  <button type="button" className="btn" disabled={!one} onClick={() => { addTimes([one]); setOne(''); }}>Thêm giờ chạy</button>
+                </div>
+              </div>
+            </>
+          )}
+          {rows.length === 0 && <p className="muted">Chưa có giờ chạy.</p>}
+          {rows.length > 0 && (
+            <div className="tt-wrap">
+              <table className="tt">
+                <thead>
+                  <tr><th>Giờ chạy</th><th>Giờ đăng ký</th><th>Số tài</th><th>Loại xe (sơ đồ ghế)</th><th>Ngày chạy</th><th>Loại hình</th>{canEdit && <th />}</tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.key} className={r.id ? '' : 'new'}>
+                      <td>
+                        <span className="tt-time">{r.depart_time}
+                          {canEdit && <button type="button" aria-label={`Bỏ giờ ${r.depart_time}`} title="Bỏ giờ này" onClick={() => drop(r)}>×</button>}
+                        </span>
+                      </td>
+                      <td><input type="time" aria-label={`Giờ đăng ký ${r.depart_time}`} disabled={!canEdit} value={r.registered_time} onChange={(e) => set(r.key, { registered_time: e.target.value })} /></td>
+                      <td><input aria-label={`Số tài ${r.depart_time}`} disabled={!canEdit} maxLength={20} value={r.trip_no} onChange={(e) => set(r.key, { trip_no: e.target.value })} /></td>
+                      <td>
+                        <select aria-label={`Loại xe nốt ${r.depart_time}`} disabled={!canEdit} value={r.vehicle_type_id} onChange={(e) => set(r.key, { vehicle_type_id: e.target.value })}>
+                          <option value="">Chưa chọn</option>
+                          {vtypes.filter((v) => v.is_active || v.id === r.vehicle_type_id).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <select aria-label={`Ngày chạy ${r.depart_time}`} disabled={!canEdit} value={r.day_rule} onChange={(e) => set(r.key, { day_rule: e.target.value as Row['day_rule'] })}>
+                          {RULES.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                        </select>
+                        {r.day_rule === 'thu' && (
+                          <div className="chips tt-days">
+                            {DAYS.map(([n, t]) => (
+                              <button key={n} type="button" disabled={!canEdit} aria-pressed={r.days.includes(n)} className={r.days.includes(n) ? 'btn small primary' : 'btn small'}
+                                      onClick={() => set(r.key, { days: r.days.includes(n) ? r.days.filter((x) => x !== n) : [...r.days, n].sort() })}>{t}</button>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <select aria-label={`Loại hình ${r.depart_time}`} disabled={!canEdit} value={r.business_type} onChange={(e) => set(r.key, { business_type: e.target.value as Row['business_type'] })}>
+                          <option value="tuyen_co_dinh">Tuyến cố định</option>
+                          <option value="hop_dong">Hợp đồng</option>
+                        </select>
+                      </td>
+                      {canEdit && <td><button type="button" className="btn small" onClick={() => applyAll(r)}>Áp dụng tất cả</button></td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {stopping?.id === s.id && (
-              <div className="inline-form">
-                <label>Ngừng từ ngày<input type="date" min={today()} value={stopping.from} onChange={(e) => setStopping({ ...stopping, from: e.target.value })} /></label>
-                <label>Lý do<input value={stopping.reason} onChange={(e) => setStopping({ ...stopping, reason: e.target.value })} /></label>
-                <button className="btn small primary" onClick={() => void stop()}>Xác nhận ngừng</button>
-                <button className="btn small link" onClick={() => setStopping(null)}>Thôi</button>
-                <p className="muted small">Các chuyến của nốt từ ngày này sẽ chuyển sang "Đã hủy" (vẫn giữ lại).</p>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {old.length > 0 && <button className="btn small link" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn nốt đã ngừng' : `Hiện nốt đã ngừng (${old.length})`}</button>}
-      {showOld && (
-        <ul className="list small">
-          {old.map((s) => <li key={s.id} className="muted">{s.depart_time.slice(0, 5)} · {routeName(s.route_id)} · {s.direction === 'di' ? 'chiều đi' : 'chiều về'} · ngừng sau {fmtDate(s.valid_to)}</li>)}
-        </ul>
+          )}
+          {removed.length > 0 && <p className="small state-sap_het">Bỏ {removed.length} giờ: chuyến của giờ đó từ ngày mai chuyển "Đã hủy" (vẫn giữ lại).</p>}
+          {canEdit && <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu lịch chạy'}</button>}
+          {old.length > 0 && <button type="button" className="btn small link" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn giờ đã ngừng' : `Hiện giờ đã ngừng (${old.length})`}</button>}
+          {showOld && (
+            <ul className="list small">
+              {old.map((s) => <li key={s.id} className="muted">{s.depart_time.slice(0, 5)} · ngừng sau {fmtDate(s.valid_to)}</li>)}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   );

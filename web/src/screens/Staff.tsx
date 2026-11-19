@@ -1,5 +1,6 @@
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
+import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
@@ -482,6 +483,7 @@ function Records(props: Common & { s: Staff }) {
             }} />
           )}
           {!form.id && <p className="muted small">{form.scanned ? `${form.scanned.aiNote} · ${form.scanned.files.length} tệp` : 'Có biên bản / quyết định thì tải lên để AI đọc; không có thì nhập tay.'}</p>}
+          <FilePreviews files={form.id ? records.find((r) => r.id === form.id)?.files ?? [] : []} blobs={form.scanned?.files.map((f) => f.blob) ?? []} />
           {form.scanned && form.scanned.warnings.length > 0 && <ul className="warn small">{form.scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
           <DocFields def={def} values={form.values} onChange={(values) => setForm({ ...form, values })} />
           <div className="actions">

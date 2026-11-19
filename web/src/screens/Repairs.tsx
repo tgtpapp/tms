@@ -1,8 +1,9 @@
 // Sửa chữa xe (như app cũ): phiếu PSX…, xe, ngày, km, gara, hạng mục (nội dung · SL · đơn giá), ảnh hóa đơn.
 import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../components/Modal';
+import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
-import { prepareFile, signedUrl, uploadFiles } from '../lib/documents';
+import { prepareFile, uploadFiles } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -85,9 +86,6 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
     toast('ok', `Đã xóa phiếu ${o.code}`);
     await load();
   }
-  async function view(path: string) {
-    try { window.open(await signedUrl(path), '_blank', 'noopener'); } catch (e) { toast('error', errMsg(e)); }
-  }
   const setLine = (i: number, p: Partial<Line>) => f && setF({ ...f, lines: f.lines.map((l, k) => (k === i ? { ...l, ...p } : l)) });
 
   return (
@@ -123,7 +121,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
                     <td>{plate(o.vehicle_id)}</td>
                     <td>{o.odo_km ? o.odo_km.toLocaleString('vi-VN') : ''}</td>
                     <td className="small">{its.map((x) => `${x.content}${Number(x.qty) > 1 ? ` (x${x.qty})` : ''}`).join('; ')}{o.note && <div className="muted">{o.note}</div>}
-                      {o.files.map((p, i) => <button key={p} className="btn small link" onClick={() => void view(p)}>Hóa đơn {i + 1}</button>)}</td>
+                      <FilesViewButton files={o.files} label={`Xem ${o.files.length} hóa đơn`} /></td>
                     <td className="small">{o.workshop}</td>
                     <td><b>{money(total(its))}</b></td>
                     <td className="hs-act">{canEdit && <><button className="btn small" onClick={() => open(o)}>Sửa</button>
@@ -168,6 +166,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
             <label>Ảnh / PDF hóa đơn, phiếu mua đồ
               <input type="file" multiple accept="image/*,application/pdf" onChange={(e) => setF({ ...f, add: [...f.add, ...Array.from(e.target.files ?? [])] })} />
             </label>
+            <FilePreviews files={f.files} blobs={f.add} />
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
               <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>

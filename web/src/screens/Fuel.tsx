@@ -1,8 +1,9 @@
 // Nhiên liệu (như app cũ): nhập dầu vào bồn, cấp dầu từ bồn cho xe, đổ ngoài cây xăng; tồn bồn, giá bình quân, tiêu hao theo xe.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '../components/Modal';
+import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
-import { prepareFile, signedUrl, uploadFiles } from '../lib/documents';
+import { prepareFile, uploadFiles } from '../lib/documents';
 import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, fetchAll, rpc, supabase, type AccountContext } from '../lib/supabase';
@@ -90,9 +91,6 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     toast('ok', `Đã xóa phiếu ${r.code}`);
     await load();
   }
-  async function view(path: string) {
-    try { window.open(await signedUrl(path), '_blank', 'noopener'); } catch (e) { toast('error', errMsg(e)); }
-  }
 
   // Theo xe trong tháng: lít, tiền, km chạy (giữa các lần đổ có km), L/100km so với định mức
   const byVeh = vehicles.map((v) => {
@@ -151,7 +149,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                       <td>{fmtDate(r.entry_date)}<div className="small muted">{r.entry_time}</div></td>
                       <td>{r.kind === 'nhap' ? <span className="small">{r.supplier}</span> : <><b>{plate(r.vehicle_id)}</b><div className="small muted">{driver(r.driver_id)}{r.kind === 'ngoai' && r.supplier ? ` · ${r.supplier}` : ''}</div></>}
                         {r.note && <div className="small muted">{r.note}</div>}
-                        {r.files.map((p, i) => <button key={p} className="btn small link" onClick={() => void view(p)}>Chứng từ {i + 1}</button>)}</td>
+                        <FilesViewButton files={r.files} label={`Xem ${r.files.length} chứng từ`} /></td>
                       <td>{r.odo_km ? num(r.odo_km) : ''}{m?.km ? <div className="small muted">+{num(m.km)} km</div> : null}</td>
                       <td className={r.kind === 'nhap' ? 'ok-text' : ''}><b>{r.kind === 'nhap' ? '+' : ''}{num(r.liters, 2)}</b></td>
                       <td>{m ? num(Math.round(m.price)) : ''}{r.kind === 'bon' && r.unit_price == null && <div className="small muted">bình quân</div>}</td>
@@ -219,6 +217,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             <label>Ảnh hóa đơn / trụ bơm / phiếu
               <input type="file" multiple accept="image/*,application/pdf" onChange={(e) => setF({ ...f, add: [...f.add, ...Array.from(e.target.files ?? [])] })} />
             </label>
+            <FilePreviews files={f.files} blobs={f.add} />
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
               <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>

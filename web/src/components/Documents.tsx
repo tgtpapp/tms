@@ -2,7 +2,8 @@
 // dòng giấy tờ (xem / sửa / thêm bản mới), giấy cũ, trạng thái hạn.
 import { useRef, useState, type ReactNode } from 'react';
 import { docTypeOf, type DocTypeDef, type OwnerKind } from '../lib/docTypes';
-import { loadStoredFiles, prepareFile, readByAI, signedUrl, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
+import { FilePreviews, FilesViewButton } from './FilePreview';
+import { loadStoredFiles, prepareFile, readByAI, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
 import { errMsg, rpc } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -177,16 +178,7 @@ export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Sc
 /* ------------------------------------------------------------------ Xem tệp */
 
 export function FilesButton({ files }: { files: string[] }) {
-  const toast = useToast();
-  async function open() {
-    try {
-      for (const p of files) window.open(await signedUrl(p), '_blank', 'noopener');
-    } catch (e) {
-      toast('error', errMsg(e));
-    }
-  }
-  if (files.length === 0) return null;
-  return <button type="button" className="btn small link" onClick={() => void open()}>Xem {files.length} tệp</button>;
+  return <FilesViewButton files={files} />;
 }
 
 /* ------------------------------------------------------------------ Một dòng giấy tờ của 1 chủ */
@@ -304,10 +296,12 @@ export function DocRow(props: {
                 });
               }} />
               {scanned && <p className="muted small">{scanned.aiNote} · {scanned.files.length} tệp</p>}
+              {scanned && <FilePreviews blobs={scanned.files.map((f) => f.blob)} />}
               {scanned && scanned.warnings.length > 0 && <ul className="warn small">{scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
               {doc && <p className="muted small">Lưu bản mới thì bản hiện tại chuyển sang giấy cũ (vẫn giữ lại).</p>}
             </>
           )}
+          {mode === 'edit' && doc && <FilePreviews files={doc.files} />}
           {mode === 'edit' && aiNote && <p className="muted small">{aiNote}</p>}
           {mode === 'edit' && doc && doc.files.length > 0 && (
             <button type="button" className="btn small" onClick={() => void rereadSaved()}>AI đọc lại ảnh đã lưu</button>

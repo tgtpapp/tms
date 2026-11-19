@@ -237,10 +237,31 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Đã bán vé [A-Z0-9]{6} · thu 150\.000 đ/)).toBeVisible();
   await expect(page.getByText('VÉ XE KHÁCH')).toBeVisible();
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
-  await expect(page.getByText('Tiền mặt tôi thu hôm nay: 150.000 đ')).toBeVisible();
+  await expect(page.getByText(/Tôi thu hôm nay: tiền mặt 150\.000 đ/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Danh sách khách' }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();
+
+  // 5n. Chuyển khoản QR, nhân viên xác nhận thủ công
+  await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByRole('combobox', { name: /^Ngân hàng/ }).selectOption({ label: 'Vietcombank' });
+  await page.getByLabel('Số tài khoản').fill('0123456789');
+  await page.getByLabel('Tên chủ tài khoản').fill('CONG TY TNHH TUONG GIA THINH PHAT');
+  await page.getByRole('button', { name: 'Lưu tài khoản nhận' }).click();
+  await expect(page.getByText('Đã lưu tài khoản nhận chuyển khoản')).toBeVisible();
+  await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
+  await page.getByRole('button', { name: 'Ngày sau' }).click();
+  await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
+  await page.getByRole('button', { name: 'Ghế A02 trống' }).click();
+  await page.getByRole('radio', { name: 'Chuyển khoản (QR)' }).click();
+  await page.getByRole('button', { name: 'Tạo QR chuyển khoản' }).click();
+  await expect(page.getByAltText('Mã QR chuyển khoản 150.000 đ')).toBeVisible();
+  await expect(page.getByText(/^VE [A-Z0-9]{6}$/)).toBeVisible();
+  await page.evaluate(() => { window.print = () => {}; });
+  await page.getByRole('button', { name: 'Đã nhận chuyển khoản' }).click();
+  await expect(page.getByText(/Đã nhận chuyển khoản vé [A-Z0-9]{6} · 150\.000 đ/)).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(page.getByText(/chuyển khoản đã xác nhận 150\.000 đ/)).toBeVisible();
 
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();

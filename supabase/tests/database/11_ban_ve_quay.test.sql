@@ -165,6 +165,32 @@ select throws_ok($$ select public.hold_seat((select v from t.ids where k = 'T'),
 select throws_ok($$ select public.pay_booking((select v from t.ids where k = 'B3'), null) $$, 'P0002', null, 'Chủ B thu tiền đơn nhà xe A: không tìm thấy');
 reset role;
 
+-- ---------------------------------------------------------------- 4.2: chuyển khoản QR, nhân viên xác nhận
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+insert into t.ids select 'B4', (public.hold_seat((select v from t.ids where k = 'T'), 'A01', (select v from t.ids where k = 'HN'),
+  (select v from t.ids where k = 'VT'), null, null) ->> 'booking_id')::uuid;
+select throws_ok($$ select public.confirm_booking((select v from t.ids where k = 'B4'), null, null, 'chuyen_khoan', false, null, null, null, null, null) $$,
+  '22023', null, 'Chưa cấu hình tài khoản nhận thì chưa bán chuyển khoản');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ insert into public.tenant_settings (key, value) values ('tt.ngan_hang_bin', '"9704"') $$, '22023', null, 'Mã BIN phải 6 số');
+select lives_ok($$ insert into public.tenant_settings (key, value) values ('tt.ngan_hang_bin', '"970436"'), ('tt.so_tai_khoan', '"0123456789"'),
+  ('tt.ten_tai_khoan', '"CONG TY TNHH THINH PHAT"') $$, 'Cấu hình tài khoản nhận (Vietcombank)');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((public.confirm_booking((select v from t.ids where k = 'B4'), null, null, 'chuyen_khoan', false, null, null, null, null, null)
+           ->> 'total')::int, 150000, 'Tạo QR chuyển khoản 150.000');
+select ok((select status = 'dat' and pay_method = 'chuyen_khoan' and hold_until between now() + interval '14 minutes' and now() + interval '16 minutes'
+           from public.seat_inventory where booking_id = (select v from t.ids where k = 'B4')), 'Chờ chuyển khoản: giữ ghế 15 phút');
+select is(public.pay_booking((select v from t.ids where k = 'B4'), null, 'chuyen_khoan'), 150000::bigint, 'Nhân viên bấm "Đã nhận chuyển khoản"');
+select is((select sum(debit)::int from public.ledger_lines where account = 'ngan_hang'), 150000, 'Ghi vào tài khoản ngân hàng, không vào tiền mặt');
+select is((select sum(debit - credit)::int from public.ledger_lines where account = 'tien_mat'), 150000, 'Tiền mặt quầy 1 không đổi');
+select throws_ok($$ select public.pay_booking((select v from t.ids where k = 'B4'), null, 'the') $$, '22023', null, 'Chỉ tiền mặt hoặc chuyển khoản');
+reset role;
+
 select ok(not has_function_privilege('anon', 'public.hold_seat(uuid, text, uuid, uuid, uuid, uuid)', 'EXECUTE'), 'Khách (anon) không bán vé được');
 
 select * from finish();

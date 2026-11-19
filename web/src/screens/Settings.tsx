@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
+import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -87,6 +88,24 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     await load();
   }
 
+  async function saveBank(e: FormEvent) {
+    e.preventDefault();
+    const bin = (sale['tt.ngan_hang_bin'] ?? '').trim();
+    const acc = (sale['tt.so_tai_khoan'] ?? '').replace(/\s/g, '');
+    const name = (sale['tt.ten_tai_khoan'] ?? '').trim().toUpperCase();
+    if (!/^[0-9]{6}$/.test(bin)) return toast('error', 'Chọn ngân hàng (hoặc nhập mã BIN 6 số)');
+    if (!/^[0-9A-Za-z]{6,19}$/.test(acc)) return toast('error', 'Số tài khoản: 6–19 chữ số');
+    if (name.length < 2) return toast('error', 'Nhập tên chủ tài khoản');
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([
+      { key: 'tt.ngan_hang_bin', value: bin }, { key: 'tt.so_tai_khoan', value: acc }, { key: 'tt.ten_tai_khoan', value: name },
+    ], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu tài khoản nhận chuyển khoản');
+    await load();
+  }
+
   async function saveDispatch(e: FormEvent) {
     e.preventDefault();
     const rows = [];
@@ -147,6 +166,26 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
                     placeholder="vd: Có mặt trước giờ chạy 15 phút. Hotline: …" />
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình đặt chỗ và vé</button>
+      </form>
+      <form className="card form" onSubmit={(e) => void saveBank(e)}>
+        <h2>Tài khoản nhận chuyển khoản (QR)</h2>
+        <p className="muted small">Bán vé chọn "Chuyển khoản (QR)": app tạo mã VietQR có sẵn số tiền và nội dung là mã vé. Nhân viên thấy tiền về thì bấm xác nhận.</p>
+        <label>Ngân hàng
+          <select value={BANKS.some((b) => b.bin === sale['tt.ngan_hang_bin']) ? sale['tt.ngan_hang_bin'] : sale['tt.ngan_hang_bin'] ? 'khac' : ''}
+                  onChange={(e) => setSale({ ...sale, 'tt.ngan_hang_bin': e.target.value === 'khac' ? '' : e.target.value })}>
+            <option value="">Chọn ngân hàng</option>
+            {BANKS.map((b) => <option key={b.bin} value={b.bin}>{b.name}</option>)}
+            <option value="khac">Ngân hàng khác (nhập mã BIN)</option>
+          </select>
+        </label>
+        {!BANKS.some((b) => b.bin === sale['tt.ngan_hang_bin']) && (
+          <label>Mã BIN ngân hàng (6 số)
+            <input inputMode="numeric" maxLength={6} value={sale['tt.ngan_hang_bin'] ?? ''} onChange={(e) => setSale({ ...sale, 'tt.ngan_hang_bin': e.target.value })} />
+          </label>
+        )}
+        <label>Số tài khoản<input inputMode="numeric" value={sale['tt.so_tai_khoan'] ?? ''} onChange={(e) => setSale({ ...sale, 'tt.so_tai_khoan': e.target.value })} /></label>
+        <label>Tên chủ tài khoản<input value={sale['tt.ten_tai_khoan'] ?? ''} onChange={(e) => setSale({ ...sale, 'tt.ten_tai_khoan': e.target.value.toUpperCase() })} /></label>
+        <button className="btn primary" disabled={busy}>Lưu tài khoản nhận</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveOrder(e)}>
         <h2>Lệnh vận chuyển</h2>

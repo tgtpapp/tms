@@ -248,6 +248,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5n. Chuyển khoản QR, nhân viên xác nhận thủ công
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Đọc lại Giấy phép kinh doanh vận tải' })).toBeDisabled();   // chưa có ảnh
   await page.getByRole('combobox', { name: /^Ngân hàng/ }).selectOption({ label: 'Vietcombank' });
   await page.getByLabel('Số tài khoản').fill('0123456789');
   await page.getByLabel('Tên chủ tài khoản').fill('CONG TY TNHH TUONG GIA THINH PHAT');

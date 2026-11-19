@@ -167,7 +167,9 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
 
   const set = (k: keyof Info) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const slot = (s: Slot, label: string, hint?: string) => (
-    <ImageSlot key={s} label={label} hint={hint} url={urls[s] ?? null} onPick={(file) => void pickImage(s, file)} onRemove={() => void drop(s)} />
+    <ImageSlot key={s} label={label} hint={hint} url={urls[s] ?? null} onPick={(file) => void pickImage(s, file)} onRemove={() => void drop(s)}
+               reading={!!reading}
+               onReread={s === 'giay_phep' ? () => void reread('giay_phep') : s === 'cccd_truoc' || s === 'cccd_sau' ? () => void reread('cccd') : undefined} />
   );
 
   return (
@@ -195,12 +197,6 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       {slot('giay_phep', 'Giấy phép kinh doanh vận tải', 'Tải ảnh chụp hoặc quét giấy phép – AI tự đọc số, ngày cấp, nơi cấp')}
       {slot('cccd_truoc', 'CCCD giám đốc (mặt trước)', 'AI tự đọc số CCCD')}
       {slot('cccd_sau', 'CCCD giám đốc (mặt sau)')}
-      {(urls.giay_phep || urls.cccd_truoc || urls.cccd_sau) && (
-        <div className="actions">
-          {urls.giay_phep && <button type="button" className="btn small" disabled={!!reading} onClick={() => void reread('giay_phep')}>Đọc lại giấy phép</button>}
-          {(urls.cccd_truoc || urls.cccd_sau) && (
-            <button type="button" className="btn small" disabled={!!reading} onClick={() => void reread('cccd')}>Đọc lại CCCD giám đốc</button>
-          )}
         </div>
       )}
       <label className="check">
@@ -219,7 +215,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
   );
 }
 
-function ImageSlot(props: { label: string; hint?: string; url: string | null; onPick: (f: File | undefined) => void; onRemove: () => void }) {
+function ImageSlot(props: { label: string; hint?: string; url: string | null; onPick: (f: File | undefined) => void; onRemove: () => void;
+                           onReread?: () => void; reading?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className="img-slot">
@@ -227,6 +224,10 @@ function ImageSlot(props: { label: string; hint?: string; url: string | null; on
       <div className="img-slot-row">
         <div className="img-slot-box">{props.url ? <img src={props.url} alt={props.label} /> : <span className="muted small">Chưa có</span>}</div>
         <button type="button" className="btn small" onClick={() => ref.current?.click()}>Chọn ảnh</button>
+        {props.onReread && (
+          <button type="button" className="btn small" aria-label={`Đọc lại ${props.label}`} disabled={!props.url || props.reading}
+                  title={props.url ? 'AI đọc lại ảnh đã lưu' : 'Chưa có ảnh: bấm "Chọn ảnh" trước'} onClick={props.onReread}>Đọc lại</button>
+        )}
         {props.url && <button type="button" className="btn small" onClick={props.onRemove}>Bỏ ảnh</button>}
         <input ref={ref} type="file" accept="image/*" hidden aria-label={`Ảnh ${props.label}`}
                onChange={(e) => { props.onPick(e.target.files?.[0]); e.target.value = ''; }} />

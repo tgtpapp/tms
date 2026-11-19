@@ -99,8 +99,9 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
           contents: [{ parts: [{ text: prompt }, ...files.map((x) => ({ inline_data: { mime_type: x.mime, data: x.data } }))] }],
           generationConfig: {
             temperature: 0, responseMimeType: 'application/json',
-            // Gemini 2.5 Flash mặc định "suy nghĩ" trước khi trả lời (chậm 10–30 giây); đọc giấy tờ không cần → tắt
-            ...(/2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+            // Dòng Flash mặc định "suy nghĩ" trước khi trả lời (chậm 10–30 giây); đọc giấy tờ không cần → tắt / tối thiểu
+            ...(/2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } }
+              : /gemini-[3-9][\d.]*-flash/.test(p.model) ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}),
           },
         }),
       });

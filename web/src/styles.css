@@ -488,3 +488,9 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
   font-weight: 800; letter-spacing: .04em; text-align: center; line-height: 1.2; opacity: .85; background: rgba(255,255,255,.6); }
 .stamp small { display: block; font-size: .68rem; font-weight: 600; letter-spacing: 0; }
 .lock-box { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.past-head { margin: 14px 0 6px; font-size: .8rem; font-weight: 800; letter-spacing: .06em; color: #dc2626; text-transform: uppercase; text-align: right; }
+.trip-card.phoi { border-left: 4px solid #7c3aed; }
+.tc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+.tc-badge.phoi { color: #6d28d9; }
+.phoi-badge { background: #ede9fe; color: #6d28d9; margin-left: 6px; }
+.sseat .printed { display: inline-flex; margin-left: 4px; color: #1d4ed8; vertical-align: middle; }

@@ -146,6 +146,14 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
 select throws_ok($$ select public.update_ticket_info('77777777-7777-7777-7777-777777777772', 'Tên khác', null, null, null) $$, '42501', null, 'Khóa lại thì không sửa được');
 reset role;
+-- Đánh dấu đã in vé / in phơi (vẫn được khi đã xuất bến)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select lives_ok($$ select public.mark_tickets_printed(array['77777777-7777-7777-7777-777777777772'::uuid]) $$, 'Đánh dấu đã in vé');
+select is((select print_count from public.seat_inventory where id = '77777777-7777-7777-7777-777777777772'), 1, 'Đếm số lần in vé');
+select lives_ok($$ select public.mark_manifest_printed((select v from t.ids where k = 'T1')) $$, 'Đánh dấu đã in phơi');
+select isnt((select manifest_printed_at from public.trips where id = (select v from t.ids where k = 'T1')), null, 'Chuyến có giờ in phơi');
+reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.my_trips(app.local_today(), app.local_today() + 7)), 0, 'Chủ B không thấy chuyến nhà xe A');

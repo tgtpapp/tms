@@ -63,6 +63,24 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","r
 select lives_ok($$ select public.set_trip_vehicle_type(id, (select id from public.vehicle_types)) from public.trips $$, 'Gắn sơ đồ ghế cho 2 chuyến');
 reset role;
 
+-- ---------------------------------------------------------------- Gom ghế đang giữ của tôi (tải lại trang vẫn bán tiếp / bỏ chọn được)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select lives_ok($$ select public.hold_seat((select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1), 'A01',
+  (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'VT'), null, null) $$, 'Giữ ghế A01 (đơn 1)');
+select lives_ok($$ select public.hold_seat((select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1), 'A02',
+  (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'VT'), null, null) $$, 'Giữ ghế A02 (đơn 2, như sau khi tải lại trang)');
+select isnt(public.merge_my_holds((select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1)), null, 'Gom ghế đang giữ');
+select is((select count(distinct booking_id)::int from public.seat_inventory where status = 'giu'
+           and trip_id = (select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1)), 1, 'Hai ghế về chung 1 đơn');
+select lives_ok($$ select public.unhold_seat(id) from public.seat_inventory where status = 'giu'
+  and trip_id = (select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1) $$, 'Bỏ chọn được cả hai ghế');
+reset role;
+-- dọn dữ liệu thử để phần sau không bị ảnh hưởng
+delete from public.seat_inventory where trip_id = (select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1);
+delete from public.bookings b where not exists (select 1 from public.seat_inventory s where s.booking_id = b.id);
+delete from public.audit_logs where entity in ('seat_inventory', 'bookings');
+
 -- ---------------------------------------------------------------- 2 quầy cùng bán
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';

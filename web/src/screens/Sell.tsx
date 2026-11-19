@@ -307,7 +307,9 @@ function TripSell(props: TripSellProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [from, setFrom] = useState(stopIds[0] ?? '');
   const [to, setTo] = useState(stopIds[stopIds.length - 1] ?? '');
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookingId, setBookingIdState] = useState<string | null>(null);
+  const bookingRef = useRef<string | null>(null);
+  const setBookingId = (b: string | null) => { bookingRef.current = b; setBookingIdState(b); };
   const [selected, setSelected] = useState<Ticket | null>(null);
   const [printing, setPrinting] = useState<TicketPrintData | null>(null);
   const [view, setView] = useState<'so_do' | 'khach'>('so_do');
@@ -341,7 +343,21 @@ function TripSell(props: TripSellProps) {
     const f = await rpc<Fare[]>('trip_fares', { p_trip_id: trip.id }).catch(() => null);
     if (f) setFares(f);
     cacheSet(cacheKey, { tickets: list, bookings: bl, fares: f ?? [] });
-  }, [trip.id, toast, cacheKey]);
+    // Ghế tôi đang giữ nhưng nằm ở đơn khác (tải lại trang, đổi chuyến rồi quay lại…): gom về 1 đơn để bán tiếp / bỏ chọn được
+    const mineHeld = list.filter((x) => x.status === 'giu' && x.created_by === ctx.user_id);
+    const cur = bookingRef.current;
+    if (mineHeld.length && (!cur || mineHeld.some((x) => x.booking_id !== cur))) {
+      const b2 = await rpc<string | null>('merge_my_holds', { p_trip_id: trip.id }).catch(() => null);
+      if (b2) {
+        bookingRef.current = b2;
+        setBookingIdState(b2);
+        if (mineHeld.some((x) => x.booking_id !== b2)) {
+          const again = await supabase.from('seat_inventory').select(TICKET_COLS).eq('trip_id', trip.id).in('status', ['giu', 'dat', 'da_tt', 'cho_xep']);
+          if (!again.error) setTickets((again.data ?? []) as Ticket[]);
+        }
+      }
+    }
+  }, [trip.id, toast, cacheKey, ctx.user_id]);
 
   useEffect(() => {
     void load();
@@ -352,7 +368,9 @@ function TripSell(props: TripSellProps) {
   const all = useMemo(() => [...tickets.filter((t) => !t.id.startsWith('q:')), ...queuedTickets(queue, trip.id, stopIds)], [tickets, queue, trip.id, stopIds]);
   const waiting = tickets.filter((t) => t.status === 'cho_xep');
   const fareOf = (a: string, b: string) => fares.find((x) => x.from_stop_id === a && x.to_stop_id === b)?.price ?? null;
-  const myHolds = tickets.filter((t) => t.status === 'giu' && t.booking_id === bookingId && active(t));
+  const me = ctx.user_id;
+  const isMine = (t: Ticket) => t.status === 'giu' && t.created_by === me;
+  const myHolds = tickets.filter((t) => isMine(t) && t.booking_id === bookingId && active(t));
   const onSeat = (label: string) => all.filter((t) => t.seat_label === label && active(t));
   const overlapping = (label: string) => onSeat(label).find((t) => t.from_idx < toIdx && fromIdx < t.to_idx);
 
@@ -368,7 +386,7 @@ function TripSell(props: TripSellProps) {
     }
     if (hit?.id.startsWith('q:')) return toast('error', `Ghế ${label}: vé bán khi mất mạng, đang chờ gửi`);
     if (hit) {
-      if (hit.status === 'giu' && hit.booking_id === bookingId) {
+      if (isMine(hit)) {
         try {
           await rpc('unhold_seat', { p_ticket_id: hit.id });
         } catch (e) {
@@ -463,7 +481,7 @@ function TripSell(props: TripSellProps) {
               const hit = overlapping(label);
               if (!hit) return { cls: 'free' };
               if (hit.id.startsWith('q:')) return { cls: 'cho_gui', t: hit };
-              const mine = hit.status === 'giu' && hit.booking_id === bookingId;
+              const mine = isMine(hit);
               return { cls: mine ? 'mine' : hit.status === 'giu' ? 'held' : hit.boarded ? 'boarded' : hit.status, t: hit };
             }} onClick={(l) => void clickSeat(l)} />
             <p className="muted small legend">

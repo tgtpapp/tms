@@ -10,6 +10,7 @@ import { cacheGet, cacheSet, enqueue, isNetworkError, localCode, queueAll, remov
   type OfflineSale } from '../lib/offline';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { zaloKick } from '../lib/zalo';
 
 type Dir = 'di' | 've';
 type SeatStatus = 'giu' | 'dat' | 'da_tt' | 'cho_xep' | 'het_han' | 'huy';
@@ -142,7 +143,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     if (!ctx.tenant_id || !ctx.user_id || !navigator.onLine) return;
     if (!queueAll().some((x) => x.tenant_id === ctx.tenant_id && x.user_id === ctx.user_id && !x.error)) return;
     const r = await syncQueue(ctx.tenant_id, ctx.user_id);
-    if (r.sent) toast('ok', `Đã gửi ${r.sent} đơn vé bán khi mất mạng`);
+    if (r.sent) { toast('ok', `Đã gửi ${r.sent} đơn vé bán khi mất mạng`); zaloKick(); }
     if (r.conflicts.length) toast('error', `Trùng ghế, cần xếp ghế khác: ${r.conflicts.join('; ')}`);
     if (r.errors) toast('error', `${r.errors} đơn vé gửi lỗi, xem mục "Vé chờ gửi"`);
     if (r.sent || r.errors) {
@@ -534,6 +535,7 @@ function Checkout(props: {
         return;
       }
       toast('ok', f.mode === 'thu_tien' ? `Đã bán vé ${r.code} · thu ${money(total)}` : `Đã đặt chỗ ${r.code}`);
+      zaloKick();
       await onDone(r.code, print ? list : null);
     } catch (e) {
       toast('error', errMsg(e));
@@ -548,6 +550,7 @@ function Checkout(props: {
     try {
       await rpc('pay_booking', { p_booking_id: bookingId, p_ticket_ids: null, p_method: 'chuyen_khoan' });
       toast('ok', `Đã nhận chuyển khoản vé ${transfer.code} · ${money(transfer.total)}`);
+      zaloKick();
       const { data } = await supabase.from('seat_inventory').select(TICKET_COLS).eq('booking_id', bookingId).eq('status', 'da_tt');
       await onDone(transfer.code, (data ?? []) as Ticket[]);
     } catch (e) {

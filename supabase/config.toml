@@ -12,3 +12,7 @@ verify_jwt = false
 # AI đọc giấy tờ: tự kiểm tra phiên đăng nhập + quyền bên trong
 [functions.doc-reader]
 verify_jwt = false
+
+# Zalo: Zalo gọi về không có phiên đăng nhập; POST tự kiểm tra phiên + quyền bên trong
+[functions.zalo]
+verify_jwt = false

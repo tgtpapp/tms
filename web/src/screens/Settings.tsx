@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
+import { ZaloSettings } from '../components/ZaloSettings';
 import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -169,6 +170,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
   return (
     <>
       <CompanyInfo tenantId={tenantId} />
+      <ZaloSettings />
       {!loaded && <p className="muted">Đang tải cấu hình…</p>}
       {loaded && (<>
       <form className="card form" onSubmit={saveSale}>

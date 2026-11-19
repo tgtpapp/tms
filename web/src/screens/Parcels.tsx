@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { zaloKick } from '../lib/zalo';
 
 type Status = 'nhan' | 'tren_xe' | 'den' | 'giao' | 'huy';
 export interface Shipment {
@@ -189,7 +190,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage }: {
           <div className="actions">
             {manage && s.status === 'nhan' && <button className="btn small" onClick={() => setAct('xe')}>Lên xe</button>}
             {(s.status === 'nhan' || s.status === 'tren_xe') && (
-              <button className="btn small" onClick={() => void run(() => rpc('set_shipment_status', { p_id: s.id, p_status: 'den', p_trip_id: null, p_reason: null }), `Phiếu ${s.code} đã đến`)}>Đã đến</button>
+              <button className="btn small" onClick={() => void run(() => rpc('set_shipment_status', { p_id: s.id, p_status: 'den', p_trip_id: null, p_reason: null }).then(zaloKick), `Phiếu ${s.code} đã đến`)}>Đã đến</button>
             )}
             <button className="btn small primary" onClick={() => setAct('giao')}>Giao hàng{due ? ` · thu ${money(due)}` : ''}</button>
             {manage && <button className="btn small link" onClick={() => setAct('huy')}>Hủy</button>}

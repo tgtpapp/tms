@@ -199,10 +199,11 @@ jobs:
           AI_PROVIDERS: ${{ secrets.AI_PROVIDERS }}
         run: |
           if [ -n "$AI_PROVIDERS" ]; then
-            supabase secrets set "AI_PROVIDERS=$AI_PROVIDERS" >/dev/null && echo "Đã cập nhật AI_PROVIDERS từ GitHub"
+            if supabase secrets set "AI_PROVIDERS=$AI_PROVIDERS" --yes >/dev/null 2>/tmp/err; then echo "Đã chép AI_PROVIDERS từ GitHub sang Supabase"
+            else echo "::warning::Không chép được AI_PROVIDERS sang Supabase: $(head -c 300 /tmp/err)"; fi
+          else
+            echo "GitHub không có secret AI_PROVIDERS (bỏ qua)"
           fi
-          # Chỉ in TÊN secret (không in giá trị) để biết AI đã được cấu hình chưa
-          if supabase secrets list | grep -q 'AI_PROVIDERS'; then echo "Supabase đã có AI_PROVIDERS"; else echo "::warning::Supabase CHƯA có secret AI_PROVIDERS"; fi
       - name: Đưa Edge Function lên
         run: |
           supabase functions deploy admin-users --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes

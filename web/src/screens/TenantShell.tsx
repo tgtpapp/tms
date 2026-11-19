@@ -45,7 +45,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       const crew = !!me.data;   // lái xe, phụ xe, người chạy trung chuyển (có hồ sơ nhân viên)
       setIsCrew(crew);
       setPerms(p);
-      setTab((cur) => cur ?? (p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : crew ? 'driver' : 'branches'));
+      // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
+      setTab((cur) => cur ?? (p.has('ticket.sell') ? 'sell' : p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : crew ? 'driver' : 'branches'));
     } catch (e) {
       setError(errMsg(e));
     }

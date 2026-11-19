@@ -47,6 +47,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 3. Chủ nhà xe đăng nhập bằng số điện thoại
   await login(page, '0901000001', 'chu123');
+  // Mở app vào thẳng Bán vé; chuyển sang Người dùng
+  await page.getByRole('button', { name: 'Người dùng', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Thêm người dùng' })).toBeVisible();
 
   // 4. Tạo chi nhánh
@@ -466,6 +468,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 6. Nhân viên đăng nhập: thấy chi nhánh, không có mục Người dùng, không thêm được chi nhánh
   await login(page, '0902000002', 'nv1234');
+  await page.getByRole('button', { name: 'Chi nhánh & phòng vé', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Chi nhánh (1)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Người dùng' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Thêm chi nhánh' })).toHaveCount(0);
@@ -499,6 +502,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Số điện thoại', { exact: true }).fill('0903000003');
   await page.getByLabel('Mật khẩu', { exact: true }).fill('chub123');
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await page.getByRole('button', { name: 'Người dùng', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (1)' })).toBeVisible();
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await expect(page.getByText(/^Nhà xe B · Chủ nhà xe B$/)).toBeVisible();

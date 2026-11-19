@@ -11,7 +11,6 @@ import { drive } from './drive';
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-const dmy = (d: string) => d.split('-').reverse().join('/');
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const vnDay = (iso: string) => new Date(iso).toLocaleDateString('sv-SE', { timeZone: TZ });
 

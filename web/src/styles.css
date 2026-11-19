@@ -655,3 +655,17 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .use-bar i { display: block; height: 100%; background: var(--ok); }
 .use-bar.warn i { background: #f59e0b; }
 .use-bar.bad i { background: var(--danger); }
+/* Xem hồ sơ (như app cũ) */
+.doc-view { display: flex; flex-direction: column; gap: 12px; }
+.doc-thumb { position: relative; display: block; width: 100%; padding: 0; border: 1.5px solid var(--primary-soft, #cfe8e3); border-radius: 12px; background: #fff; overflow: hidden; cursor: zoom-in; }
+.doc-thumb img { display: block; width: 100%; height: auto; max-height: 62vh; object-fit: contain; }
+.doc-thumb.empty { cursor: default; min-height: 180px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); }
+.doc-thumb.empty span { font-size: 2rem; font-weight: 800; }
+.doc-pages { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: .8rem; border-radius: 999px; padding: 2px 10px; }
+.doc-view .actions .btn { min-height: 48px; padding: 0 18px; font-size: 1rem; }
+.doc-close { width: 100%; min-height: 52px; font-size: 1.05rem; }
+.doc-big { position: fixed; inset: 0; z-index: 80; background: #111; display: flex; flex-direction: column; }
+.doc-big-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: #fff; }
+.doc-big-bar b { margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-big-pages { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; align-items: center; touch-action: pan-x pan-y pinch-zoom; }
+.doc-big-pages img { width: 100%; max-width: 1000px; height: auto; background: #fff; }

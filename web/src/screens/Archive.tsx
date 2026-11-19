@@ -7,6 +7,7 @@ import type { Permissions } from '../lib/permissions';
 import { errMsg, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { drive, fileToBase64, openBase64 } from '../lib/drive';
+import { DocViewer } from '../components/DocViewer';
 
 interface Folder { id: string; parent_id: string | null; name: string; note: string | null; created_at: string }
 interface Item {
@@ -66,6 +67,7 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
   const [showOld, setShowOld] = useState(false);
   const [dlg, setDlg] = useState<Dlg | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [doc, setDoc] = useState<{ title: string; name: string; mime: string; b64: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<Item | null>(null);
 
@@ -177,7 +179,8 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
     setBusy(`Đang tải ${it.file_name ?? it.name}…`);
     try {
       const r = await drive<{ name: string; mime: string; data: string }>({ action: 'get', id: it.id });
-      openBase64(r.name || it.file_name || it.name, r.mime || it.mime || '', r.data, download);
+      if (download) openBase64(r.name || it.file_name || it.name, r.mime || it.mime || '', r.data, true);
+      else setDoc({ title: it.name, name: r.name || it.file_name || it.name, mime: r.mime || it.mime || '', b64: r.data });
     } catch (e) {
       toast('error', errMsg(e));
     } finally {
@@ -261,6 +264,7 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
 
   return (
     <>
+      {doc && <DocViewer {...doc} onClose={() => setDoc(null)} />}
       <input ref={fileRef} type="file" multiple hidden aria-label="Chọn tệp hồ sơ" onChange={(e) => {
         const files = Array.from(e.target.files ?? []);
         e.target.value = '';

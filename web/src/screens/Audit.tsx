@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -65,11 +65,14 @@ export function AuditScreen() {
   const [entity, setEntity] = useState('');
   const [more, setMore] = useState(false);
 
+  const seq = useRef(0);
   const load = useCallback(async (offset: number) => {
+    const mine = ++seq.current;   // đổi bộ lọc nhanh: chỉ lấy kết quả của lần tải mới nhất
     let q = supabase.from('audit_logs').select('id, actor_id, action, entity, entity_id, detail, created_at')
       .order('id', { ascending: false }).range(offset, offset + PAGE - 1);
     if (entity) q = q.eq('entity', entity);
     const { data, error } = await q;
+    if (mine !== seq.current) return;
     if (error) return toast('error', error.message);
     const list = (data ?? []) as AuditRow[];
     setRows((cur) => (offset === 0 ? list : [...cur, ...list]));

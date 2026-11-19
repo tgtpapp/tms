@@ -2,7 +2,6 @@
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
 import { MiniCal } from '../components/MiniCal';
 import { Modal } from '../components/Modal';
-import { SeatIcon } from '../components/SeatIcon';
 import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { fmtDate, today } from '../components/Documents';
@@ -55,11 +54,7 @@ const queuedTickets = (q: OfflineSale[], tripId: string, stopIds: string[]): Tic
   passenger_name: x.name, passenger_phone: x.phone, pickup_note: null, dropoff_note: null, boarded: false, created_by: x.user_id, paid_by: x.user_id,
   pay_method: x.method,
 })));
-const addDays = (d: string, n: number) => {
-  const x = new Date(`${d}T00:00:00Z`);
-  x.setUTCDate(x.getUTCDate() + n);
-  return x.toISOString().slice(0, 10);
-};
+
 
 export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
@@ -193,15 +188,44 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       .sort((x, y) => x.label.localeCompare(y.label, 'vi'));
   }, [trips, routes]);
   const rfOk = routeOpts.some((o) => o.key === rf) ? rf : '';
-  const routeGroups = useMemo(() => [...new Set(trips.map((t) => t.route_id))].map((id) => {
-    const r = routes.find((x) => x.id === id);
-    const stat = (d: Dir) => {
-      const l = trips.filter((t) => t.route_id === id && t.direction === d);
-      return { name: dirName(r, d), trips: l.length, sold: l.reduce((a, t) => a + (counts[t.id] ?? 0), 0) };
-    };
-    return { id, title: (r?.name ?? '').replace(/\s+[-–—]\s+/, ' ⇄ '), di: stat('di'), ve: stat('ve') };
-  }).sort((a, b) => a.title.localeCompare(b.title, 'vi')), [trips, routes, counts]);
   const shownTrips = rfOk ? trips.filter((t) => `${t.route_id}|${t.direction}` === rfOk) : trips;
+
+  const canTrip = perms.has('trip.manage');
+  const [calOpen, setCalOpen] = useState(true);
+  const [extra, setExtra] = useState<{ key: string; time: string; note: string } | null>(null);
+  async function addExtra() {
+    if (!extra) return;
+    const [rid, d] = extra.key.split('|');
+    if (!rid || !extra.time) return toast('error', 'Chọn tuyến và giờ chạy');
+    try {
+      await rpc('add_extra_trip', { p_route_id: rid, p_direction: d, p_date: day, p_time: extra.time, p_note: extra.note || null });
+      toast('ok', `Đã thêm chuyến tăng cường ${extra.time}`);
+      setExtra(null);
+      await loadBase();
+    } catch (e) {
+      toast('error', errMsg(e));
+    }
+  }
+  const tail = (p: string) => p.split('-').pop() ?? p;   // 60F-004.41 → 004.41 như Vexere
+  const card = (t: Trip) => {
+    const total = sellable(t.vehicle_type_id);
+    const sold = counts[t.id] ?? 0;
+    const name = dirName(routes.find((r) => r.id === t.route_id), t.direction);
+    const past = new Date(t.depart_at).getTime() < Date.now();
+    return (
+      <button key={t.id} className={['vx-trip', t.id === tripId && 'on', past && 'past', t.manifest_printed_at && 'phoi', t.departed_at && 'xb'].filter(Boolean).join(' ')}
+              aria-label={`Chuyến ${hhmm(t.depart_at)} ${name}`} title={[name, t.departed_at && 'Đã xuất bến', t.manifest_printed_at && 'Đã in phơi'].filter(Boolean).join(' · ')}
+              onClick={() => setTripId(t.id)}>
+        <b className="vx-time">{hhmm(t.depart_at)}</b>
+        {!rfOk && <span className="vx-rname">{name}</span>}
+        <span className="vx-meta"><span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? tail(plates[t.vehicle_id] ?? '') : '—'}</span><span>{t.vehicle_type_id ? `${sold}|${total}` : ''}</span></span>
+        <span className="vx-bar"><span style={{ width: `${total ? Math.min(100, Math.round((sold / total) * 100)) : 0}%` }} /></span>
+      </button>
+    );
+  };
+  const nowMs = Date.now();
+  const upcoming = shownTrips.filter((t) => new Date(t.depart_at).getTime() >= nowMs);
+  const pastTrips = shownTrips.filter((t) => new Date(t.depart_at).getTime() < nowMs);
 
   return (
     <>
@@ -210,105 +234,46 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           Vé bán sẽ tự gửi lên khi có mạng.</p>
       )}
       {mine.length > 0 && <QueuePanel list={mine} online={online} onSync={() => void sync()} />}
-      {online && <CashToday userId={ctx.user_id} version={version} />}
-      <div className="sell-layout">
-      <aside className="sell-left">
-      <section className="card">
-        <div className="route-cards" role="group" aria-label="Tuyến">
-          {routeGroups.map((g) => (
-            <div key={g.id} className="route-card">
-              <b>{g.title}</b>
-              <div className="rc-pair">
-                {(['di', 've'] as Dir[]).map((d) => {
-                  const k = `${g.id}|${d}`;
-                  const st = g[d];
-                  return (
-                    <button key={d} type="button" className={rfOk === k ? 'rc-dir on' : 'rc-dir'} disabled={st.trips === 0}
-                            onClick={() => { setRf(rfOk === k ? '' : k); setTripId(null); }}>
-                      <span>{st.name}</span>
-                      <small>{st.trips} chuyến · {st.sold} vé</small>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          {rfOk && <button type="button" className="btn small link" onClick={() => { setRf(''); setTripId(null); }}>Xem tất cả tuyến</button>}
+      <div className="vx">
+        <aside className="vx-left">
+          <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => { setRf(e.target.value); setTripId(null); }}>
+            <option value="">Tất cả tuyến</option>
+            {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+          <div className="vx-cal">
+            {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setTripId(null); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
+            <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>
+          </div>
+          {canTrip && <div className="vx-extra"><button type="button" className="btn small" onClick={() => setExtra({ key: rfOk || routeOpts[0]?.key || '', time: '', note: '' })}>+ Tăng cường chuyến</button></div>}
+          {shownTrips.length === 0 && <p className="muted small">Không có chuyến đang mở trong ngày.</p>}
+          <div className="vx-trips">{upcoming.map(card)}</div>
+          {pastTrips.length > 0 && <><h4 className="past-head">Đã qua giờ khởi hành</h4><div className="vx-trips">{pastTrips.map(card)}</div></>}
+        </aside>
+        <div className="vx-right">
+          {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p>{online && <CashToday userId={ctx.user_id} version={version} />}</section>}
+          {trip && (
+            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
+                      stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
+                      seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
+                      otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
+                      footer={footer} logo={logo} bank={bank} online={online && !cachedAt} queue={mine} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }}
+                      sold={counts[trip.id] ?? 0} total={sellable(trip.vehicle_type_id)} day={day}
+                      cash={online ? <CashToday userId={ctx.user_id} version={version} /> : null} />
+          )}
         </div>
-        <MiniCal day={day} onPick={(d) => { setDay(d); setTripId(null); }} />
-        <div className="inline-form day-nav">
-          <button className="btn small" aria-label="Ngày trước" onClick={() => { setDay(addDays(day, -1)); setTripId(null); }}>‹</button>
-          <label>Ngày đi<input type="date" value={day} onChange={(e) => { if (e.target.value) { setDay(e.target.value); setTripId(null); } }} /></label>
-          <button className="btn small" aria-label="Ngày sau" onClick={() => { setDay(addDays(day, 1)); setTripId(null); }}>›</button>
-        </div>
-      </section>
-      <section className="card">
-        <h2>Chuyến ngày {fmtDate(day)} ({shownTrips.length})</h2>
-        {shownTrips.length === 0 && <p className="muted">Không có chuyến đang mở trong ngày.</p>}
-        {(() => {
-          const card = (t: Trip) => {
-            const total = sellable(t.vehicle_type_id);
-            const sold = counts[t.id] ?? 0;
-            const name = dirName(routes.find((r) => r.id === t.route_id), t.direction);
-            const past = new Date(t.depart_at).getTime() < Date.now();
-            return (
-              <button key={t.id} className={['trip-card', t.id === tripId && 'on', past && 'past', t.manifest_printed_at && 'phoi'].filter(Boolean).join(' ')}
-                      aria-label={`Chuyến ${hhmm(t.depart_at)} ${name}`} onClick={() => setTripId(t.id)}>
-                <span className="tc-top"><b>{hhmm(t.depart_at)}</b>{!rfOk && <span className="tc-route">{name}</span>}</span>
-                <span className="tc-meta">
-                  <span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? plates[t.vehicle_id] : 'Chưa xếp xe'}</span>
-                  <span>{t.vehicle_type_id ? `${sold}|${total}` : '—'}</span>
-                </span>
-                {(t.departed_at || t.manifest_printed_at) && <span className="tc-badges">{t.departed_at && <span className="tc-badge">Đã xuất bến</span>}{t.manifest_printed_at && <span className="tc-badge phoi">Đã in phơi</span>}</span>}
-                <span className="tc-bar"><span style={{ width: `${total ? Math.min(100, Math.round((sold / total) * 100)) : 0}%` }} /></span>
-              </button>
-            );
-          };
-          const nowMs = Date.now();
-          const upcoming = shownTrips.filter((t) => new Date(t.depart_at).getTime() >= nowMs);
-          const past = shownTrips.filter((t) => new Date(t.depart_at).getTime() < nowMs);
-          if (!rfOk && routeGroups.length > 0) {
-            // Tất cả tuyến: mỗi tuyến 1 cặp cột chiều đi | chiều về
-            return routeGroups.map((g) => (
-              <div key={g.id} className="pair-cols">
-                {(['di', 've'] as Dir[]).map((d) => {
-                  const l = shownTrips.filter((t) => t.route_id === g.id && t.direction === d);
-                  const up = l.filter((t) => new Date(t.depart_at).getTime() >= nowMs);
-                  const old = l.filter((t) => new Date(t.depart_at).getTime() < nowMs);
-                  return (
-                    <div key={d} className="pair-col">
-                      <h3>{g[d].name}</h3>
-                      <div className="trip-cards">{up.map(card)}</div>
-                      {old.length > 0 && <h4 className="past-head">Đã qua giờ khởi hành</h4>}
-                      <div className="trip-cards">{old.map(card)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            ));
-          }
-          return (
-            <>
-              <div className="trip-cards">{upcoming.map(card)}</div>
-              {past.length > 0 && <h3 className="past-head">Đã qua giờ khởi hành</h3>}
-              <div className="trip-cards">{past.map(card)}</div>
-            </>
-          );
-        })()}
-      </section>
-      </aside>
-      <div className="sell-right">
-      {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p></section>}
-      {trip && (
-        <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
-                  stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
-                  seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
-                  otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
-                  footer={footer} logo={logo} bank={bank} online={online && !cachedAt} queue={mine} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }}
-                  sold={counts[trip.id] ?? 0} total={sellable(trip.vehicle_type_id)} day={day} />
+      </div>
+      {extra && (
+        <Modal title="Tăng cường chuyến" onClose={() => setExtra(null)}>
+          <div className="form">
+            <label>Tuyến<select value={extra.key} onChange={(e) => setExtra({ ...extra, key: e.target.value })}>
+              {routes.flatMap((r) => (['di', 've'] as Dir[]).map((d) => <option key={`${r.id}|${d}`} value={`${r.id}|${d}`}>{dirName(r, d)}</option>))}</select></label>
+            <label>Ngày<input value={fmtDate(day)} disabled /></label>
+            <label>Giờ chạy<input type="time" value={extra.time} onChange={(e) => setExtra({ ...extra, time: e.target.value })} /></label>
+            <label>Ghi chú<input value={extra.note} onChange={(e) => setExtra({ ...extra, note: e.target.value })} /></label>
+            <div className="actions"><button className="btn primary" onClick={() => void addExtra()}>Thêm chuyến</button><button className="btn link" onClick={() => setExtra(null)}>Thôi</button></div>
+          </div>
+        </Modal>
       )}
-      </div>
-      </div>
     </>
   );
 }
@@ -340,7 +305,7 @@ function CashToday({ userId, version }: { userId: string | null; version: number
 interface TripSellProps {
   trip: Trip; ctx: AccountContext; canSell: boolean; canOverride: boolean; changeFee: number; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
   type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; logo: string | null; bank: BankAccount | null; onChanged: () => Promise<void>;
-  online: boolean; queue: OfflineSale[]; sold: number; total: number; day: string;
+  online: boolean; queue: OfflineSale[]; sold: number; total: number; day: string; cash: ReactNode;
 }
 
 function TripSell(props: TripSellProps) {
@@ -355,7 +320,11 @@ function TripSell(props: TripSellProps) {
   const setBookingId = (b: string | null) => { bookingRef.current = b; setBookingIdState(b); };
   const [selected, setSelected] = useState<Ticket | null>(null);
   const [printing, setPrinting] = useState<TicketPrintData | null>(null);
-  const [view, setView] = useState<'so_do' | 'khach'>('so_do');
+  const [view, setView] = useState<'so_do' | 'khach' | 'don_tra' | 'tc' | 'tk'>('so_do');
+  const [fold, setFold] = useState(false);
+  const [showStops, setShowStops] = useState(false);
+  const [phoi, setPhoi] = useState(false);
+  const [crew, setCrew] = useState<{ role: string; name: string; phone: string | null }[]>([]);
   const [fares, setFares] = useState<Fare[]>([]);
   const [offSel, setOffSel] = useState<string[]>([]);   // ghế chọn khi mất mạng
   const [paper, setPaper] = useState(false);
@@ -401,6 +370,23 @@ function TripSell(props: TripSellProps) {
       }
     }
   }, [trip.id, toast, cacheKey, ctx.user_id]);
+
+  useEffect(() => {
+    void (async () => {
+      const c = await supabase.from('trip_crew').select('role, staff_id').eq('trip_id', trip.id).eq('active', true);
+      const rows = (c.data ?? []) as { role: string; staff_id: string }[];
+      if (!rows.length) return setCrew([]);
+      const st = await supabase.from('staff_members').select('id, full_name, phone').in('id', rows.map((x) => x.staff_id));
+      const sm = (st.data ?? []) as { id: string; full_name: string; phone: string | null }[];
+      setCrew(rows.map((x) => ({ role: x.role, name: sm.find((y) => y.id === x.staff_id)?.full_name ?? '', phone: sm.find((y) => y.id === x.staff_id)?.phone ?? null })));
+    })();
+  }, [trip.id]);
+  // In phơi: chuyển sang danh sách hành khách rồi in, ghi nhận đã in phơi
+  useEffect(() => {
+    if (!phoi || view !== 'khach') return;
+    const t = setTimeout(() => { window.print(); setPhoi(false); void rpc('mark_manifest_printed', { p_trip_id: trip.id }).then(() => onChanged()).catch((e) => toast('error', errMsg(e))); }, 300);
+    return () => clearTimeout(t);
+  }, [phoi, view, trip.id, onChanged, toast]);
 
   useEffect(() => {
     void load();
@@ -477,48 +463,78 @@ function TripSell(props: TripSellProps) {
   return (
     <>
       {printing && <TicketPrint data={printing} onClose={() => setPrinting(null)} />}
-      <section className="card">
-        <div className="trip-head">
-          <div>
-            <h2>{hhmm(trip.depart_at)} · {fmtDate(props.day)} · {props.routeName}</h2>
-            <div className="small muted">
-              {stopIds.map((id) => stopName(id)).join(' → ')}
-            </div>
-            <div className="small">{type.name}{props.plate ? ` · ${props.plate}` : ' · chưa xếp xe'} · <b>{props.sold}</b>/{props.total} vé đã bán
-              {trip.manifest_printed_at && <span className="badge phoi-badge">Đã in phơi {hhmm(trip.manifest_printed_at)}</span>}</div>
-          </div>
-          {trip.departed_at && (
-            <div className="lock-box">
-              <span className="stamp">ĐÃ XUẤT BẾN<small>Thực hiện: {hhmm(trip.departed_at)} {new Date(trip.departed_at).toLocaleDateString('vi-VN', { timeZone: TZ })}</small></span>
-              {locked ? <span className="small muted">Khóa sửa vé</span> : <span className="small state-sap_het">Đang mở khóa sửa</span>}
-              {props.canOverride && (
-                <button className="btn small" onClick={() => void rpc('set_trip_edit_lock', { p_trip_id: trip.id, p_unlock: locked })
-                  .then(async () => { toast('ok', locked ? 'Đã mở khóa sửa chuyến' : 'Đã khóa lại chuyến'); await onChanged(); })
-                  .catch((e) => toast('error', errMsg(e)))}>{locked ? 'Mở khóa sửa' : 'Khóa lại'}</button>
+      <div className="vx-tool">
+        <button className="btn small" onClick={() => { setView('khach'); setPhoi(true); }}><PrinterIcon /> In Phơi</button>
+        {canSell && <button className={paper ? 'btn small primary' : 'btn small'} onClick={() => setPaper(!paper)}>Nhập vé giấy</button>}
+        {trip.departed_at && props.canOverride && (
+          <button className="btn small" onClick={() => void rpc('set_trip_edit_lock', { p_trip_id: trip.id, p_unlock: locked })
+            .then(async () => { toast('ok', locked ? 'Đã mở khóa sửa chuyến' : 'Đã khóa lại chuyến'); await onChanged(); })
+            .catch((e) => toast('error', errMsg(e)))}>{locked ? 'Mở khóa sửa' : 'Khóa lại'}</button>
+        )}
+        <span className="vx-tool-r">{props.cash}<button className="btn small" aria-label="Tải lại" title="Tải lại" onClick={() => void load()}>⟳</button></span>
+      </div>
+      <section className="card vx-head">
+        <div className="vx-h1">
+          <span><b>{hhmm(trip.depart_at)}</b> • <b>{fmtDate(props.day)}</b> • <b>{props.routeName}</b> •{' '}
+            <button type="button" className="btn small link" onClick={() => setShowStops(!showStops)}>Lộ trình {showStops ? '‹' : '›'}</button></span>
+          <button type="button" className="btn small link" aria-label={fold ? 'Mở thông tin chuyến' : 'Thu gọn thông tin chuyến'} onClick={() => setFold(!fold)}>{fold ? '﹀' : '︿'}</button>
+        </div>
+        {showStops && <div className="small muted">{stopIds.map((id) => stopName(id)).join(' → ')}</div>}
+        {!fold && (() => {
+          const sold = all.filter((t) => t.status === 'dat' || t.status === 'da_tt');
+          const sum = (l: Ticket[]) => l.reduce((a, t) => a + t.price, 0);
+          const d1 = crew.find((c) => c.role === 'lai_xe_1'), d2 = crew.find((c) => c.role === 'lai_xe_2'), px = crew.find((c) => c.role === 'phu_xe');
+          return (
+            <div className="vx-h2">
+              <div>
+                <div className="vx-line"><span>🪑 {type.name}</span><span><i className={props.plate ? 'dot ok' : 'dot'} /> <b>{props.plate ?? 'Chưa xếp xe'}</b></span></div>
+                <div className="vx-line"><span>👤 <b>{d1 ? d1.name.toUpperCase() : 'Chưa xếp lái xe'}</b> {d1?.phone && <a href={`tel:${d1.phone}`}>{d1.phone}</a>}</span>
+                  {d2 && <span>Lái xe 2: {d2.name}</span>}{px && <span>Phụ xe: {px.name}</span>}</div>
+                <div className="vx-line"><span><b className="vx-big">{props.sold}</b> /{props.total} vé đã bán</span></div>
+                <div className="vx-line small"><span>Lên xe <b>{sold.filter((t) => t.boarded).length}/{sold.length}</b></span>
+                  <span>TC đón <b>{sold.filter((t) => t.tc_don).length}</b></span><span>TC trả <b>{sold.filter((t) => t.tc_tra).length}</b></span></div>
+              </div>
+              <div>
+                <div className="vx-line small"><span>Tổng tiền <b>{money(sum(sold))}</b></span><span>Đã thu <b>{money(sum(sold.filter((t) => t.status === 'da_tt')))}</b></span></div>
+                <div className="vx-line small"><span>Thanh toán <b>{sold.filter((t) => t.status === 'da_tt').length}</b></span></div>
+                <div className="vx-line small"><span>Đặt chỗ <b>{sold.filter((t) => t.status === 'dat').length}</b></span>
+                  {trip.manifest_printed_at && <span className="badge phoi-badge">Đã in phơi {hhmm(trip.manifest_printed_at)}</span>}</div>
+              </div>
+              {trip.departed_at && (
+                <div className="lock-box">
+                  <span className="stamp">ĐÃ XUẤT BẾN<small>Thực hiện: {hhmm(trip.departed_at)} {new Date(trip.departed_at).toLocaleDateString('vi-VN', { timeZone: TZ })}</small></span>
+                  {locked ? <span className="small muted">Khóa sửa vé</span> : <span className="small state-sap_het">Đang mở khóa sửa</span>}
+                </div>
               )}
             </div>
-          )}
-          <div className="chips">
-            <button className={view === 'so_do' ? 'btn small primary' : 'btn small'} onClick={() => setView('so_do')}>Sơ đồ ghế</button>
-            <button className={view === 'khach' ? 'btn small primary' : 'btn small'} onClick={() => setView('khach')}>Danh sách khách</button>
-            {canSell && <button className={paper ? 'btn small primary' : 'btn small'} onClick={() => setPaper(!paper)}>Nhập vé giấy</button>}
-          </div>
-        </div>
-        {view === 'so_do' ? (
-          <>
-            <div className="inline-form">
-              <label>Đón tại
-                <select value={from} onChange={(e) => setFrom(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
-                  {stopIds.slice(0, -1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
-                </select>
-              </label>
-              <label>Trả tại
-                <select value={to} onChange={(e) => setTo(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
-                  {stopIds.slice(1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
-                </select>
-              </label>
+          );
+        })()}
+      </section>
+      <section className="card vx-body">
+        {(() => {
+          const sold = all.filter((t) => t.status !== 'giu');
+          const pick = sold.filter((t) => t.pickup_note).length, drop = sold.filter((t) => t.dropoff_note).length;
+          const tabs: [typeof view, string][] = [['so_do', 'Sơ đồ ghế'], ['khach', `Hành khách (${sold.length})`], ['don_tra', `Đón / Trả (${pick} | ${drop})`],
+            ['tc', `Trung chuyển (${sold.filter((t) => t.tc_don).length} | ${sold.filter((t) => t.tc_tra).length})`], ['tk', 'Thống kê']];
+          return (
+            <div className="vx-tabs" role="tablist">
+              {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}
+              {view === 'so_do' && (
+                <span className="vx-leg">
+                  <select aria-label="Đón tại" value={from} onChange={(e) => setFrom(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
+                    {stopIds.slice(0, -1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
+                  </select>→
+                  <select aria-label="Trả tại" value={to} onChange={(e) => setTo(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
+                    {stopIds.slice(1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
+                  </select>
+                </span>
+              )}
             </div>
-            <SeatMap type={type} seats={seats} statusOf={(label) => {
+          );
+        })()}
+        {view === 'so_do' && (
+          <>
+            <SeatMap type={type} seats={seats} stopName={stopName} bookingOf={bookingOf} statusOf={(label) => {
               if (offSel.includes(label)) return { cls: 'mine' };
               const hit = overlapping(label);
               if (!hit) return { cls: 'free' };
@@ -532,11 +548,15 @@ function TripSell(props: TripSellProps) {
               {queue.some((x) => x.trip_id === trip.id) && <><span className="seat-dot cho_gui" /> chờ gửi</>}
             </p>
           </>
-        ) : (
+        )}
+        {view === 'khach' && (
           <PassengerList tickets={all.filter((t) => t.status !== 'giu')} stopName={stopName} bookingOf={bookingOf}
                          onOpen={(t) => setSelected(t)} reload={load}
                          onPrinted={() => void rpc('mark_manifest_printed', { p_trip_id: trip.id }).then(() => onChanged()).catch((e) => toast('error', errMsg(e)))} />
         )}
+        {view === 'don_tra' && <PickDrop tickets={all.filter((t) => t.status !== 'giu')} onOpen={(t) => setSelected(t)} />}
+        {view === 'tc' && <PickDrop tickets={all.filter((t) => t.status !== 'giu' && (t.tc_don || t.tc_tra))} onOpen={(t) => setSelected(t)} tc />}
+        {view === 'tk' && <TripStats tickets={all.filter((t) => t.status !== 'giu')} stopName={stopName} />}
       </section>
       {waiting.length > 0 && (
         <section className="card waiting">
@@ -605,35 +625,42 @@ function TripSell(props: TripSellProps) {
 
 /* ------------------------------------------------------------------ Sơ đồ ghế */
 
-function SeatMap(props: { type: VType; seats: Seat[]; statusOf: (label: string) => { cls: string; t?: Ticket }; onClick: (label: string) => void }) {
-  const { type, seats, statusOf, onClick } = props;
+const ST_LABEL: Record<string, string> = { dat: 'Đặt chỗ', da_tt: 'Đã thanh toán', boarded: 'Đã lên xe', held: 'Quầy khác giữ', mine: 'Đang chọn', cho_gui: 'Chờ gửi', cho_xep: 'Chờ xếp ghế' };
+const shortStop = (n: string) => n.replace(/^(bến xe|bx|văn phòng|vp)\s+/i, '');
+
+/** Sơ đồ ghế kiểu Vexere: mỗi ghế là 1 thẻ lớn ghi chặng, tiền, tên, SĐT, ghi chú đón; ô tài xế / cửa ghi chữ lớn. */
+function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | null) => string; bookingOf: (id: string) => Booking | undefined;
+                          statusOf: (label: string) => { cls: string; t?: Ticket }; onClick: (label: string) => void }) {
+  const { type, seats, statusOf, onClick, stopName, bookingOf } = props;
   return (
     <div className="decks">
       {Array.from({ length: type.decks }, (_, i) => i + 1).map((d) => (
         <div key={d} className="deck">
           {type.decks > 1 && <div className="muted small">Tầng {d === 1 ? 'dưới' : 'trên'}</div>}
-          <div className="seat-grid sell" style={{ gridTemplateColumns: `repeat(${type.layout_cols}, minmax(52px, 72px))` }}>
+          <div className="vx-seats" style={{ gridTemplateColumns: `repeat(${type.layout_cols}, minmax(120px, 1fr))` }}>
             {Array.from({ length: type.layout_rows * type.layout_cols }, (_, idx) => {
               const r = Math.floor(idx / type.layout_cols) + 1;
               const c = (idx % type.layout_cols) + 1;
               const s = seats.find((x) => x.deck === d && x.row_no === r && x.col_no === c);
               if (!s) return <div key={idx} />;
-              if (s.kind === 'tai_xe' || s.kind === 'cua') return <div key={idx} className={`sseat ${s.kind}`} title={s.kind === 'tai_xe' ? 'Tài xế' : 'Cửa lên xuống'}><SeatIcon kind={s.kind} size={20} />{s.kind === 'tai_xe' ? 'Tài xế' : 'Cửa'}</div>;
-              if (!s.is_sellable) return <div key={idx} className="sseat off">{s.label}</div>;
+              if (s.kind === 'tai_xe' || s.kind === 'cua') return <div key={idx} className="vxs-fix">{s.kind === 'tai_xe' ? 'TÀI XẾ' : 'CỬA'}</div>;
+              if (!s.is_sellable) return <div key={idx} className="vxs off"><b>{s.label}</b></div>;
               const st = statusOf(s.label);
-              const who = st.t && st.t.status !== 'giu' ? (st.t.passenger_name ?? st.t.passenger_phone ?? '') : '';
+              const t = st.t && st.t.status !== 'giu' ? st.t : null;
               return (
-                <button key={idx} type="button" className={`sseat ${st.cls}${s.is_priority ? ' prio' : ''}`}
+                <button key={idx} type="button" className={`vxs ${st.cls}${s.is_priority ? ' prio' : ''}`}
                         aria-label={`Ghế ${s.label}${st.cls === 'free' ? ' trống' : ''}`} onClick={() => onClick(s.label)}>
-                  <b>{s.label}{st.t?.printed_at && <span className="printed" title={`Đã in vé ${st.t.print_count ?? 1} lần`} aria-label="Đã in vé"><PrinterIcon /></span>}</b>
-                  {st.t && st.t.status !== 'giu' ? (
+                  <span className="vxs-h"><b>{s.label}</b>
+                    {t?.printed_at && <span className="printed" title={`Đã in vé ${t.print_count ?? 1} lần`} aria-label="Đã in vé"><PrinterIcon /></span>}
+                    {t?.pickup_note && <span className="vxs-tag">{t.pickup_note}</span>}</span>
+                  {t ? (
                     <>
-                      {st.t.passenger_name && <span className="sp-name">{st.t.passenger_name}</span>}
-                      {st.t.passenger_phone && <span className="sp-phone">{st.t.passenger_phone}</span>}
-                      {st.t.pickup_note && <span className="sp-note">Đón: {st.t.pickup_note}</span>}
-                      {!st.t.passenger_name && !st.t.passenger_phone && who && <span>{who.slice(0, 14)}</span>}
+                      <span className="vxs-r"><span>{shortStop(stopName(t.from_stop_id))} - {shortStop(stopName(t.to_stop_id))}</span><b>{money(t.price)}</b></span>
+                      <span className="vxs-r"><span>{t.passenger_name ?? ''}</span><b>{t.passenger_phone ?? ''}</b></span>
+                      {t.dropoff_note && <span className="vxs-n">Trả: {t.dropoff_note}</span>}
+                      <span className="vxs-r vxs-s"><span>{bookingOf(t.booking_id)?.code ?? ''}</span><span>{ST_LABEL[st.cls] ?? ''}</span></span>
                     </>
-                  ) : who && <span>{who.slice(0, 14)}</span>}
+                  ) : st.cls !== 'free' && <span className="vxs-s">{ST_LABEL[st.cls] ?? ''}</span>}
                 </button>
               );
             })}
@@ -641,6 +668,47 @@ function SeatMap(props: { type: VType; seats: Seat[]; statusOf: (label: string) 
         </div>
       ))}
     </div>
+  );
+}
+
+/** Đón / trả (hoặc trung chuyển): gom khách theo ghi chú điểm đón và điểm trả. */
+function PickDrop({ tickets, onOpen, tc }: { tickets: Ticket[]; onOpen: (t: Ticket) => void; tc?: boolean }) {
+  const col = (title: string, list: Ticket[], note: (t: Ticket) => string | null) => {
+    const groups = new Map<string, Ticket[]>();
+    for (const t of list) { const k = note(t) || '(không ghi)'; groups.set(k, [...(groups.get(k) ?? []), t]); }
+    return (
+      <div>
+        <h3>{title} ({list.length})</h3>
+        {[...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'vi')).map(([k, l]) => (
+          <div key={k} className="pd-group"><b>{k}</b>
+            <ul className="list small">{l.map((t) => <li key={t.id}><button className="btn small link" onClick={() => onOpen(t)}>Ghế {t.seat_label}</button> {t.passenger_name ?? ''} {t.passenger_phone && <a href={`tel:${t.passenger_phone}`}>{t.passenger_phone}</a>}</li>)}</ul>
+          </div>
+        ))}
+        {list.length === 0 && <p className="muted small">Không có.</p>}
+      </div>
+    );
+  };
+  return (
+    <div className="pd-cols">
+      {col(tc ? 'Trung chuyển đón' : 'Đón', tc ? tickets.filter((t) => t.tc_don) : tickets.filter((t) => t.pickup_note), (t) => t.pickup_note)}
+      {col(tc ? 'Trung chuyển trả' : 'Trả', tc ? tickets.filter((t) => t.tc_tra) : tickets.filter((t) => t.dropoff_note), (t) => t.dropoff_note)}
+    </div>
+  );
+}
+
+/** Thống kê chuyến: theo chặng và theo trạng thái. */
+function TripStats({ tickets, stopName }: { tickets: Ticket[]; stopName: (id: string | null) => string }) {
+  const by = new Map<string, { n: number; sum: number }>();
+  for (const t of tickets) { const k = `${stopName(t.from_stop_id)} → ${stopName(t.to_stop_id)}`; const o = by.get(k) ?? { n: 0, sum: 0 }; by.set(k, { n: o.n + 1, sum: o.sum + t.price }); }
+  const st = (f: (t: Ticket) => boolean) => { const l = tickets.filter(f); return `${l.length} vé · ${money(l.reduce((a, t) => a + t.price, 0))}`; };
+  return (
+    <>
+      <table className="plist">
+        <thead><tr><th>Chặng</th><th>Số vé</th><th>Tiền</th></tr></thead>
+        <tbody>{[...by.entries()].map(([k, v]) => <tr key={k}><td>{k}</td><td>{v.n}</td><td>{money(v.sum)}</td></tr>)}</tbody>
+      </table>
+      <p className="small">Đã thanh toán: {st((t) => t.status === 'da_tt')} · Đặt chỗ chưa trả: {st((t) => t.status === 'dat')} · Đã lên xe: {st((t) => t.boarded)}</p>
+    </>
   );
 }
 

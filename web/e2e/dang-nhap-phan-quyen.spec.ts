@@ -1,5 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Chọn ngày trên lịch tháng của màn hình Bán vé (sang tháng sau nếu cần) */
+async function pickDay(page: Page, iso: string) {
+  const [y, m, d] = iso.split('-');
+  const btn = page.getByRole('button', { name: `Ngày ${d}/${m}/${y}` });
+  if (await btn.count() === 0) await page.getByRole('button', { name: 'Tháng sau' }).click();
+  await btn.click();
+}
+
 async function login(page: Page, phone: string, password: string) {
   await expect(page.getByRole('heading', { name: 'Đăng nhập' })).toBeVisible();
   await page.getByLabel('Số điện thoại', { exact: true }).fill(phone);
@@ -273,7 +281,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu lịch chạy' }).click();
   await expect(page.getByText('Đã lưu lịch chạy: 1 giờ, tạo 0 chuyến')).toBeVisible();
   await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
-  await page.getByRole('button', { name: 'Ngày sau' }).click();
+  await pickDay(page, ngay(1));
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A01 trống' }).click();
   await page.getByRole('button', { name: 'Tiếp tục' }).click();
@@ -287,7 +295,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText(/Tôi thu hôm nay: tiền mặt 150\.000 đ/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Danh sách khách' }).click();
+  await page.getByRole('tab', { name: /^Hành khách/ }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();
 
   // 5n. Chuyển khoản QR, nhân viên xác nhận thủ công
@@ -317,7 +325,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu tài khoản nhận' }).click();
   await expect(page.getByText('Đã lưu tài khoản nhận chuyển khoản')).toBeVisible();
   await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
-  await page.getByRole('button', { name: 'Ngày sau' }).click();
+  await pickDay(page, ngay(1));
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A02 trống' }).click();
   await page.getByRole('button', { name: 'Tiếp tục' }).click();

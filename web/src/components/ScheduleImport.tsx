@@ -113,7 +113,8 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       const curE = d1 ? base.staff.find((x) => x.id === d1.staff_id)?.full_name ?? '' : '';
       const r: Row = { ngay, tuyen: it.tuyen, gio: it.gio, rb: it.bks, rl: it.lai, cho: it.cho, route, trip, v, e, addV, addE, curV, curE, same: false, ok: false, st: '', tone: 'bad' };
       const vOk = !!(v || addV), eOk = !!(e || addE);
-      if (!route) r.st = 'Không xác định được tuyến';
+      if (ngay !== day) { r.st = `Khác ngày: lịch ngày ${fmtDate(ngay)}, đang xem ${fmtDate(day)} nên không áp dụng`; r.tone = 'muted'; }
+      else if (!route) r.st = 'Không xác định được tuyến';
       else if (!it.gio) r.st = 'Không đọc được giờ';
       else if ((it.bks && !vOk) || (it.lai && !eOk)) r.st = `Có ${[it.bks && !vOk && 'xe', it.lai && !eOk && 'lái xe'].filter(Boolean).join(', ')} không khớp danh sách, nhập tay`;
       else if (!vOk || !eOk) r.st = !vOk && !eOk ? 'Thiếu cả lái xe và xe' : !eOk ? 'Thiếu lái xe: không có lái xe thì xe không chạy được' : 'Thiếu xe: lái xe chưa biết chạy xe nào';
@@ -133,18 +134,27 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   // mặc định chọn các dòng cần áp dụng (bỏ dòng đã khớp)
   useEffect(() => { setPick(new Set(rows.map((r, i) => (r.ok && !r.same ? i : -1)).filter((i) => i >= 0))); }, [rows]);
 
-  function readText() {
-    const v = parseVexere(txt);
+  function readText(raw: string) {
+    const v = parseVexere(raw);
     if (v.items.length) {
       setP(v); setSrc('lịch Vexere');
-      setMsg({ ok: `Đọc được ${v.items.length} chuyến, ${v.routes} tuyến${v.ngay ? `, ngày ${fmtDate(v.ngay)}` : ''}${v.nHuy ? `, bỏ ${v.nHuy} chuyến hủy` : ''}.`, warn: v.warn });
+      setMsg({ ok: `Đọc được ${v.items.length} chuyến, ${v.routes} tuyến${v.ngay ? `, ngày ${fmtDate(v.ngay)}` : ''}${v.nHuy ? `, bỏ ${v.nHuy} chuyến hủy` : ''}.`,
+        warn: [...(v.ngay && v.ngay !== day ? [`Lịch dán là ngày ${fmtDate(v.ngay)} nhưng đang xem ngày ${fmtDate(day)}: không áp dụng. Chọn đúng ngày ở Điều hành hoặc dán lịch đúng ngày.`] : []), ...v.warn] });
       return;
     }
-    const t = parseRows(textToRows(txt));
+    const t = parseRows(textToRows(raw));
     if (t.items.length) { setP(t); setSrc('bảng dán từ Excel'); setMsg({ ok: `Đọc được ${t.items.length} chuyến, ${t.routes} tuyến.`, warn: [] }); return; }
     setP(null);
     setMsg({ ok: '', warn: ['Không nhận ra bảng lịch. Mở trang Điều hành xe của Vexere, chọn Chọn tất cả, Sao chép rồi dán lại; hoặc dán bảng từ Excel có cột Tuyến, Giờ, Biển số, Lái xe.'] });
   }
+  // Dán vào là đọc + so sánh ngay; ô dán tự xóa để dán lần khác (so sánh nhiều lần)
+  useEffect(() => {
+    if (!txt.trim()) return;
+    const t = setTimeout(() => { readText(txt); setTxt(''); }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txt]);
+
   async function readFile(f: File) {
     try {
       const data: unknown[][] = /\.csv$/i.test(f.name) ? textToRows(await f.text()) : (await readXlsxFile(f)) as unknown[][];
@@ -238,8 +248,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       + (warnN ? `, ${warnN} chuyến có cảnh báo (đã ghi lý do)` : '');
     toast(errs.length ? 'error' : 'ok', errs.length ? `${done}. ${errs.length} dòng lỗi: ${errs.slice(0, 3).join(' · ')}` : done);
     await onDone();
-    if (!errs.length) onClose();
-    else setP((p) => (p ? { ...p } : p));   // tải lại trạng thái
+    setP((p) => (p ? { ...p } : p));   // so sánh lại với lịch vừa cập nhật (dán tiếp được)
   }
 
   const nSame = rows.filter((r) => r.same).length;
@@ -262,9 +271,9 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       <div className="form">
         <div>
           <b>Dán lịch từ Vexere</b>
-          <p className="small muted">Mở trang Điều hành xe của Vexere, chọn ngày, bôi đen toàn trang (Ctrl+A), Sao chép (Ctrl+C), rồi dán vào ô dưới (Ctrl+V). Cũng dán được bảng chép từ Excel.</p>
-          <textarea rows={3} value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="Dán nội dung trang Vexere vào đây" aria-label="Nội dung dán từ Vexere" />
-          <div className="actions"><button type="button" className="btn small" disabled={!txt.trim()} onClick={readText}>Đọc nội dung đã dán</button></div>
+          <p className="small muted">Chỉ áp dụng lịch đúng ngày <b>{fmtDate(day)}</b>. Mở trang Điều hành xe của Vexere, chọn ngày, bôi đen toàn trang (Ctrl+A), Sao chép (Ctrl+C), rồi dán vào ô dưới (Ctrl+V). Cũng dán được bảng chép từ Excel.</p>
+          <textarea rows={3} value={txt} onChange={(e) => setTxt(e.target.value)} aria-label="Nội dung dán từ Vexere"
+                    placeholder="Dán nội dung trang Vexere vào đây: dán xong tự đọc và so sánh với lịch ngày đang xem. Dán lại bao nhiêu lần cũng được." />
           {msg && <div className="small">{msg.ok && <span className="state-con_han">{msg.ok}</span>}{msg.warn.map((w) => <div key={w} className="state-het_han">{w}</div>)}</div>}
         </div>
         <div className="chips small">

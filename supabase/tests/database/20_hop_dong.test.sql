@@ -118,6 +118,14 @@ select is((public.save_charter(null, jsonb_build_object('customer_name', 'Cty AB
   'pickup_place', 'Biên Hòa', 'destination', 'Đà Lạt', 'start_at', now() + interval '3 days', 'end_at', now() + interval '5 days',
   'passengers', 2, 'vehicle_id', (select v from t.ids where k = 'X2'), 'driver1_id', (select v from t.ids where k = 'D1'), 'price', 5000000),
   '[{"full_name": "Nguyễn A", "phone": "0912345678"}, {"full_name": "Trần B"}]') ->> 'code') like 'HD%', true, 'Tạo hợp đồng + 2 khách');
+select is((select contract_no from public.charters), '0001/HĐVC', 'Số hợp đồng tự đánh 0001/HĐVC');
+select is((select signed_on from public.charters), app.local_today(), 'Ngày ký mặc định hôm nay');
+select is((public.save_charter((select id from public.charters), jsonb_build_object('customer_name', 'Cty ABC', 'customer_phone', '0911111111',
+  'pickup_place', 'Biên Hòa', 'destination', 'Đà Lạt', 'start_at', now() + interval '3 days', 'end_at', now() + interval '5 days',
+  'passengers', 2, 'vehicle_id', (select v from t.ids where k = 'X2'), 'driver1_id', (select v from t.ids where k = 'D1'), 'price', 5000000,
+  'contract_no', '0015/HĐVC-TP', 'signed_on', '2026-11-01', 'distance_km', 320, 'toll_by', 'A', 'meals_by', 'B', 'round_trip', false),
+  '[{"full_name": "Nguyễn A", "phone": "0912345678"}, {"full_name": "Trần B"}]') ->> 'contract_no'), '0015/HĐVC-TP', 'Sửa số hợp đồng, ngày ký, cự ly');
+select is((select row(distance_km, toll_by, meals_by, round_trip, signed_on)::text from public.charters), '(320,A,B,f,2026-11-01)', 'Lưu trường bổ sung');
 select throws_ok($$ select public.save_charter((select id from public.charters), jsonb_build_object('customer_name', 'Cty ABC', 'customer_phone', '0911111111',
   'pickup_place', 'Biên Hòa', 'destination', 'Đà Lạt', 'start_at', now() + interval '3 days', 'end_at', now() + interval '5 days',
   'passengers', 1, 'vehicle_id', (select v from t.ids where k = 'X2'), 'driver1_id', (select v from t.ids where k = 'D1'), 'price', 5000000),

@@ -627,3 +627,14 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .fuel-bar i { display: block; height: 100%; background: var(--ok); border-radius: inherit; }
 .fuel-bar.low i { background: var(--danger); }
 .ok-text { color: var(--ok); }
+/* Hợp đồng vận chuyển / hợp đồng lao động: nhiều bản in liền, mỗi bản sang trang mới */
+.hdvc { font-family: 'Times New Roman', Times, serif; font-size: 14px; line-height: 1.45; margin-bottom: 12px; }
+.hdvc p { margin: 6px 0; text-align: justify; }
+.hdvc-pax { break-before: page; page-break-before: always; padding-top: 4mm; }
+.sign-stack { position: relative; height: 90px; }
+.sign-stack img { position: absolute; left: 50%; top: 0; transform: translateX(-50%); max-height: 90px; }
+@media print {
+  .print-stack { position: absolute; left: 0; top: 0; width: 100%; }
+  .print-stack .lenh { position: static; break-after: page; page-break-after: always; margin: 0; }
+  .print-stack .lenh:last-child { break-after: auto; page-break-after: auto; }
+}

@@ -1,22 +1,25 @@
 // Giai đoạn 6.4 – Vận tải hợp đồng: hợp đồng, danh sách hành khách, ký / chạy / xong, thu tiền, in.
 // Pháp lý (cần xác minh): bản in là thông tin hợp đồng + danh sách hành khách mang theo xe; mẫu hợp đồng chính thức theo quy định hiện hành cần xác minh.
 import { Modal } from '../components/Modal';
+import { CharterPrint, type CharterDoc } from '../components/CharterPrint';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { moneyWords } from '../lib/vnWords';
 
 type Status = 'nhap' | 'da_ky' | 'dang_chay' | 'xong' | 'huy';
 export interface Charter {
   id: string; code: string; customer_name: string; customer_phone: string; customer_tax_code: string | null; customer_address: string | null;
   pickup_place: string; destination: string; itinerary: string | null; start_at: string; end_at: string; passengers: number;
   vehicle_id: string | null; driver1_id: string | null; driver2_id: string | null; price: number; deposit: number; status: Status;
-  note: string | null; cancel_reason: string | null;
+  note: string | null; cancel_reason: string | null; contract_no: string; signed_on: string | null; customer_email: string | null; customer_rep: string | null;
+  distance_km: number | null; payment_terms: string | null; toll_by: string | null; meals_by: string | null; attendant: string | null; round_trip: boolean;
 }
 interface Pax { charter_id: string; seq: number; full_name: string; phone: string | null; birth_year: number | null }
-interface Veh { id: string; plate: string; is_active: boolean }
+interface Veh { id: string; plate: string; is_active: boolean; seats: number | null }
 interface Staff { id: string; full_name: string; is_active: boolean }
 
-export const CH_COLS = 'id, code, customer_name, customer_phone, customer_tax_code, customer_address, pickup_place, destination, itinerary, start_at, end_at, passengers, vehicle_id, driver1_id, driver2_id, price, deposit, status, note, cancel_reason';
+export const CH_COLS = 'id, code, customer_name, customer_phone, customer_tax_code, customer_address, pickup_place, destination, itinerary, start_at, end_at, passengers, vehicle_id, driver1_id, driver2_id, price, deposit, status, note, cancel_reason, contract_no, signed_on, customer_email, customer_rep, distance_km, payment_terms, toll_by, meals_by, attendant, round_trip';
 export const CH_STATUS: Record<Status, [string, string]> = {
   nhap: ['Nháp', 'idle'], da_ky: ['Đã ký', 'warn-badge'], dang_chay: ['Đang chạy', 'warn-badge'], xong: ['Xong', ''], huy: ['Đã hủy', 'locked'],
 };
@@ -26,7 +29,8 @@ const toLocal = (iso: string) => new Date(new Date(iso).getTime() + 7 * 3600e3).
 const fromLocal = (v: string) => (v ? new Date(`${v}:00+07:00`).toISOString() : '');
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const EMPTY = { customer_name: '', customer_phone: '', customer_tax_code: '', customer_address: '', pickup_place: '', destination: '', itinerary: '',
-  start: '', end: '', passengers: '', vehicle_id: '', driver1_id: '', driver2_id: '', price: '', deposit: '', note: '', pax: '' };
+  start: '', end: '', passengers: '', vehicle_id: '', driver1_id: '', driver2_id: '', price: '', deposit: '', note: '', pax: '',
+  contract_no: '', signed_on: '', customer_email: '', customer_rep: '', distance_km: '', payment_terms: '', toll_by: '', meals_by: '', attendant: '', round_trip: 'true' };
 
 const paxText = (l: Pax[]) => l.map((p) => [p.full_name, p.phone ?? '', p.birth_year ?? ''].filter((x) => x !== '').join(' - ')).join('\n');
 const parsePax = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolean).map((line) => {
@@ -36,7 +40,7 @@ const parsePax = (t: string) => t.split('\n').map((x) => x.trim()).filter(Boolea
   return { full_name: parts[0], phone, birth_year: year ? Number(year) : null };
 });
 
-export function ChartersScreen() {
+export function ChartersScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const [list, setList] = useState<Charter[]>([]);
   const [pax, setPax] = useState<Pax[]>([]);
@@ -45,19 +49,25 @@ export function ChartersScreen() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [edit, setEdit] = useState<{ id: string | null; f: typeof EMPTY } | null>(null);
   const [showDone, setShowDone] = useState(false);
-  const [printing, setPrinting] = useState<string | null>(null);
+  const [printing, setPrinting] = useState<string[] | null>(null);
+  const [pick, setPick] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
-    const [c, v, s] = await Promise.all([
+    const [c, v, vt, s] = await Promise.all([
       supabase.from('charters').select(CH_COLS).order('start_at', { ascending: false }).limit(200),
-      supabase.from('vehicles').select('id, plate, is_active').order('plate'),
+      supabase.from('vehicles').select('id, plate, is_active, vehicle_type_id').order('plate'),
+      supabase.from('vehicle_types').select('id, reg_seats, reg_berths'),
       supabase.from('staff_members').select('id, full_name, is_active').neq('position', 'nhan_vien').order('full_name'),
     ]);
     const err = c.error ?? v.error ?? s.error;
     if (err) return toast('error', err.message);
     const cl = (c.data ?? []) as Charter[];
     setList(cl);
-    setVehicles((v.data ?? []) as Veh[]);
+    const types = (vt.data ?? []) as { id: string; reg_seats: number; reg_berths: number }[];
+    setVehicles(((v.data ?? []) as { id: string; plate: string; is_active: boolean; vehicle_type_id: string | null }[]).map((x) => {
+      const t = types.find((y) => y.id === x.vehicle_type_id);
+      return { id: x.id, plate: x.plate, is_active: x.is_active, seats: t ? t.reg_seats + t.reg_berths : null };
+    }));
     setStaff((s.data ?? []) as Staff[]);
     if (cl.length) {
       const [p, pd] = await Promise.all([
@@ -70,11 +80,6 @@ export function ChartersScreen() {
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    if (!printing) return;
-    const t = setTimeout(() => { window.print(); setPrinting(null); }, 300);
-    return () => clearTimeout(t);
-  }, [printing]);
 
   const plate = (id: string | null) => vehicles.find((v) => v.id === id)?.plate ?? '';
   const who = (id: string | null) => staff.find((s) => s.id === id)?.full_name ?? '';
@@ -84,13 +89,14 @@ export function ChartersScreen() {
     if (!edit) return;
     const f = edit.f;
     try {
-      const r = await rpc<{ code: string }>('save_charter', {
+      const r = await rpc<{ code: string; contract_no: string }>('save_charter', {
         p_id: edit.id,
         p: { ...f, start_at: fromLocal(f.start), end_at: fromLocal(f.end), passengers: Number(f.passengers) || 0, price: Number(f.price) || 0,
-             deposit: Number(f.deposit) || 0, vehicle_id: f.vehicle_id || null, driver1_id: f.driver1_id || null, driver2_id: f.driver2_id || null },
+             deposit: Number(f.deposit) || 0, vehicle_id: f.vehicle_id || null, driver1_id: f.driver1_id || null, driver2_id: f.driver2_id || null,
+             round_trip: f.round_trip === 'true' },
         p_passengers: parsePax(f.pax),
       });
-      toast('ok', `Đã lưu hợp đồng ${r.code}`);
+      toast('ok', `Đã lưu hợp đồng ${r.contract_no}`);
       setEdit(null);
       await load();
     } catch (err) {
@@ -108,7 +114,9 @@ export function ChartersScreen() {
   }
 
   const shown = list.filter((c) => showDone || (c.status !== 'xong' && c.status !== 'huy'));
-  const pr = list.find((c) => c.id === printing);
+  const docOf = (c: Charter): CharterDoc => ({ ...c, plate: plate(c.vehicle_id), seats: vehicles.find((v) => v.id === c.vehicle_id)?.seats ?? null,
+    drivers: [who(c.driver1_id), who(c.driver2_id)].filter(Boolean), pax: pax.filter((x) => x.charter_id === c.id) });
+  const toggle = (id: string) => setPick((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const set = (k: keyof typeof EMPTY) => (e: { target: { value: string } }) => edit && setEdit({ ...edit, f: { ...edit.f, [k]: e.target.value } });
 
   return (
@@ -118,10 +126,14 @@ export function ChartersScreen() {
         <Modal wide title={edit.id ? 'Sửa hợp đồng' : 'Hợp đồng mới'} onClose={() => setEdit(null)}>
         <form className="form" onSubmit={(e) => void save(e)}>
           <div className="grid2">
+            <label>Số hợp đồng<input value={edit.f.contract_no} onChange={set('contract_no')} placeholder="Tự đánh số nếu để trống" /></label>
+            <label>Ngày ký<input type="date" value={edit.f.signed_on} onChange={set('signed_on')} /></label>
             <label>Bên thuê (người / công ty)<input value={edit.f.customer_name} onChange={set('customer_name')} required /></label>
             <label>SĐT bên thuê<input inputMode="tel" value={edit.f.customer_phone} onChange={set('customer_phone')} required /></label>
             <label>Mã số thuế (nếu có)<input value={edit.f.customer_tax_code} onChange={set('customer_tax_code')} /></label>
             <label>Địa chỉ bên thuê<input value={edit.f.customer_address} onChange={set('customer_address')} /></label>
+            <label>Người đại diện (nếu là công ty)<input value={edit.f.customer_rep} onChange={set('customer_rep')} /></label>
+            <label>Email bên thuê<input type="email" value={edit.f.customer_email} onChange={set('customer_email')} /></label>
             <label>Điểm đón<input value={edit.f.pickup_place} onChange={set('pickup_place')} required /></label>
             <label>Điểm đến<input value={edit.f.destination} onChange={set('destination')} required /></label>
             <label>Đi lúc<input type="datetime-local" value={edit.f.start} onChange={set('start')} required /></label>
@@ -147,7 +159,14 @@ export function ChartersScreen() {
             </label>
             <label>Giá hợp đồng (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={edit.f.price} onChange={set('price')} required /></label>
             <label>Đặt cọc thỏa thuận (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={edit.f.deposit} onChange={set('deposit')} /></label>
+            <label>Cự ly dự kiến (km)<input type="number" min={0} inputMode="numeric" value={edit.f.distance_km} onChange={set('distance_km')} /></label>
+            <label>Nhân viên phục vụ trên xe<input value={edit.f.attendant} onChange={set('attendant')} /></label>
+            <label>Chi phí cầu đường, bến bãi<select value={edit.f.toll_by} onChange={set('toll_by')}><option value="">Theo thỏa thuận</option><option value="A">Bên A (nhà xe) chịu</option><option value="B">Bên B (bên thuê) chịu</option></select></label>
+            <label>Chi phí ăn nghỉ lái xe<select value={edit.f.meals_by} onChange={set('meals_by')}><option value="">Theo thỏa thuận</option><option value="A">Bên A (nhà xe) chịu</option><option value="B">Bên B (bên thuê) chịu</option></select></label>
+            <label>Hình thức thanh toán<input value={edit.f.payment_terms} onChange={set('payment_terms')} placeholder="Chuyển khoản qua ngân hàng hoặc tiền mặt" /></label>
+            <label>Chiều<select value={edit.f.round_trip} onChange={set('round_trip')}><option value="true">Khứ hồi (đi và ngược lại)</option><option value="false">Một chiều</option></select></label>
           </div>
+          {Number(edit.f.price) > 0 && <p className="small muted">Bằng chữ: {moneyWords(Number(edit.f.price))}</p>}
           <label>Lộ trình<textarea rows={2} value={edit.f.itinerary} onChange={set('itinerary')} placeholder="vd Biên Hòa – QL20 – Đà Lạt và ngược lại" /></label>
           <label>Danh sách hành khách (mỗi dòng: Họ tên - SĐT - năm sinh)<textarea rows={5} value={edit.f.pax} onChange={set('pax')} /></label>
           <label>Ghi chú<input value={edit.f.note} onChange={set('note')} /></label>
@@ -161,6 +180,8 @@ export function ChartersScreen() {
       <section className="card">
         <div className="item-head">
           <h2>Hợp đồng ({shown.length})</h2>
+          {pick.size > 0 && <button className="btn small primary" onClick={() => setPrinting(shown.filter((c) => pick.has(c.id)).map((c) => c.id))}>In / PDF {pick.size} hợp đồng</button>}
+          {shown.length > 1 && <button className="btn small link" onClick={() => setPick(pick.size === shown.length ? new Set() : new Set(shown.map((c) => c.id)))}>{pick.size === shown.length ? 'Bỏ chọn' : 'Chọn tất cả'}</button>}
           <label className="check small"><input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Hiện hợp đồng đã xong / hủy</label>
         </div>
         {shown.length === 0 && <p className="muted">Chưa có hợp đồng.</p>}
@@ -173,19 +194,23 @@ export function ChartersScreen() {
               <li key={c.id} className="item">
                 <div className="item-head">
                   <div>
-                    <b>{c.code}</b> <span className={`badge ${cls}`}>{lb}</span> · {c.customer_name} <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>
-                    <div className="small">{c.pickup_place} → {c.destination} · {dt(c.start_at)} – {dt(c.end_at)}</div>
+                    <label className="check" style={{ display: 'inline-flex', marginRight: 6 }}><input type="checkbox" aria-label={`Chọn ${c.contract_no}`} checked={pick.has(c.id)} onChange={() => toggle(c.id)} /></label>
+                    <b>{c.contract_no}</b> <span className={`badge ${cls}`}>{lb}</span> · {c.customer_name} <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>
+                    <div className="small">{c.pickup_place} → {c.destination} · {dt(c.start_at)} – {dt(c.end_at)}{c.signed_on ? ` · ký ${c.signed_on.split('-').reverse().join('/')}` : ''}</div>
                     <div className="small muted">{plate(c.vehicle_id) || 'chưa có xe'} · {who(c.driver1_id) || 'chưa có lái xe'}{c.driver2_id ? `, ${who(c.driver2_id)}` : ''} · {p.length}/{c.passengers} khách có tên
                       · Đã thu {money(got)} / {money(c.price)}{c.cancel_reason ? ` · Hủy: ${c.cancel_reason}` : ''}</div>
                   </div>
                   <div className="actions">
-                    <button className="btn small" onClick={() => setPrinting(c.id)}>In</button>
+                    <button className="btn small" onClick={() => setPrinting([c.id])}>In hợp đồng</button>
                     {c.status !== 'xong' && c.status !== 'huy' && (
                       <>
                         <button className="btn small" onClick={() => setEdit({ id: c.id, f: { customer_name: c.customer_name, customer_phone: c.customer_phone,
                           customer_tax_code: c.customer_tax_code ?? '', customer_address: c.customer_address ?? '', pickup_place: c.pickup_place, destination: c.destination,
                           itinerary: c.itinerary ?? '', start: toLocal(c.start_at), end: toLocal(c.end_at), passengers: String(c.passengers), vehicle_id: c.vehicle_id ?? '',
-                          driver1_id: c.driver1_id ?? '', driver2_id: c.driver2_id ?? '', price: String(c.price), deposit: String(c.deposit), note: c.note ?? '', pax: paxText(p) } })}>Sửa</button>
+                          driver1_id: c.driver1_id ?? '', driver2_id: c.driver2_id ?? '', price: String(c.price), deposit: String(c.deposit), note: c.note ?? '', pax: paxText(p),
+                          contract_no: c.contract_no, signed_on: c.signed_on ?? '', customer_email: c.customer_email ?? '', customer_rep: c.customer_rep ?? '',
+                          distance_km: c.distance_km?.toString() ?? '', payment_terms: c.payment_terms ?? '', toll_by: c.toll_by ?? '', meals_by: c.meals_by ?? '',
+                          attendant: c.attendant ?? '', round_trip: String(c.round_trip) } })}>Sửa</button>
                         {c.status === 'nhap' && <button className="btn small primary" onClick={() => void act(() => rpc('set_charter_status', { p_id: c.id, p_status: 'da_ky', p_reason: null }), `Đã ký ${c.code}`)}>Ký</button>}
                         {c.status === 'da_ky' && <button className="btn small primary" onClick={() => void act(() => rpc('set_charter_status', { p_id: c.id, p_status: 'dang_chay', p_reason: null }), `${c.code} bắt đầu chạy`)}>Bắt đầu</button>}
                         {c.status === 'dang_chay' && <button className="btn small primary" onClick={() => void act(() => rpc('set_charter_status', { p_id: c.id, p_status: 'xong', p_reason: null }), `${c.code} đã xong`)}>Xong</button>}
@@ -200,20 +225,7 @@ export function ChartersScreen() {
           })}
         </ul>
       </section>
-      {pr && (
-        <div className="print-area charter-print">
-          <h2 style={{ textAlign: 'center' }}>THÔNG TIN HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH · {pr.code}</h2>
-          <p>Bên thuê: {pr.customer_name} · SĐT {pr.customer_phone}{pr.customer_tax_code ? ` · MST ${pr.customer_tax_code}` : ''}{pr.customer_address ? ` · ${pr.customer_address}` : ''}</p>
-          <p>Điểm đón: {pr.pickup_place} · Điểm đến: {pr.destination}{pr.itinerary ? ` · Lộ trình: ${pr.itinerary}` : ''}</p>
-          <p>Thời gian: {dt(pr.start_at)} – {dt(pr.end_at)} · Xe: {plate(pr.vehicle_id)} · Lái xe: {who(pr.driver1_id)}{pr.driver2_id ? `, ${who(pr.driver2_id)}` : ''} · Số khách: {pr.passengers}</p>
-          <p>Giá hợp đồng: {money(pr.price)}</p>
-          <h3>Danh sách hành khách</h3>
-          <table className="plist">
-            <thead><tr><th>STT</th><th>Họ tên</th><th>SĐT</th><th>Năm sinh</th></tr></thead>
-            <tbody>{pax.filter((x) => x.charter_id === pr.id).map((x) => <tr key={x.seq}><td>{x.seq}</td><td>{x.full_name}</td><td>{x.phone}</td><td>{x.birth_year}</td></tr>)}</tbody>
-          </table>
-        </div>
-      )}
+      {printing && <CharterPrint tenantId={tenantId} docs={list.filter((c) => printing.includes(c.id)).map(docOf)} onClose={() => setPrinting(null)} />}
     </>
   );
 }

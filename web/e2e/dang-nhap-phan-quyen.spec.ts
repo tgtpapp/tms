@@ -212,6 +212,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  // Nhập lịch dán từ Vexere: đọc tuyến / giờ / xe / lái xe, xem trước (chưa có chuyến → tạo chuyến mới), không áp dụng
+  await page.getByRole('button', { name: '⇪ Nhập lịch Vexere / Excel' }).click();
+  const vxDay = new Date(Date.now() + 86400000).toLocaleDateString('en-GB', { timeZone: 'Asia/Ho_Chi_Minh' });
+  await page.getByLabel('Nội dung dán từ Vexere').fill(`ĐHX\n${vxDay}\nHố Nai - Vũng Tàu\nChọn loại xe\n1 Chuyến (0 Hủy)\n07:00\n51B-123.45\nNGUYỄN VĂN TÀI\n0% (0 vé: 0 ĐC, 0 T.t, 0 T)\tChưa XB\n`);
+  await page.getByRole('button', { name: 'Đọc nội dung đã dán' }).click();
+  await expect(page.getByText(/Đọc được 1 chuyến, 1 tuyến/)).toBeVisible();
+  await expect(page.getByText('Tạo chuyến mới', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByLabel('Giờ xuất bến').fill('07:00');
   await page.getByRole('button', { name: 'Thêm giờ chạy' }).click();

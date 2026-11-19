@@ -572,3 +572,12 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .hs-nm { padding: 0; text-align: left; }
 .table-wrap { overflow-x: auto; }
 .danger-text { color: #dc2626 !important; }
+/* Nhập điều hành xe */
+.drop-zone { border: 2px dashed var(--line); border-radius: 12px; padding: 16px; text-align: center; cursor: pointer; background: var(--surface-2); }
+.drop-zone.on, .drop-zone:hover { border-color: var(--primary); }
+.import-tbl { max-height: 52vh; overflow: auto; }
+.imp-st { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+.imp-st.ok { background: #dcfce7; color: #166534; }
+.imp-st.warn { background: #fef3c7; color: #92400e; }
+.imp-st.bad { background: #fee2e2; color: #991b1b; }
+.imp-st.muted { background: var(--surface-2); color: var(--muted); }

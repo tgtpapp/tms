@@ -16,7 +16,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "qrcode": "^1.5.4",
-    "@flaticon/flaticon-uicons": "^3.3.1"
+    "@flaticon/flaticon-uicons": "^3.3.1",
+    "read-excel-file": "^5.8.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

@@ -1,4 +1,5 @@
 import { dirName, reverseItinerary } from '../lib/routes';
+import { ScheduleImport } from '../components/ScheduleImport';
 import { MiniCal } from '../components/MiniCal';
 import { lunarText } from '../lib/lunar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -379,6 +380,7 @@ function Schedules(props: Ctx) {
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay } = props;
+  const [imp, setImp] = useState(false);
   async function setTripType(id: string, type: string) {
     if (!type) return;
     try {
@@ -423,7 +425,8 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
     <section className="card">
       <div className="item-head">
         <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
-        {canEdit && <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>}
+        {canEdit && <span className="actions"><button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>
+          <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button></span>}
       </div>
       <div className="inline-form">
         <button className="btn small" aria-label="Ngày trước" onClick={() => setDay(addDays(day, -1))}>‹</button>
@@ -432,6 +435,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
         {day !== today() && <button className="btn small link" onClick={() => setDay(today())}>Hôm nay</button>}
       </div>
       <details className="cal-box"><summary>Lịch tháng (có âm lịch)</summary><MiniCal day={day} onPick={setDay} /></details>
+      {imp && <ScheduleImport day={day} onClose={() => setImp(false)} onDone={reload} />}
       <p className="muted small">{open_.length} chuyến · {ready} đủ xe + lái · {open_.length - ready} chưa xếp · {trips.length - open_.length} đã hủy</p>
 
       {canEdit && !extra && day >= today() && (

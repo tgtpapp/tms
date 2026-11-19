@@ -25,6 +25,7 @@ const DISPATCH_SETTINGS = [
 export function SettingsScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -33,6 +34,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     const values: Record<string, string> = {};
     for (const r of (s.data ?? []) as { key: string; value: unknown }[]) values[r.key] = String(r.value);
     setSale(values);
+    setLoaded(true);
   }, [toast]);
 
   useEffect(() => {
@@ -138,6 +140,8 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
   return (
     <>
       <CompanyInfo tenantId={tenantId} />
+      {!loaded && <p className="muted">Đang tải cấu hình…</p>}
+      {loaded && (<>
       <form className="card form" onSubmit={saveSale}>
         <h2>Bán vé</h2>
         <div className="grid2">
@@ -221,6 +225,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
+      </>)}
     </>
   );
 }

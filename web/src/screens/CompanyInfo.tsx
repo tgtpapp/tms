@@ -29,6 +29,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
   const [urls, setUrls] = useState<Partial<Record<Slot, string | null>>>({});
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const cccd = useRef<{ truoc?: PreparedFile; sau?: PreparedFile }>({});
 
   const loadUrls = useCallback(async () => {
@@ -57,6 +58,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     });
     const flag = (k: string) => ((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value;
     setFlags({ sign: flag('in.chu_ky_giam_doc') !== false, seal: flag('in.con_dau') !== false });
+    setLoaded(true);
   }, [toast]);
 
   useEffect(() => {
@@ -148,6 +150,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
   return (
     <form className="card form" onSubmit={save}>
       <h2>Thông tin công ty</h2>
+      {/* Chưa tải xong thì khóa ô nhập, tránh dữ liệu cũ ghi đè lên chữ vừa gõ */}
+      <fieldset className="plain" disabled={!loaded}>
       {slot('logo', 'Logo công ty (hiện trên app, tab trình duyệt và vé)')}
       <div className="grid2">
         <label>Tên nhà xe (tên hiển thị)<input value={f.name} onChange={set('name')} required /></label>
@@ -179,6 +183,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       {slot('chu_ky', 'Chữ ký giám đốc', 'Chụp trên giấy trắng, app tự tách nền')}
       {slot('con_dau', 'Con dấu công ty', 'Chụp hoặc quét con dấu, app tự tách nền trắng')}
       <button className="btn primary" disabled={busy}>Lưu thông tin công ty</button>
+      </fieldset>
     </form>
   );
 }

@@ -171,7 +171,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
 
   const set = (k: keyof Info) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const slot = (s: Slot, label: string, hint?: string) => (
-    <ImageSlot key={s} label={label} hint={hint} url={urls[s] ?? null} onPick={(file) => void pickImage(s, file)} onRemove={() => void drop(s)}
+    <ImageSlot key={s} label={label} hint={hint} url={urls[s] ?? null} clear={s === 'chu_ky' || s === 'con_dau'} onPick={(file) => void pickImage(s, file)} onRemove={() => void drop(s)}
                reading={!!reading}
                onReread={s === 'giay_phep' ? () => void reread('giay_phep') : s === 'cccd_truoc' || s === 'cccd_sau' ? () => void reread('cccd') : undefined} />
   );
@@ -220,7 +220,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
   );
 }
 
-function ImageSlot(props: { label: string; hint?: string; url: string | null; onPick: (f: File | undefined) => void; onRemove: () => void;
+function ImageSlot(props: { label: string; hint?: string; url: string | null; clear?: boolean; onPick: (f: File | undefined) => void; onRemove: () => void;
                            onReread?: () => void; reading?: boolean }) {
   const ref = useRef<HTMLInputElement>(null);
   return (
@@ -228,7 +228,7 @@ function ImageSlot(props: { label: string; hint?: string; url: string | null; on
       <span className="img-slot-label">{props.label}</span>
       <div className="img-slot-row">
         <div className="img-x">
-          <div className="img-slot-box">{props.url ? <img src={props.url} alt={props.label} /> : <span className="muted small">Chưa có</span>}</div>
+          <div className={props.clear ? 'img-slot-box clear-bg' : 'img-slot-box'}>{props.url ? <img src={props.url} alt={props.label} /> : <span className="muted small">Chưa có</span>}</div>
           {props.url && <button type="button" className="img-x-btn" aria-label={`Bỏ ${props.label}`} title="Bỏ ảnh này" onClick={props.onRemove}>×</button>}
         </div>
         <button type="button" className="btn small" onClick={() => ref.current?.click()}>Chọn ảnh</button>

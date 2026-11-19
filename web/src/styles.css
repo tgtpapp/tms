@@ -135,6 +135,8 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 
 /* Chữ ký */
 .sign-preview { max-width: 260px; max-height: 140px; border: 1px dashed var(--line); border-radius: 8px; background: var(--surface); }
+/* Ảnh đã tách nền (chữ ký, con dấu): hiện trên nền ô caro để thấy rõ phần trong suốt; màu cố định để chế độ tối vẫn nhìn rõ nét mực */
+.clear-bg { background-color: #fff !important; background-image: conic-gradient(#dfe3ea 25%, #fff 0 50%, #dfe3ea 0 75%, #fff 0) !important; background-size: 16px 16px !important; }
 
 /* Lệnh vận chuyển (A4) */
 .lenh-overlay { position: fixed; inset: 0; z-index: 50; background: #e9ecef; overflow: auto; padding: 8px; }

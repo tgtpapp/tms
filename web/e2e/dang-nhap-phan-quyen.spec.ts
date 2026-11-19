@@ -212,6 +212,27 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText(/Lệnh số 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
 
+  // 5m. Bán vé: gắn loại xe cho nốt → bán vé ngày mai ghế A01, thu tiền mặt, in vé, danh sách khách
+  await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
+  await page.getByLabel('Loại xe nốt 07:00').selectOption({ label: 'Giường nằm 6 chỗ' });
+  await expect(page.getByText('Đã đổi loại xe của nốt')).toBeVisible();
+  await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
+  await page.getByRole('button', { name: 'Ngày sau' }).click();
+  await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
+  await page.getByRole('button', { name: 'Ghế A01 trống' }).click();
+  await expect(page.getByRole('heading', { name: 'Đơn vé · 1 ghế · 150.000 đ' })).toBeVisible();
+  await page.getByLabel('Số điện thoại khách').fill('0912345678');
+  await page.getByLabel('Tên khách').fill('Chị Lan');
+  await page.evaluate(() => { window.print = () => {}; });
+  await page.getByRole('button', { name: 'Thu tiền + in vé' }).click();
+  await expect(page.getByText(/Đã bán vé [A-Z0-9]{6} · thu 150\.000 đ/)).toBeVisible();
+  await expect(page.getByText('VÉ XE KHÁCH')).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(page.getByText('Tiền mặt tôi thu hôm nay: 150.000 đ')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Danh sách khách' }).click();
+  await expect(page.getByText('Chị Lan')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();

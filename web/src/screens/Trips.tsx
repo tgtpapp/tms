@@ -13,17 +13,18 @@ interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_fr
 interface Stop { id: string; name: string }
 interface Schedule {
   id: string; route_id: string; direction: Dir; depart_time: string; days_of_week: number[]; valid_from: string;
-  valid_to: string | null; is_active: boolean; note: string | null;
+  valid_to: string | null; is_active: boolean; note: string | null; vehicle_type_id: string | null;
 }
 interface Trip {
   id: string; route_id: string; direction: Dir; schedule_id: string | null; service_date: string; depart_at: string; arrive_at: string;
   status: 'mo' | 'huy'; vehicle_id: string | null; cancel_reason: string | null; assign_note: string | null; note: string | null;
+  vehicle_type_id: string | null;
 }
 interface Crew { trip_id: string; role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe'; staff_id: string; active: boolean }
 interface Vehicle { id: string; plate: string; vehicle_type_id: string; is_active: boolean }
 interface Staff { id: string; full_name: string; position: 'lai_xe' | 'phu_xe' | 'nhan_vien'; is_active: boolean }
 interface License { staff_id: string; vehicle_type_id: string; license_class: string | null; ok: boolean; reason: string | null }
-interface VType { id: string; reg_seats: number; reg_berths: number }
+interface VType { id: string; name: string; reg_seats: number; reg_berths: number; is_active: boolean }
 interface Order { trip_id: string; order_no: string; valid_from: string; valid_to: string; issued_at: string }
 
 const DAYS = [[1, 'T2'], [2, 'T3'], [3, 'T4'], [4, 'T5'], [5, 'T6'], [6, 'T7'], [7, 'CN']] as const;
@@ -61,13 +62,13 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start').order('seq'),
       supabase.from('stops').select('id, name'),
-      supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note').order('depart_time'),
-      supabase.from('trips').select('id, route_id, direction, schedule_id, service_date, depart_at, arrive_at, status, vehicle_id, cancel_reason, assign_note, note')
+      supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note, vehicle_type_id').order('depart_time'),
+      supabase.from('trips').select('id, route_id, direction, schedule_id, service_date, depart_at, arrive_at, status, vehicle_id, cancel_reason, assign_note, note, vehicle_type_id')
         .eq('service_date', day).order('depart_at'),
       supabase.from('vehicles').select('id, plate, vehicle_type_id, is_active').order('plate'),
       supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name'),
       supabase.rpc('license_matrix'),
-      supabase.from('vehicle_types').select('id, reg_seats, reg_berths'),
+      supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths, is_active').order('name'),
     ]);
     const err = r.error ?? rs.error ?? st.error ?? sc.error ?? tr.error ?? v.error ?? sf.error ?? lm.error ?? vt.error;
     if (err) return toast('error', err.message);
@@ -154,7 +155,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
     }
   }, [account, routes, vehicles, vtypes, crew, staff, licenses, ends, load, toast]);
 
-  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, canEdit, ends, printOrder, reload: load };
+  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, printOrder, reload: load };
   return (
     <>
       {printing && <TransportOrderPrint data={printing} onClose={() => setPrinting(null)} />}
@@ -166,16 +167,26 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 
 interface Ctx {
   routes: Route[]; schedules: Schedule[]; trips: Trip[]; crew: Crew[]; vehicles: Vehicle[]; staff: Staff[]; licenses: License[];
-  orders: Order[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
+  orders: Order[]; vtypes: VType[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
   reload: () => Promise<void>;
 }
 
 /* ------------------------------------------------------------------ Nốt */
 
 function Schedules(props: Ctx) {
-  const { routes, schedules, canEdit, ends, reload } = props;
+  const { routes, schedules, vtypes, canEdit, ends, reload } = props;
   const toast = useToast();
-  const [f, setF] = useState({ route_id: '', direction: 'di' as Dir, time: '', days: [1, 2, 3, 4, 5, 6, 7] as number[], from: today(), to: '', note: '' });
+  const [f, setF] = useState({ route_id: '', direction: 'di' as Dir, time: '', days: [1, 2, 3, 4, 5, 6, 7] as number[], from: today(), to: '', note: '', type: '' });
+  const typeName = (id: string | null) => vtypes.find((v) => v.id === id)?.name;
+  async function setType(id: string, type: string) {
+    try {
+      await rpc('set_schedule_vehicle_type', { p_schedule_id: id, p_vehicle_type_id: type || null });
+      toast('ok', 'Đã đổi loại xe của nốt (áp cho các chuyến chưa có sơ đồ ghế)');
+      await reload();
+    } catch (err) {
+      toast('error', errMsg(err));
+    }
+  }
   const [showOld, setShowOld] = useState(false);
   const [stopping, setStopping] = useState<{ id: string; from: string; reason: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -186,10 +197,11 @@ function Schedules(props: Ctx) {
     if (!f.route_id || !f.time) return toast('error', 'Chọn tuyến và giờ xuất bến');
     setBusy(true);
     try {
-      const r = await rpc<{ created_trips: number }>('save_schedule', {
+      const r = await rpc<{ id: string; created_trips: number }>('save_schedule', {
         p_id: null, p_route_id: f.route_id, p_direction: f.direction, p_depart_time: f.time, p_days: f.days,
         p_valid_from: f.from || null, p_valid_to: f.to || null, p_note: f.note || null,
       });
+      if (f.type) await rpc('set_schedule_vehicle_type', { p_schedule_id: r.id, p_vehicle_type_id: f.type });
       toast('ok', `Đã thêm nốt ${f.time}, tạo ${r.created_trips} chuyến`);
       setF({ ...f, time: '', note: '' });
       await reload();
@@ -238,6 +250,12 @@ function Schedules(props: Ctx) {
             <label>Chạy từ ngày<input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} /></label>
             <label>Đến ngày (để trống nếu chạy lâu dài)<input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} /></label>
             <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
+            <label>Loại xe (sơ đồ ghế để bán vé)
+              <select aria-label="Loại xe của nốt" value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+                <option value="">Chưa chọn</option>
+                {vtypes.filter((v) => v.is_active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </label>
           </div>
           <div className="chips" role="group" aria-label="Ngày chạy trong tuần">
             {DAYS.map(([n, t]) => (
@@ -255,7 +273,14 @@ function Schedules(props: Ctx) {
             <div className="item-head">
               <div>
                 <b>{s.depart_time.slice(0, 5)}</b> · {routeName(s.route_id)} <span className="muted small">· {ends(s.route_id, s.direction) || (s.direction === 'di' ? 'Chiều đi' : 'Chiều về')}</span>
-                <div className="muted small">{daysText(s.days_of_week)} · từ {fmtDate(s.valid_from)}{s.valid_to ? ` đến ${fmtDate(s.valid_to)}` : ''}{s.note ? ` · ${s.note}` : ''}</div>
+                <div className="muted small">{daysText(s.days_of_week)} · từ {fmtDate(s.valid_from)}{s.valid_to ? ` đến ${fmtDate(s.valid_to)}` : ''}{s.note ? ` · ${s.note}` : ''}
+                  {' · '}{typeName(s.vehicle_type_id) ?? 'chưa chọn loại xe'}</div>
+                {canEdit && (
+                  <select aria-label={`Loại xe nốt ${s.depart_time.slice(0, 5)}`} className="small-select" value={s.vehicle_type_id ?? ''} onChange={(e) => void setType(s.id, e.target.value)}>
+                    <option value="">Loại xe…</option>
+                    {vtypes.filter((v) => v.is_active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                )}
               </div>
               {canEdit && stopping?.id !== s.id && (
                 <button className="btn small" onClick={() => setStopping({ id: s.id, from: addDays(today(), 1), reason: '' })}>Ngừng nốt</button>
@@ -286,7 +311,17 @@ function Schedules(props: Ctx) {
 /* ------------------------------------------------------------------ Chuyến theo ngày */
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
-  const { routes, trips, crew, vehicles, staff, orders, canEdit, ends, printOrder, reload, day, setDay } = props;
+  const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay } = props;
+  async function setTripType(id: string, type: string) {
+    if (!type) return;
+    try {
+      await rpc('set_trip_vehicle_type', { p_trip_id: id, p_vehicle_type_id: type });
+      toast('ok', 'Đã chọn sơ đồ ghế cho chuyến');
+      await reload();
+    } catch (e) {
+      toast('error', errMsg(e));
+    }
+  }
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
@@ -378,6 +413,16 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
                     {mine.filter((c) => c.role !== 'phu_xe').length > 0 && ` · Lái: ${mine.filter((c) => c.role !== 'phu_xe').map((c) => person(c.staff_id)).join(', ')}`}
                     {mine.find((c) => c.role === 'phu_xe') && ` · Phụ xe: ${person(mine.find((c) => c.role === 'phu_xe')!.staff_id)}`}
                   </div>
+                  {t.status === 'mo' && !t.vehicle_type_id && (
+                    <div className="small state-sap_het">Chưa có sơ đồ ghế (chưa bán vé được)
+                      {canEdit && (
+                        <select aria-label={`Sơ đồ ghế ${label}`} className="small-select" value="" onChange={(e) => void setTripType(t.id, e.target.value)}>
+                          <option value="">Chọn loại xe…</option>
+                          {vtypes.filter((v) => v.is_active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                        </select>
+                      )}
+                    </div>
+                  )}
                   {t.assign_note && <div className="muted small">Lý do xếp khi có cảnh báo: {t.assign_note}</div>}
                   {orders.find((o) => o.trip_id === t.id) && <div className="muted small">Lệnh số {orders.find((o) => o.trip_id === t.id)!.order_no}</div>}
                 </div>

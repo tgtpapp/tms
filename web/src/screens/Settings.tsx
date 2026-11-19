@@ -124,6 +124,22 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     }
   }
 
+  async function saveBooking(e: FormEvent) {
+    e.preventDefault();
+    const m = Number(sale['ban_ve.nha_dat_cho_truoc_phut']);
+    if (!Number.isInteger(m) || m < 0 || m > 1440) return toast('error', 'Nhả chỗ đặt trước giờ chạy: số nguyên từ 0 đến 1440 phút');
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([
+      { key: 'ban_ve.tu_nha_dat_cho', value: sale['ban_ve.tu_nha_dat_cho'] !== 'false' },
+      { key: 'ban_ve.nha_dat_cho_truoc_phut', value: m },
+      { key: 've.ghi_chu', value: (sale['ve.ghi_chu'] ?? '').trim() },
+    ], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu cấu hình đặt chỗ và vé');
+    await load();
+  }
+
   async function saveDispatch(e: FormEvent) {
     e.preventDefault();
     const rows = [];
@@ -179,6 +195,23 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
           ))}
         </div>
         <button className="btn primary" disabled={busy}>Lưu cấu hình bán vé</button>
+      </form>
+      <form className="card form" onSubmit={(e) => void saveBooking(e)}>
+        <h2>Đặt chỗ trả sau và vé</h2>
+        <label className="check">
+          <input type="checkbox" checked={sale['ban_ve.tu_nha_dat_cho'] !== 'false'}
+                 onChange={(e) => setSale({ ...sale, 'ban_ve.tu_nha_dat_cho': String(e.target.checked) })} />
+          Tự nhả chỗ đặt chưa thanh toán (nhân viên vẫn chọn được "giữ đến giờ chạy" cho từng vé)
+        </label>
+        <label>Nhả chỗ đặt trước giờ chạy (phút)
+          <input type="number" inputMode="numeric" min={0} max={1440} step={1} value={sale['ban_ve.nha_dat_cho_truoc_phut'] ?? ''}
+                 onChange={(e) => setSale({ ...sale, 'ban_ve.nha_dat_cho_truoc_phut': e.target.value })} required />
+        </label>
+        <label>Ghi chú in cuối vé (quy định nhà xe)
+          <textarea rows={2} maxLength={500} value={sale['ve.ghi_chu'] ?? ''} onChange={(e) => setSale({ ...sale, 've.ghi_chu': e.target.value })}
+                    placeholder="vd: Có mặt trước giờ chạy 15 phút. Hotline: …" />
+        </label>
+        <button className="btn primary" disabled={busy}>Lưu cấu hình đặt chỗ và vé</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveOrder(e)}>
         <h2>Lệnh vận chuyển</h2>

@@ -638,3 +638,7 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
   .print-stack .lenh { position: static; break-after: page; page-break-after: always; margin: 0; }
   .print-stack .lenh:last-child { break-after: auto; page-break-after: auto; }
 }
+/* Ô số liệu tổng (báo cáo) */
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat-row > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.stat-row b { font-size: 1.15rem; }

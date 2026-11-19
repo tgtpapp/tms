@@ -1,4 +1,6 @@
 import { dirName, reverseItinerary } from '../lib/routes';
+import { applyFilter, GridView, RouteFilterBar, useBoardFilter, VehicleUsage, type Group } from '../components/DispatchBoard';
+import { Modal } from '../components/Modal';
 import { ScheduleImport } from '../components/ScheduleImport';
 import { MiniCal } from '../components/MiniCal';
 import { lunarText } from '../lib/lunar';
@@ -381,6 +383,9 @@ function Schedules(props: Ctx) {
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay } = props;
   const [imp, setImp] = useState(false);
+  const { f, setF, view, setView } = useBoardFilter();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const shown = applyFilter(trips, f, (id) => groups.find((g) => g.id === id)?.routes ?? null);
   async function setTripType(id: string, type: string) {
     if (!type) return;
     try {
@@ -463,9 +468,21 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
         </div>
       )}
 
+      <RouteFilterBar routes={routes} trips={trips} crew={crew} f={f} setF={setF} canEditGroups={canEdit} view={view} setView={setView} onGroups={setGroups} />
       {trips.length === 0 && <p className="muted">Không có chuyến trong ngày.</p>}
-      <ul className="list">
-        {trips.map((t) => {
+      {view === 'bang' && (
+        <>
+          <GridView routes={routes} trips={shown} crew={crew} vehicles={vehicles} staff={staff} canEdit={canEdit} onOpen={(t) => setOpen(t.id)} />
+          {open && shown.find((t) => t.id === open) && (
+            <Modal wide title={`Xếp xe ${hhmm(shown.find((t) => t.id === open)!.depart_at)} ${dirName(routes.find((r) => r.id === shown.find((t) => t.id === open)!.route_id), shown.find((t) => t.id === open)!.direction)}`}
+                   onClose={() => setOpen(null)}>
+              <Assign {...props} trip={shown.find((t) => t.id === open)!} onClose={() => setOpen(null)} />
+            </Modal>
+          )}
+        </>
+      )}
+      {view === 'ds' && <ul className="list">
+        {shown.map((t) => {
           const mine = crew.filter((c) => c.trip_id === t.id && (c.active || t.status === 'huy'));
           const veh = vehicles.find((v) => v.id === t.vehicle_id);
           const d1 = mine.find((c) => c.role === 'lai_xe_1');
@@ -511,7 +528,8 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
             </li>
           );
         })}
-      </ul>
+      </ul>}
+      <VehicleUsage trips={trips} vehicles={vehicles} />
     </section>
   );
 }

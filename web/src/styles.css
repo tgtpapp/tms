@@ -581,3 +581,32 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .imp-st.warn { background: #fef3c7; color: #92400e; }
 .imp-st.bad { background: #fee2e2; color: #991b1b; }
 .imp-st.muted { background: var(--surface-2); color: var(--muted); }
+/* Điều hành: lọc tuyến / nhóm tuyến, dạng bảng, xe chưa / đã điều */
+.dh-filter { display: grid; gap: 8px; margin: 8px 0 12px; }
+.dh-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.dh-sp { flex: 1; }
+button.chip { border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; font-size: .85rem; }
+button.chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.dh-groups { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.route-card.on { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-ring); }
+.route-card { display: flex; align-items: flex-start; gap: 6px; }
+.dh-gbtn { flex: 1; border: 0; background: none; text-align: left; font: inherit; cursor: pointer; color: var(--text); display: flex; flex-direction: column; gap: 2px; padding: 0; }
+.dh-gbtn b { text-transform: uppercase; font-size: .85rem; }
+.dh-gbtn small { color: var(--muted); }
+.dh-grid-wrap { max-width: 100%; }
+.dh-grid { border-collapse: collapse; min-width: 100%; }
+.dh-grid th, .dh-grid td { border: 1px solid var(--line); padding: 4px; vertical-align: top; }
+.dh-grid thead th { background: var(--surface-2); font-size: .82rem; min-width: 130px; }
+.dh-grid tbody th { text-align: left; white-space: nowrap; font-size: .85rem; background: var(--surface-2); }
+.dh-grid tbody th small { display: block; font-weight: 400; color: var(--muted); font-size: .7rem; }
+.dh-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; margin: 2px 0; padding: 5px 7px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); font: inherit; font-size: .76rem; cursor: pointer; text-align: left; color: var(--text); }
+.dh-cell .dh-t { font-weight: 800; font-size: .8rem; }
+.dh-cell.ok { background: #f0fdf4; border-color: #86efac; }
+.dh-cell.thieu { background: #fffbeb; border-color: #fcd34d; }
+.dh-cell.huy { opacity: .5; text-decoration: line-through; }
+.dh-cell b { color: var(--primary); }
+.dh-usage { display: grid; gap: 4px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+.dh-veh { display: inline-block; margin: 2px 6px 2px 0; }
+.dh-veh::before { content: '●'; margin-right: 3px; color: #16a34a; }
+.dh-veh.free { color: #dc2626; }

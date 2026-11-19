@@ -364,7 +364,7 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 }
 
 /* Cắt ảnh chữ ký / con dấu */
-.crop-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(15, 23, 42, .6); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.crop-overlay { position: fixed; inset: 0; z-index: 1100; background: rgba(15, 23, 42, .6); display: flex; align-items: center; justify-content: center; padding: 12px; }
 .crop-card { background: var(--surface); color: var(--text); border-radius: var(--radius); padding: 16px; width: min(560px, 100%); max-height: 100%; overflow: auto;
   display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 40px -12px rgba(0, 0, 0, .4); }
 /* Kích thước ảnh theo màn hình (vw/vh), không theo % khung → ảnh luôn hiện, khung chọn khớp ảnh */
@@ -664,7 +664,7 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .doc-pages { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: .8rem; border-radius: 999px; padding: 2px 10px; }
 .doc-view .actions .btn { min-height: 48px; padding: 0 18px; font-size: 1rem; }
 .doc-close { width: 100%; min-height: 52px; font-size: 1.05rem; }
-.doc-big { position: fixed; inset: 0; z-index: 80; background: #111; display: flex; flex-direction: column; }
+.doc-big { position: fixed; inset: 0; z-index: 1100; background: #111; display: flex; flex-direction: column; }
 .doc-big-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; background: #fff; }
 .doc-big-bar b { margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-big-pages { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; align-items: center; touch-action: pan-x pan-y pinch-zoom; }

@@ -3,6 +3,7 @@
 // Ảnh được giải mã bằng createImageBitmap rồi vẽ lại thành ảnh JPEG nhỏ (≤ 1600px) để hiển thị:
 // không phụ thuộc đường dẫn tạm của tệp (blob:), báo lỗi rõ nếu không mở được.
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 
 interface Box { x: number; y: number; w: number; h: number }   // tỉ lệ 0..1 theo ảnh
 const MAX = 1600;
@@ -77,7 +78,8 @@ export function Cropper({ file, title, onDone, onCancel }: {
   }
 
   const ok = !!src && !!box && box.w > 0.02 && box.h > 0.02;
-  return (
+  // Gắn thẳng vào trang (không nằm trong cửa sổ hồ sơ) để luôn hiện trên cùng
+  return createPortal(
     <div className="crop-overlay" role="dialog" aria-label={title}>
       <div className="crop-card">
         <b>{title}</b>
@@ -96,6 +98,7 @@ export function Cropper({ file, title, onDone, onCancel }: {
           <button type="button" className="btn link" onClick={onCancel}>Hủy</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

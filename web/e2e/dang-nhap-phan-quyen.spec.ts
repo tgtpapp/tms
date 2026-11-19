@@ -208,6 +208,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu lý lịch' }).click();
   await expect(page.getByText('Đã lưu lý lịch: Vi phạm')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lý lịch hành nghề (1)' })).toBeVisible();
+  // 5j2. Chữ ký lái xe trong hồ sơ (đang mở trong cửa sổ): chọn ảnh → khung cắt hiện trên cùng → lưu → ảnh chữ ký hiện trong hồ sơ
+  await page.getByLabel('Ảnh chữ ký', { exact: true }).setInputFiles({ name: 'chu-ky-lx.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
+  await expect(page.getByRole('img', { name: 'Ảnh cần cắt' })).toBeVisible();
+  await page.getByRole('button', { name: 'Dùng cả ảnh' }).click();
+  await expect(page.getByText('Đã lưu chữ ký', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Chữ ký', exact: true })).toBeVisible();
+  await expect(page.getByText('Chữ ký này đã có sẵn họ tên', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)

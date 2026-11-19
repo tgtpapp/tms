@@ -81,7 +81,9 @@ export async function loadDay(day: string, tenantId: string, me: { id: string | 
     if (!s) return null;
     const g = docs.find((d) => d.staff_id === id && d.doc_type === 'gplx');
     const hang = g?.data && typeof g.data.hang === 'string' ? g.data.hang : '';
-    const sg = await signOf(cache, tenantId, s.user_id);
+    // chữ ký trong hồ sơ nhân viên trước, chưa có thì lấy chữ ký tài khoản của người đó
+    let sg = await signOf(cache, tenantId, `nv_${id}`);
+    if (!sg.img) sg = await signOf(cache, tenantId, s.user_id);
     const p: Person = { id, name: s.full_name, gplx: g ? `${g.doc_no ?? '—'}${hang ? ` (Hạng ${hang})` : ''}` : '—',
       expired: docs.filter((d) => d.staff_id === id && d.expires_on && d.expires_on < day).map((d) => `${NAME[d.doc_type]} ${s.full_name}`),
       sign: sg.img, signName: showName(sg) };

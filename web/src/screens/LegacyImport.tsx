@@ -5,7 +5,7 @@ import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { useState } from 'react';
 import { LegacyMore } from './LegacyMore';
 import { today } from '../components/Documents';
-import { uploadFiles } from '../lib/documents';
+import { BUCKET, signatureUrl, uploadFiles } from '../lib/documents';
 import {
   day, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
@@ -125,7 +125,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     const missing = pick.vehicles && plan.vehicles.some((v) => !v.match && !v.bad && !typeOf[v.group]);
     if (missing) return toast('error', 'Chọn loại xe TMS cho từng nhóm xe cũ');
     const log: string[] = [];
-    let staffNew = 0, vehNew = 0, docs = 0, typesNew = 0;
+    let staffNew = 0, vehNew = 0, docs = 0, typesNew = 0, signs = 0;
     const total = (pick.staff ? plan.staff.length : 0) + (pick.vehicles ? plan.vehicles.length : 0);
     let i = 0;
     try {
@@ -138,6 +138,19 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
               staffNew++;
             }
             docs += await importDocs('nhan_su', s.id, s.name, s.docs, plan.ex, log);
+            // Chữ ký nhân viên (trường chuKy của app cũ: ảnh PNG đã tách nền); đã có chữ ký trong TMS thì giữ nguyên
+            const raw = legacy?.employees.find((r) => str(r, 'id') === s.oldId);
+            const ck = raw ? str(raw, 'chuKy') : '';
+            if (/^(data:image\/|https?:)/.test(ck) && !(await signatureUrl(tenantId, `nv_${s.id}`))) {
+              try {
+                const blob = await (await fetch(ck)).blob();
+                const up = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/nv_${s.id}.png`, blob, { contentType: blob.type || 'image/png', upsert: true });
+                if (up.error) throw new Error(up.error.message);
+                signs++;
+              } catch (e) {
+                log.push(`${s.name}: không chuyển được chữ ký (${errMsg(e)})`);
+              }
+            }
           } catch (e) {
             log.push(`${s.name}: ${errMsg(e)}`);
           }
@@ -198,7 +211,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     } finally {
       setBusy(null);
     }
-    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe${typesNew ? ` (tạo ${typesNew} loại xe)` : ''}, ${docs} giấy tờ`;
+    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe${typesNew ? ` (tạo ${typesNew} loại xe)` : ''}, ${docs} giấy tờ, ${signs} chữ ký`;
     toast(log.length ? 'error' : 'ok', log.length ? `${msg} · ${log.length} mục lỗi` : msg);
     setResult([msg, ...log]);
     setPlan(null);
@@ -212,7 +225,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
       <h2>Nhập dữ liệu từ app cũ</h2>
       <p className="muted small">
         Trong app cũ: Sao lưu &amp; khôi phục → "Tải bản sao lưu" (.json), rồi chọn file đó ở đây. File được đọc ngay trên máy này,
-        chỉ lấy nhân viên, xe và giấy tờ; cấu hình và khóa trong file bị bỏ qua. Nhập lại nhiều lần không bị trùng, dữ liệu đã có trong TMS được giữ nguyên.
+        chỉ lấy nhân viên (kèm chữ ký), xe và giấy tờ; cấu hình và khóa trong file bị bỏ qua. Nhập lại nhiều lần không bị trùng, dữ liệu đã có trong TMS được giữ nguyên.
       </p>
       <label className="upload">
         <span>Chọn file sao lưu app cũ (.json)</span>

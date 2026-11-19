@@ -1,4 +1,5 @@
 import { Modal } from '../components/Modal';
+import { StaffSignature } from '../components/StaffSignature';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
@@ -361,6 +362,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       {age && <p className={`small state-${age.state}`}>{age.text}</p>}
       {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
         <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
+      <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />
       <h3>Giấy tờ</h3>
       <ul className="list">
         {STAFF_DOCS.map((def) => (

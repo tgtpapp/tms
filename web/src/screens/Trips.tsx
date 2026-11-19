@@ -149,15 +149,17 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
       };
       const [a, b] = ends(t.route_id, t.direction).split(' → ');
       const r0 = (ret.data ?? [])[0] as { depart_at: string; service_date: string } | undefined;
-      const uid = (role: Crew['role']) => staff.find((s) => s.id === mine.find((c) => c.role === role)?.staff_id)?.user_id ?? null;
+      const sid = (role: Crew['role']) => mine.find((c) => c.role === role)?.staff_id ?? null;
+      const uid = (role: Crew['role']) => staff.find((s) => s.id === sid(role))?.user_id ?? null;
       const [sg, sealImg, qr] = await Promise.all([
-        loadSigns(tid, ['giam_doc', account.user_id, uid('lai_xe_1'), uid('lai_xe_2')]),
+        loadSigns(tid, ['giam_doc', account.user_id, uid('lai_xe_1'), uid('lai_xe_2'), sid('lai_xe_1') && `nv_${sid('lai_xe_1')}`, sid('lai_xe_2') && `nv_${sid('lai_xe_2')}`]),
         raw('in.con_dau') === false ? Promise.resolve(null) : signatureUrl(tid, 'con_dau'),
         QRCode.toDataURL(`LVC ${order.order_no} | ${veh?.plate ?? ''} | ${route?.name ?? ''} | ${hhmm(t.depart_at)} ${fmtDate(t.service_date)}`,
                          { margin: 0, width: 240 }),
       ]);
       const gd = raw('in.chu_ky_giam_doc') === false ? null : sg.get('giam_doc') ?? null, me = account.user_id ? sg.get(account.user_id) : undefined;
-      const s1 = sg.get(uid('lai_xe_1') ?? ''), s2 = sg.get(uid('lai_xe_2') ?? '');
+      const pickSign = (role: Crew['role']) => { const a = sg.get(`nv_${sid(role)}`); return a?.img ? a : sg.get(uid(role) ?? ''); };   // chữ ký hồ sơ nhân viên trước
+      const s1 = pickSign('lai_xe_1'), s2 = pickSign('lai_xe_2');
       const signerImg = gd?.img ?? null, dispatcherImg = me?.img ?? null;
       const tnRow = (tn.data ?? {}) as { name?: string; legal_name?: string | null };
       setPrinting({

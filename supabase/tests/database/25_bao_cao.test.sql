@@ -30,7 +30,11 @@ select ok(public.storage_usage() ? 'db_bytes' and (public.storage_usage() ->> 'd
 -- Chữ ký có sẵn họ tên
 select lives_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b1', true) $$, 'Tự đặt chữ ký của mình đã có họ tên');
 select lives_ok($$ select public.set_signature_has_name('giam_doc', true) $$, 'Chủ đặt cho chữ ký giám đốc');
-select is((select count(*)::int from public.signature_settings where has_name), 2, 'Đã lưu 2 cài đặt');
+select lives_ok($$ select public.save_staff(gen_random_uuid(), '{"full_name":"Lái xe X","joined_on":"2026-01-01"}') $$, 'Thêm lái xe');
+select lives_ok(format('select public.set_signature_has_name(%L, true)', 'nv_' || (select id from public.staff_members limit 1)), 'Quản lý đặt cho chữ ký lái xe');
+select ok(app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Quản lý tải được chữ ký lái xe');
+select ok(not app.can_write_signature('nv_00000000-0000-0000-0000-000000000099.png'), 'Không tải chữ ký cho nhân viên không thuộc nhà xe');
+select is((select count(*)::int from public.signature_settings where has_name), 3, 'Đã lưu 3 cài đặt');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
@@ -39,7 +43,8 @@ select throws_ok($$ select public.report_sales('2026-10-01', '2026-10-31') $$, '
 select throws_ok($$ select public.storage_usage() $$, '42501', null, 'Bán vé không xem dung lượng');
 select throws_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b1', false) $$, '42501', null, 'Không đổi được chữ ký người khác');
 select throws_ok($$ select public.set_signature_has_name('giam_doc', false) $$, '42501', null, 'Bán vé không đổi chữ ký giám đốc');
-select is((select count(*)::int from public.signature_settings), 2, 'Cùng nhà xe đọc được cài đặt chữ ký');
+select is((select count(*)::int from public.signature_settings), 3, 'Cùng nhà xe đọc được cài đặt chữ ký');
+select ok(not app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Bán vé không tải chữ ký lái xe');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';

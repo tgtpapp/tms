@@ -272,6 +272,37 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Đã hủy 1 vé · hoàn [\d.]+ đ · phí [\d.]+ đ/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toBeVisible();
 
+  // 5q. Nhập vé giấy: trùng ghế → chờ xếp ghế → xếp sang ghế trống; chặn nhập trùng số vé giấy
+  await page.getByRole('button', { name: 'Nhập vé giấy' }).click();
+  await page.getByLabel('Số vé giấy').fill('VG001');
+  await page.getByLabel('Ghế vé giấy').selectOption('A02');
+  await page.getByRole('button', { name: 'Lưu vé giấy' }).click();
+  await expect(page.getByText(/Đã nhập vé giấy VG001 nhưng trùng ghế/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vé chờ xếp ghế (1)' })).toBeVisible();
+  await page.getByRole('button', { name: /^Ghế A02 · khách/ }).click();
+  await page.getByRole('button', { name: 'Chuyển ghế / chuyến' }).click();
+  await page.getByLabel('Ghế mới').fill('A01');
+  await page.getByRole('button', { name: 'Chuyển', exact: true }).click();
+  await expect(page.getByText('Đã chuyển sang ghế A01')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Vé chờ xếp ghế/ })).toHaveCount(0);
+  await page.getByLabel('Số vé giấy').fill('VG001');
+  await page.getByLabel('Ghế vé giấy').selectOption('A04');
+  await page.getByRole('button', { name: 'Lưu vé giấy' }).click();
+  await expect(page.getByText(/Vé giấy số VG001 đã nhập rồi/)).toBeVisible();
+  await page.getByRole('button', { name: 'Nhập vé giấy' }).click();
+
+  // 5r. Mất mạng: bán trên máy, có mạng tự gửi
+  await page.context().setOffline(true);
+  await expect(page.getByText(/Mất mạng: đang bán trên máy/)).toBeVisible();
+  await page.getByRole('button', { name: 'Ghế A03 trống' }).click();
+  await expect(page.getByRole('heading', { name: 'Bán khi mất mạng · 1 ghế' })).toBeVisible();
+  await page.getByRole('button', { name: 'Thu tiền, không in' }).click();
+  await expect(page.getByText(/Đã bán vé M[A-Z0-9]{5} \(chờ gửi\)/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Vé chờ gửi (1)' })).toBeVisible();
+  await page.context().setOffline(false);
+  await expect(page.getByText('Đã gửi 1 đơn vé bán khi mất mạng')).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Vé chờ gửi/ })).toHaveCount(0);
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Cấu hình' });

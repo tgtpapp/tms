@@ -212,3 +212,9 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; 
 .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .cancel-panel { border: 1px solid #f3c9c4; background: #fff8f7; }
 .tiers .tier { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.offline-bar { background: #fff4e5; border: 1px solid #f59e0b; color: #92400e; padding: 8px 12px; border-radius: 8px; margin: 0 0 12px; }
+.queue-list { margin: 4px 0; padding-left: 18px; }
+.queue-list li { margin: 4px 0; }
+.sseat.cho_gui { background: #fef3c7; border: 2px dashed #d97706; }
+.seat-dot.cho_gui { background: #fef3c7; border-style: dashed; }
+.card.waiting { border-color: #f59e0b; }

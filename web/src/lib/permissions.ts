@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, withOfflineCopy } from './supabase';
 
 export interface PermissionGrant {
   permission_code: string;
@@ -31,7 +31,10 @@ export class Permissions {
 }
 
 export async function loadPermissions(): Promise<Permissions> {
-  const { data, error } = await supabase.rpc('my_permissions');
-  if (error) throw new Error(error.message);
-  return new Permissions((data ?? []) as PermissionGrant[]);
+  const grants = await withOfflineCopy('perms', async () => {
+    const { data, error } = await supabase.rpc('my_permissions');
+    if (error) throw new Error(error.message);
+    return (data ?? []) as PermissionGrant[];
+  });
+  return new Permissions(grants);
 }

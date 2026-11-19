@@ -41,8 +41,25 @@ export interface AccountContext {
   is_platform_admin: boolean;
 }
 
+/** Lưu / đọc bản sao trên máy (để mở app khi mất mạng), gắn với tài khoản đang đăng nhập. */
+export async function withOfflineCopy<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const uid = (await supabase.auth.getSession()).data.session?.user.id ?? '';
+  const k = `tms:${key}:${uid}`;
+  try {
+    const v = await load();
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* bỏ qua */ }
+    return v;
+  } catch (e) {
+    const cached = navigator.onLine ? null : localStorage.getItem(k);
+    if (uid && cached) return JSON.parse(cached) as T;
+    throw e;
+  }
+}
+
 export async function loadAccountContext(): Promise<AccountContext> {
-  const { data, error } = await supabase.rpc('my_account_context').single();
-  if (error) throw new Error(error.message);
-  return data as AccountContext;
+  return withOfflineCopy('ctx', async () => {
+    const { data, error } = await supabase.rpc('my_account_context').single();
+    if (error) throw new Error(error.message);
+    return data as AccountContext;
+  });
 }

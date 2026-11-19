@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Centered } from './components/Centered';
 import { missingConfig } from './config';
 import { loadAccountContext, rpc, supabase, type AccountContext } from './lib/supabase';
+import { clearCache } from './lib/offline';
 import { ToastProvider } from './lib/toast';
 import { BootstrapScreen } from './screens/Bootstrap';
 import { LoginScreen } from './screens/Login';
@@ -58,6 +59,7 @@ function Root() {
     if (missingConfig.length > 0) return;
     void resolve();
     const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') clearCache();   // xóa bản sao dữ liệu trên máy, giữ vé chờ gửi
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') window.setTimeout(() => void resolve(), 0);
     });
     return () => data.subscription.unsubscribe();

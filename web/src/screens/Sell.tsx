@@ -395,9 +395,9 @@ function TripSell(props: TripSellProps) {
       setCrew(rows.map((x) => ({ role: x.role, name: sm.find((y) => y.id === x.staff_id)?.full_name ?? '', phone: sm.find((y) => y.id === x.staff_id)?.phone ?? null })));
     })();
   }, [trip.id]);
-  // In phơi: chuyển sang danh sách hành khách rồi in, ghi nhận đã in phơi
+  // In phơi dạng sơ đồ ghế, vừa 1 trang A4; in xong ghi nhận đã in phơi
   useEffect(() => {
-    if (!phoi || view !== 'khach') return;
+    if (!phoi || view !== 'so_do') return;
     const t = setTimeout(() => { window.print(); setPhoi(false); void rpc('mark_manifest_printed', { p_trip_id: trip.id }).then(() => onChanged()).catch((e) => toast('error', errMsg(e))); }, 300);
     return () => clearTimeout(t);
   }, [phoi, view, trip.id, onChanged, toast]);
@@ -478,7 +478,7 @@ function TripSell(props: TripSellProps) {
     <>
       {printing && <TicketPrint data={printing} onClose={() => setPrinting(null)} />}
       <div className="vx-tool">
-        <button className="btn small" onClick={() => { setView('khach'); setPhoi(true); }}><PrinterIcon /> In Phơi</button>
+        <button className="btn small" onClick={() => { setView('so_do'); setPhoi(true); }}><PrinterIcon /> In Phơi</button>
         {canSell && <button className={paper ? 'btn small primary' : 'btn small'} onClick={() => setPaper(!paper)}>Nhập vé giấy</button>}
         {trip.departed_at && props.canOverride && (
           <button className="btn small" onClick={() => void rpc('set_trip_edit_lock', { p_trip_id: trip.id, p_unlock: locked })
@@ -546,6 +546,11 @@ function TripSell(props: TripSellProps) {
             </div>
           );
         })()}
+        {phoi && (
+          <PhoiPrint company={ctx.tenant_name ?? ''} route={props.routeName} time={hhmm(trip.depart_at)} day={fmtDate(props.day)} plate={props.plate} type={type}
+                     seats={seats} crew={crew} me={ctx.full_name ?? ''} stopName={stopName}
+                     tickets={all.filter((t) => t.status === 'dat' || t.status === 'da_tt')} />
+        )}
         {view === 'so_do' && (
           <>
             <SeatMap type={type} seats={seats} stopName={stopName} bookingOf={bookingOf} statusOf={(label) => {
@@ -681,6 +686,60 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Phơi in dạng sơ đồ ghế, tự co giãn cho vừa đúng 1 trang A4 dọc (xe 2 tầng: 2 tầng cạnh nhau). */
+function PhoiPrint(p: { company: string; route: string; time: string; day: string; plate: string | null; type: VType; seats: Seat[];
+                        crew: { role: string; name: string; phone: string | null }[]; me: string; stopName: (id: string | null) => string; tickets: Ticket[] }) {
+  const { type, seats, tickets } = p;
+  const rows = type.layout_rows, cols = type.layout_cols;
+  const fs = rows <= 5 ? 13 : rows <= 7 ? 11.5 : rows <= 9 ? 10 : 8.5;   // chữ nhỏ dần khi nhiều hàng ghế
+  const paid = tickets.filter((t) => t.status === 'da_tt'), unpaid = tickets.filter((t) => t.status === 'dat');
+  const sum = (l: Ticket[]) => l.reduce((a, t) => a + t.price, 0);
+  const d1 = p.crew.find((c) => c.role === 'lai_xe_1'), d2 = p.crew.find((c) => c.role === 'lai_xe_2'), px = p.crew.find((c) => c.role === 'phu_xe');
+  return (
+    <div className="print-area phoi-a4" style={{ fontSize: fs }}>
+      <div className="phoi-head">
+        <div><b>{p.company.toUpperCase()}</b><div>PHƠI XE · SƠ ĐỒ GHẾ</div></div>
+        <div className="phoi-title"><b>{p.route}</b><div>Giờ chạy <b>{p.time}</b> · ngày <b>{p.day}</b></div></div>
+        <div className="phoi-r">Xe <b>{p.plate ?? '……………'}</b> · {type.name}<div>Lái xe: <b>{d1?.name ?? '……………'}</b>{d2 ? ` · ${d2.name}` : ''}{px ? ` · Phụ xe: ${px.name}` : ''}</div></div>
+      </div>
+      <div className="phoi-decks">
+        {Array.from({ length: type.decks }, (_, i) => i + 1).map((d) => (
+          <div key={d} className="phoi-deck">
+            {type.decks > 1 && <div className="phoi-dl">Tầng {d === 1 ? 'dưới' : 'trên'}</div>}
+            <div className="phoi-grid" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+              {Array.from({ length: rows * cols }, (_, idx) => {
+                const r = Math.floor(idx / cols) + 1, c = (idx % cols) + 1;
+                const s = seats.find((x) => x.deck === d && x.row_no === r && x.col_no === c);
+                if (!s) return <div key={idx} />;
+                if (s.kind === 'tai_xe' || s.kind === 'cua') return <div key={idx} className="phoi-fix">{s.kind === 'tai_xe' ? 'TÀI XẾ' : 'CỬA'}</div>;
+                const ts = tickets.filter((t) => t.seat_label === s.label);
+                return (
+                  <div key={idx} className={`phoi-seat${ts.length ? ' on' : ''}`}>
+                    <b className="phoi-no">{s.label}</b>
+                    {ts.map((t) => (
+                      <div key={t.id} className="phoi-t">
+                        <div className="phoi-row"><b>{t.passenger_name ?? ''}</b><span>{t.passenger_phone ?? ''}</span></div>
+                        <div className="phoi-row"><span>{shortStop(p.stopName(t.from_stop_id))} - {shortStop(p.stopName(t.to_stop_id))}</span>
+                          <b>{t.price.toLocaleString('vi-VN')}{t.status === 'da_tt' ? ' ✓' : ''}</b></div>
+                        {t.pickup_note && <div>Đón: {t.pickup_note}</div>}
+                        {t.dropoff_note && <div>Trả: {t.dropoff_note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="phoi-foot">
+        <div>Tổng <b>{tickets.length}</b> vé · Đã thu <b>{sum(paid).toLocaleString('vi-VN')} đ</b> ({paid.length} vé ✓) · Chưa thu <b>{sum(unpaid).toLocaleString('vi-VN')} đ</b> ({unpaid.length} vé)</div>
+        <div className="phoi-sign"><div><b>Người lập phơi</b><div className="phoi-sb" />{p.me}</div><div><b>Lái xe</b><div className="phoi-sb" />{d1?.name ?? ''}</div></div>
+      </div>
     </div>
   );
 }

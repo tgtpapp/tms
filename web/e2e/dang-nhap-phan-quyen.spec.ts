@@ -206,6 +206,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã thêm Nguyễn Văn Tài')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lái xe & nhân viên (1)' })).toBeVisible();
   await expect(page.locator('.staff-card').getByText('GPLX: Chưa có', { exact: true })).toBeVisible();
+  // Thẻ chọn theo chức vụ tự sinh từ dữ liệu: Tất cả + Lái xe
+  await page.getByRole('tab', { name: 'Lái xe (1)' }).click();
+  await expect(page.getByRole('tab', { name: 'Lái xe (1)' })).toHaveAttribute('aria-selected', 'true');
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
   await expect(page.getByText('Số 079123456789')).toBeVisible();
   // 5j. Hạng bằng theo loại xe + ghi lý lịch hành nghề (vi phạm)

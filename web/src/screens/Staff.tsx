@@ -33,6 +33,21 @@ interface StaffRecord {
 interface LicenseRow { staff_id: string; license_class: string | null; license_expires: string | null; vehicle_type_id: string; need: string; ok: boolean; reason: string | null }
 
 const POSITION: Record<Position, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
+/** Chức vụ hiển thị: chức vụ tự đặt, chưa có thì theo vị trí (Lái xe / Phụ xe / Nhân viên). */
+const jobLabel = (s: { job_title: string | null; position: Position }) => s.job_title?.trim() || POSITION[s.position];
+const jobKey = (s: { job_title: string | null; position: Position }) => jobLabel(s).toLocaleLowerCase('vi').replace(/\s+/g, ' ');
+/** Thẻ chọn theo chức vụ đang có (không cố định): Giám đốc, Kế toán, Lái xe… — thêm chức vụ mới là có thẻ mới. */
+function jobTabs(list: { job_title: string | null; position: Position }[]): { key: string; label: string; n: number }[] {
+  const m = new Map<string, { key: string; label: string; n: number; rank: number }>();
+  for (const s of list) {
+    const key = jobKey(s);
+    const t = m.get(key) ?? { key, label: jobLabel(s), n: 0, rank: 9 };
+    t.n++;
+    t.rank = Math.min(t.rank, s.position === 'lai_xe' ? 1 : s.position === 'phu_xe' ? 2 : 3);
+    m.set(key, t);
+  }
+  return [...m.values()].sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'vi'));
+}
 const CONTRACT: Record<Contract, string> = {
   khong_xac_dinh: 'Không xác định thời hạn', xac_dinh: 'Xác định thời hạn', thu_viec: 'Thử việc', thoi_vu: 'Thời vụ',
   khoan_viec: 'Khoán việc', khac: 'Khác',
@@ -242,7 +257,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
         <div className="grid2">
           <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
           <label>Chức vụ<input value={f.job_title} onChange={set('job_title')} list="chuc-vu" maxLength={80} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe" /></label>
-          <datalist id="chuc-vu">{['Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ'].map((x) => <option key={x} value={x} />)}</datalist>
+          <datalist id="chuc-vu">{[...new Set([...props.staff.map((x) => x.job_title?.trim() ?? '').filter(Boolean), 'Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ'])].map((x) => <option key={x} value={x} />)}</datalist>
           <label>Nhóm (để xếp chuyến, giấy tờ bắt buộc)
             <select value={f.position} onChange={set('position')}>
               {Object.entries(POSITION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -297,7 +312,10 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   const [showLeft, setShowLeft] = useState(false);
   const left = staff.filter((s) => !s.is_active).length;
 
-  const [tab, setTab] = useState<'lx' | 'nv'>('lx');
+  const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
+  const shown = staff.filter((s) => showLeft || s.is_active);
+  const tabs = jobTabs(shown);
+  const cur = tabs.some((t) => t.key === tab) ? tab : '';
   const avas = useAvatars(props.tenantId);
   return (
     <section className="card">
@@ -311,14 +329,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
       </div>
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
       <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
-        {([['lx', 'Lái xe'], ['nv', 'Nhân viên']] as const).map(([k, l]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
-            {l} ({staff.filter((x) => (showLeft || x.is_active) && (k === 'lx') === (x.position !== 'nhan_vien')).length})
+        {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
+          <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
+            {t.label} ({t.n})
           </button>
         ))}
       </div>
       <div className="staff-cards">
-        {staff.filter((s) => (showLeft || s.is_active) && (tab === 'lx') === (s.position !== 'nhan_vien')).map((s) => {
+        {shown.filter((s) => !cur || jobKey(s) === cur).map((s) => {
           const mine = s.user_id === myUserId;
           const canOpen = canEdit || mine;
           const p = priv.find((x) => x.staff_id === s.id);
@@ -330,7 +348,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                 <Avatar name={s.full_name} url={avas[s.id]} />
                 <div className="sc-name">
                   <b>{s.full_name}</b>
-                  <span className="sc-job">{s.job_title || POSITION[s.position]}</span>
+                  <span className="sc-job">{jobLabel(s)}</span>
                 </div>
               </div>
               <div className="sc-info small">

@@ -1,10 +1,12 @@
 // Nhập dữ liệu từ app cũ: chọn file sao lưu .json → xem trước → nhập nhân viên, xe và giấy tờ.
 // Nhập lại không trùng (id cố định theo mã cũ, khớp CCCD / SĐT / tên / biển số). Dữ liệu đã có trong TMS được giữ nguyên.
+import { dirName, type Dir } from '../lib/routes';
+import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { useState } from 'react';
 import { today } from '../components/Documents';
 import { uploadFiles } from '../lib/documents';
 import {
-  mapEmployee, mapVehicle, normName, parseBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
+  mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -52,6 +54,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
   const [pick, setPick] = useState({ staff: true, vehicles: true });
   const [busy, setBusy] = useState<string | null>(null);
   const [result, setResult] = useState<string[] | null>(null);
+  const [legacy, setLegacy] = useState<LegacyBackup | null>(null);
 
   async function choose(file: File | undefined) {
     if (!file) return;
@@ -59,6 +62,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     setBusy('Đang đọc file…');
     try {
       const backup = parseBackup(await file.text());
+      setLegacy(backup);
       const ex = await loadExisting();
       const d = today();
       const staff: Plan['staff'] = [];
@@ -257,11 +261,108 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
           </div>
         </>
       )}
+      {legacy && legacy.trips.length > 0 && !busy && <LegacyTrips legacy={legacy} />}
       {result && (
         <ul className="queue-list small">
           {result.map((r, i) => <li key={i} className={i ? 'error-text' : ''}>{r}</li>)}
         </ul>
       )}
     </section>
+  );
+}
+
+/* ------------------------------------------------------------------ Chuyển lịch chạy (chuyến đã điều) từ app cũ */
+
+function LegacyTrips({ legacy }: { legacy: LegacyBackup }) {
+  const toast = useToast();
+  const dates = legacy.trips.map((t) => str(t, 'ngay')).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+  const [from, setFrom] = useState(dates[0] ?? '');
+  const [to, setTo] = useState(dates[dates.length - 1] ?? '');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [out, setOut] = useState<string[] | null>(null);
+  const list = legacy.trips.filter((t) => { const d = str(t, 'ngay'); return d >= from && d <= to && str(t, 'tuyen') && /^\d{1,2}:\d{2}/.test(str(t, 'gio')); });
+
+  async function run() {
+    setBusy('Đang chuẩn bị…');
+    setOut(null);
+    const log: string[] = [];
+    try {
+      const [r, v, s] = await Promise.all([
+        supabase.from('routes').select('id, code, name, name_ve, is_active'),
+        supabase.from('vehicles').select('id, plate'),
+        supabase.from('staff_members').select('id, full_name, is_active'),
+      ]);
+      const routes = (r.data ?? []) as { id: string; code: string; name: string; name_ve: string | null; is_active: boolean }[];
+      const opts = routes.flatMap((x) => (['di', 've'] as Dir[]).map((d) => ({ id: x.id, d, k: routeKey(dirName(x, d)) })));
+      const vehByKey = new Map(((v.data ?? []) as { id: string; plate: string }[]).map((x) => [plateKey(x.plate), x.id]));
+      const staffList = (s.data ?? []) as { id: string; full_name: string; is_active: boolean }[];
+      const oldVeh = new Map(legacy.vehicles.map((x) => [str(x, 'id'), str(x, 'bks')]));
+      const oldEmp = new Map(legacy.employees.map((x) => [str(x, 'id'), str(x, 'ten')]));
+      const used = new Set(routes.map((x) => x.code.toUpperCase()));
+      const findRoute = async (tuyen: string): Promise<{ id: string; d: Dir } | null> => {
+        const k = routeKey(tuyen);
+        const hit = opts.find((o) => o.k === k);
+        if (hit) return { id: hit.id, d: hit.d };
+        const name = titleCase(tuyen.replace(/\s*[⇄→–—]\s*|\s+-\s+/g, ' - '));
+        const parts = name.split(' - ');
+        if (parts.length < 2) return null;
+        let code = parts.map((p) => p.split(/\s+/).map((w) => norm(w)[0]?.toUpperCase() ?? '').join('')).join('-');
+        for (let i = 2; used.has(code); i++) code = `${code.replace(/\d+$/, '')}${i}`;
+        used.add(code);
+        const ins = await supabase.from('routes').insert({ code, name }).select('id, code, name, name_ve, is_active').single();
+        if (ins.error) { log.push(`Không tạo được tuyến ${name}: ${ins.error.message}`); return null; }
+        const nr = ins.data as typeof routes[number];
+        routes.push(nr);
+        opts.push({ id: nr.id, d: 'di', k: routeKey(dirName(nr, 'di')) }, { id: nr.id, d: 've', k: routeKey(dirName(nr, 've')) });
+        log.push(`Đã tạo tuyến mới ${name}`);
+        return { id: nr.id, d: 'di' };
+      };
+      const rows: Record<string, unknown>[] = [];
+      let noRoute = 0, noVeh = 0, noDrv = 0;
+      for (const t of list) {
+        const rt = await findRoute(str(t, 'tuyen'));
+        if (!rt) { noRoute++; continue; }
+        const bks = oldVeh.get(str(t, 'xeId')) ?? '';
+        const vehicle_id = bks ? vehByKey.get(plateKey(bks)) ?? null : null;
+        if (bks && !vehicle_id) noVeh++;
+        const ten = oldEmp.get(str(t, 'laiXe')) ?? '';
+        const c = ten ? staffList.filter((x) => norm(x.full_name) === norm(ten)) : [];
+        const driver_id = c.length === 1 ? c[0].id : null;
+        if (ten && !driver_id) noDrv++;
+        const [h, m] = str(t, 'gio').split(':');
+        rows.push({ route_id: rt.id, direction: rt.d, date: str(t, 'ngay'), time: `${h.padStart(2, '0')}:${m.slice(0, 2)}`, vehicle_id, driver_id });
+      }
+      let created = 0, updated = 0, same = 0, skipped = 0;
+      for (let i = 0; i < rows.length; i += 400) {
+        setBusy(`Đang chuyển chuyến ${Math.min(i + 400, rows.length)}/${rows.length}…`);
+        const res = await rpc<{ created: number; updated: number; same: number; skipped: number; errors: { date: string; time: string; error: string }[] }>(
+          'import_legacy_trips', { p_rows: rows.slice(i, i + 400) });
+        created += res.created; updated += res.updated; same += res.same; skipped += res.skipped;
+        for (const e of res.errors) log.push(`${e.date} ${e.time}: ${e.error}`);
+      }
+      const msg = `Đã chuyển lịch chạy: tạo ${created} chuyến, cập nhật ${updated}, đã khớp ${same}${skipped ? `, bỏ qua ${skipped} chuyến đã xuất bến` : ''}`
+        + (noRoute ? `, ${noRoute} chuyến không xác định được tuyến` : '') + (noVeh ? `, ${noVeh} chuyến không khớp xe` : '') + (noDrv ? `, ${noDrv} chuyến không khớp lái xe` : '');
+      toast(log.some((l) => !l.startsWith('Đã tạo')) ? 'error' : 'ok', msg);
+      setOut([msg, ...log.slice(0, 50)]);
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="sub form">
+      <h3 className="section-title">Lịch chạy (chuyến đã điều) trong file: {legacy.trips.length} chuyến{dates.length ? `, từ ${dates[0]} đến ${dates[dates.length - 1]}` : ''}</h3>
+      <p className="muted small">Chuyển xe + lái xe của từng chuyến sang Điều hành TMS (kể cả ngày đã qua). Nên bấm "Nhập dữ liệu" nhân viên và xe ở trên trước để khớp đủ xe, lái xe.
+        Tuyến chưa có trong TMS sẽ được tạo. Nhập lại không trùng; chuyến đã xuất bến không bị sửa.</p>
+      <div className="inline-form">
+        <label>Từ ngày<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+        <label>Đến ngày<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+      </div>
+      {busy && <p className="upload">{busy}</p>}
+      <div className="actions"><button type="button" className="btn primary" disabled={!!busy || !list.length} onClick={() => void run()}>Chuyển {list.length} chuyến</button></div>
+      {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i && !x.startsWith('Đã tạo') ? 'error-text' : ''}>{x}</li>)}</ul>}
+    </div>
   );
 }

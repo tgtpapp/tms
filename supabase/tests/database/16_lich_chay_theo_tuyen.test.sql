@@ -147,5 +147,22 @@ select is((select distinct vt.code from public.trips t join public.routes r on r
            join public.vehicle_types vt on vt.id = t.vehicle_type_id where r.code = 'BHVT' and s.depart_time = '12:00'), 'G29B', 'Theo cấu hình sơ đồ mặc định');
 reset role;
 
+-- Chuyển lịch chạy từ app cũ: tạo chuyến cả ngày đã qua, nhập lại không trùng, dòng sai không chặn dòng khác
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((public.import_legacy_trips(jsonb_build_array(
+  jsonb_build_object('route_id', (select id from public.routes where code = 'BHVT'), 'direction', 'di', 'date', '2026-01-05', 'time', '06:00'),
+  jsonb_build_object('route_id', gen_random_uuid(), 'direction', 'di', 'date', '2026-01-05', 'time', '07:00'))) ->> 'created')::int, 1,
+  'Tạo chuyến ngày đã qua từ app cũ');
+select is((select count(*)::int from public.trips t join public.routes r on r.id = t.route_id where r.code = 'BHVT' and t.service_date = '2026-01-05'), 1, 'Có chuyến 05/01');
+select is((public.import_legacy_trips(jsonb_build_array(
+  jsonb_build_object('route_id', (select id from public.routes where code = 'BHVT'), 'direction', 'di', 'date', '2026-01-05', 'time', '06:00'))) ->> 'same')::int, 1,
+  'Nhập lại không tạo trùng');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select throws_ok($$ select public.import_legacy_trips('[]') $$, '42501', null, 'Bán vé không nhập lịch được');
+reset role;
+
 select * from finish();
 rollback;

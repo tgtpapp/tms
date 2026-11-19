@@ -3,9 +3,9 @@
 // mọi phần khác (cấu hình, khóa AI, kết nối Firebase…) bị bỏ qua, không lưu, không gửi đi.
 import type { PreparedFile } from './documents';
 
-type Raw = Record<string, unknown>;
+export type Raw = Record<string, unknown>;
 
-export interface LegacyBackup { employees: Raw[]; vehicles: Raw[] }
+export interface LegacyBackup { employees: Raw[]; vehicles: Raw[]; trips: Raw[] }
 
 export function parseBackup(text: string): LegacyBackup {
   let j: unknown;
@@ -20,7 +20,7 @@ export function parseBackup(text: string): LegacyBackup {
   const employees = arr('employees');
   const vehicles = arr('vehicles');
   if (employees.length === 0 && vehicles.length === 0) throw new Error('Không thấy danh sách nhân viên hoặc xe trong file');
-  return { employees, vehicles };
+  return { employees, vehicles, trips: arr('lichchay') };
 }
 
 export const str = (r: Raw, k: string): string => {

@@ -150,8 +150,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
         }} />}
       </div>
-      {canEdit && <StaffForm key="new" {...common} staff={staff} />}
       <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} avas={avas} />
+      {canEdit && <StaffForm key="new" {...common} staff={staff} />}
     </>
   );
 }

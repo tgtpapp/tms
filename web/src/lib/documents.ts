@@ -110,37 +110,146 @@ export async function signedUrl(path: string): Promise<string> {
 
 /* ------------------------------------------------------------------ Chữ ký (in lệnh vận chuyển) */
 
-/** Ảnh PNG cạnh dài tối đa 800px. removeWhite: tách nền trắng (chữ ký, con dấu chụp trên giấy trắng). */
-async function preparePng(file: File, removeWhite: boolean): Promise<Blob> {
+/**
+ * Ảnh PNG cạnh dài tối đa 800px. ink: tách nền giấy (chữ ký / con dấu chụp trên giấy).
+ * Cách làm (như app cũ): ước lượng màu giấy TỪNG VÙNG (chịu được bóng đổ, giấy ngả xám/vàng khi chụp điện thoại),
+ * tính độ đậm của mực so với nền giấy tại chỗ → trong suốt phần giấy, giữ nét mực, cắt sát.
+ * Con dấu: thêm bước làm màu mực tươi, đậm (đỏ dấu) cho rõ nét khi in.
+ */
+async function preparePng(file: File, ink: false | 'chu_ky' | 'con_dau'): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh');
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 800 / Math.max(bmp.width, bmp.height));
+  const scale = Math.min(1, (ink ? 1200 : 800) / Math.max(bmp.width, bmp.height));
+  const W = Math.max(1, Math.round(bmp.width * scale));
+  const H = Math.max(1, Math.round(bmp.height * scale));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  const ctx = canvas.getContext('2d');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Trình duyệt không xử lý được ảnh');
-  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bmp, 0, 0, W, H);
   bmp.close();
-  if (removeWhite) {
-    const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const p = img.data;
-    for (let i = 0; i < p.length; i += 4) {
-      const lum = (p[i] + p[i + 1] + p[i + 2]) / 3;
-      const sat = Math.max(p[i], p[i + 1], p[i + 2]) - Math.min(p[i], p[i + 1], p[i + 2]);
-      // Nền giấy: sáng và gần như không màu → trong suốt; viền chuyển dần cho mịn
-      if (lum > 215 && sat < 40) p[i + 3] = 0;
-      else if (lum > 170 && sat < 40) p[i + 3] = Math.round(p[i + 3] * (215 - lum) / 45);
+  let out: HTMLCanvasElement = canvas;
+  if (ink) out = removePaper(canvas, ctx, ink === 'con_dau') ?? canvas;
+  if (ink && Math.max(out.width, out.height) > 800) {
+    const k = 800 / Math.max(out.width, out.height);
+    const c2 = document.createElement('canvas');
+    c2.width = Math.round(out.width * k);
+    c2.height = Math.round(out.height * k);
+    const g2 = c2.getContext('2d');
+    if (g2) {
+      g2.imageSmoothingQuality = 'high';
+      g2.drawImage(out, 0, 0, c2.width, c2.height);
+      out = c2;
     }
-    ctx.putImageData(img, 0, 0);
   }
   return new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Không xử lý được ảnh'))), 'image/png'));
+    out.toBlob((b) => (b ? resolve(b) : reject(new Error('Không xử lý được ảnh'))), 'image/png'));
+}
+
+/** Tách nền giấy, trả canvas đã cắt sát nét mực (null nếu không thấy mực). seal: làm màu dấu tươi, đậm. */
+function removePaper(c: HTMLCanvasElement, g: CanvasRenderingContext2D, seal: boolean): HTMLCanvasElement | null {
+  const W = c.width, H = c.height, N = W * H;
+  const id = g.getImageData(0, 0, W, H);
+  const p = id.data;
+  let transparent = 0;
+  for (let i = 3; i < p.length; i += 4) if (p[i] < 128) transparent++;
+  if (transparent > N * 0.15) return null;   // ảnh đã có nền trong suốt
+  const L = (i: number) => 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+  // Ngưỡng "giấy": 30% điểm sáng nhất
+  const hist = new Array<number>(256).fill(0);
+  for (let i = 0; i < p.length; i += 4) hist[L(i) | 0]++;
+  let acc = 0, gL = 255;
+  for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= N * 0.3) { gL = v; break; } }
+  let gr = 0, gg = 0, gb = 0, gn = 0;
+  for (let i = 0; i < p.length; i += 4) if (L(i) >= gL) { gr += p[i]; gg += p[i + 1]; gb += p[i + 2]; gn++; }
+  const G = [gr / Math.max(1, gn), gg / Math.max(1, gn), gb / Math.max(1, gn)];
+  // Màu giấy từng ô rồi phóng to mượt
+  const B = Math.max(12, Math.round(Math.max(W, H) / 10)), bw = Math.ceil(W / B), bh = Math.ceil(H / B);
+  const sm = document.createElement('canvas');
+  sm.width = bw;
+  sm.height = bh;
+  const sg = sm.getContext('2d');
+  if (!sg) return null;
+  const sd = sg.createImageData(bw, bh);
+  for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+    const x1 = Math.min(W, bx * B + B), y1 = Math.min(H, by * B + B);
+    let mx = 0;
+    for (let y = by * B; y < y1; y++) for (let x = bx * B; x < x1; x++) mx = Math.max(mx, L((y * W + x) * 4));
+    let r = 0, gg2 = 0, b = 0, n = 0;
+    for (let y = by * B; y < y1; y++) for (let x = bx * B; x < x1; x++) {
+      const i = (y * W + x) * 4;
+      if (L(i) >= mx - 18) { r += p[i]; gg2 += p[i + 1]; b += p[i + 2]; n++; }
+    }
+    const o = (by * bw + bx) * 4, ok = n > 0 && mx >= gL * 0.5;
+    sd.data[o] = ok ? r / n : G[0];
+    sd.data[o + 1] = ok ? gg2 / n : G[1];
+    sd.data[o + 2] = ok ? b / n : G[2];
+    sd.data[o + 3] = 255;
+  }
+  sg.putImageData(sd, 0, 0);
+  const bc = document.createElement('canvas');
+  bc.width = W;
+  bc.height = H;
+  const bg = bc.getContext('2d', { willReadFrequently: true });
+  if (!bg) return null;
+  bg.imageSmoothingEnabled = true;
+  bg.imageSmoothingQuality = 'high';
+  bg.drawImage(sm, 0, 0, W, H);
+  const q = bg.getImageData(0, 0, W, H).data;
+  // Độ đậm mực so với giấy tại chỗ → độ trong suốt; khôi phục màu mực thật
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  let sr = 0, sgr = 0, sb = 0, sw = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4;
+    const d = Math.max(q[i] - p[i], q[i + 1] - p[i + 1], q[i + 2] - p[i + 2], Math.abs(q[i] - p[i]) * 0.6, 0)
+      / Math.max(60, Math.max(q[i], q[i + 1], q[i + 2]));
+    let a = (d - (seal ? 0.1 : 0.12)) / (seal ? 0.25 : 0.33);
+    a = a <= 0 ? 0 : a >= 1 ? 1 : a;
+    if (a > 0) for (let k = 0; k < 3; k++) { const v = (p[i + k] - (1 - a) * q[i + k]) / a; p[i + k] = v < 0 ? 0 : v > 255 ? 255 : v; }
+    p[i + 3] = Math.round(a * 255);
+    if (a > 0.25) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (a > 0.6) { sr += p[i] * a; sgr += p[i + 1] * a; sb += p[i + 2] * a; sw += a; }
+    }
+  }
+  if (x1 < 0) return null;   // không thấy nét mực
+  if (seal && sw > 0) {
+    // Con dấu: một màu mực tươi, đậm theo màu dấu chủ đạo (thường đỏ); nét mờ đậm lên cho rõ
+    const [h, s0] = rgbToHs(sr / sw, sgr / sw, sb / sw);
+    const [cr, cg, cb] = hslToRgb(h, Math.max(0.85, s0), 0.45);
+    for (let i = 0; i < p.length; i += 4) {
+      if (p[i + 3] === 0) continue;
+      p[i] = cr; p[i + 1] = cg; p[i + 2] = cb;
+      p[i + 3] = Math.min(255, Math.round(255 * Math.pow(p[i + 3] / 255, 0.6)));
+    }
+  }
+  g.putImageData(id, 0, 0);
+  const pad = Math.round(Math.max(W, H) * 0.02) + 2;
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+  const o = document.createElement('canvas');
+  o.width = x1 - x0 + 1;
+  o.height = y1 - y0 + 1;
+  o.getContext('2d')?.drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return o;
+}
+
+function rgbToHs(r: number, g: number, b: number): [number, number] {
+  const R = r / 255, G = g / 255, B2 = b / 255, mx = Math.max(R, G, B2), mn = Math.min(R, G, B2), d = mx - mn;
+  if (d === 0) return [0, 0];
+  const l = (mx + mn) / 2, s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === R ? ((G - B2) / d) % 6 : mx === G ? (B2 - R) / d + 2 : (R - G) / d + 4;
+  return [(h * 60 + 360) % 360, Math.min(1, s)];
+}
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
 
 /** who: 'giam_doc' (chữ ký giám đốc), 'con_dau' (con dấu công ty) hoặc user_id (chữ ký của chính mình). Tự tách nền trắng. */
 export async function uploadSignature(tenantId: string, who: string, file: File): Promise<void> {
-  const blob = await preparePng(file, true);
+  const blob = await preparePng(file, who === 'con_dau' ? 'con_dau' : 'chu_ky');
   const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/${who}.png`, blob, { contentType: 'image/png', upsert: true });
   if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
 }

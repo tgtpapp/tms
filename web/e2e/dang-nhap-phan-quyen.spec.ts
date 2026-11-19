@@ -357,6 +357,24 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã gửi 1 đơn vé bán khi mất mạng')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Vé chờ gửi/ })).toHaveCount(0);
 
+  // 5r2. Lưu trữ hồ sơ: thêm năm, tạo cây thư mục mẫu, thêm liên kết có hạn (chưa kết nối Drive → không tải tệp được)
+  await page.getByRole('button', { name: 'Lưu trữ hồ sơ', exact: true }).click();
+  await expect(page.getByText(/Chưa kết nối Google Drive nên chưa tải tệp lên được/)).toBeVisible();
+  await page.getByRole('button', { name: '+ Năm' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Thêm năm' }).click();
+  await expect(page.getByText(/^Đã thêm năm \d{4}$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Tạo cây thư mục mẫu cho nhà xe' }).click();
+  await expect(page.getByText('Đã tạo cây thư mục mẫu, đổi tên, thêm, bớt tùy ý')).toBeVisible();
+  await page.getByRole('button', { name: '📁 01. Pháp lý công ty' }).first().click();
+  await page.getByRole('button', { name: '🔗 Thêm liên kết' }).click();
+  const dl = page.getByRole('dialog');
+  await dl.getByLabel('Tên hồ sơ').fill('Giấy phép kinh doanh vận tải');
+  await dl.getByLabel('Địa chỉ liên kết (Google Drive, website…)').fill('drive.google.com/file/d/abc');
+  await dl.getByLabel('Ngày hết hạn (nếu có)').fill(ngay(20));
+  await dl.getByRole('button', { name: 'Lưu' }).click();
+  await expect(page.getByText('Đã thêm liên kết')).toBeVisible();
+  await expect(page.getByText(/Còn (19|20) ngày/)).toBeVisible();
+
   // 5s. Chữ ký của tôi: chọn ảnh → ảnh hiện trong khung cắt (điện thoại) → kéo chọn vùng → lưu → bấm × bỏ chữ ký
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await page.getByLabel('Ảnh chữ ký của tôi').setInputFiles({ name: 'chu-ky.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });

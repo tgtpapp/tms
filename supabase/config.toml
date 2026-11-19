@@ -16,3 +16,7 @@ verify_jwt = false
 # Zalo: Zalo gọi về không có phiên đăng nhập; POST tự kiểm tra phiên + quyền bên trong
 [functions.zalo]
 verify_jwt = false
+
+# Lưu trữ hồ sơ trên Google Drive (Apps Script) của nhà xe: tự kiểm tra phiên + quyền bên trong
+[functions.drive]
+verify_jwt = false

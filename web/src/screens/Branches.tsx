@@ -1,3 +1,4 @@
+import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, supabase } from '../lib/supabase';
@@ -84,7 +85,8 @@ export function BranchesScreen({ perms }: { perms: Permissions }) {
               <PlaceRow place={b} canEdit={perms.has('branch.manage', b.id)}
                         onSave={(f) => save('branches', b.id, clean(f), 'Đã lưu chi nhánh')}
                         onToggle={() => save('branches', b.id, { is_active: !b.is_active },
-                                             b.is_active ? 'Đã ngừng hoạt động chi nhánh' : 'Đã mở lại chi nhánh')} />
+                                             b.is_active ? 'Đã ngừng hoạt động chi nhánh' : 'Đã mở lại chi nhánh')}
+                        kind="branch" onDeleted={load} />
               <div className="sub">
                 <div className="muted small">Phòng vé</div>
                 <ul className="list">
@@ -93,7 +95,8 @@ export function BranchesScreen({ perms }: { perms: Permissions }) {
                       <PlaceRow place={o} canEdit={perms.has('office.manage', b.id, o.id)}
                                 onSave={(f) => save('ticket_offices', o.id, clean(f), 'Đã lưu phòng vé')}
                                 onToggle={() => save('ticket_offices', o.id, { is_active: !o.is_active },
-                                                     o.is_active ? 'Đã ngừng hoạt động phòng vé' : 'Đã mở lại phòng vé')} />
+                                                     o.is_active ? 'Đã ngừng hoạt động phòng vé' : 'Đã mở lại phòng vé')}
+                                kind="office" onDeleted={load} />
                     </li>
                   ))}
                 </ul>
@@ -148,7 +151,8 @@ function PlaceFormCard(props: { title: string; submitLabel: string; compact?: bo
   );
 }
 
-function PlaceRow(props: { place: Place; canEdit: boolean; onSave: (f: PlaceForm) => Promise<boolean>; onToggle: () => Promise<boolean> }) {
+function PlaceRow(props: { place: Place; canEdit: boolean; onSave: (f: PlaceForm) => Promise<boolean>; onToggle: () => Promise<boolean>;
+  kind: 'branch' | 'office'; onDeleted: () => Promise<void> }) {
   const { place, canEdit } = props;
   const [editing, setEditing] = useState(false);
   const [f, setF] = useState<PlaceForm>(EMPTY_FORM);
@@ -189,6 +193,7 @@ function PlaceRow(props: { place: Place; canEdit: boolean; onSave: (f: PlaceForm
             await props.onToggle();
             setBusy(false);
           }}>{place.is_active ? 'Ngừng hoạt động' : 'Mở lại'}</button>
+          <DeleteButton kind={props.kind} id={place.id} name={place.name} onDone={props.onDeleted} />
         </div>
       )}
     </div>

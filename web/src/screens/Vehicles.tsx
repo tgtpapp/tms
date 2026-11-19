@@ -1,3 +1,4 @@
+import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
@@ -208,6 +209,7 @@ function VehicleTypesSection(props: { types: VehicleType[]; seats: Seat[]; canEd
                     <button className="btn small" onClick={() => setOpen(open === t.id ? null : t.id)}>{open === t.id ? 'Đóng' : 'Sơ đồ ghế'}</button>
                     {canEdit && <button className="btn small" onClick={() => startEdit(t)}>Sửa</button>}
                     {canEdit && <button className="btn small" onClick={() => void toggle(t)}>{t.is_active ? 'Ngừng dùng' : 'Dùng lại'}</button>}
+                    {canEdit && <DeleteButton kind="vehicle_type" id={t.id} name={t.name} onDone={reload} />}
                   </div>
                 </div>
                 {open === t.id && <SeatLayout type={t} seats={mine} canEdit={canEdit} reload={reload} />}

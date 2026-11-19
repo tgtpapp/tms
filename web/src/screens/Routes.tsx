@@ -1,3 +1,4 @@
+import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -135,6 +136,7 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}>Sửa</button>
                   <button className="btn small" onClick={() => void toggle(s)}>{s.is_active ? 'Ngừng dùng' : 'Dùng lại'}</button>
+                  <DeleteButton kind="stop" id={s.id} name={s.name} onDone={reload} />
                 </div>
               )}
             </div>
@@ -165,7 +167,16 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
   const toast = useToast();
   const [f, setF] = useState(EMPTY_ROUTE);
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  async function toggle(r: Route) {
+    const { error } = await supabase.from('routes').update({ is_active: !r.is_active }).eq('id', r.id);
+    if (error) return toast('error', error.message);
+    toast('ok', r.is_active ? `Đã ngừng dùng tuyến ${r.name}` : `Đã dùng lại tuyến ${r.name}`);
+    await reload();
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -199,14 +210,17 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
         </form>
       )}
       <section className="card">
-        <h2>Tuyến ({data.routes.length})</h2>
+        <div className="item-head">
+          <h2>Tuyến ({data.routes.length})</h2>
+          <label className="check small"><input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} /> Hiện tuyến ngừng dùng</label>
+        </div>
         {data.routes.length === 0 && <p className="muted">Chưa có tuyến.</p>}
         <ul className="list">
-          {data.routes.map((r) => (
+          {data.routes.filter((r) => showInactive || r.is_active).map((r) => (
             <li key={r.id} className="item">
               <div className="item-head">
                 <div>
-                  <b>{r.name}</b> <span className="muted small">· {r.code}{r.registered_code ? ` · Mã số ${r.registered_code}` : ''}{r.distance_km ? ` · ${r.distance_km} km` : ''}</span>
+                  <b>{r.name}</b> {!r.is_active && <span className="badge locked">Ngừng dùng</span>} <span className="muted small">· {r.code}{r.registered_code ? ` · Mã số ${r.registered_code}` : ''}{r.distance_km ? ` · ${r.distance_km} km` : ''}</span>
                   <div className="muted small">
                     Giá toàn tuyến: {money(currentFare(data.fares, r.id, null, null)?.price ?? null)}
                   </div>
@@ -215,9 +229,15 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                     return p ? <div key={d} className="route-dir small"><span className="badge">{d === 'di' ? 'Chiều đi' : 'Chiều về'}</span> {p}</div> : null;
                   })}
                 </div>
-                <button className="btn small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Đóng' : 'Chi tiết'}</button>
+                <div className="actions">
+                  <button className="btn small" onClick={() => setOpen(open === r.id ? null : r.id)}>{open === r.id ? 'Đóng' : 'Chi tiết'}</button>
+                  {canRoute && <button className="btn small" onClick={() => setEditing(editing === r.id ? null : r.id)}>Sửa</button>}
+                  {canRoute && <button className="btn small" onClick={() => void toggle(r)}>{r.is_active ? 'Ngừng dùng' : 'Dùng lại'}</button>}
+                  {canRoute && <DeleteButton kind="route" id={r.id} name={`tuyến ${r.name}`} note="Giờ chạy và các chuyến chưa có vé / hàng của tuyến cũng bị xóa." onDone={reload} />}
+                </div>
               </div>
-              {open === r.id && canRoute && <RouteInfo route={r} reload={reload} />}
+              {editing === r.id && <RouteEdit route={r} reload={reload} onClose={() => setEditing(null)} />}
+              {open === r.id && <div className="small"><span className="muted">Hành trình chạy xe:</span> {r.itinerary || 'chưa nhập'}</div>}
               {open === r.id && <RouteDetail route={r} {...props} />}
             </li>
           ))}
@@ -229,41 +249,39 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
 
 interface EditStop { stop_id: string; minutes_from_start: string; allow_pickup: boolean; allow_dropoff: boolean }
 
-/** Thông tin tuyến in trên lệnh vận chuyển: mã số tuyến, cự ly, hành trình chạy xe */
-function RouteInfo({ route, reload }: { route: Route; reload: () => Promise<void> }) {
+/** Sửa tuyến: mã, tên, mã số tuyến, cự ly, hành trình chạy xe (in trên lệnh vận chuyển) */
+function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Promise<void>; onClose: () => void }) {
   const toast = useToast();
-  const [f, setF] = useState({ registered_code: route.registered_code ?? '', distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '' });
-  const [edit, setEdit] = useState(false);
-  async function save() {
+  const [f, setF] = useState({ code: route.code, name: route.name, registered_code: route.registered_code ?? '',
+    distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '' });
+  const [busy, setBusy] = useState(false);
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
     const { error } = await supabase.from('routes').update({
-      registered_code: f.registered_code.trim() || null, distance_km: f.distance_km ? Number(f.distance_km) : null,
-      itinerary: f.itinerary.trim() || null,
+      code: f.code.trim(), name: f.name.trim(), registered_code: f.registered_code.trim() || null,
+      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null,
     }).eq('id', route.id);
-    if (error) return toast('error', error.message);
-    toast('ok', 'Đã lưu thông tin tuyến');
-    setEdit(false);
+    setBusy(false);
+    if (error) return toast('error', error.code === '23505' ? 'Mã tuyến đã có' : error.message);
+    toast('ok', 'Đã lưu tuyến');
+    onClose();
     await reload();
   }
-  if (!edit) {
-    return (
-      <div className="small">
-        <span className="muted">Hành trình chạy xe:</span> {route.itinerary || 'chưa nhập'}{' '}
-        <button className="btn small link" onClick={() => setEdit(true)}>Sửa thông tin tuyến</button>
-      </div>
-    );
-  }
   return (
-    <div className="form">
+    <form className="form sub" onSubmit={(e) => void save(e)}>
       <div className="grid2">
+        <label>Mã tuyến<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
+        <label>Tên tuyến<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
         <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
         <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
       </div>
       <label>Hành trình chạy xe<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
       <div className="actions">
-        <button className="btn small primary" onClick={() => void save()}>Lưu thông tin tuyến</button>
-        <button className="btn small link" onClick={() => setEdit(false)}>Hủy</button>
+        <button className="btn small primary" disabled={busy}>Lưu tuyến</button>
+        <button type="button" className="btn small link" onClick={onClose}>Hủy</button>
       </div>
-    </div>
+    </form>
   );
 }
 

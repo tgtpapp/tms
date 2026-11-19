@@ -1,3 +1,4 @@
+import { DeleteButton } from '../components/DeleteButton';
 import { useMemo, useState, type FormEvent } from 'react';
 import {
   DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
@@ -317,6 +318,7 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
         <div className="actions">
           <button className="btn small" onClick={() => setEditing(true)}>Sửa thông tin xe</button>
           <button className="btn small" onClick={() => void toggle()}>{vehicle.is_active ? 'Ngừng dùng xe' : 'Dùng lại xe'}</button>
+          <DeleteButton kind="vehicle" id={vehicle.id} name={`xe ${vehicle.plate}`} note="Giấy tờ của xe cũng bị xóa." onDone={reload} />
         </div>
       )}
 

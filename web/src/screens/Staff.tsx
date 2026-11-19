@@ -1,3 +1,4 @@
+import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   DOC_COLS, DocFields, DocRow, docState, FilesButton, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
@@ -353,7 +354,8 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
         {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
       </dl>
       {age && <p className={`small state-${age.state}`}>{age.text}</p>}
-      {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button></div>}
+      {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
+        <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
       <h3>Giấy tờ</h3>
       <ul className="list">
         {STAFF_DOCS.map((def) => (

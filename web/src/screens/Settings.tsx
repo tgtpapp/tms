@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
+import { LegacyImport } from './LegacyImport';
 import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -278,6 +279,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
       </>)}
+      <LegacyImport tenantId={tenantId} />
     </>
   );
 }

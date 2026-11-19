@@ -249,6 +249,24 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 5n. Chuyển khoản QR, nhân viên xác nhận thủ công
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Đọc lại Giấy phép kinh doanh vận tải' })).toBeDisabled();   // chưa có ảnh
+
+  // 5m2. Nhập dữ liệu từ app cũ (file sao lưu .json): xem trước → nhập → nhập lại không trùng; khóa trong file bị bỏ qua
+  const px = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const backup = { buffer: Buffer.from(JSON.stringify({
+    _app: 'nhaxe', settings: { ai: { key: 'KHONG-DUOC-LUU' } },
+    employees: [{ id: 'e1', ma: 'NV001', ten: 'Lê Văn Cũ', sdt: '0911 222 333', ngayVao: '2019-05-01', gioiTinh: 'Nam', trangThai: 'Đang làm',
+                  cccd: '012345678901', cccdTruoc: `data:image/png;base64,${px}`, bangHang: 'D', bangSo: '790123456789', bangHetHan: '2030-01-01' }],
+    vehicles: [{ id: 'v1', bks: '60B-999.99', loai: 'Hyundai', soCho: 6, kdSo: 'KD001', hhDangKiem: ngay(300), dangKiem: 'nxdrv:abc' }],
+  })), name: 'Sao luu.json', mimeType: 'application/json' };
+  await page.getByLabel('File sao lưu app cũ').setInputFiles(backup);
+  await expect(page.getByText(/Nhân viên: 1 mới, 0 đã có · 2 giấy tờ/)).toBeVisible();
+  await page.getByLabel('Loại xe cho Hyundai 6 chỗ').selectOption({ label: 'Giường nằm 6 chỗ (GN6)' });
+  await page.getByRole('button', { name: 'Nhập dữ liệu' }).click();
+  await expect(page.getByText('Đã nhập 1 nhân viên, 1 xe, 3 giấy tờ').first()).toBeVisible();
+  await page.getByLabel('File sao lưu app cũ').setInputFiles(backup);
+  await expect(page.getByText(/Nhân viên: 0 mới, 1 đã có/)).toBeVisible();
+  await page.getByRole('button', { name: 'Nhập dữ liệu' }).click();
+  await expect(page.getByText('Đã nhập 0 nhân viên, 0 xe, 0 giấy tờ').first()).toBeVisible();
   await page.getByRole('combobox', { name: /^Ngân hàng/ }).selectOption({ label: 'Vietcombank' });
   await page.getByLabel('Số tài khoản').fill('0123456789');
   await page.getByLabel('Tên chủ tài khoản').fill('CONG TY TNHH TUONG GIA THINH PHAT');

@@ -9,7 +9,7 @@ import { moneyWords } from '../lib/vnWords';
 
 type Status = 'nhap' | 'da_ky' | 'dang_chay' | 'xong' | 'huy';
 export interface Charter {
-  id: string; code: string; customer_name: string; customer_phone: string; customer_tax_code: string | null; customer_address: string | null;
+  id: string; code: string; customer_name: string; customer_phone: string | null; customer_tax_code: string | null; customer_address: string | null;
   pickup_place: string; destination: string; itinerary: string | null; start_at: string; end_at: string; passengers: number;
   vehicle_id: string | null; driver1_id: string | null; driver2_id: string | null; price: number; deposit: number; status: Status;
   note: string | null; cancel_reason: string | null; contract_no: string; signed_on: string | null; customer_email: string | null; customer_rep: string | null;
@@ -195,7 +195,7 @@ export function ChartersScreen({ tenantId }: { tenantId: string }) {
                 <div className="item-head">
                   <div>
                     <label className="check" style={{ display: 'inline-flex', marginRight: 6 }}><input type="checkbox" aria-label={`Chọn ${c.contract_no}`} checked={pick.has(c.id)} onChange={() => toggle(c.id)} /></label>
-                    <b>{c.contract_no}</b> <span className={`badge ${cls}`}>{lb}</span> · {c.customer_name} <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>
+                    <b>{c.contract_no}</b> <span className={`badge ${cls}`}>{lb}</span> · {c.customer_name} {c.customer_phone && <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>}
                     <div className="small">{c.pickup_place} → {c.destination} · {dt(c.start_at)} – {dt(c.end_at)}{c.signed_on ? ` · ký ${c.signed_on.split('-').reverse().join('/')}` : ''}</div>
                     <div className="small muted">{plate(c.vehicle_id) || 'chưa có xe'} · {who(c.driver1_id) || 'chưa có lái xe'}{c.driver2_id ? `, ${who(c.driver2_id)}` : ''} · {p.length}/{c.passengers} khách có tên
                       · Đã thu {money(got)} / {money(c.price)}{c.cancel_reason ? ` · Hủy: ${c.cancel_reason}` : ''}</div>
@@ -204,7 +204,7 @@ export function ChartersScreen({ tenantId }: { tenantId: string }) {
                     <button className="btn small" onClick={() => setPrinting([c.id])}>In hợp đồng</button>
                     {c.status !== 'xong' && c.status !== 'huy' && (
                       <>
-                        <button className="btn small" onClick={() => setEdit({ id: c.id, f: { customer_name: c.customer_name, customer_phone: c.customer_phone,
+                        <button className="btn small" onClick={() => setEdit({ id: c.id, f: { customer_name: c.customer_name, customer_phone: c.customer_phone ?? '',
                           customer_tax_code: c.customer_tax_code ?? '', customer_address: c.customer_address ?? '', pickup_place: c.pickup_place, destination: c.destination,
                           itinerary: c.itinerary ?? '', start: toLocal(c.start_at), end: toLocal(c.end_at), passengers: String(c.passengers), vehicle_id: c.vehicle_id ?? '',
                           driver1_id: c.driver1_id ?? '', driver2_id: c.driver2_id ?? '', price: String(c.price), deposit: String(c.deposit), note: c.note ?? '', pax: paxText(p),
@@ -292,7 +292,7 @@ export function MyCharters() {
               <div>
                 <b>{c.code}</b> <span className={`badge ${CH_STATUS[c.status][1]}`}>{CH_STATUS[c.status][0]}</span>
                 <div className="small">{c.pickup_place} → {c.destination} · {dt(c.start_at)} – {dt(c.end_at)}</div>
-                <div className="small">Bên thuê: {c.customer_name} <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>{c.itinerary ? ` · ${c.itinerary}` : ''}</div>
+                <div className="small">Bên thuê: {c.customer_name} {c.customer_phone && <a href={`tel:${c.customer_phone}`}>{c.customer_phone}</a>}{c.itinerary ? ` · ${c.itinerary}` : ''}</div>
               </div>
               {c.status === 'da_ky' && <button className="btn primary" onClick={() => void mark(c, 'dang_chay')}>Bắt đầu chạy</button>}
               {c.status === 'dang_chay' && <button className="btn primary" onClick={() => void mark(c, 'xong')}>Đã xong</button>}

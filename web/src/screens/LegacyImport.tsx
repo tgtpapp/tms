@@ -3,6 +3,7 @@
 import { dirName, type Dir } from '../lib/routes';
 import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { useState } from 'react';
+import { LegacyMore } from './LegacyMore';
 import { today } from '../components/Documents';
 import { uploadFiles } from '../lib/documents';
 import {
@@ -263,6 +264,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
       )}
       {legacy && legacy.trips.length > 0 && !busy && <LegacyTrips legacy={legacy} />}
       {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0 || legacy.km.length > 0) && !busy && <LegacyOps legacy={legacy} />}
+      {legacy && (legacy.schedules.length + legacy.fares.length + legacy.records.length + legacy.charters.length > 0) && !busy && <LegacyMore legacy={legacy} tenantId={tenantId} />}
       {result && (
         <ul className="queue-list small">
           {result.map((r, i) => <li key={i} className={i ? 'error-text' : ''}>{r}</li>)}

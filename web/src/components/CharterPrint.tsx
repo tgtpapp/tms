@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { moneyWords } from '../lib/vnWords';
 
 export interface CharterDoc {
-  id: string; contract_no: string; signed_on: string | null; customer_name: string; customer_phone: string; customer_tax_code: string | null;
+  id: string; contract_no: string; signed_on: string | null; customer_name: string; customer_phone: string | null; customer_tax_code: string | null;
   customer_address: string | null; customer_email: string | null; customer_rep: string | null; pickup_place: string; destination: string;
   itinerary: string | null; start_at: string; end_at: string; passengers: number; price: number; deposit: number; distance_km: number | null;
   payment_terms: string | null; toll_by: string | null; meals_by: string | null; attendant: string | null; round_trip: boolean;
@@ -77,7 +77,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
               Đại diện: {co.director} · Chức vụ: {co.title}</p>
             <p><b>BÊN B (Bên thuê vận tải): {c.customer_name.toUpperCase()}</b><br />
               Địa chỉ: {c.customer_address ?? ''}<br />
-              Điện thoại: {c.customer_phone}{c.customer_email ? ` · Email: ${c.customer_email}` : ''}{c.customer_tax_code ? ` · Mã số thuế / CCCD: ${c.customer_tax_code}` : ''}<br />
+              Điện thoại: {c.customer_phone ?? ''}{c.customer_email ? ` · Email: ${c.customer_email}` : ''}{c.customer_tax_code ? ` · Mã số thuế / CCCD: ${c.customer_tax_code}` : ''}<br />
               {c.customer_rep && <>Đại diện: {c.customer_rep}<br /></>}</p>
             <p>Hai bên thỏa thuận ký hợp đồng vận chuyển hành khách với các điều khoản sau:</p>
             <p><b>Điều 1. Nội dung dịch vụ</b><br />

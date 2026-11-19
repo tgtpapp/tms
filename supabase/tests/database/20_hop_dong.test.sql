@@ -155,5 +155,17 @@ select is((select count(*)::int from public.charters), 0, 'Chủ B không thấy
 select throws_ok($$ select public.set_charter_status(current_setting('t.c')::uuid, 'huy', 'x') $$, 'P0002', null, 'Chủ B: không tìm thấy');
 reset role;
 
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is(public.import_legacy_charters(jsonb_build_array(jsonb_build_object('contract_no', '0003/HĐVC', 'customer_name', 'Đoàn cũ',
+  'pickup_place', 'Biên Hòa', 'destination', 'Vũng Tàu', 'start_at', '2026-01-02T06:00:00+07', 'end_at', '2026-01-02T20:00:00+07', 'price', 3000000,
+  'passengers', jsonb_build_array(jsonb_build_object('full_name', 'Lê C', 'birth_year', 1990))))) - 'errors', '{"created":1,"same":0}'::jsonb, 'Chuyển hợp đồng app cũ (thiếu SĐT)');
+select is((select status from public.charters where contract_no = '0003/HĐVC'), 'xong', 'Hợp đồng đã qua là Xong');
+select is((select count(*)::int from public.charter_passengers p join public.charters c on c.id = p.charter_id where c.contract_no = '0003/HĐVC'), 1, 'Có danh sách khách');
+select is(public.import_legacy_charters(jsonb_build_array(jsonb_build_object('contract_no', '0003/HĐVC', 'customer_name', 'Đoàn cũ',
+  'pickup_place', 'Biên Hòa', 'destination', 'Vũng Tàu', 'start_at', '2026-01-02T06:00:00+07', 'end_at', '2026-01-02T20:00:00+07', 'price', 3000000))) ->> 'same',
+  '1', 'Nhập lại không trùng');
+reset role;
+
 select * from finish();
 rollback;

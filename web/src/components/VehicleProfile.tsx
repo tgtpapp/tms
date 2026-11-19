@@ -27,6 +27,7 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
   const [inc, setInc] = useState<Inc[]>([]);
   const [months, setMonths] = useState<{ m: string; days: number; trips: number }[]>([]);
   const [company, setCompany] = useState('');
+  const [rep, setRep] = useState<{ repaired_on: string; odo_km: number | null; workshop: string | null; text: string; cost: number }[]>([]);
   const [f, setF] = useState(EMPTY_INC);
   const [printing, setPrinting] = useState(false);
 
@@ -55,6 +56,15 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
       M[m].days.add(r.service_date);
     }
     setMonths(Object.keys(M).sort().map((m) => ({ m, days: M[m].days.size, trips: M[m].trips })));
+    const ro = await supabase.from('repair_orders').select('id, repaired_on, odo_km, workshop').eq('vehicle_id', v.id).order('repaired_on');
+    const ros = (ro.data ?? []) as { id: string; repaired_on: string; odo_km: number | null; workshop: string | null }[];
+    const ri = ros.length ? await supabase.from('repair_items').select('order_id, content, qty, unit_price').in('order_id', ros.map((x) => x.id)).order('seq') : null;
+    const its = (ri?.data ?? []) as { order_id: string; content: string; qty: number; unit_price: number }[];
+    setRep(ros.map((o) => {
+      const l = its.filter((x) => x.order_id === o.id);
+      return { repaired_on: o.repaired_on, odo_km: o.odo_km, workshop: o.workshop, text: l.map((x) => `${x.content}${Number(x.qty) > 1 ? ` (x${x.qty})` : ''}`).join('; '),
+        cost: l.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0) };
+    }));
     const tt = tn.data as { name: string; legal_name: string | null } | null;
     setCompany(tt?.legal_name || tt?.name || '');
   }, [v.id, v.vehicle_type_id]);
@@ -149,7 +159,7 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
           <div className="actions"><button type="button" className="btn small" onClick={() => void addInc()}>+ Thêm sự cố</button></div>
         </div>
       )}
-      <p className="muted small">Mẫu sổ lý lịch phương tiện theo quy định hiện hành: cần xác minh. Bảo dưỡng / sửa chữa và km GPS sẽ lấy từ mục Sửa chữa, Km xe khi có.</p>
+      <p className="muted small">Mẫu sổ lý lịch phương tiện theo quy định hiện hành: cần xác minh. Bảo dưỡng / sửa chữa lấy từ mục Sửa chữa ({rep.length} phiếu).</p>
 
       {printing && createPortal(
         <div className="print-area vp-print">
@@ -180,7 +190,7 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
             <h3>TRANG 2: THEO DÕI QUÁ TRÌNH HOẠT ĐỘNG, BẢO DƯỠNG VÀ SỬA CHỮA</h3>
             <p><b>1. Theo dõi bảo dưỡng định kỳ và sửa chữa lớn:</b></p>
             <table className="vp-tbl"><thead><tr><th>Ngày / Tháng / Năm</th><th>Số km (Odo)</th><th>Nội dung bảo dưỡng / thay thế / sửa chữa</th><th>Đơn vị thực hiện</th><th>Chi phí (đ)</th><th>Xác nhận kỹ thuật / quản lý</th></tr></thead>
-              <tbody>{blank(8, 6)}</tbody></table>
+              <tbody>{rep.map((r, i) => <tr key={i}><td>{fmtDate(r.repaired_on)}</td><td>{r.odo_km ? `${r.odo_km.toLocaleString('vi-VN')} km` : ''}</td><td>{r.text}</td><td>{r.workshop}</td><td>{r.cost.toLocaleString('vi-VN')}</td><td /></tr>)}{blank(8 - rep.length, 6)}</tbody></table>
             <p><b>2. Theo dõi quá trình hoạt động:</b>{ex.odo_start ? ` Odo gốc ${ex.odo_start.toLocaleString('vi-VN')} km${ex.odo_date ? ` ngày ${fmtDate(ex.odo_date)}` : ''}` : ''}</p>
             <table className="vp-tbl"><thead><tr><th>Tháng</th><th>Số ngày hoạt động</th><th>Số chuyến</th><th>Km chạy trong tháng</th><th>Km lũy kế</th></tr></thead>
               <tbody>{months.map((r) => <tr key={r.m}><td>{r.m.slice(5)}/{r.m.slice(0, 4)}</td><td>{r.days}</td><td>{r.trips}</td><td /><td /></tr>)}{blank(4 - months.length, 5)}</tbody></table>

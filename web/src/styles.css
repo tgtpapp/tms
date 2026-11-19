@@ -416,3 +416,6 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 /* In hợp đồng: chỉ hiện khi in */
 .charter-print { display: none; }
 @media print { .charter-print { display: block; } }
+
+/* Tuyến: khung chiều đi / chiều về */
+.dir-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }

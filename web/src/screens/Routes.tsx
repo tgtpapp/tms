@@ -6,7 +6,7 @@ import { useToast } from '../lib/toast';
 
 type StopKind = 'ben_xe' | 'van_phong' | 'diem_don_tra' | 'tram_dung';
 interface Stop { id: string; code: string; name: string; kind: StopKind; province: string | null; address: string | null; is_active: boolean }
-interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; is_active: boolean }
+interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number; allow_pickup: boolean; allow_dropoff: boolean }
 interface Fare { id: string; route_id: string; from_stop_id: string | null; to_stop_id: string | null; price: number | null; effective_from: string }
 
@@ -35,7 +35,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
   const load = useCallback(async () => {
     const [s, r, rs, f] = await Promise.all([
       supabase.from('stops').select('id, code, name, kind, province, address, is_active').order('code'),
-      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
+      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start, allow_pickup, allow_dropoff').order('seq'),
       supabase.from('route_fares').select('id, route_id, from_stop_id, to_stop_id, price, effective_from').order('effective_from', { ascending: false }),
     ]);
@@ -149,7 +149,14 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
 
 /* ------------------------------------------------------------------ Tuyến */
 
-const EMPTY_ROUTE = { code: '', name: '', registered_code: '', distance_km: '', itinerary: '' };
+/** Đảo hành trình: "A - QL1A - B và ngược lại" → "B - QL1A - A" */
+export function reverseItinerary(s: string): string {
+  const core = s.replace(/\s*(và|,)?\s*ngược lại\.?\s*$/i, '').trim();
+  if (!core) return '';
+  return core.split(/\s+[-–—]\s+/).reverse().join(' - ');
+}
+
+const EMPTY_ROUTE = { code: '', name: '', registered_code: '', distance_km: '', itinerary: '', itinerary_ve: '' };
 
 /** "BX Hố Nai → Bà Rịa (+60') → BX Vũng Tàu (+90')" theo chiều (chiều về = điểm dừng ngược lại) */
 function directionPath(data: Data, routeId: string, dir: 'di' | 've'): string {
@@ -183,7 +190,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
     setBusy(true);
     const { error } = await supabase.from('routes').insert({
       code: f.code.trim(), name: f.name.trim(), registered_code: f.registered_code.trim() || null,
-      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null,
+      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null, itinerary_ve: f.itinerary_ve.trim() || null,
     });
     setBusy(false);
     if (error) return toast('error', error.code === '23505' ? 'Mã tuyến đã có' : error.message);
@@ -203,8 +210,11 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
             <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
             <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
           </div>
-          <label>Hành trình chạy xe (in trên lệnh vận chuyển)
-            <textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} placeholder="vd: BX Biên Hòa - QL1A - BX Vũng Tàu và ngược lại" />
+          <label>Hành trình chiều đi (in trên lệnh vận chuyển)
+            <textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} placeholder="vd: BX Biên Hòa - QL1A - BX Vũng Tàu" />
+          </label>
+          <label>Hành trình chiều về (để trống = đi ngược chiều đi)
+            <textarea rows={2} value={f.itinerary_ve} onChange={(e) => setF({ ...f, itinerary_ve: e.target.value })} placeholder={reverseItinerary(f.itinerary) || 'vd: BX Vũng Tàu - QL1A - BX Biên Hòa'} />
           </label>
           <button className="btn primary" disabled={busy}>Thêm tuyến</button>
         </form>
@@ -237,7 +247,6 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                 </div>
               </div>
               {editing === r.id && <RouteEdit route={r} reload={reload} onClose={() => setEditing(null)} />}
-              {open === r.id && <div className="small"><span className="muted">Hành trình chạy xe:</span> {r.itinerary || 'chưa nhập'}</div>}
               {open === r.id && <RouteDetail route={r} {...props} />}
             </li>
           ))}
@@ -253,14 +262,14 @@ interface EditStop { stop_id: string; minutes_from_start: string; allow_pickup: 
 function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Promise<void>; onClose: () => void }) {
   const toast = useToast();
   const [f, setF] = useState({ code: route.code, name: route.name, registered_code: route.registered_code ?? '',
-    distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '' });
+    distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '', itinerary_ve: route.itinerary_ve ?? '' });
   const [busy, setBusy] = useState(false);
   async function save(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     const { error } = await supabase.from('routes').update({
       code: f.code.trim(), name: f.name.trim(), registered_code: f.registered_code.trim() || null,
-      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null,
+      distance_km: f.distance_km ? Number(f.distance_km) : null, itinerary: f.itinerary.trim() || null, itinerary_ve: f.itinerary_ve.trim() || null,
     }).eq('id', route.id);
     setBusy(false);
     if (error) return toast('error', error.code === '23505' ? 'Mã tuyến đã có' : error.message);
@@ -276,7 +285,8 @@ function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Pro
         <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
         <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
       </div>
-      <label>Hành trình chạy xe<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
+      <label>Hành trình chiều đi<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
+      <label>Hành trình chiều về (để trống = đi ngược chiều đi)<textarea rows={2} value={f.itinerary_ve} placeholder={reverseItinerary(f.itinerary)} onChange={(e) => setF({ ...f, itinerary_ve: e.target.value })} /></label>
       <div className="actions">
         <button className="btn small primary" disabled={busy}>Lưu tuyến</button>
         <button type="button" className="btn small link" onClick={onClose}>Hủy</button>
@@ -333,19 +343,35 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
   return (
     <div className="sub">
       <div className="item-head">
-        <h3>Điểm dừng (chiều đi)</h3>
+        <h3>Chiều đi và chiều về</h3>
         {canRoute && !editing && <button className="btn small" onClick={startEdit}>Sửa điểm dừng</button>}
       </div>
-      {!editing && (saved.length === 0 ? <p className="muted small">Chưa khai báo điểm dừng.</p> : (
-        <ol className="stops">
-          {saved.map((s) => (
-            <li key={s.seq}>
-              <b>{stopName(s.stop_id)}</b> <span className="muted small">· +{s.minutes_from_start} phút
-                {!s.allow_pickup && ' · không đón'}{!s.allow_dropoff && ' · không trả'}</span>
-            </li>
-          ))}
-        </ol>
-      ))}
+      {!editing && (
+        <div className="grid2">
+          {(['di', 've'] as const).map((d) => {
+            const total = saved.length ? saved[saved.length - 1].minutes_from_start : 0;
+            const rows = d === 'di' ? saved.map((s) => ({ ...s, m: s.minutes_from_start, pick: s.allow_pickup, drop: s.allow_dropoff }))
+              : [...saved].reverse().map((s) => ({ ...s, m: total - s.minutes_from_start, pick: s.allow_dropoff, drop: s.allow_pickup }));
+            const it = d === 'di' ? route.itinerary : (route.itinerary_ve || reverseItinerary(route.itinerary ?? ''));
+            return (
+              <div key={d} className="dir-box">
+                <b><span className="badge">{d === 'di' ? 'Chiều đi' : 'Chiều về'}</span></b>
+                <div className="small"><span className="muted">Hành trình:</span> {it || 'chưa nhập'}
+                  {d === 've' && !route.itinerary_ve && route.itinerary ? <span className="muted"> (tự đảo từ chiều đi)</span> : null}</div>
+                {rows.length === 0 ? <p className="muted small">Chưa khai báo điểm dừng.</p> : (
+                  <ol className="stops">
+                    {rows.map((s) => (
+                      <li key={s.seq}>
+                        <b>{stopName(s.stop_id)}</b> <span className="muted small">· +{s.m} phút{!s.pick && ' · không đón'}{!s.drop && ' · không trả'}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {editing && (
         <div className="form">
           {list.map((s, i) => (

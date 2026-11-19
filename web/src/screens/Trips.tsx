@@ -1,3 +1,4 @@
+import { reverseItinerary } from './Routes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { fmtDate, today } from '../components/Documents';
@@ -9,7 +10,7 @@ import { useToast } from '../lib/toast';
 import { Transfers } from './Transfers';
 
 type Dir = 'di' | 've';
-interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; is_active: boolean }
+interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number }
 interface Stop { id: string; name: string }
 interface Schedule {
@@ -57,7 +58,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 
   const load = useCallback(async () => {
     const [r, rs, st, sc, tr, v, sf, lm, vt] = await Promise.all([
-      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, is_active').order('code'),
+      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start').order('seq'),
       supabase.from('stops').select('id, name'),
       supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note, vehicle_type_id, registered_time, trip_no, day_rule, business_type').order('depart_time'),
@@ -154,7 +155,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
         driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: who('phu_xe')?.name ?? null,
         plate: veh?.plate ?? '', seats: vt ? vt.reg_seats + vt.reg_berths : null,
         routeName: route?.name ?? '', distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,
-        itinerary: route?.itinerary ?? null, fromStop: a ?? '', toStop: b ?? '',
+        itinerary: (t.direction === 've' ? route?.itinerary_ve || reverseItinerary(route?.itinerary ?? '') : route?.itinerary) || null, fromStop: a ?? '', toStop: b ?? '',
         departTime: hhmm(t.depart_at), departDate: t.service_date,
         ret: r0 ? { time: hhmm(r0.depart_at), date: r0.service_date } : null,
         dispatcherName: account.full_name, dispatcherImg, qr,

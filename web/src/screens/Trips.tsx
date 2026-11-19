@@ -1,4 +1,6 @@
 import { dirName, reverseItinerary } from '../lib/routes';
+import { MiniCal } from '../components/MiniCal';
+import { lunarText } from '../lib/lunar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { fmtDate, today } from '../components/Documents';
@@ -420,7 +422,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   return (
     <section className="card">
       <div className="item-head">
-        <h2>Chuyến ngày {fmtDate(day)}</h2>
+        <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
         {canEdit && <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>}
       </div>
       <div className="inline-form">
@@ -429,6 +431,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
         <button className="btn small" aria-label="Ngày sau" onClick={() => setDay(addDays(day, 1))}>›</button>
         {day !== today() && <button className="btn small link" onClick={() => setDay(today())}>Hôm nay</button>}
       </div>
+      <details className="cal-box"><summary>Lịch tháng (có âm lịch)</summary><MiniCal day={day} onPick={setDay} /></details>
       <p className="muted small">{open_.length} chuyến · {ready} đủ xe + lái · {open_.length - ready} chưa xếp · {trips.length - open_.length} đã hủy</p>
 
       {canEdit && !extra && day >= today() && (

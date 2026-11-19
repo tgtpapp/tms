@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { MiniCal } from '../components/MiniCal';
 import { Modal } from '../components/Modal';
 import { SeatIcon } from '../components/SeatIcon';
 import { dirName } from '../lib/routes';
@@ -1146,44 +1147,6 @@ function PaperForm(props: {
       </div>
       <button className="btn primary" disabled={busy}>Lưu vé giấy</button>
     </form>
-  );
-}
-
-/* ------------------------------------------------------------------ Lịch tháng chọn ngày */
-
-const WD = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-function MiniCal({ day, onPick }: { day: string; onPick: (d: string) => void }) {
-  const [month, setMonth] = useState(day.slice(0, 7));
-  useEffect(() => setMonth(day.slice(0, 7)), [day]);
-  const [y, m] = month.split('-').map(Number);
-  const first = new Date(Date.UTC(y, m - 1, 1));
-  const lead = (first.getUTCDay() + 6) % 7;
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const iso = (d: number) => `${month}-${String(d).padStart(2, '0')}`;
-  const shift = (n: number) => {
-    const d = new Date(Date.UTC(y, m - 1 + n, 1));
-    setMonth(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
-  };
-  const now = today();
-  return (
-    <div className="mini-cal">
-      <div className="mc-head">
-        <button type="button" className="btn small link" aria-label="Tháng trước" onClick={() => shift(-1)}>‹</button>
-        <b>Tháng {m} {y}</b>
-        <button type="button" className="btn small link" aria-label="Tháng sau" onClick={() => shift(1)}>›</button>
-        <button type="button" className="btn small primary" onClick={() => onPick(now)}>Hôm nay</button>
-      </div>
-      <div className="mc-grid">
-        {WD.map((w) => <span key={w} className="mc-wd">{w}</span>)}
-        {Array.from({ length: lead }, (_, i) => <span key={`b${i}`} />)}
-        {Array.from({ length: days }, (_, i) => {
-          const d = iso(i + 1);
-          const wd = (lead + i) % 7;
-          const cls = ['mc-day', d === day && 'on', d === now && 'now', d < now && 'past', wd === 6 && 'sun'].filter(Boolean).join(' ');
-          return <button key={d} type="button" className={cls} aria-label={`Ngày ${fmtDate(d)}`} onClick={() => onPick(d)}>{i + 1}</button>;
-        })}
-      </div>
-    </div>
   );
 }
 

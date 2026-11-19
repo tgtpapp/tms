@@ -494,3 +494,11 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .tc-badge.phoi { color: #6d28d9; }
 .phoi-badge { background: #ede9fe; color: #6d28d9; margin-left: 6px; }
 .sseat .printed { display: inline-flex; margin-left: 4px; color: #1d4ed8; vertical-align: middle; }
+.mc-day { display: flex; flex-direction: column; align-items: center; line-height: 1.15; padding: 4px 0; }
+.mc-solar { font-size: .95rem; }
+.mc-lunar { font-size: .64rem; font-weight: 500; color: var(--muted); }
+.mc-lunar.red { color: #dc2626; font-weight: 700; }
+.mc-day.on .mc-lunar { color: #e0e7ff; }
+.mc-foot { margin: 6px 0 0; text-align: center; font-size: .82rem; color: var(--muted); }
+.mc-foot b { color: #c2410c; }
+.cal-box { margin: 6px 0; max-width: 420px; } .cal-box summary { cursor: pointer; color: var(--primary); font-weight: 600; font-size: .9rem; }

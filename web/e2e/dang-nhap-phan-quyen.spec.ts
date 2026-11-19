@@ -347,7 +347,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Nền giấy đã được xóa: góc ảnh trong suốt, nét mực còn đậm
   const signImg = page.getByRole('img', { name: 'Chữ ký của tôi' });
   await expect(signImg).toBeVisible();
-  const px = await signImg.evaluate(async (i: HTMLImageElement) => {
+  const alpha = await signImg.evaluate(async (i: HTMLImageElement) => {
     const bmp = await createImageBitmap(await (await fetch(i.src)).blob());
     const c = document.createElement('canvas');
     c.width = bmp.width; c.height = bmp.height;
@@ -358,9 +358,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
     for (let k = 3; k < d.length; k += 4) if (d[k] > 200) opaque++;
     return { corner: d[3], opaque, total: d.length / 4 };
   });
-  expect(px.corner).toBe(0);
-  expect(px.opaque).toBeGreaterThan(0);
-  expect(px.opaque).toBeLessThan(px.total * 0.5);
+  expect(alpha.corner).toBe(0);
+  expect(alpha.opaque).toBeGreaterThan(0);
+  expect(alpha.opaque).toBeLessThan(alpha.total * 0.5);
   await page.getByRole('button', { name: 'Bỏ chữ ký này' }).click();
   await expect(page.getByText('Đã bỏ chữ ký, có thể tải chữ ký khác')).toBeVisible();
 

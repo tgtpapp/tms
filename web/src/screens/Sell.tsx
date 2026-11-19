@@ -55,14 +55,21 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [tripId, setTripId] = useState<string | null>(null);
   const [footer, setFooter] = useState<string | null>(null);
+  const [bank, setBank] = useState<BankAccount | null>(null);
   const [version, setVersion] = useState(0);
   const [logo, setLogo] = useState<string | null>(null);
   useEffect(() => {
     if (ctx.tenant_id) void companyFileUrl(ctx.tenant_id, 'logo.png').then(setLogo);
   }, [ctx.tenant_id]);
   useEffect(() => {
-    void supabase.from('tenant_settings').select('value').eq('key', 've.ghi_chu').maybeSingle()
-      .then(({ data }) => setFooter(((data as { value: unknown } | null)?.value as string | undefined) || null));
+    void supabase.from('tenant_settings').select('key, value').in('key', ['ve.ghi_chu', 'tt.ngan_hang_bin', 'tt.so_tai_khoan', 'tt.ten_tai_khoan'])
+      .then(({ data }) => {
+        const v = (k: string) => ((data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value as string | undefined;
+        setFooter(v('ve.ghi_chu') || null);
+        const bin = v('tt.ngan_hang_bin');
+        const acc = v('tt.so_tai_khoan');
+        setBank(bin && acc ? { bin, account: acc, name: v('tt.ten_tai_khoan') ?? '' } : null);
+      });
   }, []);
 
   const loadBase = useCallback(async () => {

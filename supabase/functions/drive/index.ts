@@ -127,10 +127,19 @@ Deno.serve(async (req) => {
       const ids = new Set([root]);
       for (let ch = true; ch;) { ch = false; for (const f of list) if (f.parent_id && ids.has(f.parent_id) && !ids.has(f.id)) { ids.add(f.id); ch = true; } }
       const items = await user.from('archive_items').select('drive_id').in('folder_id', [...ids]).not('drive_id', 'is', null);
-      for (const it of items.data ?? []) await gas(cfg, { action: 'hs_del', id: it.drive_id }).catch(() => undefined);
+      const driveIds = (items.data ?? []).map((x) => String(x.drive_id));
+      // Xóa trong app trước (nhanh, người dùng thấy ngay); tệp trên Drive cho vào thùng rác sau, chạy song song,
+      // không bắt chờ từng tệp một (thư mục nhiều tệp trước đây chờ quá lâu, hết giờ, như không xóa được).
       const d = await user.from('archive_folders').delete().eq('id', root);
       if (d.error) throw new HttpError(400, d.error.message);
-      return json(200, { ok: true, files: (items.data ?? []).length });
+      const trash = async () => {
+        for (let i = 0; i < driveIds.length; i += 6) {
+          await Promise.all(driveIds.slice(i, i + 6).map((id) => gas(cfg, { action: 'hs_del', id }, 60000).catch(() => undefined)));
+        }
+      };
+      const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+      if (rt?.waitUntil) rt.waitUntil(trash()); else await trash();
+      return json(200, { ok: true, files: driveIds.length });
     }
 
     throw new HttpError(400, 'Thao tác không hợp lệ');

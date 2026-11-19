@@ -396,7 +396,7 @@ function ArchiveDialog(props: {
   const set = (p: Partial<Dlg>) => setDlg({ ...d, ...p } as Dlg);
   const actions = (label: string, danger = false) => (
     <div className="actions">
-      <button type="submit" className={danger ? 'btn danger' : 'btn primary'} disabled={busy}>{label}</button>
+      <button type="submit" className={danger ? 'btn danger' : 'btn primary'} disabled={busy}>{busy ? (danger ? 'Đang xóa…' : 'Đang lưu…') : label}</button>
       <button type="button" className="btn link" onClick={close}>Hủy</button>
     </div>
   );
@@ -459,6 +459,7 @@ function ArchiveDialog(props: {
             <>
               <p>Xóa thư mục <b>{props.title(d.id)}</b>{c.folders ? <> cùng <b>{c.folders}</b> thư mục con</> : null}{c.items ? <> và <b>{c.items}</b> hồ sơ bên trong</> : null}?</p>
               <p className="small muted">Tệp trên Google Drive vào thùng rác, khôi phục được trong 30 ngày.</p>
+              {busy && <p className="upload">Đang xóa, chờ trong giây lát…</p>}
               {actions('Xóa', true)}
             </>
           );

@@ -422,6 +422,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Sơ đồ ghế' });
   await expect(page.getByText('Sửa Sơ đồ ghế').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
 
   // 6. Nhân viên đăng nhập: thấy chi nhánh, không có mục Người dùng, không thêm được chi nhánh
@@ -448,6 +449,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('button', { name: /^Xếp xe/ })).toHaveCount(0);
 
   // 7. Sai mật khẩu
+  await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
   await login(page, '0902000002', 'sai-mat-khau');
   await expect(page.getByText('Sai mã nhà xe, số điện thoại hoặc mật khẩu')).toBeVisible();
@@ -459,11 +461,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Mật khẩu', { exact: true }).fill('chub123');
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (1)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await expect(page.getByText(/^Nhà xe B · Chủ nhà xe B$/)).toBeVisible();
   await page.getByRole('button', { name: 'Chi nhánh & phòng vé' }).click();
   await expect(page.getByRole('heading', { name: 'Chi nhánh (0)' })).toBeVisible();
 
   // 9. Máy nhớ mã nhà xe: đăng xuất ra vẫn hiện sẵn mã nha-xe-b
+  await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
   await expect(page.getByLabel('Mã nhà xe', { exact: true })).toHaveValue('nha-xe-b');
 });

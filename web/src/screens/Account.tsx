@@ -67,7 +67,15 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
     <>
       <ThemePicker />
       <section className="card">
-        <h2>Thông tin</h2>
+        <div className="item-head">
+          <div>
+            <h2>Thông tin</h2>
+            <p className="muted small">{ctx.tenant_name} · {ctx.full_name}</p>
+          </div>
+          <button className="btn" onClick={() => void supabase.auth.signOut()}>
+            <i className="fi fi-rr-sign-out-alt" aria-hidden="true" /> Đăng xuất
+          </button>
+        </div>
         <dl className="info">
           <dt>Họ tên</dt><dd>{ctx.full_name}</dd>
           <dt>Số điện thoại</dt><dd>{phone}</dd>

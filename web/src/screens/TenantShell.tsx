@@ -73,7 +73,6 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   ];
   const shown = tabs.filter((t) => t.show);
   const groups = [...new Set(shown.map((t) => t.group))];
-  const current = shown.find((t) => t.key === tab);
 
   return (
     <div className={pinned ? 'shell' : 'shell unpinned'}>
@@ -112,18 +111,6 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
         </div>
       </aside>
       <div className="main">
-        <header className="topbar">
-          <div className="topbar-title">
-            <span className="topbar-mobile-brand"><Logo tenantId={ctx.tenant_id} /></span>
-            <div>
-              <h1>{current?.label}</h1>
-              <p className="muted small">{ctx.tenant_name ?? config.appName} · {ctx.full_name}</p>
-            </div>
-          </div>
-          <button className="btn small" onClick={() => void supabase.auth.signOut()}>
-            <i className="fi fi-rr-sign-out-alt" aria-hidden="true" /> Đăng xuất
-          </button>
-        </header>
         <main className="content">
           {tab === 'driver' && <DriverScreen />}
           {tab === 'parcels' && <ParcelsScreen />}

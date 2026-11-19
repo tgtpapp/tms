@@ -112,9 +112,12 @@ begin
     if v_rule not in ('thu', 'chan', 'le') then
       raise exception 'Ngày chạy không hợp lệ' using errcode = '22023';
     end if;
-    v_days := coalesce((select array_agg(distinct x::int order by x::int) from jsonb_array_elements_text(e -> 'days') x
-                        where x ~ '^[1-7]$'), '{1,2,3,4,5,6,7}');
-    if v_rule = 'thu' and cardinality(v_days) = 0 then
+    v_days := case when jsonb_typeof(e -> 'days') = 'array'
+                then (select array_agg(distinct x::int order by x::int) from jsonb_array_elements_text(e -> 'days') x where x ~ '^[1-7]$')
+              end;
+    if v_days is null and v_rule <> 'thu' then v_days := '{1,2,3,4,5,6,7}'; end if;
+    if v_days is null and jsonb_typeof(e -> 'days') is null then v_days := '{1,2,3,4,5,6,7}'; end if;
+    if v_rule = 'thu' and coalesce(cardinality(v_days), 0) = 0 then
       raise exception 'Giờ % chưa chọn thứ chạy', to_char(v_time, 'HH24:MI') using errcode = '22023';
     end if;
     v_type := nullif(e ->> 'vehicle_type_id', '')::uuid;

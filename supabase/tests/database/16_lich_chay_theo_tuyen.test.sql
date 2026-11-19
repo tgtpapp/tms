@@ -65,7 +65,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select is((public.save_timetable((select id from public.routes where code = 'HN-VT'), 'di', null, null, null, jsonb_build_array(
-  jsonb_build_object('depart_time', '05:00', 'registered_time', '05:00', 'trip_no', '01', 'day_rule', 'thu', 'days', '[1,2,3,4,5,6,7]', 'business_type', 'tuyen_co_dinh'),
+  jsonb_build_object('depart_time', '05:00', 'registered_time', '05:00', 'trip_no', '01', 'day_rule', 'thu', 'days', '[1,2,3,4,5,6,7]'::jsonb, 'business_type', 'tuyen_co_dinh'),
   jsonb_build_object('depart_time', '06:00', 'day_rule', 'chan'),
   jsonb_build_object('depart_time', '07:00', 'day_rule', 'le')), null) ->> 'saved')::int, 3, 'Lưu 3 giờ chạy một lần');
 select is((select count(*)::int from public.schedules where direction = 'di' and is_active), 3, 'Có 3 nốt chiều đi');

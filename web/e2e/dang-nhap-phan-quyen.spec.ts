@@ -265,7 +265,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
+  await page.getByLabel('Lọc theo loại').selectOption({ label: 'Cấu hình' });
   await expect(page.getByText('Sửa Cấu hình').first()).toBeVisible();
+  await page.getByLabel('Lọc theo loại').selectOption({ label: 'Sơ đồ ghế' });
   await expect(page.getByText('Sửa Sơ đồ ghế').first()).toBeVisible();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
 

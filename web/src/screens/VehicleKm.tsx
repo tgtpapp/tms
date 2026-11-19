@@ -97,6 +97,7 @@ export function VehicleKmScreen({ perms }: { perms: Permissions }) {
         </div>
         <p className="small muted">Km lũy kế = Odo gốc của xe + km đã chạy từ ngày ghi Odo đến hết tháng đang xem. Nhập lại cùng xe, cùng ngày thì ghi đè.</p>
       </section>
+      <KmStats vehicles={vehicles} />
       {open && (
         <Modal title={`Km từng ngày · ${vehicles.find((v) => v.id === open)?.plate ?? ''}`} onClose={() => setOpen(null)}>
           <table className="plist">
@@ -206,5 +207,82 @@ function KmImport({ vehicles, onClose, onDone }: { vehicles: Veh[]; onClose: () 
         )}
       </div>
     </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ Thống kê km theo ngày / tuần / tháng / năm (như app cũ) */
+type Unit = 'day' | 'week' | 'month' | 'year';
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function periods(unit: Unit, ym: string, y: string): { from: string; to: string; cols: { key: string; label: string }[] } {
+  if (unit === 'day' || unit === 'week') {
+    const [yy, mm] = ym.split('-').map(Number), first = new Date(yy, mm - 1, 1), last = new Date(yy, mm, 0);
+    if (unit === 'day') {
+      return { from: iso(first), to: iso(new Date(yy, mm, 1)), cols: Array.from({ length: last.getDate() }, (_, i) => ({ key: iso(new Date(yy, mm - 1, i + 1)), label: String(i + 1) })) };
+    }
+    const mon = new Date(first); mon.setDate(first.getDate() - ((first.getDay() + 6) % 7));   // thứ Hai đầu tuần chứa ngày 1
+    const cols: { key: string; label: string }[] = [];
+    for (const d = new Date(mon); d <= last; d.setDate(d.getDate() + 7)) {
+      const e = new Date(d); e.setDate(d.getDate() + 6);
+      cols.push({ key: iso(d), label: `${d.getDate()}/${d.getMonth() + 1}–${e.getDate()}/${e.getMonth() + 1}` });
+    }
+    const end = new Date(cols[cols.length - 1].key); end.setDate(end.getDate() + 7);
+    return { from: cols[0].key, to: iso(end), cols };
+  }
+  if (unit === 'month') {
+    const n = Number(y);
+    return { from: `${n}-01-01`, to: `${n + 1}-01-01`, cols: Array.from({ length: 12 }, (_, i) => ({ key: `${n}-${String(i + 1).padStart(2, '0')}-01`, label: `T${i + 1}` })) };
+  }
+  const n = Number(y);
+  return { from: `${n - 4}-01-01`, to: `${n + 1}-01-01`, cols: Array.from({ length: 5 }, (_, i) => ({ key: `${n - 4 + i}-01-01`, label: String(n - 4 + i) })) };
+}
+
+function KmStats({ vehicles }: { vehicles: Veh[] }) {
+  const toast = useToast();
+  const [unit, setUnit] = useState<Unit>('day');
+  const [ym, setYm] = useState(today().slice(0, 7));
+  const [y, setY] = useState(today().slice(0, 4));
+  const [data, setData] = useState<Map<string, number>>(new Map());
+  const P = useMemo(() => periods(unit, ym, y), [unit, ym, y]);
+  useEffect(() => {
+    void supabase.rpc('vehicle_km_stats', { p_from: P.from, p_to: P.to, p_unit: unit }).then(({ data: d, error }) => {
+      if (error) return toast('error', error.message);
+      setData(new Map(((d ?? []) as { vehicle_id: string; period: string; km: number }[]).map((r) => [`${r.vehicle_id}|${r.period}`, Number(r.km)])));
+    });
+  }, [P, unit, toast]);
+  const val = (v: string, c: string) => data.get(`${v}|${c}`) ?? 0;
+  const rows = vehicles.map((v) => ({ v, sum: P.cols.reduce((a, c) => a + val(v.id, c.key), 0) })).filter((x) => x.sum > 0 || x.v.is_active);
+  const total = (c: string) => rows.reduce((a, x) => a + val(x.v.id, c), 0);
+  function csv() {
+    const L = [['Xe', ...P.cols.map((c) => c.label), 'Cộng'], ...rows.map((x) => [x.v.plate, ...P.cols.map((c) => String(val(x.v.id, c.key) || '')), String(x.sum)]),
+      ['Cộng', ...P.cols.map((c) => String(total(c.key))), String(rows.reduce((a, x) => a + x.sum, 0))]];
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\uFEFF', L.map((l) => l.join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `km-xe-${unit}-${unit === 'day' || unit === 'week' ? ym : y}.csv`;
+    a.click();
+  }
+  return (
+    <section className="card">
+      <div className="item-head">
+        <h2>Thống kê km theo kỳ</h2>
+        <div className="seg" role="tablist" aria-label="Kỳ thống kê">
+          {([['day', 'Ngày'], ['week', 'Tuần'], ['month', 'Tháng'], ['year', 'Năm']] as const).map(([k, l]) =>
+            <button key={k} type="button" role="tab" aria-selected={unit === k} className={unit === k ? 'on' : ''} onClick={() => setUnit(k)}>{l}</button>)}
+        </div>
+      </div>
+      <div className="inline-form">
+        {(unit === 'day' || unit === 'week') && <label>Tháng<input type="month" value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} /></label>}
+        {(unit === 'month' || unit === 'year') && <label>{unit === 'year' ? 'Đến năm' : 'Năm'}<input type="number" min={2000} max={2100} value={y} onChange={(e) => /^\d{4}$/.test(e.target.value) && setY(e.target.value)} /></label>}
+        <button className="btn small" onClick={csv}>Tải Excel (CSV)</button>
+      </div>
+      <div className="table-wrap">
+        <table className="plist km-stats">
+          <thead><tr><th>Xe</th>{P.cols.map((c) => <th key={c.key}>{c.label}</th>)}<th>Cộng</th></tr></thead>
+          <tbody>{rows.map((x) => (
+            <tr key={x.v.id}><td><b>{x.v.plate}</b></td>{P.cols.map((c) => { const k = val(x.v.id, c.key); return <td key={c.key} className={k ? '' : 'muted'}>{k ? num(k) : '·'}</td>; })}<td><b>{num(x.sum)}</b></td></tr>
+          ))}</tbody>
+          <tfoot><tr><th>Cộng</th>{P.cols.map((c) => <th key={c.key}>{num(total(c.key))}</th>)}<th>{num(rows.reduce((a, x) => a + x.sum, 0))}</th></tr></tfoot>
+        </table>
+      </div>
+    </section>
   );
 }

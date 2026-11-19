@@ -69,6 +69,10 @@ select is(public.import_vehicle_km(jsonb_build_array(
 select is((select sum(km)::numeric from public.vehicle_km), 620.5::numeric, 'Tổng km');
 select is((select km from public.vehicle_km_summary('2026-10-02', '2026-11-01')), 300::numeric, 'Tổng hợp km trong kỳ');
 select is((select km_since_odo from public.vehicle_km_summary('2026-10-02', '2026-11-01')), 620.5::numeric, 'Km cộng dồn từ ngày Odo gốc');
+select is((select count(*)::int from public.vehicle_km_stats('2026-10-01', '2026-11-01', 'day')), 2, 'Thống kê theo ngày');
+select is((select km from public.vehicle_km_stats('2026-10-01', '2026-11-01', 'month')), 620.5::numeric, 'Thống kê theo tháng');
+select is((select period from public.vehicle_km_stats('2026-01-01', '2027-01-01', 'year')), '2026-01-01'::date, 'Thống kê theo năm');
+select throws_ok($$ select * from public.vehicle_km_stats('2026-10-01', '2026-11-01', 'gio') $$, '22023', null, 'Kỳ sai bị chặn');
 select throws_ok($$ select public.import_vehicle_km(jsonb_build_array(jsonb_build_object('vehicle_id', gen_random_uuid(), 'run_date', '2026-10-01', 'km', 1))) $$, 'P0002', null, 'Xe lạ bị chặn');
 select throws_ok($$ select public.import_vehicle_km(jsonb_build_array(jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-03', 'km', 9000))) $$, '22023', null, 'Km quá lớn bị chặn');
 reset role;
@@ -90,6 +94,7 @@ select is((select count(*)::int from public.repair_orders), 0, 'Nhà xe B không
 select is((select count(*)::int from public.fuel_entries), 0, 'Nhà xe B không thấy phiếu nhiên liệu của A');
 select is((select count(*)::int from public.fuel_settings), 0, 'Nhà xe B không thấy bồn dầu của A');
 select is((select count(*)::int from public.vehicle_km), 0, 'Nhà xe B không thấy km xe của A');
+select is((select count(*)::int from public.vehicle_km_stats('2026-01-01', '2027-01-01', 'month')), 0, 'Nhà xe B không thấy thống kê km của A');
 reset role;
 select * from finish();
 rollback;

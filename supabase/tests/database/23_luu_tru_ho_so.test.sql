@@ -58,7 +58,8 @@ select is((select count(*)::int from public.archive_folders), 3, 'Điều hành 
 select is((select count(*)::int from public.archive_items), 2, 'Điều hành xem được hồ sơ');
 select throws_ok($$ insert into public.archive_folders (name) values ('2027') $$, '42501', null, 'Điều hành không thêm được');
 select throws_ok($$ select public.save_drive_config('https://script.google.com/macros/s/X/exec', '123456') $$, '42501', null, 'Điều hành không cấu hình Drive được');
-select is((with u as (delete from public.archive_items returning 1) select count(*)::int from u), 0, 'Điều hành không xóa được');
+select lives_ok($$ delete from public.archive_items $$, 'Điều hành bấm xóa');
+select is((select count(*)::int from public.archive_items), 2, 'Điều hành không xóa được (RLS)');
 reset role;
 
 -- Bán vé A: không có quyền
@@ -72,7 +73,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.archive_folders), 0, 'Nhà xe B không thấy thư mục của A');
 select is((select count(*)::int from public.archive_items), 0, 'Nhà xe B không thấy hồ sơ của A');
-select is((with u as (update public.archive_folders set name = 'Hack' returning 1) select count(*)::int from u), 0, 'Nhà xe B không sửa được');
+select lives_ok($$ update public.archive_folders set name = 'Hack' $$, 'Nhà xe B thử sửa');
 select lives_ok($$ insert into public.archive_folders (name) values ('2026') $$, 'Nhà xe B có năm 2026 riêng (không trùng với A)');
 select is(public.drive_status() ->> 'configured', 'false', 'Nhà xe B chưa có kết nối Drive của A');
 reset role;
@@ -80,6 +81,7 @@ reset role;
 -- Chủ A xóa năm: xóa luôn thư mục con và hồ sơ bên trong
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select is((select count(*)::int from public.archive_folders where name = 'Hack'), 0, 'Nhà xe B không sửa được thư mục của A');
 select lives_ok($$ delete from public.archive_folders where name = '2026' $$, 'Xóa năm 2026');
 select is((select count(*)::int from public.archive_items), 0, 'Hồ sơ bên trong đã xóa theo');
 reset role;

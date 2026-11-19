@@ -19,35 +19,60 @@ interface Veh { id: string; plate: string; type: string; seats: number | null; e
 export interface Row { time: string; veh: Veh | null; d1: Person | null; d2: Person | null; route: string; charter: boolean }
 export interface DayData { day: string; rows: Row[]; company: { name: string; address: string }; suffix: string; me: { name: string; sign: Sign } }
 
-export async function loadDay(day: string, tenantId: string, me: { id: string | null; name: string }): Promise<DayData> {
+type Doc = { vehicle_id: string | null; staff_id: string | null; doc_type: string; doc_no: string | null; expires_on: string | null; data: Record<string, unknown> | null };
+/** Dữ liệu dùng chung cho nhiều ngày (tuyến, xe, nhân viên, giấy tờ, chữ ký): tải 1 lần cho cả lượt lưu. */
+export interface PaperCache {
+  base?: Promise<{ routes: { id: string; name: string; name_ve: string | null }[]; types: { id: string; name: string; reg_seats: number; reg_berths: number }[];
+    vehicles: { id: string; plate: string; vehicle_type_id: string }[]; staff: { id: string; full_name: string; user_id: string | null }[]; docs: Doc[];
+    company: { name: string; address: string }; suffix: string }>;
+  signs: Map<string, Promise<Sign>>;
+}
+export const newCache = (): PaperCache => ({ signs: new Map() });
+
+function base(c: PaperCache) {
+  c.base ??= (async () => {
+    const [rt, vh, vt, sm, tn, st, dc] = await Promise.all([
+      supabase.from('routes').select('id, name, name_ve'),
+      supabase.from('vehicles').select('id, plate, vehicle_type_id'),
+      supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths'),
+      supabase.from('staff_members').select('id, full_name, user_id'),
+      supabase.from('tenants').select('name, legal_name, address').maybeSingle(),
+      supabase.from('tenant_settings').select('value').eq('key', 'lenh.hau_to').maybeSingle(),
+      supabase.from('documents').select('vehicle_id, staff_id, doc_type, doc_no, expires_on, data').eq('is_current', true)
+        .in('doc_type', ['kiem_dinh', 'bh_tnds', 'phu_hieu', 'gplx', 'kham_suc_khoe']),
+    ]);
+    const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null };
+    return { routes: (rt.data ?? []) as { id: string; name: string; name_ve: string | null }[], types: (vt.data ?? []) as { id: string; name: string; reg_seats: number; reg_berths: number }[],
+      vehicles: (vh.data ?? []) as { id: string; plate: string; vehicle_type_id: string }[], staff: (sm.data ?? []) as { id: string; full_name: string; user_id: string | null }[],
+      docs: (dc.data ?? []) as Doc[], company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '' };
+  })();
+  return c.base;
+}
+/** Chữ ký của 1 người: chỉ tải khi người đó có trên giấy, mỗi người 1 lần cho cả lượt. */
+function signOf(c: PaperCache, tenantId: string, uid: string | null): Promise<Sign> {
+  if (!uid) return Promise.resolve({ img: null, hasName: false });
+  if (!c.signs.has(uid)) c.signs.set(uid, loadSigns(tenantId, [uid], true).then((m) => m.get(uid) ?? { img: null, hasName: false }).catch(() => ({ img: null, hasName: false })));
+  return c.signs.get(uid)!;
+}
+
+export async function loadDay(day: string, tenantId: string, me: { id: string | null; name: string }, cache: PaperCache = newCache()): Promise<DayData> {
   const from = new Date(`${day}T00:00:00+07:00`).toISOString(), to = new Date(`${day}T23:59:59+07:00`).toISOString();
-  const [tr, ch, rt, vh, vt, sm, tn, st] = await Promise.all([
+  const [tr, ch, b] = await Promise.all([
     supabase.from('trips').select('id, route_id, direction, depart_at, vehicle_id').eq('service_date', day).eq('status', 'mo'),
     supabase.from('charters').select('start_at, vehicle_id, driver1_id, driver2_id, itinerary, pickup_place, destination, status').gte('start_at', from).lte('start_at', to).in('status', ['da_ky', 'dang_chay', 'xong']),
-    supabase.from('routes').select('id, name, name_ve'),
-    supabase.from('vehicles').select('id, plate, vehicle_type_id'),
-    supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths'),
-    supabase.from('staff_members').select('id, full_name, user_id'),
-    supabase.from('tenants').select('name, legal_name, address').maybeSingle(),
-    supabase.from('tenant_settings').select('value').eq('key', 'lenh.hau_to').maybeSingle(),
+    base(cache),
   ]);
   if (tr.error) throw new Error(tr.error.message);
   const trips = (tr.data ?? []) as { id: string; route_id: string; direction: Dir; depart_at: string; vehicle_id: string | null }[];
   const crew = trips.length ? ((await supabase.from('trip_crew').select('trip_id, role, staff_id').in('trip_id', trips.map((t) => t.id)).eq('active', true)).data ?? []) as { trip_id: string; role: string; staff_id: string }[] : [];
-  const docs = ((await supabase.from('documents').select('vehicle_id, staff_id, doc_type, doc_no, expires_on, data').eq('is_current', true)
-    .in('doc_type', ['kiem_dinh', 'bh_tnds', 'phu_hieu', 'gplx', 'kham_suc_khoe'])).data ?? []) as
-    { vehicle_id: string | null; staff_id: string | null; doc_type: string; doc_no: string | null; expires_on: string | null; data: Record<string, unknown> | null }[];
   const NAME: Record<string, string> = { kiem_dinh: 'đăng kiểm', bh_tnds: 'BH dân sự', phu_hieu: 'phù hiệu', gplx: 'GPLX', kham_suc_khoe: 'giấy khám SK' };
-  const routes = (rt.data ?? []) as { id: string; name: string; name_ve: string | null }[];
-  const types = (vt.data ?? []) as { id: string; name: string; reg_seats: number; reg_berths: number }[];
+  const { docs, staff } = b;
   const vehs = new Map<string, Veh>();
-  for (const v of (vh.data ?? []) as { id: string; plate: string; vehicle_type_id: string }[]) {
-    const t = types.find((x) => x.id === v.vehicle_type_id);
+  for (const v of b.vehicles) {
+    const t = b.types.find((x) => x.id === v.vehicle_type_id);
     vehs.set(v.id, { id: v.id, plate: v.plate, type: t?.name ?? '', seats: t ? t.reg_seats + t.reg_berths : null,
       expired: docs.filter((d) => d.vehicle_id === v.id && d.expires_on && d.expires_on < day).map((d) => NAME[d.doc_type]) });
   }
-  const staff = (sm.data ?? []) as { id: string; full_name: string; user_id: string | null }[];
-  const signs = await loadSigns(tenantId, [me.id, ...staff.map((s) => s.user_id)], true);
   const people = new Map<string, Person>();
   const person = async (id: string | null): Promise<Person | null> => {
     if (!id) return null;
@@ -56,29 +81,30 @@ export async function loadDay(day: string, tenantId: string, me: { id: string | 
     if (!s) return null;
     const g = docs.find((d) => d.staff_id === id && d.doc_type === 'gplx');
     const hang = g?.data && typeof g.data.hang === 'string' ? g.data.hang : '';
+    const sg = await signOf(cache, tenantId, s.user_id);
     const p: Person = { id, name: s.full_name, gplx: g ? `${g.doc_no ?? '—'}${hang ? ` (Hạng ${hang})` : ''}` : '—',
       expired: docs.filter((d) => d.staff_id === id && d.expires_on && d.expires_on < day).map((d) => `${NAME[d.doc_type]} ${s.full_name}`),
-      sign: s.user_id ? signs.get(s.user_id)?.img ?? null : null, signName: showName(s.user_id ? signs.get(s.user_id) : null) };
+      sign: sg.img, signName: showName(sg) };
     people.set(id, p);
     return p;
   };
+  const ids = [...new Set([...crew.map((c) => c.staff_id), ...((ch.data ?? []) as { driver1_id: string | null; driver2_id: string | null }[]).flatMap((h) => [h.driver1_id, h.driver2_id])])];
+  await Promise.all(ids.map(person));   // tải chữ ký song song
   const rows: Row[] = [];
   for (const t of trips) {
     const c = crew.filter((x) => x.trip_id === t.id);
     const d1 = c.find((x) => x.role === 'lai_xe_1')?.staff_id ?? null, d2 = c.find((x) => x.role === 'lai_xe_2')?.staff_id ?? null;
     if (!t.vehicle_id && !d1 && !d2) continue;   // giờ trống (chưa xếp gì) không đưa vào bảng
     rows.push({ time: hhmm(t.depart_at), veh: t.vehicle_id ? vehs.get(t.vehicle_id) ?? null : null, d1: await person(d1), d2: await person(d2),
-      route: `Tuyến cố định: ${dirName(routes.find((r) => r.id === t.route_id), t.direction)}`, charter: false });
+      route: `Tuyến cố định: ${dirName(b.routes.find((r) => r.id === t.route_id), t.direction)}`, charter: false });
   }
   for (const h of (ch.data ?? []) as { start_at: string; vehicle_id: string | null; driver1_id: string | null; driver2_id: string | null; itinerary: string | null; pickup_place: string; destination: string }[]) {
     if (vnDay(h.start_at) !== day) continue;
     rows.push({ time: hhmm(h.start_at), veh: h.vehicle_id ? vehs.get(h.vehicle_id) ?? null : null, d1: await person(h.driver1_id), d2: await person(h.driver2_id),
       route: `Xe hợp đồng: ${h.itinerary || `${h.pickup_place} - ${h.destination}`}`, charter: true });
   }
-  rows.sort((a, b) => a.time.localeCompare(b.time) || (a.veh?.plate ?? '').localeCompare(b.veh?.plate ?? ''));
-  const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null };
-  return { day, rows, company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '',
-    me: { name: me.name, sign: (me.id && signs.get(me.id)) || { img: null, hasName: false } } };
+  rows.sort((a, b2) => a.time.localeCompare(b2.time) || (a.veh?.plate ?? '').localeCompare(b2.veh?.plate ?? ''));
+  return { day, rows, company: b.company, suffix: b.suffix, me: { name: me.name, sign: await signOf(cache, tenantId, me.id) } };
 }
 
 /** Các dòng thiếu xe hoặc lái xe chính (quy tắc app cũ: ngày còn thiếu thì chưa lưu, trừ khi chọn "vẫn lưu"). */
@@ -174,26 +200,34 @@ export function safetyPage(d: DayData, x: DriverDay): string {
 interface Folder { id: string; parent_id: string | null; name: string }
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-/** Tìm / tạo thư mục theo đường dẫn tên, trả id thư mục cuối. */
+/** Tìm / tạo thư mục theo đường dẫn tên, trả id thư mục cuối. Danh sách thư mục tải 1 lần cho cả lượt lưu. */
+let folderList: Promise<Folder[]> | null = null;
+let folderPending: Promise<unknown> = Promise.resolve();
 export async function ensurePath(names: string[]): Promise<string> {
-  const all = ((await supabase.from('archive_folders').select('id, parent_id, name')).data ?? []) as Folder[];
-  let parent: string | null = null;
-  for (const n of names) {
-    let f = all.find((x) => x.parent_id === parent && same(x.name, n));
-    if (!f) {
-      const ins = await supabase.from('archive_folders').insert({ parent_id: parent, name: n }).select('id, parent_id, name').single();
-      if (ins.error) throw new Error(`Không tạo được thư mục ${n}: ${ins.error.message}`);
-      f = ins.data as Folder;
-      all.push(f);
+  const run = folderPending.then(async () => {      // tạo thư mục lần lượt để 2 việc song song không tạo trùng
+    folderList ??= supabase.from('archive_folders').select('id, parent_id, name').then((r) => ((r.data ?? []) as Folder[]));
+    const all = await folderList;
+    let parent: string | null = null;
+    for (const n of names) {
+      let f = all.find((x) => x.parent_id === parent && same(x.name, n));
+      if (!f) {
+        const ins = await supabase.from('archive_folders').insert({ parent_id: parent, name: n }).select('id, parent_id, name').single();
+        if (ins.error) { folderList = null; throw new Error(`Không tạo được thư mục ${n}: ${ins.error.message}`); }
+        f = ins.data as Folder;
+        all.push(f);
+      }
+      parent = f.id;
     }
-    parent = f.id;
-  }
-  return parent!;
+    return parent!;
+  });
+  folderPending = run.catch(() => undefined);
+  return run;
 }
+export const resetFolders = () => { folderList = null; };
 
 export const monthPath = (day: string, kind: string) => [day.slice(0, 4), '08. Điều hành xe', kind, `Tháng ${day.slice(5, 7)}-${day.slice(0, 4)}`];
 
-/** Tạo PDF từ các trang rồi lưu vào thư mục; có hồ sơ cùng tên thì thay bản mới (bản cũ ẩn). */
+/** Tạo PDF từ các trang rồi lưu vào thư mục; có hồ sơ cùng mã thì thay bản mới (bản cũ ẩn). */
 export async function savePdf(path: string[], name: string, fileName: string, pages: { html: string; land: boolean }[], note: string, key: string): Promise<void> {
   const imgs = [];
   for (const p of pages) imgs.push(await pageImg(p.html, p.land));
@@ -201,10 +235,11 @@ export async function savePdf(path: string[], name: string, fileName: string, pa
   const folder = await ensurePath(path);
   // Mỗi giấy có 1 mã cố định (ghi cuối ghi chú): lưu lại thì thay bản cũ, không sinh thêm bản thứ hai
   const tag = `[${key}]`;
-  const cur = ((await supabase.from('archive_items').select('id, name, note').eq('folder_id', folder).eq('is_old', false)).data ?? []) as { id: string; name: string; note: string | null }[];
-  const same = cur.filter((x) => (x.note ?? '').includes(tag) || (!(x.note ?? '').includes('[') && x.name === name));
+  const cur = ((await supabase.from('archive_items').select('id, name, note').eq('folder_id', folder).eq('is_old', false).like('note', `%${tag}%`)).data ?? []) as { id: string }[];
+  const legacy = cur.length ? [] : ((await supabase.from('archive_items').select('id').eq('folder_id', folder).eq('is_old', false).eq('name', name).not('note', 'like', '%[%')).data ?? []) as { id: string }[];
+  const same2 = [...cur, ...legacy];
   const r = await drive<{ id: string }>({ action: 'put', folder_id: folder, name, file_name: fileName, mime: 'application/pdf', data, expires_on: null,
-    note: `${note} ${tag}`, replace_id: same[0]?.id ?? null });
-  const extra = same.slice(1).map((x) => x.id).filter((id) => id !== r.id);
+    note: `${note} ${tag}`, replace_id: same2[0]?.id ?? null });
+  const extra = same2.slice(1).map((x) => x.id).filter((id) => id !== r.id);
   if (extra.length) await supabase.from('archive_items').update({ is_old: true, replaced_by: r.id }).in('id', extra);
 }

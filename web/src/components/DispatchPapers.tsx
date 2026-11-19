@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 import { fmtDate } from './Documents';
-import { assignPages, driversOf, loadDay, missing, monthPath, safetyPage, savePdf, type DayData } from '../lib/dispatchPapers';
+import { assignPages, driversOf, loadDay, missing, monthPath, newCache, resetFolders, safetyPage, savePdf, type DayData } from '../lib/dispatchPapers';
 import { errMsg } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -38,40 +38,50 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
     const days: string[] = [];
     for (let d = from; d <= to; d = addDay(d, 1)) days.push(d);
     if (days.length > 120) return toast('error', 'Tối đa 120 ngày mỗi lần');
-    const log: string[] = [];
-    let okPc = 0, okNt = 0;
-    const miss: string[] = [];
-    for (const [i, d] of days.entries()) {
-      try {
-        setBusy(`Ngày ${fmtDate(d)} (${i + 1}/${days.length})…`);
-        const data = await loadDay(d, tenantId, me);
-        if (!data.rows.length) continue;
-        const m = missing(data);
+    const log: string[] = [], miss: string[] = [];
+    const cache = newCache();
+    resetFolders();
+    // 1) Đọc dữ liệu các ngày (song song 4 ngày một lượt, dữ liệu chung chỉ tải 1 lần)
+    setBusy(`Đang đọc lịch chạy ${days.length} ngày…`);
+    const jobs: { label: string; run: () => Promise<void>; kind: 'pc' | 'nt' }[] = [];
+    for (let i = 0; i < days.length; i += 4) {
+      const part = await Promise.all(days.slice(i, i + 4).map((d) => loadDay(d, tenantId, me, cache).then((x) => x, (e: unknown) => { log.push(`${fmtDate(d)}: ${errMsg(e)}`); return null; })));
+      for (const data of part) {
+        if (!data || !data.rows.length) continue;
+        const d = data.day, m = missing(data);
         if (m.length && !force) { miss.push(`${fmtDate(d)}: ${m.join('; ')}`); continue; }
-        const note = `Lưu từ Điều hành (${data.rows.length} chuyến)`;
-        if (pc) {
-          await savePdf(monthPath(d, 'Bảng phân công lịch tài & xe'), `Bảng phân công lịch tài & xe ngày ${fmtDate(d)}`, `Bang phan cong ${d}.pdf`,
-            assignPages(data).map((html) => ({ html, land: true })), note, `pc:${d}`);
-          okPc++;
-        }
-        if (nt) {
-          for (const x of driversOf(data)) {
-            setBusy(`Ngày ${fmtDate(d)}: nghiệm thu ${x.p.name}…`);
-            await savePdf(monthPath(d, 'Nghiệm thu an toàn'), `Nghiệm thu an toàn ${fmtDate(d)} · ${x.p.name}`,
-              `${x.no.replace(/\//g, '_')}.pdf`, [{ html: safetyPage(data, x), land: false }], `${x.rows.length} chuyến · Kết luận: ĐẠT`, `ntat:${d}:${x.p.id}`);
-            okNt++;
-          }
-        }
-      } catch (e) {
-        log.push(`${fmtDate(d)}: ${errMsg(e)}`);
-        if (/Drive|kết nối|Apps Script|quyền/i.test(errMsg(e))) break;
+        if (pc) jobs.push({ kind: 'pc', label: `bảng phân công ${fmtDate(d)}`, run: () => savePdf(monthPath(d, 'Bảng phân công lịch tài & xe'),
+          `Bảng phân công lịch tài & xe ngày ${fmtDate(d)}`, `Bang phan cong ${d}.pdf`, assignPages(data).map((html) => ({ html, land: true })),
+          `Lưu từ Điều hành (${data.rows.length} chuyến)`, `pc:${d}`) });
+        if (nt) for (const x of driversOf(data)) jobs.push({ kind: 'nt', label: `nghiệm thu ${x.p.name} ${fmtDate(d)}`, run: () => savePdf(monthPath(d, 'Nghiệm thu an toàn'),
+          `Nghiệm thu an toàn ${fmtDate(d)} · ${x.p.name}`, `${x.no.replace(/\//g, '_')}.pdf`, [{ html: safetyPage(data, x), land: false }],
+          `${x.rows.length} chuyến · Kết luận: ĐẠT`, `ntat:${d}:${x.p.id}`) });
       }
+      setBusy(`Đang đọc lịch chạy ${Math.min(i + 4, days.length)}/${days.length} ngày…`);
     }
+    // 2) Tạo PDF và lưu lên Google Drive, 4 tệp cùng lúc
+    let done = 0, okPc = 0, okNt = 0, stop = false, next = 0;
+    const worker = async () => {
+      while (!stop && next < jobs.length) {
+        const j = jobs[next++];
+        try {
+          await j.run();
+          if (j.kind === 'pc') okPc++; else okNt++;
+        } catch (e) {
+          log.push(`${j.label}: ${errMsg(e)}`);
+          if (/Drive|kết nối|Apps Script|quyền/i.test(errMsg(e))) stop = true;   // lỗi kết nối / quyền: dừng, không thử tiếp vô ích
+        }
+        done++;
+        setBusy(`Đang lưu ${done}/${jobs.length} tệp lên Google Drive…`);
+      }
+    };
+    if (jobs.length) { setBusy(`Đang lưu 0/${jobs.length} tệp lên Google Drive…`); await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker)); }
     setBusy(null);
     const msg = `Đã lưu ${okPc} bảng phân công, ${okNt} bản nghiệm thu an toàn`;
     setOut([msg, ...(miss.length ? [`${miss.length} ngày còn chuyến thiếu xe / lái xe (chưa lưu):`, ...miss] : []), ...log]);
     toast(log.length ? 'error' : 'ok', msg);
   }
+
 
   if (view) {
     return (

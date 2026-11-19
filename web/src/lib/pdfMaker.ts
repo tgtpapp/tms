@@ -18,7 +18,7 @@ function measure(html: string, w: number): number {
   return h;
 }
 
-export async function pageImg(html: string, land: boolean, scale = 1.6): Promise<PdfPage> {
+export async function pageImg(html: string, land: boolean, scale = 1.4): Promise<PdfPage> {
   const W = land ? 1123 : 794, H = land ? 794 : 1123, { w, h } = pageBox(land);
   const real = measure(html, w);
   const k = real > h ? h / real : 1;                // nội dung dài hơn trang: thu nhỏ cho vừa 1 trang
@@ -43,7 +43,7 @@ export async function pageImg(html: string, land: boolean, scale = 1.6): Promise
   g.fillStyle = '#fff';
   g.fillRect(0, 0, c.width, c.height);
   g.drawImage(img, 0, 0, c.width, c.height);
-  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.82));
+  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.78));
   if (!blob) throw new Error('Không tạo được ảnh trang PDF');
   return { w: c.width, h: c.height, d: new Uint8Array(await blob.arrayBuffer()), land };
 }

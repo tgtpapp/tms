@@ -1,3 +1,4 @@
+import { Modal } from '../components/Modal';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
@@ -321,12 +322,16 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                   <div className="muted small">Vào công ty {fmtDate(s.joined_on)} · thâm niên {seniority(s.joined_on, s.left_on)}</div>
                 </div>
                 {canOpen && (
-                  <button className="btn small" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(open === s.id ? null : s.id)}>
-                    {open === s.id ? 'Đóng' : 'Hồ sơ'}
+                  <button className="btn small" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>
+                    {canEdit ? 'Sửa' : 'Hồ sơ'}
                   </button>
                 )}
               </div>
-              {open === s.id && canOpen && <StaffDetail {...props} s={s} p={p} />}
+              {open === s.id && canOpen && (
+                <Modal wide title={`Hồ sơ ${s.full_name}`} onClose={() => setOpen(null)}>
+                  <StaffDetail {...props} s={s} p={p} />
+                </Modal>
+              )}
             </li>
           );
         })}

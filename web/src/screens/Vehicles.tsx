@@ -1,3 +1,4 @@
+import { Modal } from '../components/Modal';
 import { SeatIcon } from '../components/SeatIcon';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -136,15 +137,15 @@ function VehicleTypesSection(props: { types: VehicleType[]; seats: Seat[]; canEd
       curb_weight_kg: t.curb_weight_kg?.toString() ?? '', gross_weight_kg: t.gross_weight_kg?.toString() ?? '',
       fuel: t.fuel ?? '', amenities: t.amenities.join(', '),
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   const inactive = types.filter((t) => !t.is_active).length;
 
   return (
     <>
-      {canEdit && (
-        <form className="card form" onSubmit={submit}>
+      {canEdit && (() => {
+        const form = (
+        <form className={editId ? 'form' : 'card form'} onSubmit={submit}>
           <h2>{editId ? 'Sửa loại xe' : 'Thêm loại xe'}</h2>
           <div className="grid2">
             <label>Mã loại xe<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
@@ -182,8 +183,9 @@ function VehicleTypesSection(props: { types: VehicleType[]; seats: Seat[]; canEd
             <button className="btn primary" disabled={busy}>{editId ? 'Lưu loại xe' : 'Thêm loại xe'}</button>
             {editId && <button type="button" className="btn link" onClick={() => { setEditId(null); setF(EMPTY); }}>Hủy sửa</button>}
           </div>
-        </form>
-      )}
+        </form>);
+        return editId ? <Modal title={'Sửa loại xe'} onClose={() => { setEditId(null); setF(EMPTY); }}>{form}</Modal> : form;
+      })()}
       <section className="card">
         <div className="item-head">
           <h2>Loại xe ({types.filter((t) => t.is_active).length})</h2>

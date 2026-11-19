@@ -1,3 +1,4 @@
+import { Modal } from '../components/Modal';
 import { dirName, reverseItinerary, reverseName } from '../lib/routes';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -101,7 +102,8 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
           </button>
         )}
       </div>
-      {canEdit && (
+      {canEdit && (() => {
+        const form = (
         <form className="form" onSubmit={submit}>
           <div className="grid2">
             <label>Mã điểm<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
@@ -118,8 +120,9 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
             <button className="btn primary" disabled={busy}>{editId ? 'Lưu điểm dừng' : 'Thêm điểm dừng'}</button>
             {editId && <button type="button" className="btn link" onClick={() => { setEditId(null); setF(EMPTY_STOP); }}>Hủy sửa</button>}
           </div>
-        </form>
-      )}
+        </form>);
+        return editId ? <Modal title={'Sửa điểm dừng'} onClose={() => { setEditId(null); setF(EMPTY_STOP); }}>{form}</Modal> : form;
+      })()}
       <ul className="list">
         {stops.filter((s) => showInactive || s.is_active).map((s) => (
           <li key={s.id} className="item">
@@ -134,8 +137,7 @@ function StopsSection({ stops, canEdit, reload }: { stops: Stop[]; canEdit: bool
                   <button className="btn small" onClick={() => {
                     setEditId(s.id);
                     setF({ code: s.code, name: s.name, kind: s.kind, province: s.province ?? '', address: s.address ?? '' });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}>Sửa</button>
+                                  }}>Sửa</button>
                   <button className="btn small" onClick={() => void toggle(s)}>{s.is_active ? 'Ngừng dùng' : 'Dùng lại'}</button>
                   <DeleteButton kind="stop" id={s.id} name={s.name} onDone={reload} />
                 </div>
@@ -242,7 +244,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                   {canRoute && <DeleteButton kind="route" id={r.id} name={`tuyến ${r.name}`} note="Giờ chạy và các chuyến chưa có vé / hàng của tuyến cũng bị xóa." onDone={reload} />}
                 </div>
               </div>
-              {editing === r.id && <RouteEdit route={r} reload={reload} onClose={() => setEditing(null)} />}
+              {editing === r.id && <Modal title={`Sửa tuyến ${r.name}`} onClose={() => setEditing(null)}><RouteEdit route={r} reload={reload} onClose={() => setEditing(null)} /></Modal>}
               {open === r.id && <RouteDetail route={r} {...props} />}
             </li>
           ))}
@@ -283,7 +285,7 @@ function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Pro
     await reload();
   }
   return (
-    <form className="form sub" onSubmit={(e) => void save(e)}>
+    <form className="form" onSubmit={(e) => void save(e)}>
       <div className="grid2">
         <label>Mã tuyến<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
         <label>Tên tuyến chiều đi<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>

@@ -1,5 +1,6 @@
 // Giai đoạn 6.4 – Vận tải hợp đồng: hợp đồng, danh sách hành khách, ký / chạy / xong, thu tiền, in.
 // Pháp lý (cần xác minh): bản in là thông tin hợp đồng + danh sách hành khách mang theo xe; mẫu hợp đồng chính thức theo quy định hiện hành cần xác minh.
+import { Modal } from '../components/Modal';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -112,10 +113,10 @@ export function ChartersScreen() {
 
   return (
     <>
-      {!edit && <section className="card"><button className="btn primary" onClick={() => setEdit({ id: null, f: EMPTY })}>+ Hợp đồng mới</button></section>}
+      {<section className="card"><button className="btn primary" onClick={() => setEdit({ id: null, f: EMPTY })}>+ Hợp đồng mới</button></section>}
       {edit && (
-        <form className="card form" onSubmit={(e) => void save(e)}>
-          <h2>{edit.id ? 'Sửa hợp đồng' : 'Hợp đồng mới'}</h2>
+        <Modal wide title={edit.id ? 'Sửa hợp đồng' : 'Hợp đồng mới'} onClose={() => setEdit(null)}>
+        <form className="form" onSubmit={(e) => void save(e)}>
           <div className="grid2">
             <label>Bên thuê (người / công ty)<input value={edit.f.customer_name} onChange={set('customer_name')} required /></label>
             <label>SĐT bên thuê<input inputMode="tel" value={edit.f.customer_phone} onChange={set('customer_phone')} required /></label>
@@ -155,6 +156,7 @@ export function ChartersScreen() {
             <button type="button" className="btn link" onClick={() => setEdit(null)}>Thôi</button>
           </div>
         </form>
+        </Modal>
       )}
       <section className="card">
         <div className="item-head">

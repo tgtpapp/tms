@@ -208,6 +208,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu lý lịch' }).click();
   await expect(page.getByText('Đã lưu lý lịch: Vi phạm')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lý lịch hành nghề (1)' })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();

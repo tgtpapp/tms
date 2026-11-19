@@ -1,3 +1,4 @@
+import { Modal } from '../components/Modal';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
@@ -160,6 +161,7 @@ function PlaceRow(props: { place: Place; canEdit: boolean; onSave: (f: PlaceForm
 
   if (editing) {
     return (
+      <Modal title={`Sửa ${place.name}`} onClose={() => setEditing(false)}>
       <form className="form" onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -172,6 +174,7 @@ function PlaceRow(props: { place: Place; canEdit: boolean; onSave: (f: PlaceForm
           <button type="button" className="btn small link" onClick={() => setEditing(false)}>Hủy</button>
         </div>
       </form>
+      </Modal>
     );
   }
 

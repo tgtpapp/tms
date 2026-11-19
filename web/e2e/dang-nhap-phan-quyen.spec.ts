@@ -295,6 +295,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText(/Tôi thu hôm nay: tiền mặt 150\.000 đ/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toHaveCount(0);
+  // Điện thoại 390px: màn Bán vé không tràn ngang, sơ đồ ghế vừa màn hình
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('tab', { name: 'Sơ đồ ghế' }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const seatBox = (await page.getByRole('button', { name: 'Ghế A02 trống' }).boundingBox())!;
+  expect(seatBox.x + seatBox.width).toBeLessThanOrEqual(390);
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('tab', { name: /^Hành khách/ }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();
 

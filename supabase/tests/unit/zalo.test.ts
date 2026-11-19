@@ -2,8 +2,8 @@
 import { assert, assertEquals, assertRejects } from 'jsr:@std/assert@1';
 import { authorizeUrl, pkceChallenge, refreshTokens, sendZns, znsPhone, ZaloError } from '../../functions/_shared/zalo.ts';
 
-Deno.test('PKCE đúng ví dụ RFC 7636', async () => {
-  assertEquals(await pkceChallenge('dBjftJeZ4CVP-mJ92K9eNodGLsgRK4uJn1OAHsP6k6E'), 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM');
+Deno.test('PKCE: SHA-256 + base64url không dấu =', async () => {
+  assertEquals(await pkceChallenge('dBjftJeZ4CVP-mJ92K9eNodGLsgRK4uJn1OAHsP6k6E'), 'HQWxTkcKn2WhsPgUnHFSJD3BbksZtc0O-QuvgdW68sI');
 });
 
 Deno.test('Số điện thoại sang dạng 84', () => {

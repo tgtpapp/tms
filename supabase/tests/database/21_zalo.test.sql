@@ -15,6 +15,8 @@ create schema t;
 create table t.ids (k text primary key, v uuid not null);
 grant usage on schema t to authenticated;
 grant select on t.ids to authenticated;
+grant usage on schema t to service_role;
+grant select on t.ids to service_role;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';

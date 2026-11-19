@@ -233,7 +233,6 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
       </td>
       <td className="small">{size(it.size_bytes)}</td>
       <td>{hanBadge(it)}</td>
-      <td className="small">{it.note}</td>
       <td className="small muted">{it.created_by ? people[it.created_by] ?? '' : ''}<br />{when(it.created_at)}</td>
       <td className="hs-act">
         <button type="button" className="btn small" onClick={() => void view(it, it.kind === 'file')}>{it.kind === 'link' ? 'Mở' : 'Tải xuống'}</button>
@@ -256,7 +255,7 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
   const table = (rows: Item[], showPath: boolean) => (
     <div className="table-wrap">
       <table className="plist hs-tbl">
-        <thead><tr><th /><th>Tên hồ sơ</th><th>Dung lượng</th><th>Hạn</th><th>Ghi chú</th><th>Tải lên</th><th /></tr></thead>
+        <thead><tr><th /><th>Tên hồ sơ</th><th>Dung lượng</th><th>Hạn</th><th>Tải lên</th><th /></tr></thead>
         <tbody>{rows.map((h) => row(h, showPath))}</tbody>
       </table>
     </div>
@@ -344,7 +343,6 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
                 <span className="muted small"> · {subs.length} thư mục · {list.length} hồ sơ</span>
                 {oldCount > 0 && <button type="button" className="btn small" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn' : 'Xem'} bản cũ ({oldCount})</button>}
               </div>
-              {cur?.note && <p className="hs-nt">{cur.note}</p>}
               {subs.length > 0 && <div className="hs-fg">{subs.map((f) => (
                 <button key={f.id} type="button" className="hs-fc" onClick={() => pick(f.id)}>📁 <span><b>{f.name}</b>
                   <small>{kids(f.id).length ? `${kids(f.id).length} thư mục · ` : ''}{count(f.id)} hồ sơ</small></span></button>
@@ -412,7 +410,6 @@ function ArchiveDialog(props: {
           <>
             {!d.id && <p className="small muted">Trong: {d.parent ? props.title(d.parent) : '(Gốc)'}</p>}
             <label>Tên thư mục<input value={d.name} onChange={(e) => set({ name: e.target.value })} required autoFocus /></label>
-            <label>Ghi chú<textarea rows={2} value={d.note} onChange={(e) => set({ note: e.target.value })} /></label>
             {actions(d.id ? 'Lưu' : 'Thêm thư mục')}
           </>
         )}
@@ -432,7 +429,6 @@ function ArchiveDialog(props: {
             <label>Tên hồ sơ<input value={d.name} onChange={(e) => set({ name: e.target.value })} required /></label>
             <label>Địa chỉ liên kết (Google Drive, website…)<input value={d.url} onChange={(e) => set({ url: e.target.value })} required /></label>
             <label>Ngày hết hạn (nếu có)<input type="date" value={d.expires} onChange={(e) => set({ expires: e.target.value })} /></label>
-            <label>Ghi chú<textarea rows={2} value={d.note} onChange={(e) => set({ note: e.target.value })} /></label>
             {actions('Lưu')}
           </>
         )}
@@ -440,7 +436,6 @@ function ArchiveDialog(props: {
           <>
             <label>Tên hồ sơ<input value={d.name} onChange={(e) => set({ name: e.target.value })} required /></label>
             <label>Ngày hết hạn (nếu có)<input type="date" value={d.expires} onChange={(e) => set({ expires: e.target.value })} /></label>
-            <label>Ghi chú<textarea rows={2} value={d.note} onChange={(e) => set({ note: e.target.value })} /></label>
             {actions('Lưu')}
           </>
         )}
@@ -449,7 +444,6 @@ function ArchiveDialog(props: {
             <ul className="small">{d.files.map((f) => <li key={f.name}>{f.name} · {(f.size / 1048576).toFixed(2)} MB</li>)}</ul>
             {d.replace && <p className="small muted">Thay cho “{d.replace.name}”: bản cũ được ẩn (xem lại bằng nút “Xem bản cũ”).</p>}
             <label>Ngày hết hạn (nếu có)<input type="date" value={d.expires} onChange={(e) => set({ expires: e.target.value })} /></label>
-            <label>Ghi chú<textarea rows={2} value={d.note} onChange={(e) => set({ note: e.target.value })} /></label>
             {actions(busy ? 'Đang tải lên…' : 'Lưu lên Google Drive')}
           </>
         )}

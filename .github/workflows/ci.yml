@@ -194,6 +194,15 @@ jobs:
           echo "Không kết nối được database qua Session pooler"; exit 1
       - name: Đưa migration mới lên (chỉ thêm, không xóa dữ liệu)
         run: supabase db push --remote="$SUPABASE_DB_URL" --yes
+      - name: Khóa AI đọc giấy tờ (nếu khai báo ở GitHub thì chép sang Supabase)
+        env:
+          AI_PROVIDERS: ${{ secrets.AI_PROVIDERS }}
+        run: |
+          if [ -n "$AI_PROVIDERS" ]; then
+            supabase secrets set "AI_PROVIDERS=$AI_PROVIDERS" >/dev/null && echo "Đã cập nhật AI_PROVIDERS từ GitHub"
+          fi
+          # Chỉ in TÊN secret (không in giá trị) để biết AI đã được cấu hình chưa
+          if supabase secrets list | grep -q 'AI_PROVIDERS'; then echo "Supabase đã có AI_PROVIDERS"; else echo "::warning::Supabase CHƯA có secret AI_PROVIDERS"; fi
       - name: Đưa Edge Function lên
         run: |
           supabase functions deploy admin-users --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes

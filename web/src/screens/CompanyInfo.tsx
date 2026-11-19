@@ -227,7 +227,10 @@ function ImageSlot(props: { label: string; hint?: string; url: string | null; on
     <div className="img-slot">
       <span className="img-slot-label">{props.label}</span>
       <div className="img-slot-row">
-        <div className="img-slot-box">{props.url ? <img src={props.url} alt={props.label} /> : <span className="muted small">Chưa có</span>}</div>
+        <div className="img-x">
+          <div className="img-slot-box">{props.url ? <img src={props.url} alt={props.label} /> : <span className="muted small">Chưa có</span>}</div>
+          {props.url && <button type="button" className="img-x-btn" aria-label={`Bỏ ${props.label}`} title="Bỏ ảnh này" onClick={props.onRemove}>×</button>}
+        </div>
         <button type="button" className="btn small" onClick={() => ref.current?.click()}>Chọn ảnh</button>
         {props.onReread && (
           <button type="button" className="btn small" aria-label={`Đọc lại ${props.label}`} disabled={!props.url || props.reading}

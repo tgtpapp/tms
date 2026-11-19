@@ -368,3 +368,11 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .crop-area { position: relative; touch-action: none; user-select: none; cursor: crosshair; align-self: center; max-width: 100%; }
 .crop-area img { display: block; max-width: 100%; max-height: 60vh; pointer-events: none; }
 .crop-box { position: absolute; border: 2px solid var(--primary); box-shadow: 0 0 0 9999px rgba(0, 0, 0, .45); }
+
+/* Nút × bỏ ảnh (chữ ký, con dấu, logo…) */
+.img-x { position: relative; display: inline-block; width: fit-content; }
+.img-x-btn { position: absolute; top: -10px; right: -10px; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--surface);
+  background: var(--danger); color: #fff; font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+.img-x-btn:hover { filter: brightness(.9); }
+@media (pointer: coarse) { .img-x-btn { width: 34px; height: 34px; } }

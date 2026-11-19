@@ -778,3 +778,8 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
   .vx-tabs { flex-wrap: wrap; }
   .vx-tool .btn { padding: 0 10px; }
 }
+/* Sơ đồ ghế bán vé: luôn trải hết bề ngang (điện thoại, tablet, máy tính); xe 2 tầng: 2 tầng cạnh nhau khi đủ rộng, hẹp thì xếp dọc */
+.vx-body .decks { display: flex; flex-wrap: wrap; gap: 10px; }
+.vx-body .deck { flex: 1 1 300px; min-width: 0; }
+.vx-body .vx-seats { width: 100%; box-sizing: border-box; }
+@media (max-width: 640px) { .vx-body .vxs, .vx-body .vxs-fix { min-height: 84px; } }

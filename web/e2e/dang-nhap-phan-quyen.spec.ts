@@ -301,6 +301,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   const seatBox = (await page.getByRole('button', { name: 'Ghế A02 trống' }).boundingBox())!;
   expect(seatBox.x + seatBox.width).toBeLessThanOrEqual(390);
+  // sơ đồ ghế trải gần hết bề ngang màn hình (không co về một nửa)
+  const grid = (await page.locator('.vx-seats').first().boundingBox())!;
+  expect(grid.width).toBeGreaterThan(300);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('tab', { name: /^Hành khách/ }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();

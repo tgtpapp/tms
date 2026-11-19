@@ -205,8 +205,12 @@ let folderList: Promise<Folder[]> | null = null;
 let folderPending: Promise<unknown> = Promise.resolve();
 export async function ensurePath(names: string[]): Promise<string> {
   const run = folderPending.then(async () => {      // tạo thư mục lần lượt để 2 việc song song không tạo trùng
-    folderList ??= supabase.from('archive_folders').select('id, parent_id, name').then((r) => ((r.data ?? []) as Folder[]));
-    const all = await folderList;
+    if (!folderList) {
+      const r = await supabase.from('archive_folders').select('id, parent_id, name');
+      if (r.error) throw new Error(r.error.message);
+      folderList = Promise.resolve((r.data ?? []) as Folder[]);
+    }
+    const all: Folder[] = await folderList;
     let parent: string | null = null;
     for (const n of names) {
       let f = all.find((x) => x.parent_id === parent && same(x.name, n));

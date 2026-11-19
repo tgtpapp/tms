@@ -193,6 +193,14 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       .sort((x, y) => x.label.localeCompare(y.label, 'vi'));
   }, [trips, routes]);
   const rfOk = routeOpts.some((o) => o.key === rf) ? rf : '';
+  const routeGroups = useMemo(() => [...new Set(trips.map((t) => t.route_id))].map((id) => {
+    const r = routes.find((x) => x.id === id);
+    const stat = (d: Dir) => {
+      const l = trips.filter((t) => t.route_id === id && t.direction === d);
+      return { name: dirName(r, d), trips: l.length, sold: l.reduce((a, t) => a + (counts[t.id] ?? 0), 0) };
+    };
+    return { id, title: (r?.name ?? '').replace(/\s+[-–—]\s+/, ' ⇄ '), di: stat('di'), ve: stat('ve') };
+  }).sort((a, b) => a.title.localeCompare(b.title, 'vi')), [trips, routes, counts]);
   const shownTrips = rfOk ? trips.filter((t) => `${t.route_id}|${t.direction}` === rfOk) : trips;
 
   return (
@@ -206,12 +214,27 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       <div className="sell-layout">
       <aside className="sell-left">
       <section className="card">
-        <label>Tuyến
-          <select value={rfOk} onChange={(e) => { setRf(e.target.value); setTripId(null); }}>
-            <option value="">Tất cả tuyến</option>
-            {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
-        </label>
+        <div className="route-cards" role="group" aria-label="Tuyến">
+          {routeGroups.map((g) => (
+            <div key={g.id} className="route-card">
+              <b>{g.title}</b>
+              <div className="rc-pair">
+                {(['di', 've'] as Dir[]).map((d) => {
+                  const k = `${g.id}|${d}`;
+                  const st = g[d];
+                  return (
+                    <button key={d} type="button" className={rfOk === k ? 'rc-dir on' : 'rc-dir'} disabled={st.trips === 0}
+                            onClick={() => { setRf(rfOk === k ? '' : k); setTripId(null); }}>
+                      <span>{st.name}</span>
+                      <small>{st.trips} chuyến · {st.sold} vé</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {rfOk && <button type="button" className="btn small link" onClick={() => { setRf(''); setTripId(null); }}>Xem tất cả tuyến</button>}
+        </div>
         <MiniCal day={day} onPick={(d) => { setDay(d); setTripId(null); }} />
         <div className="inline-form day-nav">
           <button className="btn small" aria-label="Ngày trước" onClick={() => { setDay(addDays(day, -1)); setTripId(null); }}>‹</button>
@@ -244,6 +267,26 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           const nowMs = Date.now();
           const upcoming = shownTrips.filter((t) => new Date(t.depart_at).getTime() >= nowMs);
           const past = shownTrips.filter((t) => new Date(t.depart_at).getTime() < nowMs);
+          if (!rfOk && routeGroups.length > 0) {
+            // Tất cả tuyến: mỗi tuyến 1 cặp cột chiều đi | chiều về
+            return routeGroups.map((g) => (
+              <div key={g.id} className="pair-cols">
+                {(['di', 've'] as Dir[]).map((d) => {
+                  const l = shownTrips.filter((t) => t.route_id === g.id && t.direction === d);
+                  const up = l.filter((t) => new Date(t.depart_at).getTime() >= nowMs);
+                  const old = l.filter((t) => new Date(t.depart_at).getTime() < nowMs);
+                  return (
+                    <div key={d} className="pair-col">
+                      <h3>{g[d].name}</h3>
+                      <div className="trip-cards">{up.map(card)}</div>
+                      {old.length > 0 && <h4 className="past-head">Đã qua giờ khởi hành</h4>}
+                      <div className="trip-cards">{old.map(card)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          }
           return (
             <>
               <div className="trip-cards">{upcoming.map(card)}</div>

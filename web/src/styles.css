@@ -502,3 +502,41 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .mc-foot { margin: 6px 0 0; text-align: center; font-size: .82rem; color: var(--muted); }
 .mc-foot b { color: #c2410c; }
 .cal-box { margin: 6px 0; max-width: 420px; } .cal-box summary { cursor: pointer; color: var(--primary); font-weight: 600; font-size: .9rem; }
+/* Nút ghim menu + menu tự thu gọn (máy tính) */
+.side-pin { margin-left: auto; flex: none; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,.15); background: transparent;
+  color: rgba(255,255,255,.6); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.side-pin.on { background: rgba(255,255,255,.12); color: #fff; }
+.side-pin:hover { color: #fff; }
+@media (min-width: 900px) {
+  .content { max-width: none; width: 100%; }
+  .shell.unpinned .main { margin-left: 68px; }
+  .shell.unpinned .sidebar { position: fixed; left: 0; top: 0; width: 68px; overflow: hidden; transition: width .18s ease, box-shadow .18s ease; z-index: 40; }
+  .shell.unpinned .sidebar:hover { width: 250px; box-shadow: 8px 0 30px rgba(0,0,0,.25); }
+  .shell.unpinned .sidebar:not(:hover) .side-link span,
+  .shell.unpinned .sidebar:not(:hover) .side-group-title,
+  .shell.unpinned .sidebar:not(:hover) .side-brand > div,
+  .shell.unpinned .sidebar:not(:hover) .side-pin,
+  .shell.unpinned .sidebar:not(:hover) .side-foot { display: none; }
+  .shell.unpinned .sidebar:not(:hover) .side-link { justify-content: center; padding: 9px 0; }
+  .shell.unpinned .sidebar:not(:hover) .side-brand { justify-content: center; padding: 18px 0 14px; }
+  .shell.unpinned .sidebar:not(:hover) .side-group { border-top: 1px solid rgba(255,255,255,.08); margin-top: 6px; padding-top: 6px; }
+}
+@media (max-width: 899px) { .side-pin { display: none; } }
+/* Thẻ tuyến theo cặp chiều đi / chiều về */
+.route-cards { display: grid; gap: 8px; margin-bottom: 10px; }
+.route-card { border: 1px solid #e9d98a; background: #fefce8; border-radius: 12px; padding: 8px 10px; }
+.route-card > b { display: block; font-size: .85rem; text-transform: uppercase; letter-spacing: .02em; margin-bottom: 6px; }
+.rc-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rc-dir { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-weight: 600; font-size: .82rem; cursor: pointer; }
+.rc-dir small { font-weight: 400; color: var(--muted); }
+.rc-dir.on { border-color: var(--primary); background: var(--primary); color: #fff; }
+.rc-dir.on small { color: #e0e7ff; }
+.rc-dir:disabled { opacity: .5; cursor: default; }
+.pair-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.pair-col h3 { margin: 4px 0 6px; font-size: .85rem; color: var(--muted); }
+.pair-col .trip-cards { grid-template-columns: 1fr; }
+.pair-col .past-head { font-size: .7rem; }
+@media (min-width: 1100px) { .sell-layout { grid-template-columns: minmax(380px, 440px) minmax(0, 1fr); } }
+@media (min-width: 1600px) { .pair-col .trip-cards { grid-template-columns: 1fr 1fr; } .sell-layout { grid-template-columns: 560px minmax(0, 1fr); } }
+@media (max-width: 480px) { .pair-cols { gap: 6px; } .trip-card { padding: 6px 8px; } }

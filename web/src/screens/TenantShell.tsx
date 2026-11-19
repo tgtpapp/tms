@@ -25,6 +25,9 @@ type Tab = 'driver' | 'parcels' | 'charters' | 'users' | 'sell' | 'trips' | 'rou
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [perms, setPerms] = useState<Permissions | null>(null);
   const [error, setError] = useState('');
+  // Menu trái máy tính: ghim (luôn mở) hoặc tự thu gọn thành cột biểu tượng, rê chuột vào thì mở
+  const [pinned, setPinnedState] = useState(() => { try { return localStorage.getItem('menu.ghim') !== '0'; } catch { return true; } });
+  const setPinned = (v: boolean) => { setPinnedState(v); try { localStorage.setItem('menu.ghim', v ? '1' : '0'); } catch { /* bỏ qua */ } };
   const [tab, setTab] = useState<Tab | null>(null);
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
 
@@ -71,7 +74,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const current = shown.find((t) => t.key === tab);
 
   return (
-    <div className="shell">
+    <div className={pinned ? 'shell' : 'shell unpinned'}>
       {/* Máy tính: menu dọc bên trái. Điện thoại: thanh mục cuộn ngang dưới thanh trên. */}
       <aside className="sidebar">
         <div className="side-brand">
@@ -80,6 +83,13 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
             <b>{ctx.tenant_name ?? config.appName}</b>
             <small>{ctx.full_name}</small>
           </div>
+          <button type="button" className={pinned ? 'side-pin on' : 'side-pin'} aria-pressed={pinned}
+                  aria-label={pinned ? 'Bỏ ghim menu (tự ẩn)' : 'Ghim menu'} title={pinned ? 'Bỏ ghim: menu tự thu gọn' : 'Ghim menu luôn mở'}
+                  onClick={() => setPinned(!pinned)}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 4h6l-1 6 4 4H6l4-4z" /><path d="M12 14v7" />
+            </svg>
+          </button>
         </div>
         <nav className="side-nav" aria-label="Mục chính">
           {groups.map((g) => (

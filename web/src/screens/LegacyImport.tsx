@@ -143,7 +143,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
         const typeId: Record<string, string> = { ...typeOf };
         for (const [g, sel] of Object.entries(typeOf)) {
           if (sel !== NEW) continue;
-          const vs = plan.vehicles.filter((v) => v.group === g);
+          const vs = plan.vehicles.filter((v) => v.group === g && !v.match && !v.bad);   // chỉ nhóm còn xe mới cần nhập
           const v0 = vs[0];
           if (!v0) continue;
           setBusy(`Đang tạo loại xe ${v0.label}`);

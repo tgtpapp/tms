@@ -99,10 +99,11 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","r
 select throws_ok($$ select public.save_timetable((select id from public.routes where code = 'HN-VT'), 'di', null, null, null, '[]', null) $$,
   '42501', null, 'Bán vé không sửa lịch chạy');
 reset role;
+select set_config('t.route', (select id::text from public.routes where code = 'HN-VT'), true);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
-select throws_ok(format($$ select public.save_timetable('%s', 'di', null, null, null, '[]', null) $$,
-  (select id from public.routes where code = 'HN-VT')), 'P0002', null, 'Chủ B sửa lịch chạy tuyến nhà xe A: không tìm thấy');
+select throws_ok($$ select public.save_timetable(current_setting('t.route')::uuid, 'di', null, null, null, '[]', null) $$,
+  'P0002', null, 'Chủ B sửa lịch chạy tuyến nhà xe A: không tìm thấy');
 reset role;
 
 select * from finish();

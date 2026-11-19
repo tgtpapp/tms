@@ -95,7 +95,7 @@ Deno.test('Gemini bị khai tử (404) → tự hỏi danh sách model, dùng mo
           { name: 'models/gemini-3.6-flash-lite', supportedGenerationMethods: ['generateContent'] },
         ] }), { status: 200 }));
       }
-      if (u.includes('gemini-2.5-flash')) return Promise.resolve(new Response(JSON.stringify({ error: { message: 'no longer available' } }), { status: 404 }));
+      if (u.includes('gemini-2.5-flash') || u.includes('flash-latest')) return Promise.resolve(new Response(JSON.stringify({ error: { message: 'no longer available' } }), { status: 404 }));
       return Promise.resolve(geminiReply(GOOD));
     } });
   assertEquals(r.provider, 'gemini:gemini-3.8-flash');

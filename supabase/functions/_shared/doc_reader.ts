@@ -129,8 +129,8 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
           generationConfig: {
             temperature: 0, responseMimeType: 'application/json',
             // Dòng Flash mặc định "suy nghĩ" trước khi trả lời (chậm 10–30 giây); đọc giấy tờ không cần → tắt / tối thiểu
-            ...(noThink ? {} : /2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } }
-              : /gemini-[3-9][\d.]*-flash/.test(p.model) ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}),
+            // (giống app cũ: thinkingBudget 0; model nào không nhận thì gửi lại không kèm)
+            ...(noThink ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
           },
         }),
       });
@@ -257,15 +257,15 @@ export async function readDocument(opts: {
   const queue: Provider[] = [];
   for (const p of candidates) {
     if (p.type === 'gemini' && p.model === 'auto') {
-      const list = await discoverGemini(p, fetchFn);
-      if (list.length === 0) attempts.push({ provider: p.name!, ok: false, ms: 0, error: 'không lấy được danh sách model (kiểm tra khóa Google)' });
-      queue.push(...list.slice(0, 3).map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
+      const list = [...new Set(['gemini-flash-latest', ...await discoverGemini(p, fetchFn)])].slice(0, 3);
+      queue.push(...list.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
     } else queue.push({ ...p, name: p.name ?? `${p.type}:${p.model}` });
   }
   const tried = new Set<string>();
   const t00 = Date.now();
   const addAlternatives = async (p: Provider, i: number) => {
-    const more = (await discoverGemini(p, fetchFn)).filter((m) => !tried.has(`gemini|${m}|${p.base_url ?? ''}`) && !queue.slice(i + 1).some((q) => q.model === m)).slice(0, 3);
+    // Giống app cũ: tên chung "gemini-flash-latest" (Google tự trỏ tới bản Flash ổn định) rồi các bản tìm được, cuối cùng bản Lite
+    const more = [...new Set(['gemini-flash-latest', ...await discoverGemini(p, fetchFn), 'gemini-flash-lite-latest'])].filter((m) => !tried.has(`gemini|${m}|${p.base_url ?? ''}`) && !queue.slice(i + 1).some((q) => q.model === m)).slice(0, 4);
     queue.splice(i + 1, 0, ...more.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
   };
   for (let i = 0; i < queue.length; i++) {

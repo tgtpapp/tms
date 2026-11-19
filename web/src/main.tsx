@@ -1,7 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { initTheme } from './lib/theme';
 import './styles.css';
+
+initTheme();   // áp giao diện đã chọn trước khi vẽ (không nháy màu)
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Không tìm thấy phần tử #root');

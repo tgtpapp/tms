@@ -3,6 +3,7 @@ import { MIN_PASSWORD } from '../lib/login';
 import { signatureUrl, uploadSignature } from '../lib/documents';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { THEMES, useTheme, type Mode } from '../lib/theme';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
 export function AccountScreen({ ctx }: { ctx: AccountContext }) {
@@ -49,6 +50,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
 
   return (
     <>
+      <ThemePicker />
       <section className="card">
         <h2>Thông tin</h2>
         <dl className="info">
@@ -79,5 +81,33 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
         <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Đổi mật khẩu'}</button>
       </form>
     </>
+  );
+}
+
+/** Giao diện: mẫu + sáng / tối / tự động. Lưu trên máy này. */
+function ThemePicker() {
+  const [cfg, setCfg] = useTheme();
+  const modes: [Mode, string][] = [['light', 'Sáng'], ['dark', 'Tối'], ['auto', 'Theo máy']];
+  return (
+    <section className="card form">
+      <h2>Giao diện</h2>
+      <div className="seg" role="radiogroup" aria-label="Chế độ sáng tối">
+        {modes.map(([m, label]) => (
+          <button key={m} type="button" role="radio" aria-checked={cfg.mode === m} className={cfg.mode === m ? 'on' : ''}
+                  onClick={() => setCfg({ ...cfg, mode: m })}>{label}</button>
+        ))}
+      </div>
+      <div className="theme-grid" role="radiogroup" aria-label="Mẫu giao diện">
+        {THEMES.map((t) => (
+          <button key={t.id} type="button" role="radio" aria-checked={cfg.theme === t.id} className={cfg.theme === t.id ? 'theme-opt on' : 'theme-opt'}
+                  onClick={() => setCfg({ ...cfg, theme: t.id })}>
+            <span className="theme-dot" style={{ background: t.swatch }} />
+            <b>{t.name}</b>
+            <span className="muted small">{t.note}</span>
+          </button>
+        ))}
+      </div>
+      <p className="muted small">Lưu trên máy này. Bản in (vé, lệnh vận chuyển) luôn nền trắng.</p>
+    </section>
   );
 }

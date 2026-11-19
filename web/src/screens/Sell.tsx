@@ -404,7 +404,6 @@ function TripSell(props: TripSellProps) {
         p_trip_id: trip.id, p_seat: label, p_from_stop: from, p_to_stop: to, p_booking_id: bookingId, p_request_id: crypto.randomUUID(),
       });
       setBookingId(r.booking_id);
-      setCkOpen(true);
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -522,8 +521,11 @@ function TripSell(props: TripSellProps) {
       )}
       {myHolds.length > 0 && bookingId && !ckOpen && (
         <div className="pick-bar">
-          <span><b>{myHolds.length}</b> vé đã chọn · ghế {myHolds.map((h) => h.seat_label).join(', ')}</span>
-          <button className="btn small primary" onClick={() => setCkOpen(true)}>Tiếp tục</button>
+          <span><b>{myHolds.length}</b> vé đã chọn · ghế {myHolds.map((h) => h.seat_label).join(', ')} <span className="small">(bấm thêm ghế để chọn tiếp, bấm lại ghế để bỏ)</span></span>
+          <span className="actions">
+            <button className="btn small" onClick={() => void (async () => { for (const h of myHolds) await rpc('unhold_seat', { p_ticket_id: h.id }).catch(() => undefined); setBookingId(null); await load(); })()}>Bỏ chọn</button>
+            <button className="btn small primary" onClick={() => setCkOpen(true)}>Tiếp tục</button>
+          </span>
         </div>
       )}
       {myHolds.length > 0 && bookingId && ckOpen && (

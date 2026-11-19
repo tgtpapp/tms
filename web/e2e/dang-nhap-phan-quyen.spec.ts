@@ -262,6 +262,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Ngày sau' }).click();
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A01 trống' }).click();
+  await page.getByRole('button', { name: 'Tiếp tục' }).click();
   await expect(page.getByRole('heading', { name: 'Đơn vé · 1 ghế · 150.000 đ' })).toBeVisible();
   await page.getByLabel('Số điện thoại khách').fill('0912345678');
   await page.getByLabel('Tên khách').fill('Chị Lan');
@@ -305,6 +306,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Ngày sau' }).click();
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A02 trống' }).click();
+  await page.getByRole('button', { name: 'Tiếp tục' }).click();
   await page.getByRole('radio', { name: 'Chuyển khoản (QR)' }).click();
   await page.getByRole('button', { name: 'Tạo QR chuyển khoản' }).click();
   await expect(page.getByAltText('Mã QR chuyển khoản 150.000 đ')).toBeVisible();

@@ -32,6 +32,13 @@ select lives_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000
 select lives_ok($$ select public.set_signature_has_name('giam_doc', true) $$, 'Chủ đặt cho chữ ký giám đốc');
 select lives_ok($$ select public.save_staff(gen_random_uuid(), '{"full_name":"Lái xe X","joined_on":"2026-01-01","job_title":"Tổ trưởng lái xe"}') $$, 'Thêm lái xe');
 select is((select job_title from public.staff_members where full_name = 'Lái xe X'), 'Tổ trưởng lái xe', 'Lưu chức vụ');
+select lives_ok(format('select public.save_staff(%L, %L)', (select id from public.staff_members where full_name = 'Lái xe X'),
+  '{"full_name":"Lái xe X","joined_on":"2026-01-01","current_address":"12 Lê Lợi, Vũng Tàu"}'), 'Lưu chỗ ở hiện nay');
+select is((select current_address from public.staff_private where staff_id = (select id from public.staff_members where full_name = 'Lái xe X')), '12 Lê Lợi, Vũng Tàu', 'Đã lưu chỗ ở hiện nay');
+select is((select job_title from public.staff_members where full_name = 'Lái xe X'), 'Tổ trưởng lái xe', 'Sửa hồ sơ không gửi chức vụ thì giữ nguyên');
+select lives_ok(format('select public.save_staff(%L, %L)', (select id from public.staff_members where full_name = 'Lái xe X'),
+  '{"full_name":"Lái xe X","joined_on":"2026-01-01"}'), 'Lưu lại không có trường chỗ ở');
+select is((select current_address from public.staff_private where staff_id = (select id from public.staff_members where full_name = 'Lái xe X')), '12 Lê Lợi, Vũng Tàu', 'Không gửi chỗ ở thì giữ nguyên');
 select lives_ok(format('select public.set_staff_job_title(%L, %L)', (select id from public.staff_members where full_name = 'Lái xe X'), 'Khác'), 'Điền chức vụ khi trống');
 select is((select job_title from public.staff_members where full_name = 'Lái xe X'), 'Tổ trưởng lái xe', 'Đã có chức vụ thì không ghi đè');
 select lives_ok(format('select public.set_signature_has_name(%L, true)', 'nv_' || (select id from public.staff_members limit 1)), 'Quản lý đặt cho chữ ký lái xe');

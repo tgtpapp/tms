@@ -824,3 +824,21 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .ava-field { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .ava-act { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+/* Lái xe & nhân viên: hàng trên cùng (thẻ chọn chức vụ + chuông cảnh báo) */
+.staff-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.staff-top .staff-tabs { flex: 1; min-width: 0; margin-bottom: 0; }
+.bell { position: relative; flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); font-size: 1.25rem; cursor: pointer; }
+.bell:disabled { opacity: .45; cursor: default; }
+.bell.has { border-color: #f59e0b; background: #fffbeb; }
+.bell.urgent { border-color: #dc2626; background: #fef2f2; animation: bell-ring 2.4s ease-in-out 3; }
+.bell-n { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: #dc2626; color: #fff; font-size: .72rem; line-height: 20px; text-align: center; }
+@keyframes bell-ring { 0%, 20%, 100% { transform: rotate(0); } 5% { transform: rotate(14deg); } 10% { transform: rotate(-12deg); } 15% { transform: rotate(6deg); } }
+.alert-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.alert-people li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.ap-head { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.ap-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-name b { color: var(--primary, #2563eb); }
+.ap-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; padding-left: 46px; }
+.ap-chip { font-size: .8rem; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; }
+.ap-chip.state-het_han { background: #fee2e2; color: #b91c1c; } .ap-chip.state-sap_het { background: #fef3c7; color: #92400e; } .ap-chip.state-thieu { background: #f3f4f6; color: #374151; }
+@media (max-width: 600px) { .ap-items { padding-left: 0; } }

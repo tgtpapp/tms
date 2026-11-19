@@ -209,6 +209,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Thẻ chọn theo chức vụ tự sinh từ dữ liệu: Tất cả + Lái xe
   await page.getByRole('tab', { name: 'Lái xe (1)' }).click();
   await expect(page.getByRole('tab', { name: 'Lái xe (1)' })).toHaveAttribute('aria-selected', 'true');
+  // Cảnh báo dạng chuông: bấm → danh sách gộp theo từng người
+  await page.getByRole('button', { name: /^Cảnh báo: \d+ việc cần xử lý của 1 người$/ }).click();
+  await expect(page.getByRole('button', { name: 'Mở hồ sơ Nguyễn Văn Tài' })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
   await expect(page.getByText('Số 079123456789')).toBeVisible();
   // 5j. Hạng bằng theo loại xe + ghi lý lịch hành nghề (vi phạm)

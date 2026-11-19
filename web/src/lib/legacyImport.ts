@@ -110,10 +110,9 @@ export function mapEmployee(r: Raw, today: string): StaffRow | null {
   const gt = str(r, 'gioiTinh');
   const notes = [`Nhập từ app cũ${ma ? ` · mã ${ma}` : ''}`];
   if (str(r, 'sdt') && !phone) notes.push(`SĐT cũ: ${str(r, 'sdt')}`);
-  if (str(r, 'diaChiHN')) notes.push(`Chỗ ở hiện nay: ${str(r, 'diaChiHN')}`);
   const staff = {
     full_name: name, job_title: str(r, 'chucVu') || null, position, phone, joined_on: day(str(r, 'ngayVao')) ?? today, is_active: str(r, 'trangThai') !== 'Nghỉ việc',
-    birth_date: day(str(r, 'ngaySinh')), gender: gt === 'Nam' ? 'nam' : gt === 'Nữ' ? 'nu' : null, address: str(r, 'diaChiTT') || null,
+    birth_date: day(str(r, 'ngaySinh')), gender: gt === 'Nam' ? 'nam' : gt === 'Nữ' ? 'nu' : null, address: str(r, 'diaChiTT') || null, current_address: str(r, 'diaChiHN') || null,
     contract_type: CONTRACT[str(r, 'loaiHD')] ?? (str(r, 'trangThai') === 'Thử việc' ? 'thu_viec' : null), note: notes.join('\n'),
   };
   const docs = [

@@ -23,7 +23,7 @@ interface Staff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
   joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null;
 }
-interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; contract_type: Contract | null; note: string | null }
+interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; contract_type: Contract | null; note: string | null }
 interface Option { id: string; label: string }
 type RecordKind = 'suc_khoe' | 'vi_pham' | 'tai_nan' | 'khen_thuong' | 'ky_luat' | 'dao_tao';
 interface StaffRecord {
@@ -102,7 +102,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
       supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title').order('full_name'),
-      supabase.from('staff_private').select('staff_id, birth_date, gender, address, contract_type, note'),
+      supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note'),
       supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
       supabase.from('branches').select('id, name').order('name'),
@@ -130,25 +130,28 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   const tenantId = ctx.tenant_id ?? '';
   const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load };
+  const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
   const cur = tabs.some((t) => t.key === tab) ? tab : '';
   return (
     <>
-      <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
-        {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
-          <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
-            {t.label} ({t.n})
-          </button>
-        ))}
+      <div className="staff-top">
+        <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
+          {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
+            <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
+              {t.label} ({t.n})
+            </button>
+          ))}
+        </div>
+        {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} avas={avas} onOpen={(id) => {
+          setTab('');
+          setOpen(id);
+          setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
+        }} />}
       </div>
-      {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} onOpen={(id) => {
-        setTab('');
-        setOpen(id);
-        setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
-      }} />}
       {canEdit && <StaffForm key="new" {...common} staff={staff} />}
-      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} />
+      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} avas={avas} />
     </>
   );
 }
@@ -157,7 +160,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
 const EMPTY = {
   full_name: '', job_title: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
-  user_id: '', birth_date: '', gender: '' as Gender | '', address: '', contract_type: '' as Contract | '', note: '',
+  user_id: '', birth_date: '', gender: '' as Gender | '', address: '', current_address: '', contract_type: '' as Contract | '', note: '',
 };
 type Form = typeof EMPTY;
 
@@ -165,7 +168,7 @@ function formOf(s: Staff, p: StaffPrivate | undefined): Form {
   return {
     full_name: s.full_name, job_title: s.job_title ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
     left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
-    gender: p?.gender ?? '', address: p?.address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
+    gender: p?.gender ?? '', address: p?.address ?? '', current_address: p?.current_address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
   };
 }
 
@@ -293,6 +296,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
             </select>
           </label>
           <label>Nơi thường trú<input value={f.address} onChange={set('address')} /></label>
+          <label>Chỗ ở hiện nay<input value={f.current_address} onChange={set('current_address')} maxLength={300} placeholder="Nơi đang ở thực tế (nếu khác thường trú)" /></label>
           <label>Hình thức hợp đồng lao động
             <select value={f.contract_type} onChange={set('contract_type')}>
               <option value="">—</option>
@@ -321,12 +325,11 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 /* ------------------------------------------------------------------ Danh sách */
 
 function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void;
-  cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void }) {
-  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft } = props;
+  cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void; avas: Record<string, string> }) {
+  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft, avas } = props;
   const left = staff.filter((s) => !s.is_active).length;
 
   const shown = staff.filter((s) => showLeft || s.is_active);
-  const avas = useAvatars(props.tenantId);
   return (
     <section className="card">
       <div className="item-head">
@@ -358,6 +361,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                 {s.phone && <span>📞 <a href={`tel:${s.phone}`}>{s.phone}</a></span>}
                 {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
                 {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
+                {p?.current_address && <span>🏠 {p.current_address}</span>}
                 <span className="muted">Vào {fmtDate(s.joined_on)} · {seniority(s.joined_on, s.left_on)}</span>
               </div>
               <div className="sc-badges">
@@ -400,6 +404,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
         <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
         <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
         <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
+        <dt>Chỗ ở hiện nay</dt><dd>{p?.current_address ?? '—'}</dd>
         <dt>Hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
         {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
       </dl>
@@ -589,23 +594,41 @@ function problems(s: Staff, p: StaffPrivate | undefined, docs: Doc[], warnDays: 
   return out;
 }
 
-function StaffAlerts(props: { staff: Staff[]; priv: StaffPrivate[]; docs: Doc[]; warnDays: number; onOpen: (id: string) => void }) {
-  const { staff, priv, docs, warnDays, onOpen } = props;
+/** Cảnh báo dạng chuông: số việc cần xử lý; bấm mở danh sách gộp theo từng người, bấm tên mở hồ sơ. */
+function StaffAlerts(props: { staff: Staff[]; priv: StaffPrivate[]; docs: Doc[]; warnDays: number; avas: Record<string, string>; onOpen: (id: string) => void }) {
+  const { staff, priv, docs, warnDays, avas, onOpen } = props;
+  const [show, setShow] = useState(false);
   const order: Record<DocState, number> = { het_han: 0, sap_het: 1, thieu: 2, con_han: 3, co: 4 };
-  const rows = staff.flatMap((s) => problems(s, priv.find((x) => x.staff_id === s.id), docs, warnDays).map((r) => ({ s, ...r })))
-    .sort((a, b) => order[a.state] - order[b.state]);
-  if (rows.length === 0) return null;
+  const people = staff.map((s) => ({ s, items: problems(s, priv.find((x) => x.staff_id === s.id), docs, warnDays).sort((a, b) => order[a.state] - order[b.state]) }))
+    .filter((x) => x.items.length > 0)
+    .sort((a, b) => order[a.items[0]!.state] - order[b.items[0]!.state] || b.items.length - a.items.length || a.s.full_name.localeCompare(b.s.full_name, 'vi'));
+  const total = people.reduce((n, x) => n + x.items.length, 0);
+  const urgent = people.some((x) => x.items[0]!.state === 'het_han');
   return (
-    <section className="card">
-      <h2>Cảnh báo lái xe & nhân viên ({rows.length})</h2>
-      <ul className="list small">
-        {rows.slice(0, 50).map((r, i) => (
-          <li key={i}>
-            <button className="btn small link" onClick={() => onOpen(r.s.id)}>{r.s.full_name}</button>
-            <span className={`state-${r.state}`}>{r.text}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <>
+      <button type="button" className={`bell${total ? ' has' : ''}${urgent ? ' urgent' : ''}`} onClick={() => setShow(true)} disabled={!total}
+              aria-label={total ? `Cảnh báo: ${total} việc cần xử lý của ${people.length} người` : 'Không có cảnh báo'} title={total ? `${total} việc cần xử lý` : 'Không có cảnh báo'}>
+        <span aria-hidden="true">🔔</span>
+        {total > 0 && <b className="bell-n">{total > 99 ? '99+' : total}</b>}
+      </button>
+      {show && (
+        <Modal wide title={`Cảnh báo lái xe & nhân viên · ${people.length} người`} onClose={() => setShow(false)}>
+          <ul className="alert-people">
+            {people.map(({ s, items }) => (
+              <li key={s.id}>
+                <button type="button" className="ap-head" onClick={() => { setShow(false); onOpen(s.id); }} aria-label={`Mở hồ sơ ${s.full_name}`}>
+                  <Avatar name={s.full_name} url={avas[s.id]} size={36} />
+                  <span className="ap-name"><b>{s.full_name}</b><small className="muted">{jobLabel(s)}</small></span>
+                  <span className={`badge ${items.some((x) => x.state === 'het_han') ? 'locked' : 'warn-badge'}`}>{items.length}</span>
+                </button>
+                <div className="ap-items">
+                  {items.map((r, i) => <span key={i} className={`ap-chip state-${r.state}`}>{r.text}</span>)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
+    </>
   );
 }

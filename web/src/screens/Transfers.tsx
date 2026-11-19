@@ -51,7 +51,7 @@ export function Transfers({ day, trips, staff, ends, canEdit }: {
   const tripOf = (id: string) => trips.find((t) => t.id === id);
   const label = (t: TcTicket) => {
     const tr = tripOf(t.trip_id);
-    return `${tr ? hhmm(tr.depart_at) : ''} · ghế ${t.seat_label} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
+    return `${tr ? `${hhmm(tr.depart_at)} ${ends(tr.route_id, tr.direction)}` : ''} · ghế ${t.seat_label} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
   };
   const assigned = (k: Kind) => new Set(items.filter((i) => i.kind === k).map((i) => i.ticket_id));
   const waiting = (k: Kind) => tickets.filter((t) => (k === 'don' ? t.tc_don : t.tc_tra) && !assigned(k).has(t.id));

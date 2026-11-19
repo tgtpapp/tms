@@ -97,7 +97,11 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }, ...files.map((x) => ({ inline_data: { mime_type: x.mime, data: x.data } }))] }],
-          generationConfig: { temperature: 0, responseMimeType: 'application/json' },
+          generationConfig: {
+            temperature: 0, responseMimeType: 'application/json',
+            // Gemini 2.5 Flash mặc định "suy nghĩ" trước khi trả lời (chậm 10–30 giây); đọc giấy tờ không cần → tắt
+            ...(/2\.5-flash/.test(p.model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          },
         }),
       });
     } else {
@@ -118,7 +122,15 @@ async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fe
       });
     }
     const body = await res.text();
-    if (!res.ok) throw new Error(res.status === 429 ? 'hết lượt (429)' : `HTTP ${res.status}`);
+    if (!res.ok) {
+      // Câu báo lỗi của nhà cung cấp (vd "API key not valid", "model not found") – không chứa khóa
+      let why = '';
+      try {
+        const e = JSON.parse(body);
+        why = String(e?.error?.message ?? e?.message ?? '').replace(/\s+/g, ' ').slice(0, 160);
+      } catch { /* bỏ qua */ }
+      throw new Error(res.status === 429 ? 'hết lượt (429)' : `HTTP ${res.status}${why ? `: ${why}` : ''}`);
+    }
     const j = JSON.parse(body);
     const text: string = p.type === 'gemini'
       ? (j?.candidates?.[0]?.content?.parts ?? []).map((x: { text?: string }) => x.text ?? '').join('')

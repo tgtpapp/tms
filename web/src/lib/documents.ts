@@ -77,8 +77,10 @@ export async function readByAI(docType: string, files: PreparedFile[]): Promise<
   });
   if (error) {
     if (error instanceof FunctionsHttpError) {
-      const payload = (await error.context.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(payload?.error ?? 'AI chưa đọc được, vui lòng nhập tay');
+      const payload = (await error.context.json().catch(() => null)) as { error?: string; attempts?: { provider: string; error?: string }[] } | null;
+      // Kèm lý do từng AI (vd "quá 10 giây", "HTTP 400: API key not valid") để biết cách sửa
+      const why = (payload?.attempts ?? []).filter((a) => a.error).map((a) => `${a.provider}: ${a.error}`).join(' · ');
+      throw new Error(`${payload?.error ?? 'AI chưa đọc được, vui lòng nhập tay'}${why ? ` (${why})` : ''}`);
     }
     throw new Error('AI chưa đọc được, vui lòng nhập tay');
   }

@@ -1,4 +1,5 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
+import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -34,7 +35,7 @@ export function ParcelsScreen() {
   const [list, setList] = useState<Shipment[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
-  const [routes, setRoutes] = useState<Record<string, string>>({});
+  const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [f, setF] = useState(EMPTY);
   const [req, setReq] = useState(() => crypto.randomUUID());
   const [q, setQ] = useState('');
@@ -47,21 +48,21 @@ export function ParcelsScreen() {
         : supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
       supabase.from('trips').select('id, depart_at, route_id, direction').eq('service_date', day).eq('status', 'mo').order('depart_at'),
       supabase.from('stops').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('routes').select('id, name'),
+      supabase.from('routes').select('id, name, name_ve'),
     ]);
     const err = s.error ?? t.error ?? st.error ?? r.error;
     if (err) return toast('error', err.message);
     setList((s.data ?? []) as Shipment[]);
     setTrips((t.data ?? []) as Trip[]);
     setStops((st.data ?? []) as Stop[]);
-    setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
+    setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
   }, [day, q, toast]);
   useEffect(() => { void load(); }, [load]);
 
   const stopName = (id: string) => stops.find((s) => s.id === id)?.name ?? '?';
   const tripName = (id: string | null) => {
     const t = trips.find((x) => x.id === id);
-    return t ? `${hhmm(t.depart_at)} ${routes[t.route_id] ?? ''}` : '';
+    return t ? `${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}` : '';
   };
 
   async function create(e: FormEvent) {

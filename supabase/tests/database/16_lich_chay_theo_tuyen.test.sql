@@ -106,5 +106,21 @@ select throws_ok($$ select public.save_timetable(current_setting('t.route')::uui
   'P0002', null, 'Chủ B sửa lịch chạy tuyến nhà xe A: không tìm thấy');
 reset role;
 
+-- Tuyến mới chưa khai điểm dừng / thời gian: vẫn lưu được giờ chạy ngay
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ insert into public.routes (code, name, distance_km) values ('BHVT', 'Biên Hòa - Vũng Tàu', 112) $$, 'Tạo tuyến chỉ có tên + cự ly');
+select is((select string_agg(st.name, ' → ' order by rs.seq) from public.route_stops rs join public.stops st on st.id = rs.stop_id
+           join public.routes r on r.id = rs.route_id where r.code = 'BHVT'), 'Biên Hòa → Vũng Tàu', 'Tự có điểm đầu / cuối theo tên tuyến');
+select is((select max(minutes_from_start) from public.route_stops rs join public.routes r on r.id = rs.route_id where r.code = 'BHVT'), 170,
+  'Tự ước tính thời gian chạy 112 km ≈ 170 phút');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((public.save_timetable((select id from public.routes where code = 'BHVT'), 've', null, null, null,
+  jsonb_build_array(jsonb_build_object('depart_time', '10:00')), null) ->> 'saved')::int, 1, 'Lưu giờ chạy chiều về ngay, không phải khai gì thêm');
+select ok((select count(*) > 0 from public.trips t join public.routes r on r.id = t.route_id where r.code = 'BHVT' and t.direction = 've'), 'Đã tạo chuyến chiều về');
+reset role;
+
 select * from finish();
 rollback;

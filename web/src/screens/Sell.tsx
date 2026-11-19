@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { TicketPrint, type TicketPrintData } from '../components/TicketPrint';
@@ -18,7 +19,7 @@ interface Trip {
   id: string; route_id: string; direction: Dir; depart_at: string; arrive_at: string; status: 'mo' | 'huy';
   vehicle_id: string | null; vehicle_type_id: string | null; service_date: string;
 }
-interface Route { id: string; name: string }
+interface Route { id: string; name: string; name_ve: string | null }
 interface RouteStop { route_id: string; seq: number; stop_id: string }
 interface Stop { id: string; name: string }
 interface VType { id: string; name: string; decks: number; layout_rows: number; layout_cols: number }
@@ -103,7 +104,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     const [t, r, rs, st, vt, se, v] = await Promise.all([
       supabase.from('trips').select('id, route_id, direction, depart_at, arrive_at, status, vehicle_id, vehicle_type_id, service_date')
         .eq('service_date', day).eq('status', 'mo').order('depart_at'),
-      supabase.from('routes').select('id, name'),
+      supabase.from('routes').select('id, name, name_ve'),
       supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
       supabase.from('stops').select('id, name'),
       supabase.from('vehicle_types').select('id, name, decks, layout_rows, layout_cols'),
@@ -202,9 +203,9 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             const stopsOf = orderedStops(t.route_id, t.direction);
             const total = sellable(t.vehicle_type_id);
             return (
-              <button key={t.id} className={t.id === tripId ? 'trip-chip on' : 'trip-chip'} aria-label={`Chuyến ${hhmm(t.depart_at)} ${routes.find((r) => r.id === t.route_id)?.name ?? ''}`}
+              <button key={t.id} className={t.id === tripId ? 'trip-chip on' : 'trip-chip'} aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes.find((r) => r.id === t.route_id), t.direction)}`}
                       onClick={() => setTripId(t.id)}>
-                <b>{hhmm(t.depart_at)}</b> {routes.find((r) => r.id === t.route_id)?.name}
+                <b>{hhmm(t.depart_at)}</b> {dirName(routes.find((r) => r.id === t.route_id), t.direction)}
                 <span className="small">{stopName(stopsOf[0])} → {stopName(stopsOf[stopsOf.length - 1])}</span>
                 <span className="small">{t.vehicle_type_id ? `${counts[t.id] ?? 0}/${total} chỗ đã bán` : 'Chưa có sơ đồ ghế'}{t.vehicle_id ? ` · ${plates[t.vehicle_id]}` : ''}</span>
               </button>
@@ -213,7 +214,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         </div>
       </section>
       {trip && (
-        <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={routes.find((r) => r.id === trip.route_id)?.name ?? ''}
+        <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
                   stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                   seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                   otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}

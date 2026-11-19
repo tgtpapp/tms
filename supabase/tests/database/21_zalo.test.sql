@@ -67,8 +67,8 @@ reset role;
 -- ---------------------------------------------------------------- Điều hành A: nốt + chuyến
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
-select throws_ok($$ select public.save_schedule(null, (select id from public.routes where code = 'KHONG'), 'di', '07:00', '{1,2,3,4,5,6,7}', null, null, null) $$,
-  '22023', null, 'Tuyến chưa có thời gian chạy thì không thêm nốt');
+select is((select count(*)::int from public.route_stops s join public.routes r on r.id = s.route_id where r.code = 'KHONG'), 2,
+  'Tuyến mới tự có điểm đầu / điểm cuối, không phải khai trước');
 select is((public.save_schedule(null, (select id from public.routes where code = 'HN-VT'), 'di', '07:00', '{1,2,3,4,5,6,7}', null, null, null)
            ->> 'created_trips')::int, 8, 'Thêm nốt 07:00 chiều đi: tạo 8 chuyến (hôm nay + 7 ngày)');
 select throws_ok($$ select public.save_schedule(null, (select id from public.routes where code = 'HN-VT'), 'di', '07:00', '{1}', null, null, null) $$,

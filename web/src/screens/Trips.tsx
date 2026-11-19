@@ -1,4 +1,4 @@
-import { reverseItinerary } from './Routes';
+import { dirName, reverseItinerary } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { fmtDate, today } from '../components/Documents';
@@ -10,7 +10,7 @@ import { useToast } from '../lib/toast';
 import { Transfers } from './Transfers';
 
 type Dir = 'di' | 've';
-interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; is_active: boolean }
+interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; name_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number }
 interface Stop { id: string; name: string }
 interface Schedule {
@@ -58,7 +58,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 
   const load = useCallback(async () => {
     const [r, rs, st, sc, tr, v, sf, lm, vt] = await Promise.all([
-      supabase.from('routes').select('id, code, name, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
+      supabase.from('routes').select('id, code, name, name_ve, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start').order('seq'),
       supabase.from('stops').select('id, name'),
       supabase.from('schedules').select('id, route_id, direction, depart_time, days_of_week, valid_from, valid_to, is_active, note, vehicle_type_id, registered_time, trip_no, day_rule, business_type').order('depart_time'),
@@ -154,7 +154,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
         signerTitle: setting('cong_ty.chuc_danh_ky') || 'Giám đốc', signerName: setting('cong_ty.giam_doc') ?? '', signerImg, sealImg,
         driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: who('phu_xe')?.name ?? null,
         plate: veh?.plate ?? '', seats: vt ? vt.reg_seats + vt.reg_berths : null,
-        routeName: route?.name ?? '', distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,
+        routeName: dirName(route, t.direction), distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,
         itinerary: (t.direction === 've' ? route?.itinerary_ve || reverseItinerary(route?.itinerary ?? '') : route?.itinerary) || null, fromStop: a ?? '', toStop: b ?? '',
         departTime: hhmm(t.depart_at), departDate: t.service_date,
         ret: r0 ? { time: hhmm(r0.depart_at), date: r0.service_date } : null,
@@ -203,7 +203,7 @@ const blankRow = (t: string, like?: Row): Row => ({
 });
 
 function Schedules(props: Ctx) {
-  const { routes, schedules, vtypes, canEdit, ends, path, reload } = props;
+  const { routes, schedules, vtypes, canEdit, path, reload } = props;
   const toast = useToast();
   const opts = routes.filter((r) => r.is_active).flatMap((r) => (['di', 've'] as Dir[]).map((d) => ({ key: `${r.id}|${d}`, r, d })));
   const [sel, setSel] = useState('');
@@ -226,7 +226,7 @@ function Schedules(props: Ctx) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel, schedules]);
 
-  const label = (r: Route, d: Dir) => `${ends(r.id, d) ? ends(r.id, d).replace(' → ', ' – ') : `${r.name} (${d === 'di' ? 'chiều đi' : 'chiều về'})`}`;
+  const label = (r: Route, d: Dir) => dirName(r, d);
   const addTimes = (times: string[]) => {
     const have = new Set(rows.map((r) => r.depart_time));
     const add = times.filter((t) => !have.has(t)).map((t) => blankRow(t, rows[rows.length - 1]));
@@ -280,7 +280,7 @@ function Schedules(props: Ctx) {
       <label>Tuyến – chiều
         <select aria-label="Tuyến lịch chạy" value={sel} onChange={(e) => setSel(e.target.value)}>
           <option value="">Chọn tuyến</option>
-          {opts.map((o) => <option key={o.key} value={o.key}>{label(o.r, o.d)} ({o.r.code})</option>)}
+          {opts.map((o) => <option key={o.key} value={o.key}>{label(o.r, o.d)}</option>)}
         </select>
       </label>
       {cur && (
@@ -388,7 +388,6 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
-  const routeName = (id: string) => routes.find((r) => r.id === id)?.name ?? '?';
   const person = (id: string) => staff.find((s) => s.id === id)?.full_name ?? '?';
 
   async function generate() {
@@ -444,8 +443,8 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
           </label>
           <label>Chiều
             <select value={extra.direction} onChange={(e) => setExtra({ ...extra, direction: e.target.value as Dir })}>
-              <option value="di">Chiều đi</option>
-              <option value="ve">Chiều về</option>
+              <option value="di">{dirName(routes.find((r) => r.id === extra.route_id), 'di') || 'Chiều đi'}</option>
+              <option value="ve">{dirName(routes.find((r) => r.id === extra.route_id), 've') || 'Chiều về'}</option>
             </select>
           </label>
           <label>Giờ<input type="time" value={extra.time} onChange={(e) => setExtra({ ...extra, time: e.target.value })} /></label>
@@ -462,12 +461,12 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
           const veh = vehicles.find((v) => v.id === t.vehicle_id);
           const d1 = mine.find((c) => c.role === 'lai_xe_1');
           const ok = t.status === 'mo' && !!veh && !!d1;
-          const label = `${hhmm(t.depart_at)} ${routeName(t.route_id)}`;
+          const label = `${hhmm(t.depart_at)} ${dirName(routes.find((r) => r.id === t.route_id), t.direction)}`;
           return (
             <li key={t.id} className="item">
               <div className="item-head">
                 <div>
-                  <b>{hhmm(t.depart_at)}–{hhmm(t.arrive_at)}</b> · {routeName(t.route_id)}
+                  <b>{hhmm(t.depart_at)}–{hhmm(t.arrive_at)}</b> · {dirName(routes.find((r) => r.id === t.route_id), t.direction)}
                   <span className="muted small"> · {ends(t.route_id, t.direction) || (t.direction === 'di' ? 'chiều đi' : 'chiều về')}{t.schedule_id ? '' : ' · tăng cường'}</span>
                   {t.status === 'huy' ? <span className="badge locked">Đã hủy: {t.cancel_reason}</span>
                     : ok ? <span className="badge">Đủ xe + lái</span> : <span className="badge warn-badge">Chưa xếp xe / lái</span>}

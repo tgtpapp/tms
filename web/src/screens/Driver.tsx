@@ -1,4 +1,5 @@
 // Giai đoạn 6.1 – App lái xe: chuyến của tôi, danh sách khách theo điểm đón, lên xe, thu tiền trên xe, xuất bến / đến bến.
+import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -15,7 +16,6 @@ interface Ticket {
   id: string; booking_id: string; seat_label: string; from_stop_id: string; to_stop_id: string; from_idx: number; price: number;
   status: 'dat' | 'da_tt'; passenger_name: string | null; passenger_phone: string | null; pickup_note: string | null; dropoff_note: string | null; boarded: boolean;
 }
-interface RouteStop { route_id: string; seq: number; stop_id: string }
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
@@ -31,22 +31,19 @@ export function DriverScreen() {
   const toast = useToast();
   const [day, setDay] = useState(today());
   const [trips, setTrips] = useState<MyTrip[]>([]);
-  const [routes, setRoutes] = useState<Record<string, string>>({});
-  const [rstops, setRstops] = useState<RouteStop[]>([]);
+  const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [stops, setStops] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [t, r, rs, st] = await Promise.all([
+      const [t, r, st] = await Promise.all([
         rpc<MyTrip[]>('my_trips', { p_from: day, p_to: day }),
-        supabase.from('routes').select('id, name'),
-        supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
+        supabase.from('routes').select('id, name, name_ve'),
         supabase.from('stops').select('id, name'),
       ]);
       setTrips(t);
-      setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
-      setRstops((rs.data ?? []) as RouteStop[]);
+      setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
       setStops(Object.fromEntries(((st.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
       if (t.length === 1) setOpen((o) => o ?? t[0].trip_id);
     } catch (e) {
@@ -58,12 +55,6 @@ export function DriverScreen() {
     void load();
   }, [load]);
 
-  const ends = (routeId: string, dir: 'di' | 've') => {
-    const l = rstops.filter((x) => x.route_id === routeId).sort((a, b) => a.seq - b.seq);
-    if (l.length < 2) return routes[routeId] ?? '';
-    const [a, b] = [stops[l[0].stop_id], stops[l[l.length - 1].stop_id]];
-    return dir === 'di' ? `${a} → ${b}` : `${b} → ${a}`;
-  };
 
   return (
     <>
@@ -78,8 +69,8 @@ export function DriverScreen() {
         <div className="drv-trips">
           {trips.map((t) => (
             <button key={t.trip_id} className={open === t.trip_id ? 'trip-chip on' : 'trip-chip'} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
-                    aria-label={`Chuyến ${hhmm(t.depart_at)} ${ends(t.route_id, t.direction)}`}>
-              <b>{hhmm(t.depart_at)}</b> {ends(t.route_id, t.direction)}
+                    aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
+              <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
               <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
               <span className={`badge ${t.status === 'huy' ? 'locked' : t.arrived_at ? '' : t.departed_at ? 'warn-badge' : 'idle'}`}>
                 {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}` : 'Chưa xuất bến'}

@@ -196,7 +196,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
-  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'BX Hố Nai – BX Vũng Tàu (HN-VT)' });
+  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByLabel('Giờ xuất bến').fill('07:00');
   await page.getByRole('button', { name: 'Thêm giờ chạy' }).click();
   await page.getByRole('button', { name: 'Lưu lịch chạy' }).click();
@@ -238,7 +238,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5m. Bán vé: gắn loại xe cho nốt → bán vé ngày mai ghế A01, thu tiền mặt, in vé, danh sách khách
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
-  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'BX Hố Nai – BX Vũng Tàu (HN-VT)' });
+  await page.getByLabel('Tuyến lịch chạy').selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByLabel('Loại xe nốt 07:00').selectOption({ label: 'Giường nằm 6 chỗ' });
   await page.getByRole('button', { name: 'Lưu lịch chạy' }).click();
   await expect(page.getByText('Đã lưu lịch chạy: 1 giờ, tạo 0 chuyến')).toBeVisible();

@@ -330,6 +330,23 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã gửi 1 đơn vé bán khi mất mạng')).toBeVisible();
   await expect(page.getByRole('heading', { name: /Vé chờ gửi/ })).toHaveCount(0);
 
+  // 5s. Chữ ký của tôi: chọn ảnh → ảnh hiện trong khung cắt (điện thoại) → kéo chọn vùng → lưu → bấm × bỏ chữ ký
+  await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
+  await page.getByLabel('Ảnh chữ ký của tôi').setInputFiles({ name: 'chu-ky.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
+  const cropImg = page.getByRole('img', { name: 'Ảnh cần cắt' });
+  await expect(cropImg).toBeVisible();
+  expect(await cropImg.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  const bb = (await cropImg.boundingBox())!;
+  expect(bb.width).toBeGreaterThan(100);
+  await page.mouse.move(bb.x + bb.width * 0.1, bb.y + bb.height * 0.25);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + bb.width * 0.9, bb.y + bb.height * 0.75, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Dùng vùng đã chọn' }).click();
+  await expect(page.getByText('Đã lưu chữ ký của tôi')).toBeVisible();
+  await page.getByRole('button', { name: 'Bỏ chữ ký này' }).click();
+  await expect(page.getByText('Đã bỏ chữ ký, có thể tải chữ ký khác')).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Cấu hình' });

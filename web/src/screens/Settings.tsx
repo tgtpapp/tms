@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
 import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
@@ -22,6 +22,8 @@ const DISPATCH_SETTINGS = [
 ] as const;
 
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
+interface Tier { truoc_gio: number; phi_pt: number }
+
 export function SettingsScreen({ tenantId }: { tenantId: string }) {
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
@@ -32,7 +34,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     const s = await supabase.from('tenant_settings').select('key, value');
     if (s.error) return toast('error', s.error.message);
     const values: Record<string, string> = {};
-    for (const r of (s.data ?? []) as { key: string; value: unknown }[]) values[r.key] = String(r.value);
+    for (const r of (s.data ?? []) as { key: string; value: unknown }[]) values[r.key] = typeof r.value === 'object' ? JSON.stringify(r.value) : String(r.value);
     setSale(values);
     setLoaded(true);
   }, [toast]);
@@ -87,6 +89,32 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
     setBusy(false);
     if (error) return toast('error', error.message);
     toast('ok', 'Đã lưu cấu hình đặt chỗ và vé');
+    await load();
+  }
+
+  const tiers: Tier[] = useMemo(() => {
+    try { return JSON.parse(sale['huy_ve.moc'] ?? '[]') as Tier[]; } catch { return []; }
+  }, [sale]);
+  const setTiers = (t: Tier[]) => setSale({ ...sale, 'huy_ve.moc': JSON.stringify(t) });
+
+  async function saveCancel(e: FormEvent) {
+    e.preventDefault();
+    const t = [...tiers].map((x) => ({ truoc_gio: Number(x.truoc_gio), phi_pt: Number(x.phi_pt) }))
+      .sort((a, b) => b.truoc_gio - a.truoc_gio);
+    if (t.some((x) => !Number.isInteger(x.truoc_gio) || x.truoc_gio < 0 || x.truoc_gio > 720 || !(x.phi_pt >= 0 && x.phi_pt <= 100))) {
+      return toast('error', 'Mỗi mốc: số giờ 0–720 (số nguyên), phí 0–100%');
+    }
+    if (new Set(t.map((x) => x.truoc_gio)).size !== t.length) return toast('error', 'Các mốc giờ không được trùng');
+    if (t.at(-1)?.truoc_gio !== 0) return toast('error', 'Phải có mốc 0 giờ (hủy sát giờ chạy)');
+    const fee = Number(sale['doi_ve.phi_dong'] ?? 0);
+    if (!Number.isInteger(fee) || fee < 0 || fee > 10000000) return toast('error', 'Phí đổi vé: số nguyên từ 0 đến 10.000.000');
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([
+      { key: 'huy_ve.moc', value: t }, { key: 'doi_ve.phi_dong', value: fee },
+    ], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', 'Đã lưu cấu hình hủy / đổi vé');
     await load();
   }
 
@@ -170,6 +198,30 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
                     placeholder="vd: Có mặt trước giờ chạy 15 phút. Hotline: …" />
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình đặt chỗ và vé</button>
+      </form>
+      <form className="card form tiers" onSubmit={(e) => void saveCancel(e)}>
+        <h2>Hủy / đổi vé</h2>
+        <p className="muted small">Phí hủy tính theo số giờ còn lại trước giờ chạy: lấy mốc lớn nhất mà số giờ còn lại ≥ mốc. Phí 100% là không hoàn tiền.
+          Quy định hoàn vé theo pháp luật: cần xác minh.</p>
+        {tiers.map((x, i) => (
+          <div key={i} className="tier">
+            <label>Hủy trước (giờ)
+              <input type="number" inputMode="numeric" min={0} max={720} value={x.truoc_gio}
+                     onChange={(e) => setTiers(tiers.map((y, j) => (j === i ? { ...y, truoc_gio: Number(e.target.value) } : y)))} />
+            </label>
+            <label>Phí (%)
+              <input type="number" inputMode="numeric" min={0} max={100} value={x.phi_pt}
+                     onChange={(e) => setTiers(tiers.map((y, j) => (j === i ? { ...y, phi_pt: Number(e.target.value) } : y)))} />
+            </label>
+            {tiers.length > 1 && <button type="button" className="btn small link" onClick={() => setTiers(tiers.filter((_, j) => j !== i))}>Xóa mốc</button>}
+          </div>
+        ))}
+        <button type="button" className="btn small" onClick={() => setTiers([...tiers, { truoc_gio: 0, phi_pt: 100 }])}>Thêm mốc</button>
+        <label>Phí đổi chuyến (đồng / vé đã thanh toán)
+          <input type="number" inputMode="numeric" min={0} max={10000000} step={1000} value={sale['doi_ve.phi_dong'] ?? ''}
+                 onChange={(e) => setSale({ ...sale, 'doi_ve.phi_dong': e.target.value })} required />
+        </label>
+        <button className="btn primary" disabled={busy}>Lưu cấu hình hủy / đổi vé</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveBank(e)}>
         <h2>Tài khoản nhận chuyển khoản (QR)</h2>

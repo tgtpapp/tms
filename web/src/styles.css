@@ -209,3 +209,6 @@ label.check input { min-height: auto; width: auto; }
 .transfer-qr { width: 240px; height: 240px; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .transfer .info { width: 100%; }
 fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.cancel-panel { border: 1px solid #f3c9c4; background: #fff8f7; }
+.tiers .tier { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }

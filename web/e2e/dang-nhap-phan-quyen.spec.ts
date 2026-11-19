@@ -263,6 +263,15 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText(/chuyển khoản đã xác nhận 150\.000 đ/)).toBeVisible();
 
+  // 5p. Hủy vé A01 theo mốc phí, hoàn tiền mặt, ghế được nhả
+  await page.getByRole('button', { name: 'Ghế A01', exact: true }).click();
+  await page.getByRole('button', { name: 'Hủy vé', exact: true }).click();
+  await expect(page.getByText(/Phí [\d.]+ đ · hoàn khách [\d.]+ đ/)).toBeVisible();
+  await page.getByLabel('Lý do hủy').fill('Khách đổi kế hoạch');
+  await page.getByRole('button', { name: 'Xác nhận hủy' }).click();
+  await expect(page.getByText(/Đã hủy 1 vé · hoàn [\d.]+ đ · phí [\d.]+ đ/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toBeVisible();
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Cấu hình' });

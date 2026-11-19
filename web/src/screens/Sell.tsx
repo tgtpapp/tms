@@ -56,16 +56,18 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [tripId, setTripId] = useState<string | null>(null);
   const [footer, setFooter] = useState<string | null>(null);
   const [bank, setBank] = useState<BankAccount | null>(null);
+  const [changeFee, setChangeFee] = useState(0);
   const [version, setVersion] = useState(0);
   const [logo, setLogo] = useState<string | null>(null);
   useEffect(() => {
     if (ctx.tenant_id) void companyFileUrl(ctx.tenant_id, 'logo.png').then(setLogo);
   }, [ctx.tenant_id]);
   useEffect(() => {
-    void supabase.from('tenant_settings').select('key, value').in('key', ['ve.ghi_chu', 'tt.ngan_hang_bin', 'tt.so_tai_khoan', 'tt.ten_tai_khoan'])
+    void supabase.from('tenant_settings').select('key, value').in('key', ['ve.ghi_chu', 'tt.ngan_hang_bin', 'tt.so_tai_khoan', 'tt.ten_tai_khoan', 'doi_ve.phi_dong'])
       .then(({ data }) => {
         const v = (k: string) => ((data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value as string | undefined;
         setFooter(v('ve.ghi_chu') || null);
+        setChangeFee(Number(v('doi_ve.phi_dong') ?? 0) || 0);
         const bin = v('tt.ngan_hang_bin');
         const acc = v('tt.so_tai_khoan');
         setBank(bin && acc ? { bin, account: acc, name: v('tt.ten_tai_khoan') ?? '' } : null);
@@ -143,7 +145,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         </div>
       </section>
       {trip && (
-        <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} routeName={routes.find((r) => r.id === trip.route_id)?.name ?? ''}
+        <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={routes.find((r) => r.id === trip.route_id)?.name ?? ''}
                   stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                   seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                   otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
@@ -178,7 +180,7 @@ function CashToday({ userId, version }: { userId: string | null; version: number
 /* ------------------------------------------------------------------ Bán vé 1 chuyến */
 
 interface TripSellProps {
-  trip: Trip; ctx: AccountContext; canSell: boolean; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
+  trip: Trip; ctx: AccountContext; canSell: boolean; canOverride: boolean; changeFee: number; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
   type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; logo: string | null; bank: BankAccount | null; onChanged: () => Promise<void>;
 }
 
@@ -317,6 +319,7 @@ function TripSell(props: TripSellProps) {
       )}
       {selected && (
         <TicketDetail ticket={selected} booking={bookingOf(selected.booking_id)} stopName={stopName} otherTrips={props.otherTrips} bank={props.bank}
+                      canOverride={props.canOverride} changeFee={props.changeFee}
                       currentTrip={trip} onClose={() => setSelected(null)}
                       onPrint={(list, code) => setPrinting(ticketData(list, code))}
                       siblings={tickets.filter((t) => t.booking_id === selected.booking_id && t.status !== 'giu')}
@@ -532,10 +535,12 @@ function PassengerList(props: { tickets: Ticket[]; stopName: (id: string | null)
 
 function TicketDetail(props: {
   ticket: Ticket; booking: Booking | undefined; siblings: Ticket[]; stopName: (id: string | null) => string; otherTrips: Trip[];
-  bank: BankAccount | null;
+  bank: BankAccount | null; canOverride: boolean; changeFee: number;
   currentTrip: Trip; onClose: () => void; onPrint: (list: Ticket[], code: string) => void; reload: () => Promise<void>;
 }) {
-  const { ticket: t, booking, siblings, stopName, otherTrips, currentTrip, onClose, onPrint, reload, bank } = props;
+  const { ticket: t, booking, siblings, stopName, otherTrips, currentTrip, onClose, onPrint, reload, bank, canOverride, changeFee } = props;
+  const [cancel, setCancel] = useState(false);
+  const [feeMethod, setFeeMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat');
   const [qr, setQr] = useState(false);
   const toast = useToast();
   const [info, setInfo] = useState({ name: t.passenger_name ?? '', phone: t.passenger_phone ?? '', pickup: t.pickup_note ?? '', dropoff: t.dropoff_note ?? '' });
@@ -596,7 +601,10 @@ function TicketDetail(props: {
           p_pickup_note: info.pickup, p_dropoff_note: info.dropoff }), 'Đã sửa thông tin khách')}>Lưu thông tin</button>
         <button className="btn small" onClick={() => onPrint(siblings, booking?.code ?? '')}>In vé</button>
         {!move && <button className="btn small" onClick={() => setMove({ trip: currentTrip.id, seat: '' })}>Chuyển ghế / chuyến</button>}
+        {!cancel && <button className="btn small danger" onClick={() => setCancel(true)}>Hủy vé</button>}
       </div>
+      {cancel && <CancelPanel siblings={siblings} current={t} canOverride={canOverride} bank={bank !== null}
+                              onDone={async (msg) => { toast('ok', msg); await reload(); onClose(); }} onClose={() => setCancel(false)} />}
       {move && (
         <div className="inline-form">
           <label>Chuyến
@@ -605,11 +613,111 @@ function TicketDetail(props: {
             </select>
           </label>
           <label>Ghế mới<input value={move.seat} onChange={(e) => setMove({ ...move, seat: e.target.value.toUpperCase() })} placeholder="vd A05" /></label>
-          <button className="btn small primary" disabled={!move.seat} onClick={() => void run(() => rpc('move_ticket', { p_ticket_id: t.id, p_trip_id: move.trip, p_seat: move.seat }),
-            `Đã chuyển sang ghế ${move.seat}`)}>Chuyển</button>
+          {move.trip !== currentTrip.id && t.status === 'da_tt' && changeFee > 0 && (
+            <label>Thu phí đổi {money(changeFee)}
+              <select value={feeMethod} onChange={(e) => setFeeMethod(e.target.value as 'tien_mat' | 'chuyen_khoan')}>
+                <option value="tien_mat">Tiền mặt</option>
+                <option value="chuyen_khoan">Chuyển khoản</option>
+              </select>
+            </label>
+          )}
+          <button className="btn small primary" disabled={!move.seat} onClick={() => void run(async () => {
+            const fee = await rpc<number>('change_ticket', { p_ticket_id: t.id, p_trip_id: move.trip, p_seat: move.seat, p_fee_method: feeMethod });
+            if (fee > 0) toast('ok', `Đã thu phí đổi ${money(fee)}`);
+          }, `Đã chuyển sang ghế ${move.seat}`)}>Chuyển</button>
         </div>
       )}
-      <p className="muted small">Đổi, hủy, hoàn vé: làm ở bước 4.3.</p>
     </section>
+  );
+}
+
+/* ------------------------------------------------------------------ Hủy vé + hoàn tiền */
+
+interface Quote { ticket_id: string; seat_label: string; status: string; price: number; hours_left: number; fee_pct: number; fee: number; refund: number }
+
+function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: boolean; bank: boolean;
+                              onDone: (msg: string) => Promise<void>; onClose: () => void }) {
+  const { siblings, current, canOverride, bank, onDone, onClose } = props;
+  const toast = useToast();
+  const active = siblings.filter((x) => x.status === 'dat' || x.status === 'da_tt');
+  const [pick, setPick] = useState<string[]>([current.id]);
+  const [quote, setQuote] = useState<Quote[]>([]);
+  const [reason, setReason] = useState('');
+  const [method, setMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat');
+  const [override, setOverride] = useState<{ fee: string; reason: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!pick.length) return setQuote([]);
+    void rpc<Quote[]>('cancel_quote', { p_ticket_ids: pick }).then(setQuote).catch((e) => toast('error', errMsg(e)));
+  }, [pick, toast]);
+
+  const sum = (k: 'fee' | 'refund') => quote.reduce((a, q) => a + q[k], 0);
+  const paid = quote.some((q) => q.status === 'da_tt');
+
+  async function go() {
+    setBusy(true);
+    try {
+      const r = await rpc<{ tickets: number; fee: number; refund: number }>('cancel_tickets', {
+        p_ticket_ids: pick, p_reason: reason, p_refund_method: method,
+        p_fee_override: override ? Number(override.fee || 0) : null, p_override_reason: override?.reason ?? null,
+      });
+      await onDone(`Đã hủy ${r.tickets} vé${r.refund ? ` · hoàn ${money(r.refund)}${method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}` : ''}${r.fee ? ` · phí ${money(r.fee)}` : ''}`);
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sub form cancel-panel">
+      <b>Hủy vé</b>
+      {active.length > 1 && (
+        <div className="chips">
+          {active.map((x) => (
+            <label key={x.id} className="check">
+              <input type="checkbox" checked={pick.includes(x.id)}
+                     onChange={(e) => setPick(e.target.checked ? [...pick, x.id] : pick.filter((p) => p !== x.id))} /> Ghế {x.seat_label}
+            </label>
+          ))}
+        </div>
+      )}
+      <table className="plist">
+        <thead><tr><th>Ghế</th><th>Giá</th><th>Phí hủy</th><th>Hoàn</th></tr></thead>
+        <tbody>
+          {quote.map((q) => (
+            <tr key={q.ticket_id}>
+              <td>{q.seat_label}</td>
+              <td>{q.status === 'da_tt' ? money(q.price) : 'chưa thu'}</td>
+              <td>{q.status === 'da_tt' ? `${q.fee_pct}% · ${money(q.fee)}` : '—'}</td>
+              <td>{q.status === 'da_tt' ? money(q.refund) : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {quote[0] && <p className="muted small">Còn {quote[0].hours_left} giờ đến giờ chạy. Mốc phí sửa ở Cấu hình → Hủy / đổi vé.</p>}
+      <label>Lý do hủy<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+      {paid && (
+        <label>Hoàn tiền bằng
+          <select value={method} onChange={(e) => setMethod(e.target.value as 'tien_mat' | 'chuyen_khoan')}>
+            <option value="tien_mat">Tiền mặt (tôi chi ra)</option>
+            {bank && <option value="chuyen_khoan">Chuyển khoản cho khách</option>}
+          </select>
+        </label>
+      )}
+      {paid && canOverride && !override && <button type="button" className="btn small link" onClick={() => setOverride({ fee: '0', reason: '' })}>Sửa phí hủy (quản trị)</button>}
+      {override && (
+        <div className="inline-form">
+          <label>Phí hủy mỗi vé (đồng)<input type="number" min={0} inputMode="numeric" value={override.fee} onChange={(e) => setOverride({ ...override, fee: e.target.value })} /></label>
+          <label>Lý do sửa phí<input value={override.reason} onChange={(e) => setOverride({ ...override, reason: e.target.value })} /></label>
+        </div>
+      )}
+      <p className="small">{paid && !override ? `Phí ${money(sum('fee'))} · hoàn khách ${money(sum('refund'))}` : ''}</p>
+      <div className="actions">
+        <button type="button" className="btn small danger" disabled={busy || !reason.trim() || !pick.length} onClick={() => void go()}>Xác nhận hủy</button>
+        <button type="button" className="btn small link" onClick={onClose}>Thôi</button>
+      </div>
+    </div>
   );
 }

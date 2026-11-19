@@ -169,7 +169,7 @@ function CashToday({ userId, version }: { userId: string | null; version: number
 
 interface TripSellProps {
   trip: Trip; ctx: AccountContext; canSell: boolean; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
-  type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; onChanged: () => Promise<void>;
+  type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; logo: string | null; onChanged: () => Promise<void>;
 }
 
 function TripSell(props: TripSellProps) {

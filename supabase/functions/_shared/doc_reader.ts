@@ -258,7 +258,7 @@ export async function readDocument(opts: {
       const list = await discoverGemini(p, fetchFn);
       if (list.length === 0) attempts.push({ provider: p.name!, ok: false, ms: 0, error: 'không lấy được danh sách model (kiểm tra khóa Google)' });
       queue.push(...list.slice(0, 3).map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
-    } else queue.push(p);
+    } else queue.push({ ...p, name: p.name ?? `${p.type}:${p.model}` });
   }
   const tried = new Set<string>();
   for (let i = 0; i < queue.length; i++) {

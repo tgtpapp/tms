@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
+import { StorageUsage } from '../components/StorageUsage';
 import { ZaloSettings } from '../components/ZaloSettings';
 import { DriveSettings } from '../components/DriveSettings';
 import { BANKS } from '../lib/vietqr';
@@ -295,6 +296,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
       </>)}
+      <StorageUsage />
       <LegacyImport tenantId={tenantId} />
     </>
   );

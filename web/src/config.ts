@@ -12,6 +12,9 @@ export interface AppConfig {
   tenantCode: string;
   /** Tên miền email nội bộ để đăng nhập bằng số điện thoại (không gửi thư) */
   loginEmailDomain: string;
+  /** Giới hạn dung lượng của gói Supabase đang dùng (MB), để cảnh báo khi gần đầy */
+  dbLimitMb: number;
+  fileLimitMb: number;
 }
 
 export interface ConfigResult {
@@ -29,6 +32,8 @@ const RAW = {
   VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined,
   VITE_TENANT_CODE: import.meta.env.VITE_TENANT_CODE as string | undefined,
   VITE_LOGIN_EMAIL_DOMAIN: import.meta.env.VITE_LOGIN_EMAIL_DOMAIN as string | undefined,
+  VITE_DB_LIMIT_MB: import.meta.env.VITE_DB_LIMIT_MB as string | undefined,
+  VITE_FILE_LIMIT_MB: import.meta.env.VITE_FILE_LIMIT_MB as string | undefined,
 };
 
 type RawKey = keyof typeof RAW;
@@ -51,6 +56,8 @@ export function loadConfig(): ConfigResult {
     supabasePublishableKey: read('VITE_SUPABASE_PUBLISHABLE_KEY', missing),
     tenantCode: read('VITE_TENANT_CODE', null).toLowerCase(),
     loginEmailDomain: read('VITE_LOGIN_EMAIL_DOMAIN', null) || 'login.tms.invalid',
+    dbLimitMb: Number(read('VITE_DB_LIMIT_MB', null)) || 500,      // Supabase Free: 500 MB database
+    fileLimitMb: Number(read('VITE_FILE_LIMIT_MB', null)) || 1024,  // Supabase Free: 1 GB file
   };
 
   return { config, missing };

@@ -649,3 +649,9 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 /* Thống kê km: bảng rộng, cột xe dính bên trái */
 .km-stats th, .km-stats td { white-space: nowrap; text-align: right; font-size: 0.85rem; padding: 4px 6px; }
 .km-stats th:first-child, .km-stats td:first-child { position: sticky; left: 0; background: var(--surface); text-align: left; z-index: 1; }
+/* Dung lượng */
+.use-row { display: flex; flex-direction: column; gap: 4px; }
+.use-bar { height: 12px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+.use-bar i { display: block; height: 100%; background: var(--ok); }
+.use-bar.warn i { background: #f59e0b; }
+.use-bar.bad i { background: var(--danger); }

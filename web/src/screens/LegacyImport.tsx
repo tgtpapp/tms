@@ -20,6 +20,8 @@ interface Plan {
   ex: Existing;
 }
 
+const NEW = '__tao_moi__';
+
 async function loadExisting(): Promise<Existing> {
   const [s, d, v, t] = await Promise.all([
     supabase.from('staff_members').select('id, full_name, phone'),
@@ -81,7 +83,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
       for (const v of vehicles) {
         if (guess[v.group] !== undefined) continue;
         const hit = ex.types.filter((t) => t.is_active && v.seats !== null && t.reg_seats + t.reg_berths === v.seats);
-        guess[v.group] = hit.length === 1 ? hit[0].id : '';
+        guess[v.group] = hit.length === 1 ? hit[0].id : NEW;   // không khớp: tự tạo loại xe mới
       }
       setTypeOf(guess);
       setPlan({ staff, vehicles, ex });
@@ -118,7 +120,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     const missing = pick.vehicles && plan.vehicles.some((v) => !v.match && !v.bad && !typeOf[v.group]);
     if (missing) return toast('error', 'Chọn loại xe TMS cho từng nhóm xe cũ');
     const log: string[] = [];
-    let staffNew = 0, vehNew = 0, docs = 0;
+    let staffNew = 0, vehNew = 0, docs = 0, typesNew = 0;
     const total = (pick.staff ? plan.staff.length : 0) + (pick.vehicles ? plan.vehicles.length : 0);
     let i = 0;
     try {
@@ -137,6 +139,34 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
         }
       }
       if (pick.vehicles) {
+        // Tự tạo loại xe cho nhóm chưa có (kèm sơ đồ ghế của app cũ nếu có)
+        const typeId: Record<string, string> = { ...typeOf };
+        for (const [g, sel] of Object.entries(typeOf)) {
+          if (sel !== NEW) continue;
+          const vs = plan.vehicles.filter((v) => v.group === g);
+          const v0 = vs[0];
+          if (!v0) continue;
+          setBusy(`Đang tạo loại xe ${v0.label}`);
+          const id = await stableId(tenantId, 'lx', g);
+          const layout = vs.find((v) => v.layout)?.layout ?? null;
+          const code = `CU-${(v0.brand || 'XE').normalize('NFD').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10)}${v0.seats ?? ''}`;
+          if (!plan.ex.types.some((t) => t.id === id)) {
+            const { error } = await supabase.from('vehicle_types').insert({
+              id, code, name: v0.label, brand: v0.brand || null,
+              reg_seats: Math.max(v0.seats ?? 0, layout?.seats.length ?? 0, 1),
+            });
+            if (error) { log.push(`Loại xe ${v0.label}: ${error.code === '23505' ? 'mã loại xe đã có, chọn loại xe có sẵn' : error.message}`); continue; }
+            if (layout) {
+              try {
+                await rpc('set_seat_layout', { p_type_id: id, p_rows: layout.rows, p_cols: layout.cols, p_seats: layout.seats });
+              } catch (e) {
+                log.push(`Sơ đồ ghế ${v0.label}: ${errMsg(e)} – vẽ lại ở mục Xe`);
+              }
+            } else log.push(`Loại xe ${v0.label}: app cũ chưa có sơ đồ ghế, vẽ ở mục Xe → Loại xe`);
+            typesNew++;
+          }
+          typeId[g] = id;
+        }
         for (const v of plan.vehicles) {
           setBusy(`Đang nhập ${++i}/${total}: xe ${v.plate}`);
           if (v.bad) {
@@ -145,7 +175,8 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
           }
           try {
             if (!v.match) {
-              const { error } = await supabase.from('vehicles').insert({ id: v.id, ...v.vehicle, vehicle_type_id: typeOf[v.group] });
+              if (!typeId[v.group] || typeId[v.group] === NEW) { log.push(`Xe ${v.plate}: chưa có loại xe, bỏ qua`); continue; }
+              const { error } = await supabase.from('vehicles').insert({ id: v.id, ...v.vehicle, vehicle_type_id: typeId[v.group] });
               if (error && error.code !== '23505') throw new Error(error.message);
               if (error) {
                 log.push(`Xe ${v.plate}: biển số hoặc số khung đã có, bỏ qua`);
@@ -162,7 +193,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
     } finally {
       setBusy(null);
     }
-    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe, ${docs} giấy tờ`;
+    const msg = `Đã nhập ${staffNew} nhân viên, ${vehNew} xe${typesNew ? ` (tạo ${typesNew} loại xe)` : ''}, ${docs} giấy tờ`;
     toast(log.length ? 'error' : 'ok', log.length ? `${msg} · ${log.length} mục lỗi` : msg);
     setResult([msg, ...log]);
     setPlan(null);
@@ -209,11 +240,11 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
           </ul>
           {pick.vehicles && groups.length > 0 && (
             <>
-              {plan.ex.types.length === 0 && <p className="error-text small">Chưa có loại xe trong TMS: vào mục Xe tạo loại xe trước.</p>}
+              <p className="muted small">Loại xe tự khớp theo số chỗ. Không khớp thì app tự tạo loại xe mới kèm sơ đồ ghế của app cũ; muốn dùng loại có sẵn thì chọn lại.</p>
               {groups.map(([g, label]) => (
                 <label key={g}>Loại xe TMS cho xe cũ "{label}"
                   <select aria-label={`Loại xe cho ${label}`} value={typeOf[g] ?? ''} onChange={(e) => setTypeOf({ ...typeOf, [g]: e.target.value })}>
-                    <option value="">Chọn loại xe</option>
+                    <option value={NEW}>Tự tạo loại xe mới "{label}" (lấy sơ đồ ghế từ app cũ)</option>
                     {plan.ex.types.filter((t) => t.is_active).map((t) => <option key={t.id} value={t.id}>{t.name} ({t.code})</option>)}
                   </select>
                 </label>

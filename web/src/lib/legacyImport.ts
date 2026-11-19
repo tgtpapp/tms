@@ -130,8 +130,27 @@ export function mapEmployee(r: Raw, today: string): StaffRow | null {
 
 /* ------------------------------------------------------------------ Xe */
 
+/** Sơ đồ ghế app cũ: { cols, rows: [[ "" = lối đi, "D" = tài xế, "DOOR" = cửa, còn lại = số ghế ]] } */
+export interface Layout { rows: number; cols: number; seats: { label: string; deck: number; row: number; col: number; kind: 'ghe' }[] }
+export function parseLayout(v: unknown): Layout | null {
+  let o = v;
+  if (typeof o === 'string') { try { o = JSON.parse(o); } catch { return null; } }
+  const rowsRaw = (o as { rows?: unknown })?.rows;
+  if (!Array.isArray(rowsRaw) || rowsRaw.length === 0 || rowsRaw.length > 30) return null;
+  const cols = Math.max(...rowsRaw.map((r) => (Array.isArray(r) ? r.length : 0)));
+  if (cols < 1 || cols > 8) return null;
+  const seats: Layout['seats'] = [];
+  rowsRaw.forEach((r, i) => (Array.isArray(r) ? r : []).forEach((c, j) => {
+    const t = String(c ?? '').trim().toUpperCase();
+    if (!t || /^(D|DOOR|CỬA|CUA|TÀI XẾ|TAI XE)$/.test(t) || t.length > 10) return;
+    seats.push({ label: t, deck: 1, row: i + 1, col: j + 1, kind: 'ghe' });
+  }));
+  if (seats.length === 0 || new Set(seats.map((x) => x.label)).size !== seats.length) return null;
+  return { rows: rowsRaw.length, cols, seats };
+}
+
 export interface VehicleRow {
-  oldId: string; plate: string; key: string; seats: number | null; group: string; label: string;
+  oldId: string; plate: string; key: string; seats: number | null; group: string; label: string; brand: string; layout: Layout | null;
   vehicle: Record<string, unknown>; docs: LegacyDoc[];
 }
 
@@ -164,5 +183,6 @@ export function mapVehicle(r: Raw): VehicleRow | null {
     doc('phu_hieu', r, ['phuHieuF', 'phuHieu'], { expires_on: day(str(r, 'hhPhuHieu')), data: { ...base } }),
   ].filter((x): x is LegacyDoc => x !== null);
   const group = `${seats ?? '?'}|${loai.toLowerCase()}`;
-  return { oldId: str(r, 'id') || plate, plate, key: plateKey(plate), seats, group, label: `${loai || 'Xe'} ${seats ?? '?'} chỗ`, vehicle, docs };
+  return { oldId: str(r, 'id') || plate, plate, key: plateKey(plate), seats, group, label: `${loai || 'Xe'} ${seats ?? '?'} chỗ`, brand: loai,
+           layout: parseLayout(r.soDo), vehicle, docs };
 }

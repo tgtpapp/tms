@@ -7,6 +7,7 @@ import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { AccountScreen } from './Account';
 import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
+import { DriverScreen } from './Driver';
 import { RolesScreen } from './Roles';
 import { RoutesScreen } from './Routes';
 import { SettingsScreen } from './Settings';
@@ -16,23 +17,29 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'driver' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [perms, setPerms] = useState<Permissions | null>(null);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab | null>(null);
+  const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
 
   const load = useCallback(async () => {
     try {
-      const p = await loadPermissions();
+      const [p, me] = await Promise.all([
+        loadPermissions(),
+        ctx.user_id ? supabase.from('staff_members').select('id, position').eq('user_id', ctx.user_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      const crew = !!me.data && (me.data as { position: string }).position !== 'nhan_vien';
+      setIsCrew(crew);
       setPerms(p);
-      setTab((cur) => cur ?? (p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : 'branches'));
+      setTab((cur) => cur ?? (p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : crew ? 'driver' : 'branches'));
     } catch (e) {
       setError(errMsg(e));
     }
-  }, []);
+  }, [ctx.user_id]);
 
   useEffect(() => {
     void load();
@@ -42,6 +49,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;
 
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
+    { key: 'driver', label: 'Chuyến của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('ticket.sell') },
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: true },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: true },
@@ -101,6 +109,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           </button>
         </header>
         <main className="content">
+          {tab === 'driver' && <DriverScreen />}
           {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
           {tab === 'routes' && <RoutesScreen perms={perms} />}
           {tab === 'sell' && <SellScreen ctx={ctx} perms={perms} />}

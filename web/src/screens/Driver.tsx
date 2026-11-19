@@ -4,6 +4,7 @@ import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { MyTransfers } from './Transfers';
+import { ParcelRow, SHIP_COLS, type Shipment } from './Parcels';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -99,8 +100,11 @@ function TripRun({ trip, stopName, reload }: { trip: MyTrip; stopName: (id: stri
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [codes, setCodes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [parcels, setParcels] = useState<Shipment[]>([]);
 
   const load = useCallback(async () => {
+    const ps = await supabase.from('shipments').select(SHIP_COLS).eq('trip_id', trip.trip_id).neq('status', 'huy').order('created_at');
+    setParcels((ps.data ?? []) as Shipment[]);
     const t = await supabase.from('seat_inventory')
       .select('id, booking_id, seat_label, from_stop_id, to_stop_id, from_idx, price, status, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded')
       .eq('trip_id', trip.trip_id).in('status', ['dat', 'da_tt']);
@@ -197,6 +201,14 @@ function TripRun({ trip, stopName, reload }: { trip: MyTrip; stopName: (id: stri
           );
         })}
       </ul>
+      {parcels.length > 0 && (
+        <>
+          <h3 className="section-title">Hàng trên xe ({parcels.length})</h3>
+          <ul className="list">
+            {parcels.map((p) => <ParcelRow key={p.id} s={p} stopName={stopName} tripName={() => ''} trips={null} reload={load} manage={false} />)}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

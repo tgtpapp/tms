@@ -1,4 +1,5 @@
 import { Modal } from '../components/Modal';
+import { VehicleProfile } from '../components/VehicleProfile';
 import { DeleteButton } from '../components/DeleteButton';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
@@ -261,6 +262,7 @@ export function VehicleList(props: {
               {open === v.id && (
                 <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
                   <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
+                  <VehicleProfile v={v} canEdit={canEdit} />
                   {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
                 </Modal>
               )}

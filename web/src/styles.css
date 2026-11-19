@@ -610,3 +610,14 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .dh-veh { display: inline-block; margin: 2px 6px 2px 0; }
 .dh-veh::before { content: '●'; margin-right: 3px; color: #16a34a; }
 .dh-veh.free { color: #dc2626; }
+/* Lý lịch phương tiện */
+.vp-sum { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px 14px; margin: 8px 0; }
+.vp-sum div { display: flex; flex-direction: column; }
+.vp-sum small { color: var(--muted); font-size: .72rem; }
+.vp-print { display: none; font-size: 13px; color: #000; }
+@media print { .vp-print { display: block; } .vp-page { page-break-before: always; } }
+.vp-list li { margin: 5px 0; }
+.vp-tbl { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
+.vp-tbl th, .vp-tbl td { border: 1px solid #333; padding: 5px; font-size: 12px; vertical-align: top; }
+.vp-tbl th { background: #e2e8f0; }
+.vp-blank td { height: 30px; }

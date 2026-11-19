@@ -256,7 +256,16 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
   );
 }
 
-interface EditStop { stop_id: string; minutes_from_start: string; allow_pickup: boolean; allow_dropoff: boolean }
+interface EditStop { stop_id: string; minutes_from_start: string; allow_pickup: boolean; allow_dropoff: boolean; newName?: string; newKind?: StopKind }
+
+/** Mã điểm tự sinh từ tên: "BX Vũng Tàu" → "BXVT", trùng thì thêm số */
+function autoCode(name: string, used: string[]): string {
+  const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').split(/[^A-Za-z0-9]+/).filter(Boolean)
+    .map((w) => (/^[A-Z0-9]+$/.test(w) && w.length <= 3 ? w : w[0].toUpperCase())).join('').toUpperCase().slice(0, 12) || 'DIEM';
+  let code = base;
+  for (let i = 2; used.includes(code); i++) code = `${base}${i}`;
+  return code;
+}
 
 /** Sửa tuyến: mã, tên, mã số tuyến, cự ly, hành trình chạy xe (in trên lệnh vận chuyển) */
 function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Promise<void>; onClose: () => void }) {
@@ -320,7 +329,7 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
   }
 
   async function saveStops() {
-    if (list.some((s) => !s.stop_id)) return toast('error', 'Chọn đủ điểm dừng cho mọi dòng');
+    if (list.some((s) => !s.stop_id)) return toast('error', 'Chọn đủ điểm dừng cho mọi dòng (chưa có thì chọn "+ Điểm mới…")');
     setBusy(true);
     try {
       await rpc('set_route_stops', {
@@ -339,6 +348,20 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
   }
 
   const activeStops = data.stops.filter((s) => s.is_active);
+  const setRow = (i: number, v: Partial<EditStop>) => setList((l) => l.map((x, k) => (k === i ? { ...x, ...v } : x)));
+
+  async function createStop(i: number) {
+    const name = (list[i].newName ?? '').trim();
+    if (!name) return toast('error', 'Nhập tên điểm mới');
+    setBusy(true);
+    const { data: row, error } = await supabase.from('stops')
+      .insert({ code: autoCode(name, data.stops.map((s) => s.code)), name, kind: list[i].newKind ?? 'diem_don_tra' }).select('id').single();
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    toast('ok', `Đã thêm điểm dừng ${name}`);
+    await reload();
+    setRow(i, { stop_id: (row as { id: string }).id, newName: undefined, newKind: undefined });
+  }
 
   return (
     <div className="sub">
@@ -377,11 +400,26 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
           {list.map((s, i) => (
             <div key={i} className="stop-row">
               <span className="muted">{i + 1}.</span>
-              <select value={s.stop_id} aria-label={`Điểm dừng thứ ${i + 1}`}
-                      onChange={(e) => setList(list.map((x, k) => (k === i ? { ...x, stop_id: e.target.value } : x)))}>
-                <option value="">Chọn điểm</option>
-                {activeStops.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
-              </select>
+              {s.newName === undefined ? (
+                <select value={s.stop_id} aria-label={`Điểm dừng thứ ${i + 1}`}
+                        onChange={(e) => (e.target.value === '__new__' ? setRow(i, { newName: '', newKind: i === 0 || i === list.length - 1 ? 'ben_xe' : 'diem_don_tra' })
+                          : setRow(i, { stop_id: e.target.value }))}>
+                  <option value="">{activeStops.length ? 'Chọn điểm' : 'Chưa có điểm – chọn "+ Điểm mới"'}</option>
+                  {activeStops.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+                  <option value="__new__">+ Điểm mới…</option>
+                </select>
+              ) : (
+                <span className="inline-form">
+                  <input autoFocus value={s.newName} placeholder="Tên điểm, vd: BX Vũng Tàu" aria-label={`Tên điểm mới, điểm ${i + 1}`}
+                         onChange={(e) => setRow(i, { newName: e.target.value })}
+                         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void createStop(i); } }} />
+                  <select value={s.newKind} aria-label={`Loại điểm mới, điểm ${i + 1}`} onChange={(e) => setRow(i, { newKind: e.target.value as StopKind })}>
+                    {(Object.keys(KIND) as StopKind[]).map((k) => <option key={k} value={k}>{KIND[k]}</option>)}
+                  </select>
+                  <button type="button" className="btn small primary" disabled={busy} onClick={() => void createStop(i)}>Tạo điểm</button>
+                  <button type="button" className="btn small link" onClick={() => setRow(i, { newName: undefined })}>Thôi</button>
+                </span>
+              )}
               <input type="number" min={0} inputMode="numeric" aria-label={`Phút từ điểm đầu, điểm ${i + 1}`} disabled={i === 0}
                      value={i === 0 ? '0' : s.minutes_from_start} placeholder="phút"
                      onChange={(e) => setList(list.map((x, k) => (k === i ? { ...x, minutes_from_start: e.target.value } : x)))} />

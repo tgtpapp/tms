@@ -74,7 +74,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5e. Tuyến: 3 điểm dừng, tuyến Hố Nai – Vũng Tàu, giá toàn tuyến + giá chặng
   await page.getByRole('button', { name: 'Tuyến', exact: true }).click();
-  for (const [code, name, kind] of [['HN', 'BX Hố Nai', 'Bến xe'], ['BR', 'Bà Rịa', 'Điểm đón trả'], ['VT', 'BX Vũng Tàu', 'Bến xe']]) {
+  for (const [code, name, kind] of [['HN', 'BX Hố Nai', 'Bến xe'], ['BR', 'Bà Rịa', 'Điểm đón trả']]) {
     await page.getByLabel('Mã điểm').fill(code);
     await page.getByLabel('Tên điểm').fill(name);
     await page.getByLabel('Loại điểm').selectOption({ label: kind });
@@ -91,10 +91,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Điểm dừng thứ 2').selectOption({ label: 'Bà Rịa' });
   await page.getByLabel('Phút từ điểm đầu, điểm 2').fill('60');
   await page.getByRole('button', { name: '+ Thêm điểm' }).click();
-  await page.getByLabel('Điểm dừng thứ 3').selectOption({ label: 'BX Vũng Tàu' });
+  // Điểm chưa có: tạo ngay trong ô chọn điểm của tuyến
+  await page.getByLabel('Điểm dừng thứ 3').selectOption({ label: '+ Điểm mới…' });
+  await page.getByLabel('Tên điểm mới, điểm 3').fill('BX Vũng Tàu');
+  await page.getByLabel('Loại điểm mới, điểm 3').selectOption({ label: 'Bến xe' });
+  await page.getByRole('button', { name: 'Tạo điểm' }).click();
+  await expect(page.getByText('Đã thêm điểm dừng BX Vũng Tàu')).toBeVisible();
+  await expect(page.getByLabel('Điểm dừng thứ 3')).toHaveValue(/.+/);
+  await expect(page.getByLabel('Điểm dừng thứ 3').locator('option:checked')).toHaveText('BX Vũng Tàu');
   await page.getByLabel('Phút từ điểm đầu, điểm 3').fill('90');
   await page.getByRole('button', { name: 'Lưu điểm dừng', exact: true }).click();
   await expect(page.getByText('Đã lưu điểm dừng của tuyến')).toBeVisible();
+  // Chiều về: điểm dừng đảo ngược, giờ tính lại
+  await expect(page.getByText("BX Vũng Tàu → Bà Rịa (+30') → BX Hố Nai (+90')")).toBeVisible();
   await page.getByLabel('Giá toàn tuyến').fill('150000');
   await page.getByRole('button', { name: 'Lưu giá toàn tuyến' }).click();
   await expect(page.getByText('Đã lưu giá toàn tuyến')).toBeVisible();

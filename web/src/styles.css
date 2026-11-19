@@ -419,3 +419,5 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 
 /* Tuyến: khung chiều đi / chiều về */
 .dir-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.update-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; background: #111827; color: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: flex; gap: 10px; align-items: center; font-size: 14px; }
+.update-bar button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; font-weight: 600; cursor: pointer; }

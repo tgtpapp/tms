@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { initTheme } from './lib/theme';
+import '@flaticon/flaticon-uicons/css/regular/rounded.css';   // bộ biểu tượng Uicons (Flaticon) – kiểu Regular Rounded
 import './styles.css';
 
 initTheme();   // áp giao diện đã chọn trước khi vẽ (không nháy màu)

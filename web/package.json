@@ -8,14 +8,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run build",
+    "check": "node scripts/check-icons.mjs && npm run typecheck && npm run build",
     "test:ui": "playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "@flaticon/flaticon-uicons": "^3.3.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

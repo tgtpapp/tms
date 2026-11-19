@@ -6,6 +6,7 @@ import {
 } from '../lib/documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { SignNameToggle } from '../components/SignNameToggle';
 import { Cropper } from '../components/Cropper';
 
 const EMPTY = {
@@ -210,6 +211,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
         In con dấu công ty vào toàn bộ văn bản (dấu nằm trên chữ ký)
       </label>
       {slot('chu_ky', 'Chữ ký giám đốc', 'Chụp trên giấy trắng, app tự tách nền')}
+      {urls.chu_ky && <SignNameToggle who="giam_doc" />}
       {slot('con_dau', 'Con dấu công ty', 'Chụp hoặc quét con dấu, app tự tách nền trắng')}
       {cropping && <Cropper file={cropping.file} title={cropping.slot === 'chu_ky' ? 'Cắt ảnh chữ ký giám đốc' : 'Cắt ảnh con dấu'}
                             onCancel={() => setCropping(null)}

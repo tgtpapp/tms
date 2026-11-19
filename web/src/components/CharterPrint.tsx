@@ -2,6 +2,7 @@
 // Pháp lý (cần xác minh): nội dung bắt buộc của hợp đồng vận tải theo Nghị định hiện hành về kinh doanh vận tải bằng xe ô tô.
 import { useEffect, useRef, useState } from 'react';
 import { signatureUrl } from '../lib/documents';
+import { loadSigns, showName } from '../lib/signatures';
 import { supabase } from '../lib/supabase';
 import { moneyWords } from '../lib/vnWords';
 
@@ -13,7 +14,7 @@ export interface CharterDoc {
   plate: string; seats: number | null; drivers: string[]; pax: { seq: number; full_name: string; phone: string | null; birth_year: number | null }[];
 }
 interface Company { name: string; legal_name: string | null; tax_code: string | null; address: string | null; phone: string | null; transport_license_no: string | null;
-  director: string; title: string; sign: string | null; seal: string | null }
+  director: string; title: string; sign: string | null; seal: string | null; signName: boolean }
 
 const TZ = 'Asia/Ho_Chi_Minh';
 const vnDate = (iso: string) => new Date(iso).toLocaleDateString('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -32,12 +33,13 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
         supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'in.chu_ky_giam_doc', 'in.con_dau']),
       ]);
       const raw = (k: string) => ((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value;
-      const [sign, seal] = await Promise.all([
-        raw('in.chu_ky_giam_doc') === false ? null : signatureUrl(tenantId, 'giam_doc'),
+      const [sg, seal] = await Promise.all([
+        loadSigns(tenantId, ['giam_doc']),
         raw('in.con_dau') === false ? null : signatureUrl(tenantId, 'con_dau'),
       ]);
-      const t = (tn.data ?? { name: '' }) as Omit<Company, 'director' | 'title' | 'sign' | 'seal'>;
-      setCo({ ...t, director: String(raw('cong_ty.giam_doc') ?? ''), title: String(raw('cong_ty.chuc_danh_ky') ?? '') || 'Giám đốc', sign, seal });
+      const gd = raw('in.chu_ky_giam_doc') === false ? null : sg.get('giam_doc') ?? null, sign = gd?.img ?? null, signName = showName(gd);
+      const t = (tn.data ?? { name: '' }) as Omit<Company, 'director' | 'title' | 'sign' | 'seal' | 'signName'>;
+      setCo({ ...t, director: String(raw('cong_ty.giam_doc') ?? ''), title: String(raw('cong_ty.chuc_danh_ky') ?? '') || 'Giám đốc', sign, seal, signName });
     })();
   }, [tenantId]);
   useEffect(() => {
@@ -101,7 +103,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
               Hợp đồng lập thành 02 bản có giá trị như nhau, mỗi bên giữ 01 bản.</p>
             <table className="lenh-foot" style={{ width: '100%' }}><tbody><tr>
               <td><b>ĐẠI DIỆN BÊN B</b><div className="sign-box" /><b>{c.customer_rep || c.customer_name}</b></td>
-              <td><b>ĐẠI DIỆN BÊN A</b><div className="sign-box sign-stack">{co.seal && <img src={co.seal} alt="" />}{co.sign && <img src={co.sign} alt="" />}</div><b>{co.director}</b></td>
+              <td><b>ĐẠI DIỆN BÊN A</b><div className="sign-box sign-stack">{co.seal && <img src={co.seal} alt="" />}{co.sign && <img src={co.sign} alt="" />}</div>{co.signName && <b>{co.director}</b>}</td>
             </tr></tbody></table>
             <div className="hdvc-pax">
               <h3 className="c">DANH SÁCH HÀNH KHÁCH</h3>

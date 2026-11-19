@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
 import { removeFile, signatureUrl, uploadSignature } from '../lib/documents';
+import { SignNameToggle } from '../components/SignNameToggle';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { Cropper } from '../components/Cropper';
@@ -85,7 +86,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
       {ctx.tenant_id && (
         <section className="card form">
           <h2>Chữ ký của tôi</h2>
-          <p className="muted small">Dùng khi in lệnh vận chuyển (ô Cán bộ điều hành). Chụp chữ ký trên giấy trắng, app tự xóa nền. Nền ô caro bên dưới là phần đã trong suốt.</p>
+          <p className="muted small">Dùng ở mọi bản in có phần ký của bạn: lệnh vận chuyển, bảng phân công, nghiệm thu an toàn, lý lịch xe….. Chụp chữ ký trên giấy trắng, app tự xóa nền. Nền ô caro bên dưới là phần đã trong suốt.</p>
           <label className="upload">
             <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
             <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { setCropping(e.target.files?.[0] ?? null); e.target.value = ''; }} />
@@ -96,6 +97,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
               <button type="button" className="img-x-btn" aria-label="Bỏ chữ ký này" title="Bỏ chữ ký này" onClick={() => void dropSign()}>×</button>
             </div>
           )}
+          {sign && ctx.user_id && <SignNameToggle who={ctx.user_id} />}
           {cropping && <Cropper file={cropping} title="Cắt ảnh chữ ký" onCancel={() => setCropping(null)}
                                 onDone={(f) => { setCropping(null); void pickSign(f); }} />}
         </section>

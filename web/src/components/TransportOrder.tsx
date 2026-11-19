@@ -10,6 +10,10 @@ export interface OrderPrintData {
   signerTitle: string;
   signerName: string;
   signerImg: string | null;
+  signerShowName: boolean;          // chữ ký đã có họ tên thì không in thêm
+  dispatcherShowName: boolean;
+  driver1Sign: string | null; driver1ShowName: boolean;
+  driver2Sign: string | null; driver2ShowName: boolean;
   sealImg: string | null;
   driver1: { name: string; hang: string | null } | null;
   driver2: { name: string; hang: string | null } | null;
@@ -117,7 +121,7 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
                   {data.signerImg && <img src={data.signerImg} alt="" />}
                   {data.sealImg && <img src={data.sealImg} alt="" className="seal" />}
                 </div>
-                <b><i>{data.signerName}</i></b>
+                {data.signerShowName && <b><i>{data.signerName}</i></b>}
               </td>
             </tr>
             <tr className="c">
@@ -130,12 +134,14 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
         <table className="lenh-table lenh-foot">
           <tbody>
             <tr className="c">
-              <td><b>LÁI XE 1</b><br /><i>(Ký và ghi rõ họ tên)</i><div className="sign-box" /></td>
-              <td><b>LÁI XE 2</b><br /><i>(Ký và ghi rõ họ tên)</i><div className="sign-box" /></td>
+              <td><b>LÁI XE 1</b><br /><i>(Ký và ghi rõ họ tên)</i><div className="sign-box">{data.driver1Sign && <img src={data.driver1Sign} alt="" />}</div>
+                {data.driver1 && data.driver1ShowName && <i>{data.driver1.name}</i>}</td>
+              <td><b>LÁI XE 2</b><br /><i>(Ký và ghi rõ họ tên)</i><div className="sign-box">{data.driver2Sign && <img src={data.driver2Sign} alt="" />}</div>
+                {data.driver2 && data.driver2ShowName && <i>{data.driver2.name}</i>}</td>
               <td>
                 <b>CÁN BỘ ĐIỀU HÀNH</b>
                 <div className="sign-box">{data.dispatcherImg && <img src={data.dispatcherImg} alt="" />}</div>
-                <i>{data.dispatcherName}</i>
+                {data.dispatcherShowName && <i>{data.dispatcherName}</i>}
               </td>
             </tr>
           </tbody>

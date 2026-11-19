@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 import { fmtDate } from './Documents';
 import { errMsg, fetchAll, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { signatureUrl } from '../lib/documents';
+import { loadSigns, showName, type Sign } from '../lib/signatures';
 
 interface V {
   id: string; plate: string; vehicle_type_id: string; chassis_no: string | null; engine_no: string | null; country_of_origin: string | null;
@@ -78,9 +80,22 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
   }, [v.id, v.vehicle_type_id]);
   useEffect(() => { void load(); }, [load]);
 
+  // Chữ ký: người lập sổ = người đang in; đại diện đơn vị = giám đốc (+ con dấu). Tải xong mới in.
+  const [sg, setSg] = useState<{ me: Sign; meName: string; gd: Sign | null; gdName: string; seal: string | null } | null>(null);
   useEffect(() => {
     if (!printing) return;
-    const t = setTimeout(() => { window.print(); setPrinting(false); }, 300);
+    let t = 0;
+    void (async () => {
+      const uid = (await supabase.auth.getUser()).data.user?.id ?? null;
+      const u = uid ? (await supabase.from('app_users').select('tenant_id, full_name').eq('id', uid).maybeSingle()).data as { tenant_id: string; full_name: string } | null : null;
+      const ss = ((await supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'in.chu_ky_giam_doc', 'in.con_dau'])).data ?? []) as { key: string; value: unknown }[];
+      const raw = (k: string) => ss.find((x) => x.key === k)?.value;
+      const m = u ? await loadSigns(u.tenant_id, ['giam_doc', uid]) : new Map<string, Sign>();
+      const seal = u && raw('in.con_dau') !== false ? await signatureUrl(u.tenant_id, 'con_dau').catch(() => null) : null;
+      setSg({ me: (uid && m.get(uid)) || { img: null, hasName: false }, meName: u?.full_name ?? '', gd: raw('in.chu_ky_giam_doc') === false ? null : m.get('giam_doc') ?? null,
+        gdName: String(raw('cong_ty.giam_doc') ?? ''), seal });
+      t = window.setTimeout(() => { window.print(); setPrinting(false); }, 600);
+    })();
     return () => clearTimeout(t);
   }, [printing]);
 
@@ -217,8 +232,10 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
             <div>○ Thời gian ngừng hoạt động / thanh lý xe (nếu có): {dt(ex.retired_on)}</div>
             <p style={{ textAlign: 'right', marginTop: 24 }}><i>……………, ngày ….. tháng ….. năm 20…..</i></p>
             <table style={{ width: '100%', marginTop: 10 }}><tbody><tr>
-              <td style={{ textAlign: 'center', width: '50%' }}><b>NGƯỜI LẬP SỔ LÝ LỊCH</b><br /><i>(Ký, ghi rõ họ tên)</i></td>
-              <td style={{ textAlign: 'center' }}><b>ĐẠI DIỆN ĐƠN VỊ KINH DOANH VẬN TẢI</b><br /><i>(Ký, đóng dấu)</i></td>
+              <td style={{ textAlign: 'center', width: '50%', verticalAlign: 'top' }}><b>NGƯỜI LẬP SỔ LÝ LỊCH</b><br /><i>(Ký, ghi rõ họ tên)</i>
+                <div className="sign-box">{sg?.me.img && <img src={sg.me.img} alt="" />}</div>{sg && showName(sg.me) && <b>{sg.meName}</b>}</td>
+              <td style={{ textAlign: 'center', verticalAlign: 'top' }}><b>ĐẠI DIỆN ĐƠN VỊ KINH DOANH VẬN TẢI</b><br /><i>(Ký, đóng dấu)</i>
+                <div className="sign-box sign-stack">{sg?.seal && <img src={sg.seal} alt="" />}{sg?.gd?.img && <img src={sg.gd.img} alt="" />}</div>{sg && showName(sg.gd) && <b>{sg.gdName}</b>}</td>
             </tr></tbody></table>
           </div>
         </div>, document.body)}

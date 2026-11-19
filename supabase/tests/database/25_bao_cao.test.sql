@@ -26,15 +26,23 @@ select is((public.report_transport('2026-10-01', '2026-10-31') -> 'vehicles' -> 
 select is(jsonb_array_length(public.report_transport('2026-11-01', '2026-11-30') -> 'vehicles'), 0, 'Ngoài kỳ không có số liệu');
 select is((public.report_sales('2026-10-01', '2026-10-31') -> 'total' ->> 'tickets')::int, 0, 'Báo cáo bán vé chạy được');
 select throws_ok($$ select public.report_sales('2026-10-31', '2026-10-01') $$, '22023', null, 'Khoảng ngày sai bị chặn');
+-- Chữ ký có sẵn họ tên
+select lives_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b1', true) $$, 'Tự đặt chữ ký của mình đã có họ tên');
+select lives_ok($$ select public.set_signature_has_name('giam_doc', true) $$, 'Chủ đặt cho chữ ký giám đốc');
+select is((select count(*)::int from public.signature_settings where has_name), 2, 'Đã lưu 2 cài đặt');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
 select throws_ok($$ select public.report_transport('2026-10-01', '2026-10-31') $$, '42501', null, 'Bán vé không xem báo cáo');
 select throws_ok($$ select public.report_sales('2026-10-01', '2026-10-31') $$, '42501', null, 'Bán vé không xem báo cáo bán vé');
+select throws_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b1', false) $$, '42501', null, 'Không đổi được chữ ký người khác');
+select throws_ok($$ select public.set_signature_has_name('giam_doc', false) $$, '42501', null, 'Bán vé không đổi chữ ký giám đốc');
+select is((select count(*)::int from public.signature_settings), 2, 'Cùng nhà xe đọc được cài đặt chữ ký');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is(jsonb_array_length(public.report_transport('2026-10-01', '2026-10-31') -> 'vehicles'), 0, 'Nhà xe B không thấy số liệu của A');
+select is((select count(*)::int from public.signature_settings), 0, 'Nhà xe B không thấy cài đặt chữ ký của A');
 reset role;
 select * from finish();
 rollback;

@@ -4,9 +4,9 @@
 // Lưu PDF vào Lưu trữ hồ sơ: <năm> / 08. Điều hành xe / <loại> / Tháng MM-YYYY (lưu lại thì thay bản cũ, bản cũ ẩn).
 // Mẫu và nội dung kiểm tra lấy theo app cũ của nhà xe; căn cứ pháp lý của mẫu: cần xác minh.
 import { dirName, type Dir } from './routes';
-import { signatureUrl } from './documents';
+import { loadSigns, showName, type Sign } from './signatures';
 import { supabase } from './supabase';
-import { bytesToBase64, makePdf, pageImg, toDataUrl } from './pdfMaker';
+import { bytesToBase64, makePdf, pageImg } from './pdfMaker';
 import { drive } from './drive';
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -14,12 +14,12 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const vnDay = (iso: string) => new Date(iso).toLocaleDateString('sv-SE', { timeZone: TZ });
 
-interface Person { id: string; name: string; gplx: string; expired: string[]; sign: string | null }
+interface Person { id: string; name: string; gplx: string; expired: string[]; sign: string | null; signName: boolean }
 interface Veh { id: string; plate: string; type: string; seats: number | null; expired: string[] }
 export interface Row { time: string; veh: Veh | null; d1: Person | null; d2: Person | null; route: string; charter: boolean }
-export interface DayData { day: string; rows: Row[]; company: { name: string; address: string }; suffix: string }
+export interface DayData { day: string; rows: Row[]; company: { name: string; address: string }; suffix: string; me: { name: string; sign: Sign } }
 
-export async function loadDay(day: string, tenantId: string): Promise<DayData> {
+export async function loadDay(day: string, tenantId: string, me: { id: string | null; name: string }): Promise<DayData> {
   const from = new Date(`${day}T00:00:00+07:00`).toISOString(), to = new Date(`${day}T23:59:59+07:00`).toISOString();
   const [tr, ch, rt, vh, vt, sm, tn, st] = await Promise.all([
     supabase.from('trips').select('id, route_id, direction, depart_at, vehicle_id').eq('service_date', day).eq('status', 'mo'),
@@ -47,6 +47,7 @@ export async function loadDay(day: string, tenantId: string): Promise<DayData> {
       expired: docs.filter((d) => d.vehicle_id === v.id && d.expires_on && d.expires_on < day).map((d) => NAME[d.doc_type]) });
   }
   const staff = (sm.data ?? []) as { id: string; full_name: string; user_id: string | null }[];
+  const signs = await loadSigns(tenantId, [me.id, ...staff.map((s) => s.user_id)], true);
   const people = new Map<string, Person>();
   const person = async (id: string | null): Promise<Person | null> => {
     if (!id) return null;
@@ -57,7 +58,7 @@ export async function loadDay(day: string, tenantId: string): Promise<DayData> {
     const hang = g?.data && typeof g.data.hang === 'string' ? g.data.hang : '';
     const p: Person = { id, name: s.full_name, gplx: g ? `${g.doc_no ?? '—'}${hang ? ` (Hạng ${hang})` : ''}` : '—',
       expired: docs.filter((d) => d.staff_id === id && d.expires_on && d.expires_on < day).map((d) => `${NAME[d.doc_type]} ${s.full_name}`),
-      sign: s.user_id ? await toDataUrl(await signatureUrl(tenantId, s.user_id).catch(() => null)) : null };
+      sign: s.user_id ? signs.get(s.user_id)?.img ?? null : null, signName: showName(s.user_id ? signs.get(s.user_id) : null) };
     people.set(id, p);
     return p;
   };
@@ -76,7 +77,8 @@ export async function loadDay(day: string, tenantId: string): Promise<DayData> {
   }
   rows.sort((a, b) => a.time.localeCompare(b.time) || (a.veh?.plate ?? '').localeCompare(b.veh?.plate ?? ''));
   const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null };
-  return { day, rows, company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '' };
+  return { day, rows, company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '',
+    me: { name: me.name, sign: (me.id && signs.get(me.id)) || { img: null, hasName: false } } };
 }
 
 /** Các dòng thiếu xe hoặc lái xe chính (quy tắc app cũ: ngày còn thiếu thì chưa lưu, trừ khi chọn "vẫn lưu"). */
@@ -91,8 +93,8 @@ const head = (d: DayData, title: string, sub: string) => `
   <h2 style="text-align:center;margin:12px 0 2px;font-size:19px">${title}</h2><div style="text-align:center;margin-bottom:10px">${sub}</div>`;
 const longDay = (day: string) => { const [y, m, dd] = day.split('-'); return `ngày ${dd} tháng ${m} năm ${y}`; };
 const sigImg = (p: Person | null) => (p?.sign ? `<img src="${p.sign}" alt="" style="max-height:36px;max-width:110px">` : '');
-const signs = (cols: [string, string][]) => `<table style="width:100%;margin-top:16px;border-collapse:collapse"><tr>${cols.map(([t, n]) =>
-  `<td style="width:${100 / cols.length}%;text-align:center;vertical-align:top"><b>${t}</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i><div style="height:70px"></div><b>${esc(n)}</b></td>`).join('')}</tr></table>`;
+const signs = (cols: [string, string, Sign | null][]) => `<table style="width:100%;margin-top:16px;border-collapse:collapse"><tr>${cols.map(([t, n, sg]) =>
+  `<td style="width:${100 / cols.length}%;text-align:center;vertical-align:top"><b>${t}</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i><div style="height:64px;display:flex;align-items:center;justify-content:center">${sg?.img ? `<img src="${sg.img}" alt="" style="max-height:60px;max-width:180px">` : ''}</div><b>${showName(sg) ? esc(n) : ''}</b></td>`).join('')}</tr></table>`;
 
 /** Bảng phân công: trả về các trang (ngang). */
 export function assignPages(d: DayData): string[] {
@@ -109,7 +111,7 @@ export function assignPages(d: DayData): string[] {
     <td style="${td}">${esc(r.d2?.name ?? '—')}</td><td style="${td}">${esc(r.d2?.gplx ?? '—')}</td><td style="${td}">${esc(r.route)}</td><td style="${td};text-align:center">${esc(r.time)}</td>
     <td style="${td};text-align:center">${state(r)}</td><td style="${td};text-align:center">${sigImg(r.d1)}${r.d2?.sign ? `<br>${sigImg(r.d2)}` : ''}</td></tr>`;
   const foot = `<div style="margin-top:10px;font-size:13px"><b>XÁC NHẬN CỦA BỘ PHẬN QUẢN LÝ AN TOÀN GIAO THÔNG:</b><div>• Đã kiểm tra các điều kiện an toàn đối với phương tiện; đồng thời kiểm tra tính hợp lệ của Giấy phép lái xe, thời gian làm việc (không quá giờ quy định) của lái xe trước khi ký lệnh xuất bến.</div></div>
-    ${signs([['Người lập lịch tài', ''], ['Đội trưởng điều hành', ''], ['Bộ phận quản lý ATGT', '']])}`;
+    ${signs([['Người lập lịch tài', d.me.name, d.me.sign], ['Đội trưởng điều hành', '', null], ['Bộ phận quản lý ATGT', '', null]])}`;
   const table = (rs: Row[], start: number) => `<table style="width:100%;border-collapse:collapse"><tr>${H.map((h) => `<th style="${th}">${h}</th>`).join('')}</tr>${rs.map((r, i) => row(r, start + i)).join('')}</table>`;
   const top = `${head(d, 'BẢNG PHÂN CÔNG LỊCH TÀI &amp; XE HÀNG NGÀY', `<i>${longDay(d.day)[0].toUpperCase()}${longDay(d.day).slice(1)}</i>`).replace('<h2', '<div style="font-weight:bold;margin-top:4px">BỘ PHẬN ĐIỀU HÀNH VẬN TẢI</div><h2')}`;
   const pages: string[] = [];
@@ -165,10 +167,7 @@ export function safetyPage(d: DayData, x: DriverDay): string {
     ${exp.length ? `<p style="margin:6px 0 0;color:#b91c1c"><b>Lưu ý giấy tờ hết hạn:</b> ${esc([...new Set(exp)].join(', '))}</p>` : ''}
     <p style="margin:6px 0 2px"><b>Ghi chú / khắc phục:</b> ………………………………………………………………………………………………</p>
     <p style="margin:4px 0;font-size:14px"><b>KẾT LUẬN:</b> ☒ ĐẠT, cho phép xe khởi hành các chuyến trong ngày</p>
-    <table style="width:100%;margin-top:12px;border-collapse:collapse"><tr>
-      <td style="width:33%;text-align:center;vertical-align:top"><b>LÁI XE</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i><div style="height:60px;display:flex;align-items:center;justify-content:center">${sigImg(x.p)}</div><b>${esc(x.p.name)}</b></td>
-      <td style="width:33%;text-align:center;vertical-align:top"><b>NGƯỜI KIỂM TRA</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i></td>
-      <td style="width:34%;text-align:center;vertical-align:top"><b>ĐIỀU HÀNH / PHỤ TRÁCH AN TOÀN</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i></td></tr></table></div>`;
+    ${signs([['LÁI XE', x.p.name, { img: x.p.sign, hasName: !x.p.signName }], ['NGƯỜI KIỂM TRA', '', null], ['ĐIỀU HÀNH', d.me.name, d.me.sign]])}</div>`;
 }
 
 // ------------------------------------------------------------------ Lưu vào Lưu trữ hồ sơ

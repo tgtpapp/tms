@@ -8,7 +8,7 @@ import { useToast } from '../lib/toast';
 
 const addDay = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 
-export function DispatchPapers({ day, tenantId, canSave, onClose }: { day: string; tenantId: string; canSave: boolean; onClose: () => void }) {
+export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: string; tenantId: string; me: { id: string | null; name: string }; canSave: boolean; onClose: () => void }) {
   const toast = useToast();
   const [from, setFrom] = useState(day);
   const [to, setTo] = useState(day);
@@ -22,7 +22,7 @@ export function DispatchPapers({ day, tenantId, canSave, onClose }: { day: strin
   async function preview() {
     setBusy('Đang chuẩn bị…');
     try {
-      const d = await loadDay(from, tenantId);
+      const d = await loadDay(from, tenantId, me);
       if (!d.rows.length) { toast('error', `Ngày ${fmtDate(from)} chưa có chuyến nào được xếp xe / lái xe`); return; }
       const html = [...(pc ? assignPages(d).map((h) => ({ h, land: true })) : []), ...(nt ? driversOf(d).map((x) => ({ h: safetyPage(d, x), land: false })) : [])];
       setView({ d, html });
@@ -44,7 +44,7 @@ export function DispatchPapers({ day, tenantId, canSave, onClose }: { day: strin
     for (const [i, d] of days.entries()) {
       try {
         setBusy(`Ngày ${fmtDate(d)} (${i + 1}/${days.length})…`);
-        const data = await loadDay(d, tenantId);
+        const data = await loadDay(d, tenantId, me);
         if (!data.rows.length) continue;
         const m = missing(data);
         if (m.length && !force) { miss.push(`${fmtDate(d)}: ${m.join('; ')}`); continue; }

@@ -95,6 +95,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [records, setRecords] = useState<StaffRecord[]>([]);
   const [types, setTypes] = useState<Option[]>([]);
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
+  const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
+  const [showLeft, setShowLeft] = useState(false);
   const canEdit = perms.has('staff.manage');
 
   const load = useCallback(async () => {
@@ -128,14 +130,25 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   const tenantId = ctx.tenant_id ?? '';
   const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load };
+  const shown = staff.filter((s) => showLeft || s.is_active);
+  const tabs = jobTabs(shown);
+  const cur = tabs.some((t) => t.key === tab) ? tab : '';
   return (
     <>
+      <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
+        {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
+          <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
+            {t.label} ({t.n})
+          </button>
+        ))}
+      </div>
       {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} onOpen={(id) => {
+        setTab('');
         setOpen(id);
         setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
       }} />}
       {canEdit && <StaffForm key="new" {...common} staff={staff} />}
-      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} />
+      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} />
     </>
   );
 }
@@ -307,15 +320,12 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 
 /* ------------------------------------------------------------------ Danh sách */
 
-function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void }) {
-  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches } = props;
-  const [showLeft, setShowLeft] = useState(false);
+function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void;
+  cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void }) {
+  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft } = props;
   const left = staff.filter((s) => !s.is_active).length;
 
-  const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
   const shown = staff.filter((s) => showLeft || s.is_active);
-  const tabs = jobTabs(shown);
-  const cur = tabs.some((t) => t.key === tab) ? tab : '';
   const avas = useAvatars(props.tenantId);
   return (
     <section className="card">
@@ -328,13 +338,6 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
         )}
       </div>
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
-      <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
-        {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
-          <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
-            {t.label} ({t.n})
-          </button>
-        ))}
-      </div>
       <div className="staff-cards">
         {shown.filter((s) => !cur || jobKey(s) === cur).map((s) => {
           const mine = s.user_id === myUserId;

@@ -184,13 +184,27 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const sellable = (typeId: string | null) => seats.filter((s) => s.vehicle_type_id === typeId && s.is_sellable).length;
   const routeOpts = useMemo(() => {
     const keys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))];
-    return keys.map((k) => { const [rid, d] = k.split('|'); return { key: k, label: dirName(routes.find((r) => r.id === rid), d as Dir) }; })
-      .sort((x, y) => x.label.localeCompare(y.label, 'vi'));
+    // Theo từng cặp tuyến: chiều đi rồi chiều về (Biên Hòa - Vũng Tàu, Vũng Tàu - Biên Hòa, Hố Nai - Vũng Tàu, Vũng Tàu - Hố Nai…)
+    return keys.map((k) => { const [rid, d] = k.split('|'); const r = routes.find((x) => x.id === rid); return { key: k, label: dirName(r, d as Dir), pair: r?.name ?? '', d }; })
+      .sort((x, y) => x.pair.localeCompare(y.pair, 'vi') || (x.d === 'di' ? 0 : 1) - (y.d === 'di' ? 0 : 1));
   }, [trips, routes]);
   const rfOk = routeOpts.some((o) => o.key === rf) ? rf : '';
   const shownTrips = rfOk ? trips.filter((t) => `${t.route_id}|${t.direction}` === rfOk) : trips;
 
   const canTrip = perms.has('trip.manage');
+  const rightRef = useRef<HTMLDivElement>(null);
+  /** Bấm chuyến là nhảy ngay tới sơ đồ ghế (điện thoại: cột phải nằm dưới) */
+  const pickTrip = (id: string) => {
+    setTripId(id);
+    setTimeout(() => rightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  /** Chọn tuyến: tự mở chuyến sắp chạy gần nhất của tuyến đó */
+  const pickRoute = (key: string) => {
+    setRf(key);
+    const l = trips.filter((t) => !key || `${t.route_id}|${t.direction}` === key);
+    const next = l.find((t) => new Date(t.depart_at).getTime() >= Date.now()) ?? l[l.length - 1];
+    if (key && next) pickTrip(next.id); else setTripId(null);
+  };
   const [calOpen, setCalOpen] = useState(true);
   const [extra, setExtra] = useState<{ key: string; time: string; note: string } | null>(null);
   async function addExtra() {
@@ -215,7 +229,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     return (
       <button key={t.id} className={['vx-trip', t.id === tripId && 'on', past && 'past', t.manifest_printed_at && 'phoi', t.departed_at && 'xb'].filter(Boolean).join(' ')}
               aria-label={`Chuyến ${hhmm(t.depart_at)} ${name}`} title={[name, t.departed_at && 'Đã xuất bến', t.manifest_printed_at && 'Đã in phơi'].filter(Boolean).join(' · ')}
-              onClick={() => setTripId(t.id)}>
+              onClick={() => pickTrip(t.id)}>
         <b className="vx-time">{hhmm(t.depart_at)}</b>
         {!rfOk && <span className="vx-rname">{name}</span>}
         <span className="vx-meta"><span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? tail(plates[t.vehicle_id] ?? '') : '—'}</span><span>{t.vehicle_type_id ? `${sold}|${total}` : ''}</span></span>
@@ -236,7 +250,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       {mine.length > 0 && <QueuePanel list={mine} online={online} onSync={() => void sync()} />}
       <div className="vx">
         <aside className="vx-left">
-          <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => { setRf(e.target.value); setTripId(null); }}>
+          <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
             <option value="">Tất cả tuyến</option>
             {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
           </select>
@@ -249,7 +263,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           <div className="vx-trips">{upcoming.map(card)}</div>
           {pastTrips.length > 0 && <><h4 className="past-head">Đã qua giờ khởi hành</h4><div className="vx-trips">{pastTrips.map(card)}</div></>}
         </aside>
-        <div className="vx-right">
+        <div className="vx-right" ref={rightRef}>
           {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p>{online && <CashToday userId={ctx.user_id} version={version} />}</section>}
           {trip && (
             <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}

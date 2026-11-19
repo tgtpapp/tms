@@ -748,3 +748,4 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .pd-group { margin-bottom: 8px; }
 .vx-body .seat-dot.dat { background: #fde2e2; } .vx-body .seat-dot.da_tt { background: #dcfce7; } .vx-body .seat-dot.boarded { background: #86efac; }
 .vxs.boarded { background: #86efac; }
+.vx-right { scroll-margin-top: 8px; }

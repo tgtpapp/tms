@@ -2,6 +2,7 @@ import { dirName, reverseItinerary } from '../lib/routes';
 import { applyFilter, GridView, RouteFilterBar, useBoardFilter, VehicleUsage, type Group } from '../components/DispatchBoard';
 import { Modal } from '../components/Modal';
 import { ScheduleImport } from '../components/ScheduleImport';
+import { DispatchPapers } from '../components/DispatchPapers';
 import { MiniCal } from '../components/MiniCal';
 import { lunarText } from '../lib/lunar';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -173,7 +174,8 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
     }
   }, [account, routes, vehicles, vtypes, crew, staff, licenses, ends, load, toast]);
 
-  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, path, printOrder, reload: load };
+  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, path, printOrder, reload: load,
+    tenantId: account.tenant_id ?? '', canArchive: perms.has('archive.manage') };
   return (
     <>
       {printing && <TransportOrderPrint data={printing} onClose={() => setPrinting(null)} />}
@@ -185,6 +187,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 }
 
 interface Ctx {
+  tenantId: string; canArchive: boolean;
   routes: Route[]; schedules: Schedule[]; trips: Trip[]; crew: Crew[]; vehicles: Vehicle[]; staff: Staff[]; licenses: License[];
   orders: Order[]; vtypes: VType[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; path: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
   reload: () => Promise<void>;
@@ -381,8 +384,9 @@ function Schedules(props: Ctx) {
 /* ------------------------------------------------------------------ Chuyến theo ngày */
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
-  const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay } = props;
+  const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay, tenantId, canArchive } = props;
   const [imp, setImp] = useState(false);
+  const [papers, setPapers] = useState(false);
   const { f, setF, view, setView } = useBoardFilter();
   const [groups, setGroups] = useState<Group[]>([]);
   const shown = applyFilter(trips, f, (id) => groups.find((g) => g.id === id)?.routes ?? null);
@@ -431,7 +435,8 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
       <div className="item-head">
         <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
         {canEdit && <span className="actions"><button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>
-          <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button></span>}
+          <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>
+          <button className="btn small" onClick={() => setPapers(true)}>Phân công &amp; nghiệm thu</button></span>}
       </div>
       <div className="inline-form">
         <button className="btn small" aria-label="Ngày trước" onClick={() => setDay(addDays(day, -1))}>‹</button>
@@ -441,6 +446,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
       </div>
       <details className="cal-box"><summary>Lịch tháng (có âm lịch)</summary><MiniCal day={day} onPick={setDay} /></details>
       {imp && <ScheduleImport day={day} onClose={() => setImp(false)} onDone={reload} />}
+      {papers && <DispatchPapers day={day} tenantId={tenantId} canSave={canArchive} onClose={() => setPapers(false)} />}
       <p className="muted small">{open_.length} chuyến · {ready} đủ xe + lái · {open_.length - ready} chưa xếp · {trips.length - open_.length} đã hủy</p>
 
       {canEdit && !extra && day >= today() && (

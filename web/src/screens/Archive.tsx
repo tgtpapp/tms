@@ -37,7 +37,7 @@ const SEED: [string, string[]][] = [
   ['05. Hợp đồng vận chuyển', ['Hợp đồng đang hiệu lực', 'Hợp đồng đã thanh lý']],
   ['06. Sửa chữa - Nhiên liệu', ['Phiếu sửa chữa', 'Chứng từ nhiên liệu']],
   ['07. Khác', []],
-  ['08. Điều hành xe', ['Bảng phân công lịch tài & xe']],
+  ['08. Điều hành xe', ['Bảng phân công lịch tài & xe', 'Nghiệm thu an toàn']],
 ];
 
 type Dlg =

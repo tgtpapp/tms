@@ -642,3 +642,7 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .stat-row > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
 .stat-row b { font-size: 1.15rem; }
+/* Bảng phân công (A4 ngang) + nghiệm thu an toàn (A4 dọc) */
+.lenh.dp { font-family: 'Times New Roman', Times, serif; font-size: 13px; margin-bottom: 12px; }
+.lenh.dp.land { width: 297mm; page: land; }
+@page land { size: A4 landscape; margin: 8mm; }

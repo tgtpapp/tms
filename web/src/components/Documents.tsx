@@ -2,7 +2,7 @@
 // dòng giấy tờ (xem / sửa / thêm bản mới), giấy cũ, trạng thái hạn.
 import { useRef, useState, type ReactNode } from 'react';
 import { docTypeOf, type DocTypeDef, type OwnerKind } from '../lib/docTypes';
-import { prepareFile, readByAI, signedUrl, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
+import { loadStoredFiles, prepareFile, readByAI, signedUrl, uploadFiles, type FieldValue, type PreparedFile } from '../lib/documents';
 import { errMsg, rpc } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -95,9 +95,11 @@ export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Sc
   const [sides, setSides] = useState<(PreparedFile | null)[]>(() => (def.sides ?? []).map(() => null));
   // Giữ bản mới nhất ngoài state: chọn 2 mặt liên tiếp thật nhanh vẫn không mất mặt trước
   const sidesRef = useRef(sides);
+  const [last, setLast] = useState<PreparedFile[]>([]);   // ảnh vừa đọc: để bấm "Đọc lại"
   const short = SHORT[def.code] ?? def.name;
 
   async function read(files: PreparedFile[]) {
+    setLast(files);
     const t0 = Date.now();
     setBusy({ on: true, sec: 0 });
     const tick = setInterval(() => setBusy({ on: true, sec: Math.round((Date.now() - t0) / 1000) }), 1000);
@@ -137,6 +139,9 @@ export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Sc
   }
 
   if (busy.on) return <p className="upload">AI đang đọc… {busy.sec} giây</p>;
+  const again = last.length > 0 && (
+    <button type="button" className="btn small" aria-label={`Đọc lại ${short}`} onClick={() => void read(last)}>Đọc lại</button>
+  );
 
   if (def.sides) {
     const chosen = sides.filter(Boolean) as PreparedFile[];
@@ -152,16 +157,20 @@ export function Scanner({ def, onScanned }: { def: DocTypeDef; onScanned: (s: Sc
         {chosen.length > 0 && chosen.length < def.sides.length && (
           <button type="button" className="btn small" onClick={() => void read(chosen)}>Đọc với {chosen.length} mặt đã chọn</button>
         )}
+        {again}
       </div>
     );
   }
 
   return (
-    <label className="upload">
-      <span>{`Chụp / tải ảnh ${def.name} (tối đa 4 ảnh hoặc PDF)`}</span>
-      <input type="file" accept="image/*,application/pdf" multiple aria-label={`Tải ảnh ${short}`}
-             onChange={(e) => { void pickMany(e.target.files); e.target.value = ''; }} />
-    </label>
+    <div className="sides">
+      <label className="upload">
+        <span>{`Chụp / tải ảnh ${def.name} (tối đa 4 ảnh hoặc PDF)`}</span>
+        <input type="file" accept="image/*,application/pdf" multiple aria-label={`Tải ảnh ${short}`}
+               onChange={(e) => { void pickMany(e.target.files); e.target.value = ''; }} />
+      </label>
+      {again}
+    </div>
   );
 }
 
@@ -201,6 +210,26 @@ export function DocRow(props: {
   const [reqId, setReqId] = useState(() => crypto.randomUUID());
   const st = docState(def, doc, warnDays, props.required ?? def.required);
   const short = SHORT[def.code] ?? def.name;
+  const [aiNote, setAiNote] = useState<string | null>(null);
+
+  /** AI đọc lại ảnh đã lưu của giấy hiện tại, điền vào ô (chưa lưu – kiểm tra rồi bấm Lưu) */
+  async function rereadSaved() {
+    if (!doc || doc.files.length === 0) return;
+    const base = mode === 'edit' ? values : valuesFromDoc(def, doc);
+    setValues(base);
+    setMode('edit');
+    const t0 = Date.now();
+    setAiNote('AI đang đọc lại ảnh đã lưu…');
+    try {
+      const r = await readByAI(def.code, await loadStoredFiles(doc.files));
+      const next = { ...base };
+      for (const [k, v] of Object.entries(valuesFromAi(def, r.fields))) if (v) next[k] = v;
+      setValues(next);
+      setAiNote(`AI đã đọc lại (${((Date.now() - t0) / 1000).toFixed(1)} giây)${r.warnings.length ? ` · ${r.warnings.join('; ')}` : ''}. Kiểm tra rồi bấm "Lưu giấy tờ".`);
+    } catch (e) {
+      setAiNote(errMsg(e));
+    }
+  }
 
   async function saveNew() {
     if (!scanned || scanned.files.length === 0) return toast('error', 'Hãy tải lên ảnh giấy tờ');
@@ -250,7 +279,10 @@ export function DocRow(props: {
           {doc && <FilesButton files={doc.files} />}
           {canEdit && mode === 'view' && (
             <>
-              {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
+              {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
+              {doc && doc.files.length > 0 && (
+                <button className="btn small" aria-label={`Đọc lại ${short}`} onClick={() => void rereadSaved()}>Đọc lại</button>
+              )}
               <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setMode('add'); }}>
                 {doc ? 'Thêm bản mới' : 'Thêm'}
               </button>
@@ -275,6 +307,10 @@ export function DocRow(props: {
               {scanned && scanned.warnings.length > 0 && <ul className="warn small">{scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
               {doc && <p className="muted small">Lưu bản mới thì bản hiện tại chuyển sang giấy cũ (vẫn giữ lại).</p>}
             </>
+          )}
+          {mode === 'edit' && aiNote && <p className="muted small">{aiNote}</p>}
+          {mode === 'edit' && doc && doc.files.length > 0 && (
+            <button type="button" className="btn small" onClick={() => void rereadSaved()}>AI đọc lại ảnh đã lưu</button>
           )}
           <DocFields def={def} values={values} onChange={setValues} />
           {check?.(values)}

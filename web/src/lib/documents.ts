@@ -85,6 +85,20 @@ export async function readByAI(docType: string, files: PreparedFile[]): Promise<
   return data as AiResult;
 }
 
+/** Tải lại tệp giấy tờ đã lưu (ảnh / PDF) để AI đọc lại. */
+export async function loadStoredFiles(paths: string[]): Promise<PreparedFile[]> {
+  const out: PreparedFile[] = [];
+  for (const p of paths) {
+    const { data, error } = await supabase.storage.from(BUCKET).download(p);
+    if (error || !data) throw new Error(`Không tải được tệp đã lưu: ${error?.message ?? p}`);
+    const ext = (p.split('.').pop() ?? 'jpg').toLowerCase();
+    const mime = data.type.startsWith('image/') || data.type === 'application/pdf' ? data.type
+      : ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
+    out.push({ blob: data, mime, base64: await toBase64(data), ext });
+  }
+  return out;
+}
+
 /** Link xem tệp trong 10 phút (bucket riêng tư). */
 export async function signedUrl(path: string): Promise<string> {
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 600);

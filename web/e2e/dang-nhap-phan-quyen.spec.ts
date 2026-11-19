@@ -156,6 +156,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu giấy tờ' }).click();
   await expect(page.getByRole('button', { name: 'Hiện giấy cũ (1)' })).toBeVisible();
   await expect(page.getByText(/Kiểm định: Sắp hết hạn/)).toHaveCount(0);
+  // Đọc lại ảnh đã lưu (CI không có AI → báo nhập tay, vẫn mở ô sửa)
+  await page.getByRole('button', { name: 'Đọc lại Kiểm định' }).click();
+  await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'AI đọc lại ảnh đã lưu' })).toBeVisible();
 
   // 5i. Lái xe: tải CCCD mặt trước + mặt sau, nhập tay (CI không có AI), có ngày vào công ty
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();

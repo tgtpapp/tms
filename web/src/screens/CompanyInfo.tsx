@@ -2,7 +2,7 @@
 // hồ sơ pháp lý & chữ ký (chỉ quản trị xem). Giấy tờ tải lên → AI đọc, điền sẵn để kiểm tra rồi lưu.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  companyFileUrl, prepareFile, readByAI, removeFile, signatureUrl, uploadCompanyFile, uploadLogo, uploadSignature, type PreparedFile,
+  companyFileUrl, loadStoredFiles, prepareFile, readByAI, removeFile, signatureUrl, uploadCompanyFile, uploadLogo, uploadSignature, type PreparedFile,
 } from '../lib/documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -88,34 +88,57 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     }
   }
 
-  /** Giấy tờ: lưu ảnh rồi cho AI đọc, điền sẵn các ô (chưa lưu – kiểm tra rồi bấm Lưu) */
+  /** AI đọc giấy phép / CCCD giám đốc, điền sẵn các ô (chưa lưu – kiểm tra rồi bấm Lưu). again: đọc lại thì lấy số AI mới đọc. */
+  async function readDoc(kind: 'giay_phep' | 'cccd', files: PreparedFile[], again: boolean) {
+    setReading(again ? 'AI đang đọc lại…' : 'AI đang đọc…');
+    try {
+      if (kind === 'giay_phep') {
+        const r = await readByAI('gpkd_van_tai', files);
+        const g = (k: string) => (r.fields[k] == null ? '' : String(r.fields[k]));
+        const pick = (ai: string, cur: string, keep: boolean) => (keep && !again ? cur || ai : ai || cur);
+        setF((cur) => ({
+          ...cur, transport_license_no: g('so_giay') || cur.transport_license_no, transport_license_date: g('ngay_cap') || cur.transport_license_date,
+          transport_license_issuer: g('noi_cap') || cur.transport_license_issuer, legal_name: pick(g('ten_don_vi'), cur.legal_name, true),
+          address: pick(g('dia_chi'), cur.address, true),
+        }));
+      } else {
+        const r = await readByAI('cccd', files);
+        const so = r.fields.so_giay == null ? '' : String(r.fields.so_giay).replace(/\s/g, '');
+        if (so) setF((cur) => ({ ...cur, director_id_no: so }));
+      }
+      toast('ok', 'AI đã đọc và điền sẵn, kiểm tra rồi bấm "Lưu thông tin công ty"');
+    } finally {
+      setReading(null);
+    }
+  }
+
+  /** Giấy tờ: lưu ảnh rồi cho AI đọc */
   async function pickDoc(slot: 'giay_phep' | 'cccd_truoc' | 'cccd_sau', file: File) {
     try {
       const prepared = await prepareFile(file);
       await uploadCompanyFile(tenantId, PATH[slot](tenantId).split('/cong_ty/')[1], prepared.blob, prepared.mime);
       await loadUrls();
-      setReading('AI đang đọc…');
-      if (slot === 'giay_phep') {
-        const r = await readByAI('gpkd_van_tai', [prepared]);
-        const g = (k: string) => (r.fields[k] == null ? '' : String(r.fields[k]));
-        setF((cur) => ({
-          ...cur, transport_license_no: g('so_giay') || cur.transport_license_no, transport_license_date: g('ngay_cap') || cur.transport_license_date,
-          transport_license_issuer: g('noi_cap') || cur.transport_license_issuer, legal_name: cur.legal_name || g('ten_don_vi'),
-          address: cur.address || g('dia_chi'),
-        }));
-      } else {
+      if (slot === 'giay_phep') await readDoc('giay_phep', [prepared], false);
+      else {
         cccd.current[slot === 'cccd_truoc' ? 'truoc' : 'sau'] = prepared;
-        const imgs = [cccd.current.truoc, cccd.current.sau].filter(Boolean) as PreparedFile[];
-        const r = await readByAI('cccd', imgs);
-        const so = r.fields.so_giay == null ? '' : String(r.fields.so_giay).replace(/\s/g, '');
-        if (so) setF((cur) => ({ ...cur, director_id_no: so }));
+        await readDoc('cccd', [cccd.current.truoc, cccd.current.sau].filter(Boolean) as PreparedFile[], false);
       }
-      setReading(null);
-      toast('ok', 'AI đã đọc và điền sẵn, kiểm tra rồi bấm "Lưu thông tin công ty"');
+    } catch (err) {
+      toast('error', errMsg(err));
+      await loadUrls();
+    }
+  }
+
+  /** Đọc lại ảnh đã lưu */
+  async function reread(kind: 'giay_phep' | 'cccd') {
+    try {
+      const slots: ('giay_phep' | 'cccd_truoc' | 'cccd_sau')[] = kind === 'giay_phep' ? ['giay_phep'] : ['cccd_truoc', 'cccd_sau'];
+      const paths = slots.filter((x) => urls[x]).map((x) => PATH[x](tenantId));
+      if (paths.length === 0) return toast('error', 'Chưa có ảnh để đọc');
+      await readDoc(kind, await loadStoredFiles(paths), true);
     } catch (err) {
       setReading(null);
       toast('error', errMsg(err));
-      await loadUrls();
     }
   }
 
@@ -172,6 +195,14 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       {slot('giay_phep', 'Giấy phép kinh doanh vận tải', 'Tải ảnh chụp hoặc quét giấy phép – AI tự đọc số, ngày cấp, nơi cấp')}
       {slot('cccd_truoc', 'CCCD giám đốc (mặt trước)', 'AI tự đọc số CCCD')}
       {slot('cccd_sau', 'CCCD giám đốc (mặt sau)')}
+      {(urls.giay_phep || urls.cccd_truoc || urls.cccd_sau) && (
+        <div className="actions">
+          {urls.giay_phep && <button type="button" className="btn small" disabled={!!reading} onClick={() => void reread('giay_phep')}>Đọc lại giấy phép</button>}
+          {(urls.cccd_truoc || urls.cccd_sau) && (
+            <button type="button" className="btn small" disabled={!!reading} onClick={() => void reread('cccd')}>Đọc lại CCCD giám đốc</button>
+          )}
+        </div>
+      )}
       <label className="check">
         <input type="checkbox" checked={flags.sign} onChange={(e) => setFlags({ ...flags, sign: e.target.checked })} />
         In chữ ký giám đốc vào toàn bộ văn bản

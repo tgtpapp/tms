@@ -1,5 +1,6 @@
+import { Modal } from '../components/Modal';
 import { DeleteButton } from '../components/DeleteButton';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
 } from '../components/Documents';
@@ -221,6 +222,8 @@ function VehicleFields({ f, setF, types }: { f: VehicleForm; setF: (f: VehicleFo
 export function VehicleList(props: {
   tenantId: string; vehicles: Vehicle[]; types: VehicleTypeLite[]; docs: Doc[]; warnDays: number; canEdit: boolean;
   open: string | null; setOpen: (id: string | null) => void; reload: () => Promise<void>;
+  /** Sơ đồ ghế của loại xe (sửa ngay trong cửa sổ xe) */
+  layout?: (typeId: string) => ReactNode;
 }) {
   const { vehicles, types, docs, warnDays, canEdit, open, setOpen } = props;
   const [showInactive, setShowInactive] = useState(false);
@@ -253,9 +256,14 @@ export function VehicleList(props: {
                   {!v.is_active && <span className="badge locked">Ngừng dùng</span>}
                   {bad > 0 && <span className="badge warn-badge">{bad} giấy tờ cần xử lý</span>}
                 </div>
-                <button className="btn small" onClick={() => setOpen(open === v.id ? null : v.id)}>{open === v.id ? 'Đóng' : 'Giấy tờ'}</button>
+                <button className="btn small" aria-label={`Sửa xe ${v.plate}`} onClick={() => setOpen(v.id)}>{canEdit ? 'Sửa' : 'Xem'}</button>
               </div>
-              {open === v.id && <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />}
+              {open === v.id && (
+                <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
+                  <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
+                  {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
+                </Modal>
+              )}
             </li>
           );
         })}
@@ -267,7 +275,7 @@ export function VehicleList(props: {
 function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: VehicleTypeLite[]; docs: Doc[]; warnDays: number; canEdit: boolean; reload: () => Promise<void> }) {
   const { tenantId, vehicle, types, docs, warnDays, canEdit, reload } = props;
   const toast = useToast();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(canEdit);
   const [f, setF] = useState<VehicleForm>(() => vehicleFormOf(vehicle));
   const mine = useMemo(() => docs.filter((d) => d.vehicle_id === vehicle.id), [docs, vehicle.id]);
   const life = lifeLimit(vehicle.manufacture_year);

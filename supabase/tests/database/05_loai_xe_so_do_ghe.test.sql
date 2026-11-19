@@ -73,6 +73,21 @@ select lives_ok($$ select public.set_seat_layout((select v from t.ids where k = 
 select is((select count(*)::int from public.vehicle_type_seats), 5, 'Sơ đồ có 5 chỗ');
 select is((select count(*)::int from public.vehicle_type_seats where is_sellable), 4, 'Có 4 chỗ bán được');
 select is((select label from public.vehicle_type_seats where is_priority), 'A01', 'Số ghế viết hoa, có chỗ ưu tiên');
+-- Ô tài xế + cửa: không bán, không ưu tiên, không tính vào số chỗ theo kiểm định
+select lives_ok($$ select public.set_seat_layout((select v from t.ids where k = 'T'), 3, 3, jsonb_build_array(
+  jsonb_build_object('label', 'A01', 'deck', 1, 'row', 1, 'col', 1, 'kind', 'giuong', 'priority', true),
+  jsonb_build_object('label', 'A02', 'deck', 1, 'row', 1, 'col', 3, 'kind', 'giuong'),
+  jsonb_build_object('label', 'B01', 'deck', 2, 'row', 1, 'col', 1, 'kind', 'giuong'),
+  jsonb_build_object('label', 'B02', 'deck', 2, 'row', 1, 'col', 3, 'kind', 'giuong'),
+  jsonb_build_object('label', 'PX', 'deck', 1, 'row', 2, 'col', 1, 'kind', 'ghe', 'sellable', false),
+  jsonb_build_object('label', 'TX', 'deck', 1, 'row', 3, 'col', 1, 'kind', 'tai_xe', 'sellable', true, 'priority', true),
+  jsonb_build_object('label', 'CUA', 'deck', 1, 'row', 3, 'col', 3, 'kind', 'cua'))) $$,
+  'Thêm ô tài xế + cửa lên xuống (không vượt số chỗ theo kiểm định)');
+select is((select count(*)::int from public.vehicle_type_seats where kind in ('tai_xe', 'cua') and not is_sellable and not is_priority), 2,
+  'Ô tài xế / cửa luôn không bán, không ưu tiên');
+select is((select count(*)::int from public.vehicle_type_seats where is_sellable), 4, 'Vẫn 4 chỗ bán được');
+select throws_ok($$ select public.set_seat_layout((select v from t.ids where k = 'T'), 2, 3, jsonb_build_array(
+  jsonb_build_object('label', 'X1', 'deck', 1, 'row', 1, 'col', 1, 'kind', 'ban'))) $$, '22023', null, 'Loại ô lạ bị chặn');
 select is((select layout_rows * 10 + layout_cols from public.vehicle_types where code = 'GN40'), 23, 'Lưu kích thước lưới');
 select ok(exists (select 1 from public.audit_logs where entity = 'vehicle_type_seats'
                   and detail -> 'new' ->> 'so_do' = '1 ghế, 4 giường'), 'Nhật ký ghi lần lưu sơ đồ');
@@ -88,7 +103,7 @@ reset role;
 -- ---------------------------------------------------------------- Nhân viên bán vé A
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
-select is((select count(*)::int from public.vehicle_type_seats), 5, 'Bán vé xem được sơ đồ ghế');
+select is((select count(*)::int from public.vehicle_type_seats), 7, 'Bán vé xem được sơ đồ ghế');
 select throws_ok($$ insert into public.vehicle_types (code, name, reg_seats) values ('X', 'X', 10) $$, '42501', null,
   'Bán vé không tạo được loại xe');
 select throws_ok($$ select public.set_seat_layout((select v from t.ids where k = 'T'), 1, 1, '[]'::jsonb) $$, '42501', null,

@@ -149,7 +149,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Xe (1)', exact: true })).toBeVisible();
 
   // 5h. Thêm kiểm định sắp hết hạn → cảnh báo; thêm bản mới → bản cũ vào "giấy cũ"
-  await page.getByRole('button', { name: 'Giấy tờ', exact: true }).click();
+  await page.getByRole('button', { name: 'Sửa xe 51B-123.45' }).click();
+  await expect(page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' })).toBeVisible();
   await expect(page.getByText('Số 012345')).toBeVisible();
   await page.getByRole('button', { name: 'Thêm Kiểm định' }).click();
   await page.getByLabel('Tải ảnh Kiểm định').setInputFiles(png);
@@ -169,6 +170,20 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đọc lại Kiểm định' }).click();
   await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
   await expect(page.getByRole('button', { name: 'AI đọc lại ảnh đã lưu' })).toBeVisible();
+  // Sơ đồ ghế trong cửa sổ xe: thêm ô tài xế + cửa lên xuống (không bán, không tính chỗ)
+  const dlg = page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' });
+  await dlg.getByRole('button', { name: 'Sửa sơ đồ' }).click();
+  await dlg.getByLabel('Số hàng', { exact: true }).fill('4');
+  await dlg.getByRole('button', { name: 'Tài xế' }).click();
+  await dlg.getByRole('button', { name: /^Tầng 1 hàng 4 cột 1/ }).click();
+  await dlg.getByRole('button', { name: 'Cửa lên xuống' }).click();
+  await dlg.getByRole('button', { name: /^Tầng 1 hàng 4 cột 3/ }).click();
+  await expect(dlg.getByRole('button', { name: 'Tầng 1 hàng 4 cột 1: tài xế TX' })).toBeVisible();
+  await dlg.getByRole('button', { name: 'Lưu sơ đồ' }).click();
+  await expect(page.getByText('Đã lưu sơ đồ ghế')).toBeVisible();
+  await expect(page.getByText('Sơ đồ: 6 giường · 6 chỗ bán · 1 chỗ ưu tiên')).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // 5i. Lái xe: tải CCCD mặt trước + mặt sau, nhập tay (CI không có AI), có ngày vào công ty
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();

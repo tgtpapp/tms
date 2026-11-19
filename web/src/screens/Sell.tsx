@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { SeatIcon } from '../components/SeatIcon';
 import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { fmtDate, today } from '../components/Documents';
@@ -23,7 +24,7 @@ interface Route { id: string; name: string; name_ve: string | null }
 interface RouteStop { route_id: string; seq: number; stop_id: string }
 interface Stop { id: string; name: string }
 interface VType { id: string; name: string; decks: number; layout_rows: number; layout_cols: number }
-interface Seat { vehicle_type_id: string; label: string; deck: number; row_no: number; col_no: number; kind: 'ghe' | 'giuong'; is_priority: boolean; is_sellable: boolean }
+interface Seat { vehicle_type_id: string; label: string; deck: number; row_no: number; col_no: number; kind: 'ghe' | 'giuong' | 'tai_xe' | 'cua'; is_priority: boolean; is_sellable: boolean }
 export interface Ticket {
   id: string; booking_id: string; trip_id: string; seat_label: string; from_stop_id: string; to_stop_id: string;
   from_idx: number; to_idx: number; price: number; status: SeatStatus; hold_until: string | null; keep_reason: string | null;
@@ -467,6 +468,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; statusOf: (label: string) 
               const c = (idx % type.layout_cols) + 1;
               const s = seats.find((x) => x.deck === d && x.row_no === r && x.col_no === c);
               if (!s) return <div key={idx} />;
+              if (s.kind === 'tai_xe' || s.kind === 'cua') return <div key={idx} className={`sseat ${s.kind}`} title={s.kind === 'tai_xe' ? 'Tài xế' : 'Cửa lên xuống'}><SeatIcon kind={s.kind} size={20} />{s.kind === 'tai_xe' ? 'Tài xế' : 'Cửa'}</div>;
               if (!s.is_sellable) return <div key={idx} className="sseat off">{s.label}</div>;
               const st = statusOf(s.label);
               const who = st.t && st.t.status !== 'giu' ? (st.t.passenger_name ?? st.t.passenger_phone ?? '') : '';

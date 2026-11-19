@@ -1,3 +1,4 @@
+import { SeatIcon } from '../components/SeatIcon';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
@@ -7,7 +8,7 @@ import { AddVehicle, DOC_COLS, DocAlerts, VEHICLE_COLS, VehicleList, type Doc, t
 
 type BodyStyle = 'ghe_ngoi' | 'giuong_nam' | 'limousine' | 'phong_nam' | 'khac';
 type Fuel = 'dau' | 'xang' | 'dien' | 'khi' | 'hybrid';
-type SeatKind = 'ghe' | 'giuong';
+type SeatKind = 'ghe' | 'giuong' | 'tai_xe' | 'cua';
 
 interface VehicleType {
   id: string; code: string; name: string; brand: string | null; model_code: string | null;
@@ -24,7 +25,8 @@ const BODY: Record<BodyStyle, string> = {
   ghe_ngoi: 'Ghế ngồi', giuong_nam: 'Giường nằm', limousine: 'Limousine', phong_nam: 'Phòng nằm (cabin)', khac: 'Khác',
 };
 const FUEL: Record<Fuel, string> = { dau: 'Dầu diesel', xang: 'Xăng', dien: 'Điện', khi: 'Khí (CNG/LNG)', hybrid: 'Hybrid' };
-const KIND: Record<SeatKind, string> = { ghe: 'ghế', giuong: 'giường' };
+const KIND: Record<SeatKind, string> = { ghe: 'ghế', giuong: 'giường', tai_xe: 'tài xế', cua: 'cửa lên xuống' };
+const isExtra = (k: SeatKind) => k === 'tai_xe' || k === 'cua';
 
 export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
@@ -66,7 +68,11 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
       }} />
       {canEdit && <AddVehicle tenantId={tenantId} types={types} reload={load} />}
       <VehicleList tenantId={tenantId} vehicles={vehicles} types={types} docs={docs} warnDays={warnDays} canEdit={canEdit}
-                   open={open} setOpen={setOpen} reload={load} />
+                   open={open} setOpen={setOpen} reload={load}
+                   layout={(typeId) => {
+                     const t = types.find((x) => x.id === typeId);
+                     return t ? <SeatLayout type={t} seats={seats.filter((s) => s.vehicle_type_id === t.id)} canEdit={canEdit} reload={load} /> : null;
+                   }} />
       <VehicleTypesSection types={types} seats={seats} canEdit={canEdit} reload={load} />
     </>
   );
@@ -235,9 +241,9 @@ function summary(list: { kind: SeatKind; is_sellable: boolean; is_priority: bool
 /* ------------------------------------------------------------------ Sơ đồ ghế */
 
 interface Cell { label: string; kind: SeatKind; priority: boolean; sellable: boolean }
-type Tool = 'ghe' | 'giuong' | 'trong' | 'uu_tien' | 'khong_ban' | 'doi_so';
+type Tool = 'ghe' | 'giuong' | 'tai_xe' | 'cua' | 'trong' | 'uu_tien' | 'khong_ban' | 'doi_so';
 const TOOLS: Record<Tool, string> = {
-  ghe: 'Ghế', giuong: 'Giường', trong: 'Lối đi / trống', uu_tien: 'Chỗ ưu tiên', khong_ban: 'Không bán (phụ xe)', doi_so: 'Đổi số ghế',
+  ghe: 'Ghế', giuong: 'Giường', tai_xe: 'Tài xế', cua: 'Cửa lên xuống', trong: 'Lối đi / trống', uu_tien: 'Chỗ ưu tiên', khong_ban: 'Không bán (phụ xe)', doi_so: 'Đổi số ghế',
 };
 const key = (d: number, r: number, c: number) => `${d}-${r}-${c}`;
 const DECK_PREFIX = ['A', 'B'];
@@ -250,7 +256,7 @@ function renumber(cells: Map<string, Cell>, decks: number, rows: number, cols: n
     for (let r = 1; r <= rows; r++) {
       for (let c = 1; c <= cols; c++) {
         const cell = cells.get(key(d, r, c));
-        if (cell) next.set(key(d, r, c), { ...cell, label: `${DECK_PREFIX[d - 1]}${String(++n).padStart(2, '0')}` });
+        if (cell) next.set(key(d, r, c), isExtra(cell.kind) ? cell : { ...cell, label: `${DECK_PREFIX[d - 1]}${String(++n).padStart(2, '0')}` });
       }
     }
   }
@@ -287,9 +293,14 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
     const cur = cells.get(k);
     const next = new Map(cells);
     if (tool === 'ghe' || tool === 'giuong') {
-      next.set(k, cur ? { ...cur, kind: tool } : { label: nextLabel(d), kind: tool, priority: false, sellable: true });
+      next.set(k, cur && !isExtra(cur.kind) ? { ...cur, kind: tool } : { label: nextLabel(d), kind: tool, priority: false, sellable: true });
+    } else if (tool === 'tai_xe' || tool === 'cua') {
+      next.set(k, cur?.kind === tool ? cur : { label: extraLabel(tool), kind: tool, priority: false, sellable: false });
     } else if (tool === 'trong') {
       next.delete(k);
+    } else if (cur && isExtra(cur.kind)) {
+      if (tool === 'doi_so') { setRenaming(k); return; }
+      return;
     } else if (cur && tool === 'uu_tien') {
       next.set(k, { ...cur, priority: !cur.priority });
     } else if (cur && tool === 'khong_ban') {
@@ -309,13 +320,23 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
     }
   }
 
+  function extraLabel(kind: 'tai_xe' | 'cua'): string {
+    const base = kind === 'tai_xe' ? 'TX' : 'CUA';
+    const used = new Set(Array.from(cells.values()).map((c) => c.label.toUpperCase()));
+    for (let n = 1; ; n++) {
+      const l = n === 1 ? base : `${base}${n}`;
+      if (!used.has(l)) return l;
+    }
+  }
+
   function quickFill() {
     const aisles = new Set(quick.aisle.split(/[,\s]+/).map(Number).filter((n) => n >= 1));
     const next = new Map<string, Cell>();
+    cells.forEach((v, k) => { if (isExtra(v.kind)) next.set(k, v); });   // giữ ô tài xế / cửa
     for (let d = 1; d <= type.decks; d++)
       for (let r = 1; r <= rows; r++)
         for (let c = 1; c <= cols; c++)
-          if (!aisles.has(c)) next.set(key(d, r, c), { label: '', kind: quick.kind, priority: false, sellable: true });
+          if (!aisles.has(c) && !next.has(key(d, r, c))) next.set(key(d, r, c), { label: '', kind: quick.kind, priority: false, sellable: true });
     setCells(renumber(next, type.decks, rows, cols));
   }
 
@@ -387,7 +408,7 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
                       onClick={() => { setTool(t); setRenaming(null); }}>{TOOLS[t]}</button>
             ))}
           </div>
-          <p className="muted small">Chọn công cụ rồi chạm vào ô. Đầu xe ở phía trên.</p>
+          <p className="muted small">Chọn công cụ rồi chạm vào ô. Đầu xe ở phía trên. Ô tài xế và cửa không bán, không tính vào số chỗ.</p>
         </div>
       )}
 
@@ -402,13 +423,14 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
                   const c = (idx % shownCols) + 1;
                   const k = key(d, r, c);
                   const cell = cells.get(k);
-                  const cls = ['seat', cell ? cell.kind : 'empty', cell?.priority && 'priority', cell && !cell.sellable && 'nosell', renaming === k && 'selected']
+                  const cls = ['seat', cell ? cell.kind : 'empty', cell?.priority && 'priority', cell && !cell.sellable && !isExtra(cell.kind) && 'nosell', renaming === k && 'selected']
                     .filter(Boolean).join(' ');
                   return (
                     <button key={k} type="button" className={cls} disabled={!editing}
                             aria-label={`Tầng ${d} hàng ${r} cột ${c}${cell ? `: ${KIND[cell.kind]} ${cell.label}` : ': trống'}`}
                             onClick={() => tap(d, r, c)}>
-                      {cell?.label ?? ''}
+                      {cell && <SeatIcon kind={cell.kind} size={isExtra(cell.kind) ? 18 : 14} />}
+                      {cell && <span className="cap">{cell.kind === 'tai_xe' ? 'Tài xế' : cell.kind === 'cua' ? 'Cửa' : cell.label}</span>}
                     </button>
                   );
                 })}
@@ -420,6 +442,7 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
 
       <p className="muted small legend">
         <span className="seat ghe sample" /> ghế <span className="seat giuong sample" /> giường
+        <span className="seat tai_xe sample" /> tài xế <span className="seat cua sample" /> cửa lên xuống
         <span className="seat ghe priority sample" /> ưu tiên <span className="seat ghe nosell sample" /> không bán
       </p>
 

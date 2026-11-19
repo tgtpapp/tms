@@ -421,3 +421,22 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .dir-box { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
 .update-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 1000; background: #111827; color: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: flex; gap: 10px; align-items: center; font-size: 14px; }
 .update-bar button { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; font-weight: 600; cursor: pointer; }
+/* Cửa sổ nổi */
+.modal-back { position: fixed; inset: 0; z-index: 900; background: rgba(15, 23, 42, .45); display: flex; align-items: flex-start; justify-content: center; padding: 4vh 12px; overflow-y: auto; }
+.modal { background: var(--surface, #fff); color: inherit; width: 100%; max-width: 720px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); display: flex; flex-direction: column; max-height: 92vh; }
+.modal.wide { max-width: 980px; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { margin: 0; font-size: 1.1rem; }
+.modal-x { border: 0; background: transparent; font-size: 1.6rem; line-height: 1; cursor: pointer; color: var(--muted); padding: 4px 8px; border-radius: 8px; }
+.modal-x:hover { background: var(--surface-2); }
+.modal-body { padding: 14px 18px 18px; overflow-y: auto; }
+@media (max-width: 600px) { .modal-back { padding: 0; } .modal { max-height: 100vh; height: 100%; border-radius: 0; } }
+/* Sơ đồ xe: ô có biểu tượng */
+.seat { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.seat svg { opacity: .75; }
+.seat.tai_xe { border: 1px solid #94a3b8; background: #e2e8f0; color: #334155; }
+.seat.cua { border: 1px solid #f59e0b; background: #fef3c7; color: #92400e; }
+.seat .cap { font-size: .62rem; font-weight: 700; letter-spacing: .02em; }
+.sseat.tai_xe, .sseat.cua { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: .7rem; font-weight: 700; }
+.sseat.tai_xe { background: #e2e8f0; color: #334155; border: 1px solid #94a3b8; }
+.sseat.cua { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }

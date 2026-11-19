@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { MyTransfers } from './Transfers';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -71,7 +72,7 @@ export function DriverScreen() {
           <label>Ngày<input type="date" value={day} onChange={(e) => { if (e.target.value) { setDay(e.target.value); setOpen(null); } }} /></label>
           <button className="btn small" aria-label="Ngày sau" onClick={() => { setDay(addDays(day, 1)); setOpen(null); }}>›</button>
         </div>
-        {trips.length === 0 && <p className="muted">Không có chuyến nào được xếp cho bạn trong ngày.</p>}
+        {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">
           {trips.map((t) => (
             <button key={t.trip_id} className={open === t.trip_id ? 'trip-chip on' : 'trip-chip'} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
@@ -85,6 +86,7 @@ export function DriverScreen() {
           ))}
         </div>
       </section>
+      <MyTransfers day={day} />
       {open && trips.find((t) => t.trip_id === open) && (
         <TripRun trip={trips.find((t) => t.trip_id === open)!} stopName={(id) => stops[id] ?? '?'} reload={load} />
       )}

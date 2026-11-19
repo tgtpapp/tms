@@ -32,7 +32,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
         loadPermissions(),
         ctx.user_id ? supabase.from('staff_members').select('id, position').eq('user_id', ctx.user_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
-      const crew = !!me.data && (me.data as { position: string }).position !== 'nhan_vien';
+      const crew = !!me.data;   // lái xe, phụ xe, người chạy trung chuyển (có hồ sơ nhân viên)
       setIsCrew(crew);
       setPerms(p);
       setTab((cur) => cur ?? (p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : crew ? 'driver' : 'branches'));
@@ -49,7 +49,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;
 
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
-    { key: 'driver', label: 'Chuyến của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
+    { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('ticket.sell') },
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: true },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: true },

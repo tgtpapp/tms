@@ -27,6 +27,7 @@ export interface Ticket {
   from_idx: number; to_idx: number; price: number; status: SeatStatus; hold_until: string | null; keep_reason: string | null;
   passenger_name: string | null; passenger_phone: string | null; pickup_note: string | null; dropoff_note: string | null;
   boarded: boolean; created_by: string | null; paid_by: string | null; pay_method: 'tien_mat' | 'chuyen_khoan' | null;
+  tc_don?: boolean; tc_tra?: boolean;
 }
 interface Booking { id: string; code: string; customer_name: string | null; customer_phone: string | null; note: string | null }
 interface Customer { phone: string; name: string | null; last_from_stop: string | null; last_to_stop: string | null; last_pickup_note: string | null; trips_count: number }
@@ -36,7 +37,7 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZo
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const active = (t: Ticket) => (t.status === 'giu' || t.status === 'dat' || t.status === 'da_tt')
   && !(t.hold_until && t.status !== 'da_tt' && Date.parse(t.hold_until) < Date.now());
-const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method';
+const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra';
 /** Đã thu tiền (kể cả vé chờ xếp ghế). */
 const paid = (t: Ticket) => t.status === 'da_tt' || t.status === 'cho_xep';
 interface Fare { from_stop_id: string; to_stop_id: string; price: number }
@@ -491,7 +492,7 @@ function Checkout(props: {
 }) {
   const { holds, bookingId, stopName, onDone, onCancelAll, bank } = props;
   const toast = useToast();
-  const [f, setF] = useState({ phone: '', name: '', pickup: '', dropoff: '', note: '', mode: 'thu_tien' as 'thu_tien' | 'dat_cho' | 'chuyen_khoan', keep: false, reason: '' });
+  const [f, setF] = useState({ phone: '', name: '', pickup: '', dropoff: '', note: '', mode: 'thu_tien' as 'thu_tien' | 'dat_cho' | 'chuyen_khoan', keep: false, reason: '', tcDon: false, tcTra: false });
   const [transfer, setTransfer] = useState<{ code: string; total: number; holdUntil: string | null } | null>(null);
   const [known, setKnown] = useState<Customer | null>(null);
   const [busy, setBusy] = useState(false);
@@ -522,6 +523,9 @@ function Checkout(props: {
         p_booking_id: bookingId, p_phone: f.phone || null, p_name: f.name || null, p_mode: f.mode, p_keep: f.mode === 'dat_cho' && f.keep,
         p_keep_reason: f.reason || null, p_pickup_note: f.pickup || null, p_dropoff_note: f.dropoff || null, p_note: f.note || null, p_passengers: null,
       });
+      if (f.tcDon || f.tcTra) {
+        for (const h of holds) await rpc('set_ticket_transfer', { p_ticket_id: h.id, p_don: f.tcDon, p_tra: f.tcTra });
+      }
       const { data } = await supabase.from('seat_inventory').select(TICKET_COLS).eq('booking_id', bookingId).in('status', ['dat', 'da_tt']);
       const list = (data ?? []) as Ticket[];
       if (f.mode === 'chuyen_khoan') {
@@ -579,6 +583,10 @@ function Checkout(props: {
         <label>Ghi chú điểm đón<input value={f.pickup} onChange={(e) => setF({ ...f, pickup: e.target.value })} placeholder="vd: đón trước cây xăng" /></label>
         <label>Ghi chú điểm trả<input value={f.dropoff} onChange={(e) => setF({ ...f, dropoff: e.target.value })} /></label>
         <label>Ghi chú đơn<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
+      </div>
+      <div className="chips">
+        <label className="check"><input type="checkbox" checked={f.tcDon} onChange={(e) => setF({ ...f, tcDon: e.target.checked })} /> Đón tận nơi (trung chuyển, địa chỉ ở ghi chú điểm đón)</label>
+        <label className="check"><input type="checkbox" checked={f.tcTra} onChange={(e) => setF({ ...f, tcTra: e.target.checked })} /> Trả tận nơi (địa chỉ ở ghi chú điểm trả)</label>
       </div>
       <div className="chips" role="radiogroup" aria-label="Cách thanh toán">
         <button type="button" role="radio" aria-checked={f.mode === 'thu_tien'} className={f.mode === 'thu_tien' ? 'btn small primary' : 'btn small'}
@@ -722,6 +730,17 @@ function TicketDetail(props: {
         <button className="btn small" onClick={() => void run(() => rpc('update_ticket_info', { p_ticket_id: t.id, p_name: info.name, p_phone: info.phone,
           p_pickup_note: info.pickup, p_dropoff_note: info.dropoff }), 'Đã sửa thông tin khách')}>Lưu thông tin</button>
         <button className="btn small" onClick={() => onPrint(siblings, booking?.code ?? '')}>In vé</button>
+        {t.status !== 'cho_xep' && (['don', 'tra'] as const).map((k) => {
+          const on = k === 'don' ? !!t.tc_don : !!t.tc_tra;
+          return (
+            <label key={k} className="check small">
+              <input type="checkbox" checked={on} onChange={(e) => void run(() => rpc('set_ticket_transfer', {
+                p_ticket_id: t.id, p_don: k === 'don' ? e.target.checked : !!t.tc_don, p_tra: k === 'tra' ? e.target.checked : !!t.tc_tra,
+              }), e.target.checked ? `Đã đánh dấu ${k === 'don' ? 'đón' : 'trả'} tận nơi` : 'Đã bỏ trung chuyển')} />
+              {k === 'don' ? 'Đón tận nơi' : 'Trả tận nơi'}
+            </label>
+          );
+        })}
         {!move && <button className="btn small" onClick={() => setMove({ trip: currentTrip.id, seat: '' })}>Chuyển ghế / chuyến</button>}
         {!cancel && <button className="btn small danger" onClick={() => setCancel(true)}>Hủy vé</button>}
       </div>

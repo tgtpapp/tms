@@ -6,6 +6,7 @@ import { signatureUrl } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { Transfers } from './Transfers';
 
 type Dir = 'di' | 've';
 interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; is_active: boolean }
@@ -169,6 +170,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
     <>
       {printing && <TransportOrderPrint data={printing} onClose={() => setPrinting(null)} />}
       <TripDay {...ctx} day={day} setDay={setDay} />
+      <Transfers day={day} trips={trips.filter((t) => t.status === 'mo')} staff={staff} ends={ends} canEdit={canEdit} />
       <Schedules {...ctx} />
     </>
   );

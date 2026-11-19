@@ -71,7 +71,7 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
                    open={open} setOpen={setOpen} reload={load}
                    layout={(typeId) => {
                      const t = types.find((x) => x.id === typeId);
-                     return t ? <SeatLayout type={t} seats={seats.filter((s) => s.vehicle_type_id === t.id)} canEdit={canEdit} reload={load} /> : null;
+                     return t ? <SeatLayout type={t} seats={seats.filter((s) => s.vehicle_type_id === t.id)} canEdit={canEdit} reload={load} types={types} allSeats={seats} /> : null;
                    }} />
       <VehicleTypesSection types={types} seats={seats} canEdit={canEdit} reload={load} />
     </>
@@ -218,7 +218,7 @@ function VehicleTypesSection(props: { types: VehicleType[]; seats: Seat[]; canEd
                     {canEdit && <DeleteButton kind="vehicle_type" id={t.id} name={t.name} onDone={reload} />}
                   </div>
                 </div>
-                {open === t.id && <SeatLayout type={t} seats={mine} canEdit={canEdit} reload={reload} />}
+                {open === t.id && <SeatLayout type={t} seats={mine} canEdit={canEdit} reload={reload} types={types} allSeats={seats} />}
               </li>
             );
           })}
@@ -263,8 +263,9 @@ function renumber(cells: Map<string, Cell>, decks: number, rows: number, cols: n
   return next;
 }
 
-function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean; reload: () => Promise<void> }) {
-  const { type, seats, canEdit, reload } = props;
+function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean; reload: () => Promise<void>; types: VehicleType[]; allSeats: Seat[] }) {
+  const { type, seats, canEdit, reload, types, allSeats } = props;
+  const sources = types.filter((t) => t.id !== type.id && allSeats.some((s) => s.vehicle_type_id === t.id));
   const toast = useToast();
   const initial = useMemo(() => new Map<string, Cell>(seats.map((s): [string, Cell] => [key(s.deck, s.row_no, s.col_no),
     { label: s.label, kind: s.kind, priority: s.is_priority, sellable: s.is_sellable }])), [seats]);
@@ -327,6 +328,21 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
       const l = n === 1 ? base : `${base}${n}`;
       if (!used.has(l)) return l;
     }
+  }
+
+  /** Sao chép sơ đồ từ loại xe khác (giữ số ghế, ô tài xế / cửa); bỏ tầng không có ở loại này */
+  function copyFrom(srcId: string) {
+    const src = types.find((t) => t.id === srcId);
+    if (!src) return;
+    const next = new Map<string, Cell>();
+    for (const s of allSeats.filter((x) => x.vehicle_type_id === srcId && x.deck <= type.decks)) {
+      next.set(key(s.deck, s.row_no, s.col_no), { label: s.label, kind: s.kind, priority: s.is_priority, sellable: s.is_sellable });
+    }
+    setRows(Math.max(1, src.layout_rows || 1));
+    setCols(Math.max(1, src.layout_cols || 1));
+    setCells(next);
+    setRenaming(null);
+    toast('ok', `Đã chép sơ đồ của ${src.name}, kiểm tra rồi bấm Lưu sơ đồ`);
   }
 
   function quickFill() {
@@ -400,6 +416,14 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
               </select>
             </label>
             <button type="button" className="btn small" onClick={quickFill}>Tạo nhanh</button>
+            {sources.length > 0 && (
+              <label>Chép sơ đồ từ loại xe
+                <select value="" onChange={(e) => e.target.value && copyFrom(e.target.value)}>
+                  <option value="">Chọn loại xe…</option>
+                  {sources.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </label>
+            )}
             <button type="button" className="btn small" onClick={() => setCells(renumber(cells, type.decks, rows, cols))}>Đánh số lại</button>
           </div>
           <div className="chips" role="group" aria-label="Công cụ vẽ">

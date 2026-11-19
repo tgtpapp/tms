@@ -180,7 +180,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await dlg.getByRole('button', { name: /^Tầng 1 hàng 4 cột 3/ }).click();
   await expect(dlg.getByRole('button', { name: 'Tầng 1 hàng 4 cột 1: tài xế TX' })).toBeVisible();
   await dlg.getByRole('button', { name: 'Lưu sơ đồ' }).click();
-  await expect(page.getByText('Đã lưu sơ đồ ghế')).toBeVisible();
+  await expect(page.getByText('Đã lưu sơ đồ ghế').first()).toBeVisible();
   await expect(page.getByText('Sơ đồ: 6 giường · 6 chỗ bán · 1 chỗ ưu tiên')).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);

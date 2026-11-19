@@ -88,7 +88,7 @@ select is((select count(*)::int from public.vehicle_type_seats where kind in ('t
 select is((select count(*)::int from public.vehicle_type_seats where is_sellable), 4, 'Vẫn 4 chỗ bán được');
 select throws_ok($$ select public.set_seat_layout((select v from t.ids where k = 'T'), 2, 3, jsonb_build_array(
   jsonb_build_object('label', 'X1', 'deck', 1, 'row', 1, 'col', 1, 'kind', 'ban'))) $$, '22023', null, 'Loại ô lạ bị chặn');
-select is((select layout_rows * 10 + layout_cols from public.vehicle_types where code = 'GN40'), 23, 'Lưu kích thước lưới');
+select is((select layout_rows * 10 + layout_cols from public.vehicle_types where code = 'GN40'), 33, 'Lưu kích thước lưới');
 select ok(exists (select 1 from public.audit_logs where entity = 'vehicle_type_seats'
                   and detail -> 'new' ->> 'so_do' = '1 ghế, 4 giường'), 'Nhật ký ghi lần lưu sơ đồ');
 

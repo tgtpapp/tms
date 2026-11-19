@@ -440,3 +440,51 @@ html[data-theme='than-chi'] { --sidebar: #111827; }
 .sseat.tai_xe, .sseat.cua { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: .7rem; font-weight: 700; }
 .sseat.tai_xe { background: #e2e8f0; color: #334155; border: 1px solid #94a3b8; }
 .sseat.cua { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+/* Bán vé kiểu bảng điều khiển: cột trái chọn tuyến / ngày / chuyến, cột phải sơ đồ ghế */
+.sell-layout { display: grid; gap: 12px; align-items: start; }
+@media (min-width: 1100px) { .sell-layout { grid-template-columns: 360px minmax(0, 1fr); } .sell-left { position: sticky; top: 8px; } }
+.sell-left .card, .sell-right .card { margin-bottom: 12px; }
+.mini-cal { margin: 10px 0; }
+.mc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mc-head b { flex: 1; text-align: center; }
+.mc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.mc-wd { font-size: .72rem; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.mc-day { border: 0; background: transparent; border-radius: 8px; padding: 7px 0; font: inherit; font-weight: 600; cursor: pointer; color: var(--text); }
+.mc-day:hover { background: var(--surface-2); }
+.mc-day.past { color: var(--muted); font-weight: 400; }
+.mc-day.sun { color: #dc2626; }
+.mc-day.now { box-shadow: inset 0 0 0 1px var(--primary); }
+.mc-day.on { background: var(--primary); color: #fff; }
+.day-nav { margin-top: 4px; }
+.trip-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.trip-card { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.trip-card:hover { border-color: var(--input-line); }
+.trip-card.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-ring); }
+.trip-card .tc-top b { font-size: 1.15rem; color: #15803d; margin-right: 6px; }
+.trip-card.past .tc-top b { color: #dc2626; }
+.trip-card .tc-route { font-size: .75rem; color: var(--muted); }
+.trip-card .tc-meta { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
+.trip-card .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; margin-right: 4px; vertical-align: middle; }
+.trip-card .dot.ok { background: #16a34a; }
+.trip-card .tc-bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.trip-card .tc-bar span { display: block; height: 100%; background: #3b82f6; }
+.trip-card .tc-badge { font-size: .68rem; font-weight: 700; color: #b91c1c; }
+.trip-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; position: relative; }
+.trip-head h2 { margin: 0 0 4px; }
+.sseat .sp-name { font-weight: 700; font-size: .72rem; }
+.sseat .sp-phone { font-size: .72rem; }
+.sseat .sp-note { font-size: .66rem; opacity: .8; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.seat-grid.sell { grid-auto-rows: minmax(76px, auto); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.tab { border: 0; background: transparent; padding: 8px 14px; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.tab.on { color: var(--primary); border-bottom-color: var(--primary); }
+.hist { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.hist li { border-left: 3px solid var(--primary); padding: 4px 10px; background: var(--surface-2); border-radius: 0 8px 8px 0; }
+.pick-bar { position: sticky; bottom: 10px; z-index: 50; display: flex; gap: 10px; align-items: center; justify-content: space-between;
+  background: #1e3a8a; color: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.2); margin: 8px 0; }
+/* Dấu "ĐÃ XUẤT BẾN" */
+.stamp { display: inline-block; border: 3px solid #dc2626; color: #dc2626; border-radius: 6px; padding: 4px 12px; transform: rotate(-6deg);
+  font-weight: 800; letter-spacing: .04em; text-align: center; line-height: 1.2; opacity: .85; background: rgba(255,255,255,.6); }
+.stamp small { display: block; font-size: .68rem; font-weight: 600; letter-spacing: 0; }
+.lock-box { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }

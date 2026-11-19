@@ -125,6 +125,21 @@ select is((select sum(credit - debit) from public.ledger_lines where account = '
 select is((select sum(debit - credit) from public.ledger_lines where account = 'ngan_hang')::int, -150000, 'Hoàn chuyển khoản ghi vào tài khoản ngân hàng');
 reset role;
 
+-- ---------------------------------------------------------------- Lịch sử vé
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select ok(jsonb_array_length(public.ticket_history((select v from t.ids where k = 'B1'))) >= 3, 'Quầy xem được lịch sử đơn vé');
+select ok(exists (select 1 from jsonb_array_elements(public.ticket_history((select v from t.ids where k = 'B1'))) e
+                  where e ->> 'entity' = 'tien' and (e ->> 'amount')::int > 0), 'Lịch sử có lần thu tiền');
+select ok(exists (select 1 from jsonb_array_elements(public.ticket_history((select v from t.ids where k = 'B1'))) e
+                  where e ->> 'actor' = 'Quầy 1'), 'Lịch sử ghi tên người thao tác');
+reset role;
+select set_config('t.b1', (select v::text from t.ids where k = 'B1'), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.ticket_history(current_setting('t.b1')::uuid) $$, 'P0002', null, 'Chủ B xem lịch sử vé nhà xe A: không tìm thấy');
+reset role;
+
 -- ---------------------------------------------------------------- Nhà xe khác
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';

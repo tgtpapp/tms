@@ -6,6 +6,7 @@ import {
 } from '../lib/documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { Cropper } from '../components/Cropper';
 
 const EMPTY = {
   name: '', legal_name: '', tax_code: '', address: '', phone: '',
@@ -142,9 +143,12 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     }
   }
 
-  async function pickImage(slot: Slot, file: File | undefined) {
+  const [cropping, setCropping] = useState<{ slot: 'chu_ky' | 'con_dau'; file: File } | null>(null);
+
+  async function pickImage(slot: Slot, file: File | undefined, cropped = false) {
     if (!file) return;
     if (slot === 'giay_phep' || slot === 'cccd_truoc' || slot === 'cccd_sau') return pickDoc(slot, file);
+    if ((slot === 'chu_ky' || slot === 'con_dau') && !cropped) return setCropping({ slot, file });   // cắt bỏ phần thừa trước
     try {
       if (slot === 'logo') await uploadLogo(tenantId, file);
       else await uploadSignature(tenantId, slot === 'chu_ky' ? 'giam_doc' : 'con_dau', file);
@@ -207,6 +211,9 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       </label>
       {slot('chu_ky', 'Chữ ký giám đốc', 'Chụp trên giấy trắng, app tự tách nền')}
       {slot('con_dau', 'Con dấu công ty', 'Chụp hoặc quét con dấu, app tự tách nền trắng')}
+      {cropping && <Cropper file={cropping.file} title={cropping.slot === 'chu_ky' ? 'Cắt ảnh chữ ký giám đốc' : 'Cắt ảnh con dấu'}
+                            onCancel={() => setCropping(null)}
+                            onDone={(f) => { const sl = cropping.slot; setCropping(null); void pickImage(sl, f, true); }} />}
       <button className="btn primary" disabled={busy}>Lưu thông tin công ty</button>
       </fieldset>
     </form>

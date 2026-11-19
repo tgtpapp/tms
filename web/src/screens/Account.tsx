@@ -3,6 +3,7 @@ import { MIN_PASSWORD } from '../lib/login';
 import { signatureUrl, uploadSignature } from '../lib/documents';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { Cropper } from '../components/Cropper';
 import { THEMES, useTheme, type Mode } from '../lib/theme';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
@@ -20,6 +21,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
   }, [ctx.user_id]);
 
   const [sign, setSign] = useState<string | null>(null);
+  const [cropping, setCropping] = useState<File | null>(null);
   useEffect(() => {
     if (ctx.tenant_id && ctx.user_id) void signatureUrl(ctx.tenant_id, ctx.user_id).then(setSign);
   }, [ctx.tenant_id, ctx.user_id]);
@@ -65,9 +67,11 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
           <p className="muted small">Dùng khi in lệnh vận chuyển (ô Cán bộ điều hành). Nên chụp chữ ký trên giấy trắng hoặc dùng ảnh PNG nền trong suốt.</p>
           <label className="upload">
             <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
-            <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { void pickSign(e.target.files?.[0]); e.target.value = ''; }} />
+            <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { setCropping(e.target.files?.[0] ?? null); e.target.value = ''; }} />
           </label>
           {sign && <img src={sign} alt="Chữ ký của tôi" className="sign-preview" />}
+          {cropping && <Cropper file={cropping} title="Cắt ảnh chữ ký" onCancel={() => setCropping(null)}
+                                onDone={(f) => { setCropping(null); void pickSign(f); }} />}
         </section>
       )}
       <form className="card form" onSubmit={submit}>

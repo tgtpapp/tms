@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { fmtDate } from './Documents';
-import { errMsg, supabase } from '../lib/supabase';
+import { errMsg, fetchAll, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface V {
@@ -25,7 +25,7 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
   const [type, setType] = useState<VType | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [inc, setInc] = useState<Inc[]>([]);
-  const [months, setMonths] = useState<{ m: string; days: number; trips: number }[]>([]);
+  const [months, setMonths] = useState<{ m: string; days: number; trips: number; km: number | null; run: number }[]>([]);
   const [company, setCompany] = useState('');
   const [rep, setRep] = useState<{ repaired_on: string; odo_km: number | null; workshop: string | null; text: string; cost: number }[]>([]);
   const [f, setF] = useState(EMPTY_INC);
@@ -55,7 +55,15 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
       (M[m] ??= { days: new Set(), trips: 0 }).trips++;
       M[m].days.add(r.service_date);
     }
-    setMonths(Object.keys(M).sort().map((m) => ({ m, days: M[m].days.size, trips: M[m].trips })));
+    const kms = await fetchAll<{ run_date: string; km: number }>(() => supabase.from('vehicle_km').select('run_date, km').eq('vehicle_id', v.id).order('run_date')).catch(() => []);
+    const K: Record<string, { km: number; days: number }> = {};
+    for (const r of kms) { const m = r.run_date.slice(0, 7); (K[m] ??= { km: 0, days: 0 }).km += Number(r.km); if (Number(r.km) > 0) K[m].days++; }
+    const odoDate = (e.data as Extra | null)?.odo_date ?? null;
+    let run = 0;
+    setMonths([...new Set([...Object.keys(M), ...Object.keys(K)])].sort().map((m) => {
+      run += kms.filter((r) => r.run_date.slice(0, 7) === m && (!odoDate || r.run_date >= odoDate)).reduce((a, r) => a + Number(r.km), 0);
+      return { m, days: Math.max(M[m]?.days.size ?? 0, K[m]?.days ?? 0), trips: M[m]?.trips ?? 0, km: K[m]?.km ?? null, run };
+    }));
     const ro = await supabase.from('repair_orders').select('id, repaired_on, odo_km, workshop').eq('vehicle_id', v.id).order('repaired_on');
     const ros = (ro.data ?? []) as { id: string; repaired_on: string; odo_km: number | null; workshop: string | null }[];
     const ri = ros.length ? await supabase.from('repair_items').select('order_id, content, qty, unit_price').in('order_id', ros.map((x) => x.id)).order('seq') : null;
@@ -193,7 +201,7 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
               <tbody>{rep.map((r, i) => <tr key={i}><td>{fmtDate(r.repaired_on)}</td><td>{r.odo_km ? `${r.odo_km.toLocaleString('vi-VN')} km` : ''}</td><td>{r.text}</td><td>{r.workshop}</td><td>{r.cost.toLocaleString('vi-VN')}</td><td /></tr>)}{blank(8 - rep.length, 6)}</tbody></table>
             <p><b>2. Theo dõi quá trình hoạt động:</b>{ex.odo_start ? ` Odo gốc ${ex.odo_start.toLocaleString('vi-VN')} km${ex.odo_date ? ` ngày ${fmtDate(ex.odo_date)}` : ''}` : ''}</p>
             <table className="vp-tbl"><thead><tr><th>Tháng</th><th>Số ngày hoạt động</th><th>Số chuyến</th><th>Km chạy trong tháng</th><th>Km lũy kế</th></tr></thead>
-              <tbody>{months.map((r) => <tr key={r.m}><td>{r.m.slice(5)}/{r.m.slice(0, 4)}</td><td>{r.days}</td><td>{r.trips}</td><td /><td /></tr>)}{blank(4 - months.length, 5)}</tbody></table>
+              <tbody>{months.map((r) => <tr key={r.m}><td>{r.m.slice(5)}/{r.m.slice(0, 4)}</td><td>{r.days}</td><td>{r.trips}</td><td>{r.km != null ? r.km.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : ''}</td><td>{ex.odo_start != null && r.km != null ? (ex.odo_start + r.run).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : ''}</td></tr>)}{blank(4 - months.length, 5)}</tbody></table>
             <p><b>3. Theo dõi kiểm định kỹ thuật (Đăng kiểm):</b></p>
             <table className="vp-tbl"><thead><tr><th>Lần kiểm định</th><th>Ngày kiểm định</th><th>Ngày hết hạn</th><th>Số giấy chứng nhận</th><th>Kết quả</th></tr></thead>
               <tbody>{kdAll.map((d, i) => <tr key={i}><td>Lần {i + 1}</td><td>{d.valid_from || d.issued_on ? fmtDate((d.valid_from || d.issued_on)!) : ''}</td><td>{d.expires_on ? fmtDate(d.expires_on) : ''}</td><td>{d.doc_no}</td><td>Đạt</td></tr>)}{blank(3 - kdAll.length, 5)}</tbody></table>

@@ -59,6 +59,18 @@ select is(public.import_legacy_ops(
   jsonb_build_array(jsonb_build_object('code', 'XD00099', 'kind', 'bon', 'entry_date', '2026-09-01', 'vehicle_id', (select id from public.vehicles), 'liters', 30))) ->> 'same',
   '2', 'Nhập lại không trùng');
 select is((select code from public.fuel_entries where kind = 'bon' order by created_at desc, code desc limit 1), 'XD00099', 'Giữ số phiếu app cũ');
+-- Km xe theo ngày (GPS): nhập, nhập lại ghi đè, km sai bị chặn
+select is(public.import_vehicle_km(jsonb_build_array(
+  jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-01', 'km', 320.5),
+  jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-02', 'km', 280))), '{"created":2,"updated":0,"same":0}'::jsonb, 'Nhập km GPS');
+select is(public.import_vehicle_km(jsonb_build_array(
+  jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-01', 'km', 320.5),
+  jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-02', 'km', 300))), '{"created":0,"updated":1,"same":1}'::jsonb, 'Nhập lại ghi đè');
+select is((select sum(km)::numeric from public.vehicle_km), 620.5::numeric, 'Tổng km');
+select is((select km from public.vehicle_km_summary('2026-10-02', '2026-11-01')), 300::numeric, 'Tổng hợp km trong kỳ');
+select is((select km_since_odo from public.vehicle_km_summary('2026-10-02', '2026-11-01')), 620.5::numeric, 'Km cộng dồn từ ngày Odo gốc');
+select throws_ok($$ select public.import_vehicle_km(jsonb_build_array(jsonb_build_object('vehicle_id', gen_random_uuid(), 'run_date', '2026-10-01', 'km', 1))) $$, 'P0002', null, 'Xe lạ bị chặn');
+select throws_ok($$ select public.import_vehicle_km(jsonb_build_array(jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-03', 'km', 9000))) $$, '22023', null, 'Km quá lớn bị chặn');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
@@ -67,6 +79,8 @@ select is((select count(*)::int from public.repair_orders), 0, 'Bán vé không 
 select throws_ok($$ select public.save_repair(null, '{}', '[]') $$, '42501', null, 'Bán vé không lưu phiếu được');
 select is((select count(*)::int from public.fuel_entries), 0, 'Bán vé không xem phiếu nhiên liệu');
 select throws_ok($$ select public.save_fuel(null, '{}') $$, '42501', null, 'Bán vé không lưu phiếu nhiên liệu');
+select is((select count(*)::int from public.vehicle_km), 0, 'Bán vé không xem km xe');
+select throws_ok($$ select public.import_vehicle_km('[]') $$, '42501', null, 'Bán vé không nhập km');
 select throws_ok($$ insert into public.vehicle_incidents (vehicle_id, occurred_on, summary) values (gen_random_uuid(), '2026-10-02', 'x') $$, '42501', null, 'Bán vé không ghi được');
 reset role;
 set local role authenticated;
@@ -75,6 +89,7 @@ select is((select count(*)::int from public.vehicle_incidents), 0, 'Nhà xe B kh
 select is((select count(*)::int from public.repair_orders), 0, 'Nhà xe B không thấy phiếu sửa chữa của A');
 select is((select count(*)::int from public.fuel_entries), 0, 'Nhà xe B không thấy phiếu nhiên liệu của A');
 select is((select count(*)::int from public.fuel_settings), 0, 'Nhà xe B không thấy bồn dầu của A');
+select is((select count(*)::int from public.vehicle_km), 0, 'Nhà xe B không thấy km xe của A');
 reset role;
 select * from finish();
 rollback;

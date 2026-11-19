@@ -5,7 +5,7 @@ import type { PreparedFile } from './documents';
 
 export type Raw = Record<string, unknown>;
 
-export interface LegacyBackup { employees: Raw[]; vehicles: Raw[]; trips: Raw[]; repairs: Raw[]; fuel: Raw[]; fuelSet: Raw | null }
+export interface LegacyBackup { employees: Raw[]; vehicles: Raw[]; trips: Raw[]; repairs: Raw[]; fuel: Raw[]; km: Raw[]; fuelSet: Raw | null }
 
 export function parseBackup(text: string): LegacyBackup {
   let j: unknown;
@@ -21,7 +21,7 @@ export function parseBackup(text: string): LegacyBackup {
   const vehicles = arr('vehicles');
   if (employees.length === 0 && vehicles.length === 0) throw new Error('Không thấy danh sách nhân viên hoặc xe trong file');
   const st = o.settings && typeof o.settings === 'object' ? (o.settings as Raw).nl : null;
-  return { employees, vehicles, trips: arr('lichchay'), repairs: arr('suachua'), fuel: arr('nhienlieu'), fuelSet: st && typeof st === 'object' && !Array.isArray(st) ? (st as Raw) : null };
+  return { employees, vehicles, trips: arr('lichchay'), repairs: arr('suachua'), fuel: arr('nhienlieu'), km: arr('kmxe'), fuelSet: st && typeof st === 'object' && !Array.isArray(st) ? (st as Raw) : null };
 }
 
 export const str = (r: Raw, k: string): string => {

@@ -5,7 +5,7 @@ import { fmtDate, today } from '../components/Documents';
 import { prepareFile, signedUrl, uploadFiles } from '../lib/documents';
 import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
 import type { Permissions } from '../lib/permissions';
-import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
+import { errMsg, fetchAll, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface Veh { id: string; plate: string; is_active: boolean; fuel_norm: number | null }
@@ -34,13 +34,14 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
 
   const load = useCallback(async () => {
     const [e, s, v, d] = await Promise.all([
-      supabase.from('fuel_entries').select('id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files'),
+      fetchAll<FuelEntry>(() => supabase.from('fuel_entries').select('id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files').order('id'))
+        .then((data) => ({ data, error: null }), (err: Error) => ({ data: null, error: err })),
       supabase.from('fuel_settings').select('tank_name, fuel_type, capacity_l, opening_l, opening_price, opening_on, alert_l').maybeSingle(),
       supabase.from('vehicles').select('id, plate, is_active, fuel_norm').order('plate'),
       supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name'),
     ]);
     if (e.error) return toast('error', e.error.message);
-    setRows(((e.data ?? []) as FuelEntry[]).map((r) => ({ ...r, liters: Number(r.liters), entry_time: r.entry_time?.slice(0, 5) ?? null })));
+    setRows((e.data ?? []).map((r) => ({ ...r, liters: Number(r.liters), entry_time: r.entry_time?.slice(0, 5) ?? null })));
     if (s.data) setSet({ ...(s.data as FuelSettings), capacity_l: Number(s.data.capacity_l), opening_l: Number(s.data.opening_l), alert_l: Number(s.data.alert_l) });
     setVehicles(((v.data ?? []) as Veh[]).map((x) => ({ ...x, fuel_norm: x.fuel_norm == null ? null : Number(x.fuel_norm) })));
     setDrivers((d.data ?? []) as Drv[]);

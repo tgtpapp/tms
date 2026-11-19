@@ -63,3 +63,15 @@ export async function loadAccountContext(): Promise<AccountContext> {
     return data as AccountContext;
   });
 }
+
+/** Đọc hết mọi dòng (API trả tối đa 1000 dòng / lần): gọi lại theo trang. `make` phải tạo truy vấn mới có sắp xếp ổn định. */
+export async function fetchAll<T>(make: () => { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string } | null }> }, page = 1000): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += page) {
+    const { data, error } = await make().range(from, from + page - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < page) return out;
+  }
+}

@@ -262,7 +262,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
         </>
       )}
       {legacy && legacy.trips.length > 0 && !busy && <LegacyTrips legacy={legacy} />}
-      {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0) && !busy && <LegacyOps legacy={legacy} />}
+      {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0 || legacy.km.length > 0) && !busy && <LegacyOps legacy={legacy} />}
       {result && (
         <ul className="queue-list small">
           {result.map((r, i) => <li key={i} className={i ? 'error-text' : ''}>{r}</li>)}
@@ -414,6 +414,22 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
         rep += res.repairs; fu += res.fuel; same += res.same;
         for (const e of res.errors) log.push(`${e.code}: ${e.error}`);
       }
+      // Km xe theo ngày (DB.kmxe)
+      const kmRows = new Map<string, { vehicle_id: string; run_date: string; km: number }>();
+      for (const r of legacy.km) {
+        const id = vehByKey.get(plateKey(str(r, 'bks'))), d = day(str(r, 'ngay')), km = Number(r.km);
+        if (!id || !d || !Number.isFinite(km) || km < 0 || km >= 5000) continue;
+        const k = `${id}|${d}`;
+        kmRows.set(k, { vehicle_id: id, run_date: d, km: (kmRows.get(k)?.km ?? 0) + km });
+      }
+      let kmNew = 0;
+      const kl = [...kmRows.values()];
+      for (let i = 0; i < kl.length; i += 2000) {
+        setBusy(`Đang chuyển km xe ${Math.min(i + 2000, kl.length)}/${kl.length}…`);
+        const res = await rpc<{ created: number; updated: number }>('import_vehicle_km', { p_rows: kl.slice(i, i + 2000), p_source: 'app_cu' });
+        kmNew += res.created + res.updated;
+      }
+      if (legacy.km.length && kl.length < legacy.km.length) log.push(`Km xe: ${legacy.km.length - kl.length} dòng không khớp xe / ngày (bỏ qua hoặc gộp cùng ngày)`);
       // Thiết lập bồn + định mức theo xe
       const st = legacy.fuelSet;
       if (st) {
@@ -430,7 +446,7 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
           if (id && n > 0 && n < 100 && !vehs.find((x) => x.id === id)?.fuel_norm) await supabase.from('vehicles').update({ fuel_norm: n }).eq('id', id);
         }
       }
-      const msg = `Đã chuyển ${rep} phiếu sửa chữa, ${fu} phiếu nhiên liệu${same ? `, ${same} phiếu đã có (bỏ qua)` : ''}${noVeh ? `, ${noVeh} phiếu không khớp xe / thiếu ngày` : ''}`;
+      const msg = `Đã chuyển ${rep} phiếu sửa chữa, ${fu} phiếu nhiên liệu, ${kmNew} dòng km xe${same ? `, ${same} phiếu đã có (bỏ qua)` : ''}${noVeh ? `, ${noVeh} phiếu không khớp xe / thiếu ngày` : ''}`;
       toast(log.length ? 'error' : 'ok', msg);
       setOut([msg, ...log.slice(0, 50)]);
     } catch (e) {
@@ -442,10 +458,10 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
 
   return (
     <div className="sub form">
-      <h3 className="section-title">Sửa chữa, nhiên liệu trong file: {legacy.repairs.length} phiếu sửa chữa, {legacy.fuel.length} phiếu nhiên liệu</h3>
+      <h3 className="section-title">Sửa chữa, nhiên liệu, km xe trong file: {legacy.repairs.length} phiếu sửa chữa, {legacy.fuel.length} phiếu nhiên liệu, {legacy.km.length} dòng km</h3>
       <p className="muted small">Giữ nguyên số phiếu của app cũ, nhập lại không trùng. Kèm thiết lập bồn dầu và định mức tiêu hao từng xe (nếu TMS chưa có). Nên nhập xe ở trên trước.</p>
       {busy && <p className="upload">{busy}</p>}
-      <div className="actions"><button type="button" className="btn primary" disabled={!!busy} onClick={() => void run()}>Chuyển phiếu sửa chữa, nhiên liệu</button></div>
+      <div className="actions"><button type="button" className="btn primary" disabled={!!busy} onClick={() => void run()}>Chuyển sửa chữa, nhiên liệu, km xe</button></div>
       {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i ? 'error-text' : ''}>{x}</li>)}</ul>}
     </div>
   );

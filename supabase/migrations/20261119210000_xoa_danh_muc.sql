@@ -54,8 +54,7 @@ begin
       coalesce(v_name, 'Mục này') using errcode = '23503';
   end;
   if n = 0 then raise exception 'Không tìm thấy' using errcode = 'P0002'; end if;
-  insert into public.audit_logs (tenant_id, actor_id, action, entity, entity_id, detail)
-  values (v_tenant, auth.uid(), 'delete', v_table, p_id::text, jsonb_build_object('name', v_name));
+  -- Nhật ký xóa: trigger app.write_audit có sẵn trên các bảng này tự ghi
 end;
 $$;
 revoke execute on function public.delete_record(text, uuid) from public, anon, authenticated;

@@ -852,3 +852,10 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .pay-table input.money { text-align: right; min-width: 120px; width: 100%; }
 .pay-table input[type=checkbox] { width: 20px; height: 20px; }
 .pay-total td { font-weight: bold; background: var(--surface-2); }
+/* Bảng phân quyền */
+.perm-matrix th.c, .perm-matrix td.c { text-align: center; width: 76px; }
+.perm-matrix input[type=checkbox] { width: 18px; height: 18px; }
+.perm-matrix td.inh input { opacity: .55; }
+.perm-bar { flex-wrap: wrap; align-items: flex-end; margin-top: 8px; }
+.role-tabs small { margin-left: 4px; opacity: .7; }
+.chip-own { background: #fef3c7; }

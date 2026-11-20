@@ -1,167 +1,127 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+// Phân quyền theo nhóm (như app cũ): chọn nhóm rồi tích quyền theo bảng Xem / Thêm / Sửa / Xóa từng màn hình.
+// Một người vào được nhiều nhóm (kiêm nhiệm, quyền cộng dồn) và có thể có quyền riêng – gán ở mục Người dùng.
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { PermMatrix, quick } from '../components/PermMatrix';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface Role { id: string; code: string; name: string; is_system: boolean }
 interface RolePerm { role_id: string; permission_code: string }
-interface Perm { code: string; module: string; name: string }
+/** Nhóm "quyền riêng" của 1 người (tạo ở mục Người dùng) – không hiện trong danh sách nhóm. */
+export const isPersonal = (r: { code: string }) => r.code.startsWith('rieng_');
 
-/** Mã vai trò từ tên tiếng Việt: "Thu ngân" → "thu_ngan" */
+/** Mã nhóm từ tên tiếng Việt: "Thu ngân" → "thu_ngan" */
 function toCode(name: string): string {
-  return name
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-    .slice(0, 40);
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 }
 
-/** Vai trò: xem quyền từng vai trò, tạo vai trò mới, sửa quyền (trừ Chủ nhà xe). */
 export function RolesScreen({ perms }: { perms: Permissions }) {
   const toast = useToast();
   const [roles, setRoles] = useState<Role[]>([]);
   const [rolePerms, setRolePerms] = useState<RolePerm[]>([]);
-  const [catalog, setCatalog] = useState<Perm[]>([]);
+  const [catalog, setCatalog] = useState<Set<string>>(new Set());
+  const [members, setMembers] = useState<Record<string, number>>({});
+  const [sel, setSel] = useState('');
+  const [value, setValue] = useState<Set<string>>(new Set());
+  const [dirty, setDirty] = useState(false);
+  const [copyFrom, setCopyFrom] = useState('');
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const canAdd = perms.has('role.add'), canEdit = perms.has('role.edit');
+  const allowed = useCallback((c: string) => perms.has(c), [perms]);
 
   const load = useCallback(async () => {
-    const [r, rp, p] = await Promise.all([
+    const [r, rp, p, ur] = await Promise.all([
       supabase.from('roles').select('id, code, name, is_system').order('created_at'),
       supabase.from('role_permissions').select('role_id, permission_code'),
-      supabase.from('permissions').select('code, module, name').order('code'),
+      supabase.from('permissions').select('code'),
+      supabase.from('user_roles').select('role_id, user_id'),
     ]);
     const err = r.error ?? rp.error ?? p.error;
     if (err) return toast('error', err.message);
-    setRoles((r.data ?? []) as Role[]);
+    setRoles(((r.data ?? []) as Role[]).filter((x) => !isPersonal(x)));
     setRolePerms((rp.data ?? []) as RolePerm[]);
-    setCatalog((p.data ?? []) as Perm[]);
+    setCatalog(new Set(((p.data ?? []) as { code: string }[]).map((x) => x.code)));
+    const m: Record<string, Set<string>> = {};
+    for (const x of (ur.data ?? []) as { role_id: string; user_id: string }[]) (m[x.role_id] ??= new Set()).add(x.user_id);
+    setMembers(Object.fromEntries(Object.entries(m).map(([k, v]) => [k, v.size])));
   }, [toast]);
+  useEffect(() => { void load(); }, [load]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const permName = (code: string) => catalog.find((p) => p.code === code)?.name ?? code;
-
-  return (
-    <>
-      <CreateRoleForm catalog={catalog} perms={perms} onCreated={load} />
-      <section className="card">
-        <h2>Vai trò ({roles.length})</h2>
-        <ul className="list">
-          {roles.map((role) => (
-            <RoleItem key={role.id} role={role} catalog={catalog} perms={perms} permName={permName}
-                      current={rolePerms.filter((x) => x.role_id === role.id).map((x) => x.permission_code)}
-                      onSaved={load} />
-          ))}
-        </ul>
-      </section>
-    </>
-  );
-}
-
-function PermissionChecklist(props: { catalog: Perm[]; perms: Permissions; value: string[]; onChange: (v: string[]) => void }) {
-  return (
-    <div className="checklist">
-      {props.catalog.map((p) => {
-        const allowed = props.perms.has(p.code);
-        return (
-          <label key={p.code} className={allowed ? 'check' : 'check disabled'} title={allowed ? '' : 'Bạn không có quyền này nên không cấp được'}>
-            <input type="checkbox" disabled={!allowed} checked={props.value.includes(p.code)}
-                   onChange={(e) => props.onChange(e.target.checked ? [...props.value, p.code] : props.value.filter((c) => c !== p.code))} />
-            {p.name}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-function CreateRoleForm({ catalog, perms, onCreated }: { catalog: Perm[]; perms: Permissions; onCreated: () => Promise<void> }) {
-  const toast = useToast();
-  const [name, setName] = useState('');
-  const [selected, setSelected] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const code = toCode(name);
-    if (code.length < 2) return toast('error', 'Tên vai trò quá ngắn');
-    setBusy(true);
-    try {
-      await rpc('create_role', { p_code: code, p_name: name.trim(), p_permissions: selected });
-      toast('ok', `Đã tạo vai trò ${name.trim()}`);
-      setName('');
-      setSelected([]);
-      await onCreated();
-    } catch (err) {
-      const msg = errMsg(err);
-      toast('error', /duplicate|unique/i.test(msg) ? 'Đã có vai trò cùng tên' : msg);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form className="card form" onSubmit={submit}>
-      <h2>Tạo vai trò mới</h2>
-      <label>Tên vai trò<input value={name} onChange={(e) => setName(e.target.value)} required /></label>
-      <div className="muted small">Quyền của vai trò</div>
-      <PermissionChecklist catalog={catalog} perms={perms} value={selected} onChange={setSelected} />
-      <button className="btn primary" disabled={busy}>Tạo vai trò</button>
-    </form>
-  );
-}
-
-function RoleItem(props: {
-  role: Role; catalog: Perm[]; perms: Permissions; current: string[];
-  permName: (c: string) => string; onSaved: () => Promise<void>;
-}) {
-  const { role } = props;
-  const toast = useToast();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const locked = role.code === 'owner';
+  const role = roles.find((r) => r.id === sel) ?? roles[0];
+  const current = useMemo(() => new Set(rolePerms.filter((x) => x.role_id === role?.id).map((x) => x.permission_code)), [rolePerms, role?.id]);
+  useEffect(() => { setValue(current); setDirty(false); }, [current]);
+  const locked = !role || role.code === 'owner' || !canEdit;
+  const change = (v: Set<string>) => { setValue(v); setDirty(true); };
 
   async function save() {
+    if (!role) return;
     setBusy(true);
     try {
-      await rpc('set_role_permissions', { p_role_id: role.id, p_permissions: value });
-      toast('ok', `Đã lưu quyền vai trò ${role.name}`);
-      setEditing(false);
-      await props.onSaved();
+      await rpc('set_role_permissions', { p_role_id: role.id, p_permissions: [...value] });
+      toast('ok', `Đã lưu quyền nhóm ${role.name}`);
+      await load();
+    } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+  async function create(e: FormEvent) {
+    e.preventDefault();
+    const code = toCode(newName);
+    if (code.length < 2 || isPersonal({ code })) return toast('error', 'Tên nhóm không hợp lệ');
+    setBusy(true);
+    try {
+      await rpc('create_role', { p_code: code, p_name: newName.trim(), p_permissions: [] });
+      toast('ok', `Đã tạo nhóm ${newName.trim()}`);
+      setNewName('');
+      await load();
+      const { data } = await supabase.from('roles').select('id').eq('code', code).maybeSingle();
+      if (data) setSel((data as { id: string }).id);
     } catch (err) {
-      toast('error', errMsg(err));
-    } finally {
-      setBusy(false);
-    }
+      const msg = errMsg(err);
+      toast('error', /duplicate|unique/i.test(msg) ? 'Đã có nhóm cùng tên' : msg);
+    } finally { setBusy(false); }
   }
 
   return (
-    <li className="item">
+    <section className="card">
       <div className="item-head">
-        <div>
-          <b>{role.name}</b> <span className="muted small">· {role.is_system ? 'vai trò mẫu' : 'tự tạo'}</span>
-        </div>
-        {!locked && !editing && (
-          <button className="btn small" onClick={() => { setValue(props.current); setEditing(true); }}>Sửa quyền</button>
-        )}
+        <h2>Phân quyền theo nhóm</h2>
+        <span className="small muted">Chọn nhóm rồi tích quyền · 1 người vào được nhiều nhóm (quyền cộng dồn) và có quyền riêng: gán ở mục Người dùng</span>
       </div>
-      {editing ? (
-        <>
-          <PermissionChecklist catalog={props.catalog} perms={props.perms} value={value} onChange={setValue} />
-          <div className="actions">
-            <button className="btn small primary" disabled={busy} onClick={() => void save()}>Lưu</button>
-            <button className="btn small link" onClick={() => setEditing(false)}>Hủy</button>
-          </div>
-        </>
-      ) : (
-        <div className="chips">
-          {props.current.length === 0 && <span className="muted small">Chưa có quyền</span>}
-          {props.current.map((c) => <span key={c} className="chip">{props.permName(c)}</span>)}
-          {locked && <span className="muted small">(Chủ nhà xe luôn có toàn quyền)</span>}
-        </div>
+      <div className="vx-tabs role-tabs" role="tablist" aria-label="Nhóm quyền">
+        {roles.map((r) => (
+          <button key={r.id} type="button" role="tab" aria-selected={r.id === role?.id} className={r.id === role?.id ? 'on' : ''}
+                  onClick={() => { if (dirty && !window.confirm('Nhóm đang sửa chưa lưu. Bỏ thay đổi?')) return; setSel(r.id); }}>
+            {r.name} <small>{members[r.id] ?? 0}</small>
+          </button>
+        ))}
+      </div>
+      {canAdd && (
+        <form className="inline-form" onSubmit={create}>
+          <label>Nhóm mới<input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="vd: Phòng vé Biên Hòa" /></label>
+          <button className="btn small" disabled={busy || !newName.trim()}>+ Tạo nhóm</button>
+        </form>
       )}
-    </li>
+      {role && <>
+        {role.code === 'owner' && <p className="small muted">Chủ nhà xe luôn có toàn quyền, không sửa được.</p>}
+        <PermMatrix catalog={catalog} value={value} onChange={change} allowed={allowed} readOnly={locked} />
+        {!locked && (
+          <div className="actions perm-bar">
+            <button type="button" className="btn small" onClick={() => change(quick('all', catalog, allowed))}>✓ Tích tất cả</button>
+            <button type="button" className="btn small" onClick={() => change(quick('view', catalog, allowed))}>Chỉ xem</button>
+            <button type="button" className="btn small" onClick={() => change(quick('none', catalog, allowed))}>Bỏ hết</button>
+            <label className="inline">Sao chép quyền từ
+              <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
+                <option value="">Chọn nhóm…</option>
+                {roles.filter((r) => r.id !== role.id).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select></label>
+            <button type="button" className="btn small" disabled={!copyFrom}
+                    onClick={() => change(new Set(rolePerms.filter((x) => x.role_id === copyFrom).map((x) => x.permission_code).filter(allowed)))}>Sao chép</button>
+            <button type="button" className="btn primary" disabled={busy || !dirty} onClick={() => void save()}>Lưu quyền nhóm {role.name}</button>
+          </div>
+        )}
+      </>}
+    </section>
   );
 }

@@ -3,6 +3,8 @@ import { MIN_PASSWORD, PHONE_RE } from '../lib/login';
 import type { Permissions } from '../lib/permissions';
 import { adminUsers, errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { PermMatrix } from '../components/PermMatrix';
+import { isPersonal } from './Roles';
 
 interface UserRow { id: string; phone: string; full_name: string; status: 'active' | 'locked' }
 interface RoleRow { id: string; code: string; name: string }
@@ -16,9 +18,11 @@ interface Data {
   userRoles: UserRoleRow[];
   branches: BranchRow[];
   offices: OfficeRow[];
+  rolePerms: { role_id: string; permission_code: string }[];
+  catalog: Set<string>;
 }
 
-const EMPTY: Data = { users: [], roles: [], userRoles: [], branches: [], offices: [] };
+const EMPTY: Data = { users: [], roles: [], userRoles: [], branches: [], offices: [], rolePerms: [], catalog: new Set() };
 
 async function select<T>(table: string, columns: string, order: string): Promise<T[]> {
   const { data, error } = await supabase.from(table).select(columns).order(order);
@@ -36,18 +40,22 @@ function parseScope(v: string): { scope_type: string; scope_id: string | null } 
 export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
   const [data, setData] = useState<Data>(EMPTY);
-  const canManage = perms.has('user.manage');
+  const canManage = perms.has('user.edit');
+  const canAdd = perms.has('user.add');
+  const canPerm = perms.has('role.add') && perms.has('role.edit');
 
   const load = useCallback(async () => {
     try {
-      const [users, roles, userRoles, branches, offices] = await Promise.all([
+      const [users, roles, userRoles, branches, offices, rp, cat] = await Promise.all([
         select<UserRow>('app_users', 'id, phone, full_name, status', 'full_name'),
         select<RoleRow>('roles', 'id, code, name', 'created_at'),
         select<UserRoleRow>('user_roles', 'id, user_id, role_id, scope_type, scope_id', 'created_at'),
         select<BranchRow>('branches', 'id, name', 'name'),
         select<OfficeRow>('ticket_offices', 'id, name, branch_id', 'name'),
+        select<{ role_id: string; permission_code: string }>('role_permissions', 'role_id, permission_code', 'role_id'),
+        select<{ code: string }>('permissions', 'code', 'code'),
       ]);
-      setData({ users, roles, userRoles, branches, offices });
+      setData({ users, roles, userRoles, branches, offices, rolePerms: rp, catalog: new Set(cat.map((x) => x.code)) });
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -65,13 +73,13 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   return (
     <>
-      {canManage && <CreateUserForm data={data} onCreated={load} />}
+      {canAdd && <CreateUserForm data={data} onCreated={load} />}
       <section className="card">
         <h2>Người dùng ({data.users.length})</h2>
         <ul className="list">
           {data.users.map((u) => (
-            <UserItem key={u.id} user={u} data={data} isSelf={u.id === ctx.user_id} canManage={canManage}
-                      scopeLabel={scopeLabel} onChanged={load} />
+            <UserItem key={u.id} user={u} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+                      allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
           ))}
         </ul>
       </section>
@@ -132,14 +140,14 @@ function CreateUserForm({ data, onCreated }: { data: Data; onCreated: () => Prom
           <input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })}
                  autoComplete="new-password" required />
         </label>
-        <label>Vai trò
+        <label>Nhóm quyền
           <select value={f.roleId} onChange={(e) => setF({ ...f, roleId: e.target.value })}>
             <option value="">(Chưa gán)</option>
-            {data.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {data.roles.filter((r) => !isPersonal(r)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </label>
         {f.roleId && (
-          <label>Phạm vi vai trò
+          <label>Phạm vi
             <ScopeSelect data={data} value={f.scope} onChange={(v) => setF({ ...f, scope: v })} />
           </label>
         )}
@@ -150,12 +158,12 @@ function CreateUserForm({ data, onCreated }: { data: Data; onCreated: () => Prom
 }
 
 function UserItem(props: {
-  user: UserRow; data: Data; isSelf: boolean; canManage: boolean;
+  user: UserRow; data: Data; isSelf: boolean; canManage: boolean; canPerm: boolean; allowed: (c: string) => boolean;
   scopeLabel: (type: string, id: string | null) => string; onChanged: () => Promise<void>;
 }) {
   const { user, data, isSelf, canManage, scopeLabel, onChanged } = props;
   const toast = useToast();
-  const [panel, setPanel] = useState<'none' | 'password' | 'role'>('none');
+  const [panel, setPanel] = useState<'none' | 'password' | 'role' | 'perm'>('none');
   const [newPassword, setNewPassword] = useState('');
   const [roleId, setRoleId] = useState('');
   const [scope, setScope] = useState('tenant');
@@ -188,20 +196,24 @@ function UserItem(props: {
         <span className={`badge ${user.status}`}>{user.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>
       </div>
       <div className="chips">
-        {myRoles.length === 0 && <span className="muted small">Chưa có vai trò</span>}
-        {myRoles.map((ur) => (
-          <span key={ur.id} className="chip">
-            {data.roles.find((r) => r.id === ur.role_id)?.name ?? '?'} · {scopeLabel(ur.scope_type, ur.scope_id)}
+        {myRoles.length === 0 && <span className="muted small">Chưa có nhóm quyền</span>}
+        {myRoles.map((ur) => {
+          const r = data.roles.find((x) => x.id === ur.role_id);
+          return (
+          <span key={ur.id} className={`chip${r && isPersonal(r) ? ' chip-own' : ''}`}>
+            {r ? (isPersonal(r) ? 'Quyền riêng' : r.name) : '?'} · {scopeLabel(ur.scope_type, ur.scope_id)}
             {canEdit && (
-              <button className="chip-x" title="Gỡ vai trò" aria-label="Gỡ vai trò" disabled={busy}
-                      onClick={() => void run(() => rpc('revoke_role', { p_user_role_id: ur.id }), 'Đã gỡ vai trò')}>×</button>
+              <button className="chip-x" title="Gỡ khỏi nhóm" aria-label={`Gỡ ${r?.name ?? ''}`} disabled={busy}
+                      onClick={() => void run(() => rpc('revoke_role', { p_user_role_id: ur.id }), 'Đã gỡ khỏi nhóm')}>×</button>
             )}
           </span>
-        ))}
+          );
+        })}
       </div>
       {canEdit && (
         <div className="actions">
-          <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'role' ? 'none' : 'role')}>Thêm vai trò</button>
+          <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'role' ? 'none' : 'role')}>Thêm vào nhóm</button>
+          <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'perm' ? 'none' : 'perm')}>Phân quyền {user.full_name}</button>
           <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'password' ? 'none' : 'password')}>Đặt lại mật khẩu</button>
           <button className="btn small" disabled={busy}
                   onClick={() => void run(() => rpc('set_user_status', { p_user_id: user.id, p_status: user.status === 'active' ? 'locked' : 'active' }),
@@ -227,16 +239,56 @@ function UserItem(props: {
           e.preventDefault();
           const s = parseScope(scope);
           void run(() => rpc('assign_role', { p_user_id: user.id, p_role_id: roleId, p_scope_type: s.scope_type, p_scope_id: s.scope_id }),
-                   'Đã gán vai trò');
+                   'Đã thêm vào nhóm');
         }}>
-          <select value={roleId} onChange={(e) => setRoleId(e.target.value)} aria-label="Vai trò" required>
-            <option value="">Chọn vai trò</option>
-            {data.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+          <select value={roleId} onChange={(e) => setRoleId(e.target.value)} aria-label="Nhóm quyền" required>
+            <option value="">Chọn nhóm</option>
+            {data.roles.filter((r) => !isPersonal(r)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
           <ScopeSelect data={data} value={scope} onChange={setScope} />
           <button className="btn small primary" disabled={busy}>Gán</button>
         </form>
       )}
+      {panel === 'perm' && <UserPerms {...props} myRoles={myRoles} onDone={() => { setPanel('none'); void onChanged(); }} />}
     </li>
+  );
+}
+
+/** Quyền của 1 người: ô đã có từ các nhóm (tích mờ) + quyền riêng tích thêm. Quyền riêng lưu thành nhóm ẩn "rieng_…" của người đó. */
+function UserPerms(props: {
+  user: UserRow; data: Data; canPerm: boolean; allowed: (c: string) => boolean; myRoles: UserRoleRow[]; onDone: () => void;
+}) {
+  const { user, data, canPerm, allowed, myRoles, onDone } = props;
+  const toast = useToast();
+  const code = `rieng_${user.id.replace(/-/g, '').slice(0, 24)}`;
+  const own = data.roles.find((r) => r.code === code);
+  const groupIds = new Set(myRoles.map((r) => r.role_id).filter((id) => id !== own?.id));
+  const inherited = new Set(data.rolePerms.filter((x) => groupIds.has(x.role_id)).map((x) => x.permission_code));
+  const [value, setValue] = useState<Set<string>>(() => new Set(data.rolePerms.filter((x) => x.role_id === own?.id).map((x) => x.permission_code)));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    try {
+      const codes = [...value].filter((c) => !inherited.has(c));
+      if (own) {
+        await rpc('set_role_permissions', { p_role_id: own.id, p_permissions: codes });
+        if (!myRoles.some((r) => r.role_id === own.id)) await rpc('assign_role', { p_user_id: user.id, p_role_id: own.id, p_scope_type: 'tenant', p_scope_id: null });
+      } else if (codes.length) {
+        await rpc('create_role', { p_code: code, p_name: `Riêng: ${user.full_name}`.slice(0, 80), p_permissions: codes });
+        const { data: r } = await supabase.from('roles').select('id').eq('code', code).single();
+        await rpc('assign_role', { p_user_id: user.id, p_role_id: (r as { id: string }).id, p_scope_type: 'tenant', p_scope_id: null });
+      }
+      toast('ok', `Đã lưu quyền riêng của ${user.full_name}`);
+      onDone();
+    } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="sub">
+      <p className="small muted">Ô tích mờ: đã có từ nhóm ({myRoles.filter((r) => r.role_id !== own?.id).map((r) => data.roles.find((x) => x.id === r.role_id)?.name).filter(Boolean).join(', ') || 'chưa vào nhóm nào'}).
+        Tích thêm ô nào là quyền riêng của {user.full_name}, áp dụng toàn nhà xe.</p>
+      <PermMatrix catalog={data.catalog} value={value} onChange={setValue} allowed={allowed} inherited={inherited} readOnly={!canPerm} />
+      {canPerm && <div className="actions"><button className="btn primary" disabled={busy} onClick={() => void save()}>Lưu quyền riêng</button></div>}
+    </div>
   );
 }

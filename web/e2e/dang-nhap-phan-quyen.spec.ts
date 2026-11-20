@@ -63,10 +63,18 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Họ tên', { exact: true }).fill('Nhân viên bán vé');
   await page.getByLabel('Số điện thoại', { exact: true }).fill('0902000002');
   await page.getByLabel('Mật khẩu ban đầu').fill('nv1234');
-  await page.getByRole('combobox', { name: /^Vai trò/ }).selectOption({ label: 'Bán vé' });
+  await page.getByRole('combobox', { name: /^Nhóm quyền/ }).selectOption({ label: 'Bán vé' });
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (2)' })).toBeVisible();
   await expect(page.getByText('Bán vé · Toàn nhà xe')).toBeVisible();
+  // Quyền riêng từng người: ô có từ nhóm hiện tích mờ, tích thêm ô riêng rồi lưu (kiêm nhiệm cộng dồn)
+  await page.getByRole('button', { name: 'Phân quyền Nhân viên bán vé' }).click();
+  await expect(page.getByLabel('Bán vé: Xem')).toBeChecked();
+  await expect(page.getByLabel('Bán vé: Xem')).toBeDisabled();
+  await page.getByLabel('Báo cáo: Xem').check();
+  await page.getByRole('button', { name: 'Lưu quyền riêng' }).click();
+  await expect(page.getByText('Đã lưu quyền riêng của Nhân viên bán vé')).toBeVisible();
+  await expect(page.getByText('Quyền riêng · Toàn nhà xe')).toBeVisible();
 
   // 5b. Cấu hình bán vé: mặc định 5 phút → đổi 7 phút
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
@@ -77,10 +85,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5c. Tạo vai trò tùy chỉnh
   await page.getByRole('button', { name: 'Vai trò', exact: true }).click();
-  await page.getByLabel('Tên vai trò').fill('Thu ngân');
+  await page.getByLabel('Nhóm mới').fill('Thu ngân');
+  await page.getByRole('button', { name: '+ Tạo nhóm' }).click();
+  await expect(page.getByText('Đã tạo nhóm Thu ngân')).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Thu ngân/ })).toHaveAttribute('aria-selected', 'true');
+  // Bảng quyền như app cũ: tích ô, tích cả dòng, rồi lưu
   await page.getByLabel('Người dùng: Xem').check();
-  await page.getByRole('button', { name: 'Tạo vai trò' }).click();
-  await expect(page.getByText('Đã tạo vai trò Thu ngân')).toBeVisible();
+  await page.getByLabel('Gửi hàng: tất cả').check();
+  await expect(page.getByLabel('Gửi hàng: Xóa')).toBeChecked();
+  await page.getByRole('button', { name: 'Lưu quyền nhóm Thu ngân' }).click();
+  await expect(page.getByText('Đã lưu quyền nhóm Thu ngân')).toBeVisible();
 
   // 5e. Tuyến: 3 điểm dừng, tuyến Hố Nai – Vũng Tàu, giá toàn tuyến + giá chặng
   await page.getByRole('button', { name: 'Tuyến', exact: true }).click();

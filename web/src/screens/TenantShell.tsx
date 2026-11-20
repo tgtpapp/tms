@@ -48,7 +48,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       setIsCrew(crew);
       setPerms(p);
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
-      setTab((cur) => cur ?? (p.has('ticket.sell') ? 'sell' : p.hasAnywhere('user.read') || p.hasAnywhere('user.manage') ? 'users' : crew ? 'driver' : 'branches'));
+      setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
     } catch (e) {
       setError(errMsg(e));
     }
@@ -63,25 +63,25 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
 
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
     { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
-    { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('ticket.sell') },
-    { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.manage') },
-    { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('trip.manage') },
-    { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: true },
-    { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: true },
-    { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('vehicle.manage') || perms.has('trip.manage') },
-    { key: 'fuel', label: 'Nhiên liệu', icon: 'gas-pump', group: 'Danh mục', show: perms.has('vehicle.manage') || perms.has('trip.manage') },
+    { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
+    { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
+    { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },
+    { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') },
+    { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: perms.has('route.view') },
+    { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('repair.view') },
+    { key: 'fuel', label: 'Nhiên liệu', icon: 'gas-pump', group: 'Danh mục', show: perms.has('fuel.view') },
     { key: 'reports', label: 'Báo cáo', icon: 'chart-histogram', group: 'Danh mục', show: perms.has('report.view') },
-    { key: 'km', label: 'Km xe', icon: 'road', group: 'Danh mục', show: perms.has('vehicle.manage') || perms.has('trip.manage') },
-    { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: true },
-    { key: 'staff', label: 'Lái xe & nhân viên', icon: 'id-badge', group: 'Danh mục', show: true },
-    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('salary.manage') },
-    { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: true },
-    { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.manage') },
-    { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') || perms.has('archive.manage') },
-    { key: 'users', label: 'Người dùng', icon: 'users', group: 'Quản trị', show: perms.hasAnywhere('user.read') || perms.hasAnywhere('user.manage') },
-    { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.manage') },
-    { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.manage') },
-    { key: 'audit', label: 'Nhật ký', icon: 'time-past', group: 'Quản trị', show: perms.has('audit.read') },
+    { key: 'km', label: 'Km xe', icon: 'road', group: 'Danh mục', show: perms.has('km.view') },
+    { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: perms.has('vehicle.view') },
+    { key: 'staff', label: 'Lái xe & nhân viên', icon: 'id-badge', group: 'Danh mục', show: perms.has('staff.view') || isCrew },
+    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('labor.view') },
+    { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: perms.hasAnywhere('branch.view') || perms.hasAnywhere('office.view') },
+    { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.view') },
+    { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') },
+    { key: 'users', label: 'Người dùng', icon: 'users', group: 'Quản trị', show: perms.hasAnywhere('user.view') },
+    { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.view') },
+    { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.view') },
+    { key: 'audit', label: 'Nhật ký', icon: 'time-past', group: 'Quản trị', show: perms.has('audit.view') },
     { key: 'account', label: 'Tài khoản của tôi', icon: 'user', group: 'Cá nhân', show: true },
   ];
   const shown = tabs.filter((t) => t.show);
@@ -143,7 +143,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
           {tab === 'branches' && <BranchesScreen perms={perms} />}
           {tab === 'roles' && <RolesScreen perms={perms} />}
-          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.manage')} canArchive={perms.has('archive.manage')} />}
+          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} />}
           {tab === 'audit' && <AuditScreen />}
           {tab === 'account' && <AccountScreen ctx={ctx} />}
         </main>

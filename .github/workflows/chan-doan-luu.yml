@@ -1,0 +1,26 @@
+name: Chẩn đoán (tạm)
+on: workflow_dispatch
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+    steps:
+      - name: Đo
+        run: |
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGPASSWORD="$SUPABASE_DB_PASSWORD" PGDATABASE=postgres PGPORT=5432
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              PGHOST="$host" psql -v ON_ERROR_STOP=1 <<'SQL'
+          select kind, count(*) tong, count(*) filter (where cardinality(files) > 0) co_tep, count(*) filter (where data ? 'anh' or data ? 'files' or data ? 'url') co_anh_trong_data,
+                 (select string_agg(distinct k, ',') from public.staff_records r2, jsonb_object_keys(r2.data) k where r2.kind = r.kind) cac_truong
+          from public.staff_records r where kind in ('suc_khoe','dao_tao') group by 1;
+          select kind, left(files[1], 60) mau from public.staff_records where kind in ('suc_khoe','dao_tao') and cardinality(files) > 0 limit 3;
+          select doc_type, count(*), count(*) filter (where cardinality(files) > 0) co_tep from public.documents where doc_type in ('kham_suc_khoe','tap_huan') group by 1;
+          SQL
+              exit 0
+            fi
+          done
+          exit 1

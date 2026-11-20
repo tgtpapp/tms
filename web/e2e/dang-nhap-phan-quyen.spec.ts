@@ -322,6 +322,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(hd.getByText(/7\.000\.000 đồng\/tháng/).first()).toBeVisible();
   await expect(hd.getByText(/PHỤ LỤC II/)).toBeVisible();
   await hd.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();
+  await page.getByRole('button', { name: /^Xem HĐ 001\/\d{4}\/HĐLĐ/ }).click();
+  await expect(page.locator('.paper-top').getByText('NGƯỜI LAO ĐỘNG (BÊN B):')).toBeVisible();
+  await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();

@@ -2,6 +2,7 @@ import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, type Me } from '../components/ProfilePapers';
+import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -135,7 +136,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const canArchive = perms.has('archive.manage');
   const me: Me = { id: ctx.user_id, name: ctx.full_name ?? '' };
   const [bulk, setBulk] = useState(false);
-  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me };
+  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') } };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
@@ -200,7 +201,7 @@ interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
 interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
-  canArchive: boolean; me: Me;
+  canArchive: boolean; me: Me; labor: { view: boolean; add: boolean; edit: boolean };
 }
 
 function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
@@ -423,6 +424,8 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       {age && <p className={`small state-${age.state}`}>{age.text}</p>}
       {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
         <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
+      {props.labor.view && <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
+                                           canAdd={props.labor.add} canEdit={props.labor.edit} />}
       <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />
       <h3>Giấy tờ</h3>
       <ul className="list">

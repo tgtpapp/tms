@@ -134,9 +134,24 @@ export function contractPages(k: Contract, x: LaborCtx): string[] {
   return [...paginate(main.map(wrap)), ...paginate(pl1.map(wrap)), ...paginate(pl2.map(wrap))];
 }
 
-const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-/** Lưu PDF vào <năm> / Nhân sự / Hợp đồng lao động / <họ tên> (như app cũ: mỗi người 1 thư mục); lưu lại thì thay bản cũ. */
-export async function saveContractPdf(k: Contract, x: LaborCtx): Promise<void> {
-  await savePdf([String(k.year), 'Nhân sự', 'Hợp đồng lao động', x.person.name], `Hợp đồng lao động số ${k.number} · ${x.person.name}`,
-    `HDLD-${slug(k.number)}-${slug(x.person.name)}.pdf`, contractPages(k, x).map((html) => ({ html, land: false })), 'Lưu từ Hợp đồng lao động', `hdld:${k.id}`);
+/** Lưu PDF theo quy tắc app cũ: <năm bắt đầu> / Nhân sự / Hợp đồng lao động / <họ tên>;
+ *  tên "Hợp đồng lao động - <tên> (<số>)", tệp "HĐLĐ <số> - <tên>.pdf"; mỗi người mỗi năm 1 bản (sửa thì đè bản của năm đó);
+ *  nội dung không đổi so với bản đã lưu thì bỏ qua. Trả 'saved' | 'same'. */
+export async function saveContractPdf(k: Contract, x: LaborCtx): Promise<'saved' | 'same'> {
+  const pages = contractPages(k, x);
+  const sig = hash(pages.join(''));
+  const key = `hdld:${k.staff_id}:${k.year}`;
+  const path = [String(k.year), 'Nhân sự', 'Hợp đồng lao động', x.person.name];
+  const so = k.number.replace(/[\\/:*?"<>|]+/g, '-');
+  const { data } = await supabase.from('archive_items').select('id, note').eq('is_old', false).like('note', `%[${key}]%`);
+  if (((data ?? []) as { note: string | null }[]).some((r) => r.note?.includes(`sig:${sig}`))) return 'same';
+  await savePdf(path, `Hợp đồng lao động - ${x.person.name} (${so})`, `HĐLĐ ${so} - ${x.person.name}.pdf`,
+    pages.map((html) => ({ html, land: false })), `Tự tạo PDF khi lưu/in · sig:${sig}`, key);
+  return 'saved';
+}
+/** Mã ngắn của nội dung để biết hợp đồng có đổi không. */
+function hash(s: string): string {
+  let a = 5381, b = 52711;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = (Math.imul(a, 33) ^ c) >>> 0; b = (Math.imul(b, 31) + c) >>> 0; }
+  return a.toString(36) + b.toString(36);
 }

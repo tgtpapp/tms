@@ -13,12 +13,12 @@ export type Me = { id: string | null; name: string };
 type Kind = 'driver' | 'vehicle';
 
 /** Xem trước các trang A4, bấm In. */
-export function PaperView({ title, pages, onClose }: { title: string; pages: Page[]; onClose: () => void }) {
+export function PaperView({ title, pages, onClose, onPrint }: { title: string; pages: Page[]; onClose: () => void; onPrint?: () => void }) {
   return createPortal(
     <div className="lenh-overlay paper-top">
       <div className="lenh-bar no-print">
         <b>{title}</b>
-        <button className="btn small primary" onClick={() => window.print()}>In</button>
+        <button className="btn small primary" onClick={() => { onPrint?.(); window.print(); }}>In</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
       <div className="print-stack">{pages.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: p.html }} />)}</div>

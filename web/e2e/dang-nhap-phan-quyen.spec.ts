@@ -226,6 +226,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await hdx.getByLabel('Họ tên chủ xe').fill('Nguyễn Văn Chủ');
   await hdx.getByLabel('Giá thuê xe 51B-123.45').fill('8000000');
   await hdx.getByRole('button', { name: 'Lập & cấp số' }).click();
+  await page.waitForTimeout(8000);
+  console.log('TOAST HĐTX:', await page.locator('.toasts').innerText().catch(() => '?'));
   await expect(page.getByText(/Đã lưu hợp đồng \d{3}\/\d{4}\/HĐTX/)).toBeVisible({ timeout: 30_000 });
   await expect(dlx.getByText('Hợp đồng thuê xe / hợp tác kinh doanh')).toBeVisible();
   await dlx.getByRole('button', { name: /^Xem hợp đồng \d{3}\/\d{4}\/HĐTX/ }).click();

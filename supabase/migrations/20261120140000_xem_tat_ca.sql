@@ -24,8 +24,8 @@ begin
     v := replace(replace(p.qual, '''staff.view''', '''staff.view_all'''), '''labor.view''', '''labor.view_all''');
     if v <> p.qual then execute format('alter policy %I on public.%I using (%s)', p.policyname, p.tablename, v); end if;
   end loop;
-  for f in select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-           where n.nspname = 'app' and p.proname in ('can_read_documents', 'can_read_signature')
+  for f in select pr.oid from pg_proc pr join pg_namespace n on n.oid = pr.pronamespace
+           where n.nspname = 'app' and pr.proname in ('can_read_documents', 'can_read_signature')
   loop
     v := pg_get_functiondef(f.oid);
     execute replace(v, '''staff.view''', '''staff.view_all''');

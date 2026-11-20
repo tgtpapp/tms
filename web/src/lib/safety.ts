@@ -46,7 +46,6 @@ export interface Base {
   supervisor: { name: string; since: string } | null;
 }
 export async function loadBase(): Promise<Base> {
-  const since = addDays(todayVN(), -420);
   const [c, vh, sm, rt, dc, rc, ev, qd] = await Promise.all([
     company(),
     supabase.from('vehicles').select('id, plate, gsht_provider, camera_provider'),
@@ -55,7 +54,7 @@ export async function loadBase(): Promise<Base> {
     supabase.from('documents').select('vehicle_id, staff_id, doc_type, expires_on').eq('is_current', true)
       .in('doc_type', ['dang_ky', 'kiem_dinh', 'bh_tnds', 'phu_hieu', 'gplx', 'kham_suc_khoe', 'tap_huan']),
     supabase.from('staff_records').select('staff_id, kind, data').in('kind', ['suc_khoe', 'dao_tao']),
-    supabase.from('safety_events').select(EV_COLS).gte('occurred_at', `${since}T00:00:00+07:00`).order('occurred_at'),
+    supabase.from('safety_events').select(EV_COLS).order('occurred_at'),
     supabase.from('official_docs').select('staff_id, signed_on, content').eq('template', 'qd_giam_sat').eq('status', 'hieu_luc').order('signed_on', { ascending: false }).limit(1),
   ]);
   if (ev.error) throw new Error(ev.error.message);
@@ -258,36 +257,53 @@ export async function autoArchiveSafety(onStep?: (s: string) => void): Promise<n
       n++;
     };
     const today = todayVN();
-    // Checklist trước chuyến: hôm nay + 7 ngày trước
-    for (let i = 7; i >= 0; i--) {
-      const d = addDays(today, -i), r = await checklistDay(b, d);
-      if (r) await put(`atgt-ck:${d}`, [d.slice(0, 4), ROOT, 'Checklist trước chuyến', monthDir(d)], `Checklist trước chuyến ngày ${dmy(d)}`, `Checklist-truoc-chuyen-${d}.pdf`, r.pages, true);
+    // Làm cho mọi kỳ có dữ liệu: từ chuyến đầu tiên (hoặc sự việc đầu tiên) đến nay.
+    // Kỳ đã lưu và đã qua lâu (không còn đổi) thì bỏ qua cho nhanh; kỳ gần đây dựng lại, nội dung đổi mới lưu.
+    const ft = await supabase.from('trips').select('service_date').eq('status', 'mo').order('service_date').limit(1);
+    const firstTrip = ((ft.data ?? []) as { service_date: string }[])[0]?.service_date ?? today;
+    const firstEv = b.events[0] ? vnDay(b.events[0].occurred_at) : today;
+    const first = firstTrip < firstEv ? firstTrip : firstEv;
+    const settled = (key: string, end: string, days: number) => sigs.has(key) && end < addDays(today, -days);
+    // Checklist trước chuyến: mọi ngày có chuyến
+    for (let d = first; d <= today; d = addDays(d, 1)) {
+      const key = `atgt-ck:${d}`;
+      if (settled(key, d, 8)) continue;
+      const r = await checklistDay(b, d);
+      if (r) await put(key, [d.slice(0, 4), ROOT, 'Checklist trước chuyến', monthDir(d)], `Checklist trước chuyến ngày ${dmy(d)}`, `Checklist-truoc-chuyen-${d}.pdf`, r.pages, true);
     }
-    // Sổ giám sát hằng ngày: chỉ ngày có sự việc (31 ngày gần nhất)
-    for (let i = 31; i >= 0; i--) {
-      const d = addDays(today, -i), p = await soNgay(b, d);
+    // Sổ giám sát hằng ngày: chỉ ngày có sự việc
+    for (const d of [...new Set(b.events.map((e) => vnDay(e.occurred_at)))]) {
+      const p = await soNgay(b, d);
       if (p) await put(`atgt-so:${d}`, [d.slice(0, 4), ROOT, 'Sổ giám sát hằng ngày', monthDir(d)], `Sổ giám sát an toàn ngày ${dmy(d)}`, `So-giam-sat-${d}.pdf`, p, true);
     }
-    // Biên bản xác minh (mức 2, 3 đã đóng) và báo cáo sự cố khẩn cấp (sự cố hoặc mức 3), 60 ngày gần nhất
-    const recent = b.events.filter((e) => vnDay(e.occurred_at) >= addDays(today, -60));
-    await loadTrips(recent.map((e) => e.trip_id ?? ''));
-    for (const e of recent) {
+    // Biên bản xác minh (mức 2, 3 đã đóng) và báo cáo sự cố khẩn cấp (sự cố hoặc mức 3)
+    await loadTrips(b.events.map((e) => e.trip_id ?? ''));
+    for (const e of b.events) {
       const d = vnDay(e.occurred_at), tag = `${d}-${(b.staff.get(e.staff_id ?? '') ?? b.vehicles.get(e.vehicle_id ?? '')?.plate ?? '').slice(0, 40)}`;
       if (e.status === 'dong' && e.level >= 2 && !e.auto) await put(`atgt-bb:${e.id}`, [d.slice(0, 4), ROOT, 'Biên bản xác minh'], `Biên bản xác minh ${dmy(d)} ${who(b, e)}`, `Bien-ban-xac-minh-${tag}.pdf`, bienBan(b, e), false);
       if (e.kind === 'su_co' || e.level === 3) await put(`atgt-sc:${e.id}`, [d.slice(0, 4), ROOT, 'Sự cố khẩn cấp'], `Báo cáo sự cố ${dmy(d)} ${who(b, e)}`, `Su-co-${tag}.pdf`, suCo(b, e), false);
     }
-    // Báo cáo tuần (5 tuần đã xong), tháng (3 tháng đã xong), năm trước
-    for (let i = 5; i >= 1; i--) {
-      const w = weekOf(addDays(today, -7 * i)), lb = weekLabel(w.from), r = await baoCao(b, lb, w.from, w.to);
-      if (!r.empty) await put(`atgt-bc:w:${w.from}`, [w.to.slice(0, 4), ROOT, 'Báo cáo tuần'], `Báo cáo giám sát an toàn ${lb} (${dmy(w.from)} - ${dmy(w.to)})`, `Bao-cao-tuan-${w.from}.pdf`, r.pages, false);
+    // Báo cáo tuần: mọi tuần đã xong có dữ liệu
+    for (let w = weekOf(first); w.to < today; w = weekOf(addDays(w.to, 1))) {
+      const key = `atgt-bc:w:${w.from}`;
+      if (settled(key, w.to, 14)) continue;
+      const lb = weekLabel(w.from), r = await baoCao(b, lb, w.from, w.to);
+      if (!r.empty) await put(key, [w.to.slice(0, 4), ROOT, 'Báo cáo tuần'], `Báo cáo giám sát an toàn ${lb} (${dmy(w.from)} - ${dmy(w.to)})`, `Bao-cao-tuan-${w.from}.pdf`, r.pages, false);
     }
-    for (let i = 3; i >= 1; i--) {
-      const x = new Date(`${today.slice(0, 7)}-01T00:00:00Z`); x.setUTCMonth(x.getUTCMonth() - i);
-      const m = monthOf(x.toISOString().slice(0, 10)), lb = `tháng ${m.from.slice(5, 7)}/${m.from.slice(0, 4)}`, r = await baoCao(b, lb, m.from, m.to);
-      if (!r.empty) await put(`atgt-bc:m:${m.from.slice(0, 7)}`, [m.from.slice(0, 4), ROOT, 'Báo cáo tháng'], `Báo cáo giám sát an toàn ${lb}`, `Bao-cao-thang-${m.from.slice(0, 7)}.pdf`, r.pages, false);
+    // Báo cáo tháng: mọi tháng đã xong có dữ liệu
+    for (let m = monthOf(first); m.to < today; m = monthOf(addDays(m.to, 1))) {
+      const key = `atgt-bc:m:${m.from.slice(0, 7)}`;
+      if (settled(key, m.to, 40)) continue;
+      const lb = `tháng ${m.from.slice(5, 7)}/${m.from.slice(0, 4)}`, r = await baoCao(b, lb, m.from, m.to);
+      if (!r.empty) await put(key, [m.from.slice(0, 4), ROOT, 'Báo cáo tháng'], `Báo cáo giám sát an toàn ${lb}`, `Bao-cao-thang-${m.from.slice(0, 7)}.pdf`, r.pages, false);
     }
-    const y = yearOf(`${+today.slice(0, 4) - 1}-01-01`), ry = await baoCao(b, `năm ${y.from.slice(0, 4)}`, y.from, y.to);
-    if (!ry.empty) await put(`atgt-bc:y:${y.from.slice(0, 4)}`, [y.from.slice(0, 4), ROOT, 'Báo cáo năm'], `Báo cáo giám sát an toàn năm ${y.from.slice(0, 4)}`, `Bao-cao-nam-${y.from.slice(0, 4)}.pdf`, ry.pages, false);
+    // Báo cáo năm: mọi năm đã xong có dữ liệu
+    for (let y = +first.slice(0, 4); y < +today.slice(0, 4); y++) {
+      const key = `atgt-bc:y:${y}`, p = yearOf(`${y}-01-01`);
+      if (settled(key, p.to, 60)) continue;
+      const r = await baoCao(b, `năm ${y}`, p.from, p.to);
+      if (!r.empty) await put(key, [String(y), ROOT, 'Báo cáo năm'], `Báo cáo giám sát an toàn năm ${y}`, `Bao-cao-nam-${y}.pdf`, r.pages, false);
+    }
     return n;
   } finally { running = false; }
 }

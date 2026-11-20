@@ -182,8 +182,8 @@ export function SafetyScreen({ ctx, perms }: { ctx: AccountContext; perms: Permi
                   <option value="">— Không gắn chuyến —</option>
                   {trips.map((t) => <option key={t.id} value={t.id}>{vnTime(t.depart_at)} {rname(t)} · {plate(t.vehicle_id) || 'chưa xe'} · {name(t.driver) || 'chưa lái xe'}</option>)}
                 </select></label>
-              <label>Xe<select value={f.vehicle_id} onChange={set('vehicle_id')}><option value="">—</option>{veh.map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>
-              <label>Lái xe<select value={f.staff_id} onChange={set('staff_id')}><option value="">—</option>{staff.filter((s) => s.is_active || s.id === f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></label>
+              <label>Xe<select aria-label="Xe liên quan" value={f.vehicle_id} onChange={set('vehicle_id')}><option value="">—</option>{veh.map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>
+              <label>Lái xe<select aria-label="Lái xe liên quan" value={f.staff_id} onChange={set('staff_id')}><option value="">—</option>{staff.filter((s) => s.is_active || s.id === f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></label>
               <label>Loại<select value={f.kind} onChange={set('kind')}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
               <label>Mức độ<select value={f.level} onChange={set('level')}>{Object.entries(LEVEL).map(([k, v]) => <option key={k} value={k}>{k} · {v}</option>)}</select></label>
               <label>Nguồn dữ liệu<input value={f.source} onChange={set('source')} list="atgt-nguon" /><datalist id="atgt-nguon">{SOURCES.map((s) => <option key={s} value={s} />)}</datalist></label>

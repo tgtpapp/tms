@@ -338,7 +338,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 5j5c. Giám sát ATGT: ghi sự việc, đóng là vi phạm (tự ghi lý lịch lái xe), báo cáo tháng tự tổng hợp
   await page.getByRole('button', { name: 'Giám sát ATGT', exact: true }).click();
   await page.getByRole('button', { name: '+ Ghi sự việc' }).click();
-  await page.getByLabel('Lái xe', { exact: true }).selectOption({ label: 'Nguyễn Văn Tài' });
+  await page.getByLabel('Lái xe liên quan').selectOption({ label: 'Nguyễn Văn Tài' });
   await page.getByLabel('Nội dung sự việc').fill('Vượt tốc độ 92/80 km/h trên QL51');
   await page.getByRole('button', { name: 'Ghi vào sổ' }).click();
   await expect(page.getByText('Đã ghi vào sổ giám sát')).toBeVisible();

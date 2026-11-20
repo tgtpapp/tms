@@ -195,7 +195,8 @@ reset role;
 insert into public.tenant_settings (tenant_id, key, value) select id, 'chuyen.tao_chuyen_trong', '0' from public.tenants where code = 'nha-xe-a';
 select ok((select count(*) from public.trips x where x.vehicle_id is null and not exists (select 1 from public.trip_crew c where c.trip_id = x.id and c.active)) > 0, 'Đang có chuyến trống');
 select ok(app.purge_empty_trips((select id from public.tenants where code = 'nha-xe-a')) > 0, 'Xóa chuyến trống');
-select is((select count(*)::int from public.trips x where x.vehicle_id is null and not exists (select 1 from public.trip_crew c where c.trip_id = x.id and c.active and c.role in ('lai_xe_1', 'lai_xe_2'))), 0, 'Không còn chuyến trống');
+select is((select count(*)::int from public.trips x where x.vehicle_id is null and not exists (select 1 from public.trip_crew c where c.trip_id = x.id and c.active and c.role in ('lai_xe_1', 'lai_xe_2'))
+  and not exists (select 1 from public.safety_events e where e.trip_id = x.id)), 0, 'Không còn chuyến trống (trừ chuyến có trong sổ giám sát an toàn)');
 select ok((select count(*) from public.trips) > 0, 'Chuyến đã xếp xe / tài xế giữ nguyên');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';

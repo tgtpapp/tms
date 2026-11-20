@@ -3,6 +3,7 @@
 // - Bảng kiểm tra an toàn, nghiệm thu xe trước khi khởi hành: 1 bản chung cho mọi giờ chạy trong ngày của TỪNG lái xe.
 // Lưu PDF vào Lưu trữ hồ sơ: <năm> / 08. Điều hành xe / <loại> / Tháng MM-YYYY (lưu lại thì thay bản cũ, bản cũ ẩn).
 // Mẫu và nội dung kiểm tra lấy theo app cũ của nhà xe; căn cứ pháp lý của mẫu: cần xác minh.
+import { mergeRecordPapers } from './recordPapers';
 import { dirName, type Dir } from './routes';
 import { loadSigns, showName, type Sign } from './signatures';
 import { supabase } from './supabase';
@@ -31,7 +32,7 @@ export const newCache = (): PaperCache => ({ signs: new Map() });
 
 function base(c: PaperCache) {
   c.base ??= (async () => {
-    const [rt, vh, vt, sm, tn, st, dc] = await Promise.all([
+    const [rt, vh, vt, sm, tn, st, dc, rc] = await Promise.all([
       supabase.from('routes').select('id, name, name_ve'),
       supabase.from('vehicles').select('id, plate, vehicle_type_id'),
       supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths'),
@@ -40,11 +41,14 @@ function base(c: PaperCache) {
       supabase.from('tenant_settings').select('value').eq('key', 'lenh.hau_to').maybeSingle(),
       supabase.from('documents').select('vehicle_id, staff_id, doc_type, doc_no, expires_on, data').eq('is_current', true)
         .in('doc_type', ['kiem_dinh', 'bh_tnds', 'phu_hieu', 'gplx', 'kham_suc_khoe']),
+      supabase.from('staff_records').select('staff_id, kind, data').eq('kind', 'suc_khoe'),
     ]);
     const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null };
     return { routes: (rt.data ?? []) as { id: string; name: string; name_ve: string | null }[], types: (vt.data ?? []) as { id: string; name: string; reg_seats: number; reg_berths: number }[],
       vehicles: (vh.data ?? []) as { id: string; plate: string; vehicle_type_id: string }[], staff: (sm.data ?? []) as { id: string; full_name: string; user_id: string | null }[],
-      docs: (dc.data ?? []) as Doc[], company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '' };
+      // khám sức khỏe ghi trong Lý lịch hành nghề cũng tính (ngày hết hạn xa nhất)
+      docs: mergeRecordPapers((dc.data ?? []) as Doc[], (rc.data ?? []) as { staff_id: string; kind: string; data: Record<string, unknown> | null }[],
+        (sid, type, exp): Doc => ({ vehicle_id: null, staff_id: sid, doc_type: type, doc_no: null, expires_on: exp, data: null })), company: { name: t.legal_name || t.name || '', address: t.address ?? '' }, suffix: typeof st.data?.value === 'string' ? st.data.value : '' };
   })();
   return c.base;
 }

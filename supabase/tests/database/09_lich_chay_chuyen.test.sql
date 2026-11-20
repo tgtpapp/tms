@@ -104,10 +104,10 @@ select is((public.assign_trip((select v from t.ids where k = 'T3'), (select v fr
   'true', '2 lái xe, giấy tờ đủ: lưu ngay không cần lý do');
 
 -- Chặn
-select throws_ok($$ select public.assign_trip((select v from t.ids where k = 'T1'), (select v from t.ids where k = 'X2'),
-  (select v from t.ids where k = 'D1'), null, null, 'x') $$, '22023', null, 'Chặn: GPLX hạng D2 lái xe giường nằm');
-select throws_ok($$ select public.assign_trip((select v from t.ids where k = 'T1'), null,
-  (select v from t.ids where k = 'D3'), null, null, 'x') $$, '22023', null, 'Chặn: phụ xe không làm lái xe');
+select ok((public.assign_trip((select v from t.ids where k = 'T1'), (select v from t.ids where k = 'X2'),
+  (select v from t.ids where k = 'D1'), null, null, null) -> 'warnings')::text like '%cần hạng%', 'Cảnh báo (vẫn cho lưu): GPLX hạng D2 lái xe giường nằm');
+select ok((public.assign_trip((select v from t.ids where k = 'T1'), null,
+  (select v from t.ids where k = 'D3'), null, null, null) -> 'warnings')::text like '%không phải lái xe%', 'Cảnh báo (vẫn cho lưu): phụ xe làm lái xe');
 select throws_ok($$ select public.assign_trip((select v from t.ids where k = 'T1'), null,
   (select v from t.ids where k = 'D1'), (select v from t.ids where k = 'D1'), null, 'x') $$, '22023', null, 'Chặn: 1 người giữ 2 vai trò');
 select lives_ok($$ select public.add_extra_trip((select id from public.routes where code = 'HN-VT'), 'di', app.local_today() + 1, '09:00', null) $$,
@@ -127,8 +127,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok(format($$ select public.add_vehicle_document('%1$s', 'kiem_dinh', 'KD', null, null, null, app.local_today(), '{}',
   array['%2$s/xe/%1$s/k.jpg'], null, null) $$, (select v from t.ids where k = 'X2'), (select v from t.ids where k = 'A')), 'Kiểm định xe 2 hết hạn hôm nay');
-select throws_ok($$ select public.assign_trip((select id from public.trips where schedule_id is null), (select v from t.ids where k = 'X2'),
-  (select v from t.ids where k = 'D2'), null, null, 'x') $$, '22023', null, 'Chặn: giấy kiểm định hết hạn trước ngày chạy');
+select ok((public.assign_trip((select id from public.trips where schedule_id is null), (select v from t.ids where k = 'X2'),
+  (select v from t.ids where k = 'D2'), null, null, null) -> 'warnings')::text like '%hết hạn ngày%', 'Cảnh báo (vẫn cho lưu): giấy kiểm định hết hạn trước ngày chạy');
 select lives_ok($$ update public.tenant_settings set value = '8' where key = 'lai_xe.gio_ngay_toi_da' $$, 'Giờ lái tối đa/ngày = 8');
 select ok((public.assign_trip((select v from t.ids where k = 'T2'), (select v from t.ids where k = 'X1'),
            (select v from t.ids where k = 'D1'), null, null, null) -> 'warnings')::text like '%trong ngày%',
@@ -174,6 +174,18 @@ reset role;
 
 select ok(not has_function_privilege('anon', 'public.assign_trip(uuid, uuid, uuid, uuid, uuid, text)', 'EXECUTE'), 'Khách (anon) không xếp xe được');
 select ok(app.svc_generate_all_trips() >= 0, 'Việc định kỳ tạo chuyến chạy được');
+
+-- Khám sức khỏe ghi trong Lý lịch hành nghề (dữ liệu app cũ) được tính, không báo thiếu
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_staff('33333333-3333-3333-3333-333333333334', '{"full_name": "Lái Bốn", "position": "lai_xe", "joined_on": "2020-01-01"}') $$, 'Lái xe 4');
+select ok((public.assign_trip((select id from public.trips where schedule_id is null and status = 'mo' limit 1), null,
+  '33333333-3333-3333-3333-333333333334'::uuid, null, null, null) -> 'warnings')::text like '%chưa có giấy khám sức khỏe%', 'Chưa có khám sức khỏe ở đâu: cảnh báo thiếu');
+select lives_ok(format($$ select public.save_staff_record(null, %L, 'suc_khoe', app.local_today() - 30, null, 'Khám sức khỏe định kỳ', null,
+  jsonb_build_object('het_han', (app.local_today() + 300)::text), '{}', null) $$, '33333333-3333-3333-3333-333333333334'::uuid), 'Ghi khám sức khỏe vào lý lịch');
+select ok((public.assign_trip((select id from public.trips where schedule_id is null and status = 'mo' limit 1), null,
+  '33333333-3333-3333-3333-333333333334'::uuid, null, null, null) -> 'warnings')::text not like '%khám sức khỏe%', 'Khám sức khỏe trong lý lịch còn hạn: không báo thiếu');
+reset role;
 
 -- Bỏ chuyến trống: không tự tạo chuyến trống theo nốt, xóa chuyến chưa có xe và tài xế (giữ chuyến đã xếp)
 insert into public.tenant_settings (tenant_id, key, value) select id, 'chuyen.tao_chuyen_trong', '0' from public.tenants where code = 'nha-xe-a';

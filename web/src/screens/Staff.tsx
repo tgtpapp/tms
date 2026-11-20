@@ -1,3 +1,4 @@
+import { mergeRecordPapers, recordExpiry } from '../lib/recordPapers';
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
@@ -136,7 +137,11 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const canArchive = perms.has('archive.manage');
   const me: Me = { id: ctx.user_id, name: ctx.full_name ?? '' };
   const [bulk, setBulk] = useState(false);
-  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') } };
+  // Giấy khám SK / tập huấn ghi trong Lý lịch hành nghề cũng tính (như khi xếp xe)
+  const papers = useMemo(() => mergeRecordPapers(docs.filter((d) => d.is_current), records, (sid, type, exp): Doc => ({
+    id: `ly-lich:${sid}:${type}`, vehicle_id: null, staff_id: sid, doc_type: type, doc_no: null, issuer: null, issued_on: null, valid_from: null,
+    expires_on: exp, data: {}, files: [], note: 'Theo Lý lịch hành nghề', is_current: true, created_at: '' })), [docs, records]);
+  const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') } };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
@@ -156,7 +161,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         )}
         {bulk && <BulkPaperSave kind="driver" tenantId={tenantId} me={me} onClose={() => setBulk(false)}
           items={staff.filter((x) => x.is_active && x.position === 'lai_xe').map((x) => ({ id: x.id, label: x.full_name }))} />}
-        {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} avas={avas} onOpen={(id) => {
+        {canEdit && <StaffAlerts staff={staff} priv={priv} docs={papers} warnDays={warnDays} avas={avas} onOpen={(id) => {
           setTab('');
           setOpen(id);
           setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -199,7 +204,7 @@ function applyToForm(f: Form, v: Values): Form {
 
 interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
 interface Common {
-  tenantId: string; priv: StaffPrivate[]; docs: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
+  tenantId: string; priv: StaffPrivate[]; docs: Doc[]; papers: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
   canArchive: boolean; me: Me; labor: { view: boolean; add: boolean; edit: boolean };
 }
@@ -339,7 +344,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 
 function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void;
   cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void; avas: Record<string, string> }) {
-  const { staff, priv, docs, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft, avas } = props;
+  const { staff, priv, papers, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft, avas } = props;
   const left = staff.filter((s) => !s.is_active).length;
 
   const shown = staff.filter((s) => showLeft || s.is_active);
@@ -360,7 +365,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           const canOpen = canEdit || mine;
           const p = priv.find((x) => x.staff_id === s.id);
           const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
-          const bad = canEdit ? problems(s, p, docs, warnDays).length : 0;
+          const bad = canEdit ? problems(s, p, papers, warnDays).length : 0;
           return (
             <div key={s.id} id={`nv-${s.id}`} className={`staff-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
               <div className="sc-top">
@@ -431,6 +436,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       <ul className="list">
         {STAFF_DOCS.map((def) => (
           <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
+                  recordExp={recordExpiry(props.records, s.id, def.code)}
                   owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
                   required={required.includes(def.code)} reload={reload} />
         ))}

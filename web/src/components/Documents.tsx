@@ -192,15 +192,21 @@ const ADD_RPC: Partial<Record<OwnerKind, { fn: string; idParam: string }>> = {
 export function DocRow(props: {
   def: DocTypeDef; doc?: Doc; tenantId: string; owner: DocOwner; warnDays: number; canEdit: boolean; required?: boolean;
   reload: () => Promise<void>; check?: (values: Values) => ReactNode;
+  /** Ngày hết hạn theo Lý lịch hành nghề (khám sức khỏe / tập huấn); undefined = lý lịch không có */
+  recordExp?: string | null;
 }) {
-  const { def, doc, tenantId, owner, warnDays, canEdit, reload, check } = props;
+  const { def, doc, tenantId, owner, warnDays, canEdit, reload, check, recordExp } = props;
   const toast = useToast();
   const [mode, setMode] = useState<'view' | 'add' | 'edit'>('view');
   const [scanned, setScanned] = useState<Scanned | null>(null);
   const [values, setValues] = useState<Values>({});
   const [busy, setBusy] = useState(false);
   const [reqId, setReqId] = useState(() => crypto.randomUUID());
-  const st = docState(def, doc, warnDays, props.required ?? def.required);
+  const st0 = docState(def, doc, warnDays, props.required ?? def.required);
+  // Có trong lý lịch: lấy ngày hết hạn xa nhất của 2 nguồn
+  const useRec = recordExp !== undefined && (!doc || (!!doc.expires_on && !!recordExp && recordExp > doc.expires_on));
+  const st = useRec ? (() => { const r = docState(def, { ...(doc ?? {}), expires_on: recordExp ?? null } as Doc, warnDays, true);
+    return { ...r, text: `${r.text} (theo Lý lịch hành nghề)` }; })() : st0;
   const short = SHORT[def.code] ?? def.name;
   const [aiNote, setAiNote] = useState<string | null>(null);
 

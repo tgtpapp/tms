@@ -23,8 +23,6 @@ from (select s.id,
       from public.staff_members s where s.is_active and s.position = 'lai_xe') x;
 \echo '== Trùng tên nhân viên đang làm (số nhóm trùng)'
 select count(*) from (select lower(full_name) from public.staff_members where is_active group by tenant_id, lower(full_name) having count(*) > 1) z;
-\echo '== Nhân viên tự thêm từ nhập lịch (ghi chú "Thêm tự động")'
-select count(*) from public.staff_members where note like 'Thêm tự động%';
 \echo '== Trường hợp trong ảnh: số hồ sơ cùng tên, mỗi hồ sơ có bao nhiêu giấy / dòng lý lịch'
 select s.is_active, s.position, (select count(*) from public.documents d where d.staff_id = s.id and d.is_current) giay,
        (select string_agg(d.doc_type, ',') from public.documents d where d.staff_id = s.id and d.is_current) loai_giay,

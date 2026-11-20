@@ -1,0 +1,31 @@
+name: Chẩn đoán (tạm) chuyến
+on: workflow_dispatch
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+    steps:
+      - name: Đo (chỉ đọc, chỉ số đếm)
+        run: |
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGPASSWORD="$SUPABASE_DB_PASSWORD" PGDATABASE=postgres PGPORT=5432
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              PGHOST="$host" psql -v ON_ERROR_STOP=1 <<'SQL'
+          select now() at time zone 'Asia/Ho_Chi_Minh' as gio_vn;
+          select service_date, status, count(*) chuyen, count(vehicle_id) co_xe,
+                 count(*) filter (where exists (select 1 from public.trip_crew c where c.trip_id = t.id and c.active)) co_lai
+          from public.trips t where service_date between date '2026-11-15' and date '2026-11-25' group by 1, 2 order by 1, 2;
+          select key, value from public.tenant_settings where key like 'chuyen.%' or key like 'lich%';
+          select count(*) so_lich, count(*) filter (where is_active) dang_dung from public.schedules;
+          select jobname, schedule, active from cron.job order by 1;
+          select j.jobname, d.status, d.start_time at time zone 'Asia/Ho_Chi_Minh' bat_dau, left(d.return_message, 120) kq
+          from cron.job_run_details d join cron.job j using (jobid) where j.jobname = 'tao-chuyen-hang-dem' order by d.start_time desc limit 5;
+          select max(created_at) at time zone 'Asia/Ho_Chi_Minh' chuyen_tao_gan_nhat, count(*) filter (where created_at > now() - interval '3 days') tao_3_ngay from public.trips;
+          SQL
+              exit 0
+            fi
+          done
+          exit 1

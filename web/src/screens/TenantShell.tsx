@@ -65,8 +65,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   // Hợp đồng lao động năm mới (máy chủ tự lập ngày 01/01): tự lưu PDF còn thiếu vào Lưu trữ hồ sơ, chạy ngầm sau khi mở app
   const autoHd = !!perms && perms.has('labor.view_all') && perms.has('archive.view') && perms.has('archive.add');
   useEffect(() => {
-    if (!autoHd) return;
-    const t = window.setTimeout(() => { void archiveMissingContracts(ctx.tenant_id, { id: ctx.user_id, name: ctx.full_name ?? '' }).catch(() => undefined); }, 60_000);
+    const tid = ctx.tenant_id;
+    if (!autoHd || !tid) return;
+    const t = window.setTimeout(() => { void archiveMissingContracts(tid, { id: ctx.user_id, name: ctx.full_name ?? '' }).catch(() => undefined); }, 60_000);
     return () => window.clearTimeout(t);
   }, [autoHd, ctx.tenant_id, ctx.user_id, ctx.full_name]);
 

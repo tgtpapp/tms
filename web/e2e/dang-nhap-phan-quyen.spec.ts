@@ -535,8 +535,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.locator('.gh-cur')).toContainText('07:00');
   expect(await page.getByLabel('Gửi tại').inputValue()).not.toBe('');
   expect(await page.getByLabel('Nhận tại').inputValue()).not.toBe('');
-  await page.getByLabel('SĐT người gửi').fill('0911111111');
-  await page.getByLabel('SĐT người nhận').fill('0922222222');
+  await page.getByLabel('SĐT người gửi', { exact: true }).fill('0911111111');
+  await page.getByLabel('SĐT người nhận', { exact: true }).fill('0922222222');
   await page.getByLabel('Hàng gì').fill('1 thùng trái cây');
   await page.getByLabel('Cước (đồng)').fill('30000');
   const pv = page.getByRole('complementary', { name: 'Xem trước phiếu K80' });

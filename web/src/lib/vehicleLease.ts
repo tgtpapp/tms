@@ -129,7 +129,8 @@ export async function saveLeasePdf(tenantId: string, k: Lease, x: LeaseCtx): Pro
   for (const it of k.items) {
     const v = x.vehicles.get(it.vehicle_id);
     if (!v) continue;
-    const path = `${tenantId}/xe/${v.id}/${safeName(v.plate)}_hop_dong_thue_${so}_${crypto.randomUUID().slice(0, 4)}.pdf`;
+    // Tên tệp trong kho chỉ được chữ không dấu (số HĐ có chữ "Đ"): 001/2026/HĐTX-TGTP → 0012026HDTXTGTP
+    const path = `${tenantId}/xe/${v.id}/${safeName(v.plate)}_hop_dong_thue_${safeName(k.number)}_${crypto.randomUUID().slice(0, 4)}.pdf`;
     const up = await supabase.storage.from('giay-to').upload(path, blob, { contentType: 'application/pdf', upsert: false });
     if (up.error) throw new Error(`Không tải được PDF lên hồ sơ xe ${v.plate}: ${up.error.message}`);
     await rpc('add_vehicle_document', { p_vehicle_id: v.id, p_doc_type: 'hop_dong_thue', p_doc_no: k.number, p_issuer: who || null, p_issued_on: k.signed_on,

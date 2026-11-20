@@ -51,7 +51,9 @@ export async function brandApp(name: string, imageUrl: string | null) {
   if (key === lastKey) return;
   lastKey = key;
   try {
-    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    // Android: Chrome tạo app (WebAPK) trên máy chủ Google từ địa chỉ tệp cài app và biểu tượng, nên không đọc được tệp tạo tạm
+    // trên máy (blob:) và ảnh nhúng (data:) → không cho cài. Android giữ tệp cài app gốc (tên nhà xe theo cấu hình, biểu tượng chung).
+    const link = isAndroid() ? null : document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
     const base = await (await fetch('/manifest.webmanifest', { cache: 'no-store' })).json() as Record<string, unknown>;
     const sh = shortName(name);
     let icons = base.icons as { src: string }[];

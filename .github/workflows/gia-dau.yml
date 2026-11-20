@@ -22,12 +22,10 @@ jobs:
           echo "$J"
           GIA=$(echo "$J" | python3 -c 'import json,sys;print(json.dumps(json.load(sys.stdin)["gia"]))')
           SRC=$(echo "$J" | python3 -c 'import json,sys;print(json.load(sys.stdin)["source"])')
-          PW=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGPASSWORD="$SUPABASE_DB_PASSWORD" PGDATABASE=postgres PGPORT=5432
           for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
-            url="postgresql://postgres.${SUPABASE_PROJECT_REF}:${PW}@${host}:5432/postgres"
-            echo "::add-mask::$url"
-            if psql "$url" -tAc 'select 1' >/dev/null 2>&1; then
-              echo "select app.svc_set_fuel_market(:'gia'::jsonb, :'src');" | psql "$url" -v ON_ERROR_STOP=1 -v gia="$GIA" -v src="$SRC" -tA
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              echo "select app.svc_set_fuel_market(:'gia'::jsonb, :'src');" | PGHOST="$host" psql -v ON_ERROR_STOP=1 -v gia="$GIA" -v src="$SRC" -tA
               exit 0
             fi
           done

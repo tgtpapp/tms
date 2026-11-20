@@ -1,5 +1,5 @@
 // Bảng phân quyền như app cũ: mỗi dòng 1 màn hình, cột Xem / Thêm / Sửa / Xóa, cột "Tất cả dòng"; ô không có nghĩa để gạch (—).
-// inherited: các ô đã có từ nhóm (hiện tích mờ, không bỏ được ở đây). allowed: ô người đang thao tác được cấp (không cấp vượt quyền mình).
+// inherited: các ô có từ nhóm (đánh dấu; bỏ tích = chặn riêng người đó). allowed: ô người đang thao tác được cấp (không cấp vượt quyền mình; bỏ tích luôn được).
 export const SCREENS: [string, string][] = [
   ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['route', 'Tuyến & giá vé'],
   ['repair', 'Sửa chữa'], ['fuel', 'Nhiên liệu'], ['report', 'Báo cáo'], ['km', 'Km xe'], ['vehicle', 'Xe'], ['staff', 'Lái xe & nhân viên'],
@@ -12,11 +12,11 @@ export function PermMatrix({ catalog, value, onChange, allowed, inherited, readO
   catalog: Set<string>; value: Set<string>; onChange: (v: Set<string>) => void; allowed: (code: string) => boolean;
   inherited?: Set<string>; readOnly?: boolean;
 }) {
-  const on = (c: string) => value.has(c) || !!inherited?.has(c);
-  const can = (c: string) => !readOnly && catalog.has(c) && allowed(c) && !inherited?.has(c);
+  const on = (c: string) => value.has(c);
+  const can = (c: string) => !readOnly && catalog.has(c) && (allowed(c) || value.has(c) || !!inherited?.has(c));
   const set = (codes: string[], v: boolean) => {
     const next = new Set(value);
-    for (const c of codes) if (can(c)) { if (v) next.add(c); else next.delete(c); }
+    for (const c of codes) if (can(c) && (!v || allowed(c) || inherited?.has(c))) { if (v) next.add(c); else next.delete(c); }
     onChange(next);
   };
   const rowCodes = (s: string) => ACTS.map(([a]) => `${s}.${a}`).filter((c) => catalog.has(c));
@@ -41,7 +41,8 @@ export function PermMatrix({ catalog, value, onChange, allowed, inherited, readO
                 const c = `${s}.${a}`;
                 if (!catalog.has(c)) return <td key={a} className="c muted">—</td>;
                 return (
-                  <td key={a} className={`c${inherited?.has(c) ? ' inh' : ''}`} title={inherited?.has(c) ? 'Đã có từ nhóm' : !allowed(c) ? 'Bạn không có quyền này nên không cấp được' : ''}>
+                  <td key={a} className={`c${inherited?.has(c) ? (on(c) ? ' inh' : ' deny') : on(c) && inherited ? ' own' : ''}`}
+                      title={inherited?.has(c) ? (on(c) ? 'Có từ nhóm' : 'Có từ nhóm nhưng đã bỏ riêng người này') : inherited && on(c) ? 'Quyền riêng' : !allowed(c) ? 'Bạn không có quyền này nên không cấp được' : ''}>
                     <input type="checkbox" aria-label={`${label}: ${l}`} checked={on(c)} disabled={!can(c)} onChange={(e) => set([c], e.target.checked)} />
                   </td>
                 );

@@ -859,3 +859,8 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .perm-bar { flex-wrap: wrap; align-items: flex-end; margin-top: 8px; }
 .role-tabs small { margin-left: 4px; opacity: .7; }
 .chip-own { background: #fef3c7; }
+.perm-matrix td.inh { background: #eef2ff; } .perm-matrix td.own { background: #dcfce7; } .perm-matrix td.deny { background: #fee2e2; }
+.perm-matrix td.inh input { opacity: 1; }
+.perm-key { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
+.perm-key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); }
+.perm-key .k-inh { background: #eef2ff; } .perm-key .k-own { background: #dcfce7; } .perm-key .k-deny { background: #fee2e2; }

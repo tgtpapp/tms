@@ -42,7 +42,7 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [data, setData] = useState<Data>(EMPTY);
   const canManage = perms.has('user.edit');
   const canAdd = perms.has('user.add');
-  const canPerm = perms.has('role.add') && perms.has('role.edit');
+  const canPerm = perms.has('user.edit');
 
   const load = useCallback(async () => {
     try {
@@ -213,7 +213,9 @@ function UserItem(props: {
       {canEdit && (
         <div className="actions">
           <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'role' ? 'none' : 'role')}>Thêm vào nhóm</button>
-          <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'perm' ? 'none' : 'perm')}>Phân quyền {user.full_name}</button>
+          {!myRoles.some((ur) => data.roles.find((r) => r.id === ur.role_id)?.code === 'owner') && (
+            <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'perm' ? 'none' : 'perm')}>Phân quyền {user.full_name}</button>
+          )}
           <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'password' ? 'none' : 'password')}>Đặt lại mật khẩu</button>
           <button className="btn small" disabled={busy}
                   onClick={() => void run(() => rpc('set_user_status', { p_user_id: user.id, p_status: user.status === 'active' ? 'locked' : 'active' }),
@@ -254,41 +256,47 @@ function UserItem(props: {
   );
 }
 
-/** Quyền của 1 người: ô đã có từ các nhóm (tích mờ) + quyền riêng tích thêm. Quyền riêng lưu thành nhóm ẩn "rieng_…" của người đó. */
+/** Bảng quyền của 1 người: hiện đủ quyền đang có (từ các nhóm + riêng), sửa được mọi ô.
+ *  Tích thêm ngoài nhóm = quyền riêng; bỏ tích ô của nhóm = chặn riêng người này (người khác trong nhóm không ảnh hưởng). */
 function UserPerms(props: {
   user: UserRow; data: Data; canPerm: boolean; allowed: (c: string) => boolean; myRoles: UserRoleRow[]; onDone: () => void;
 }) {
   const { user, data, canPerm, allowed, myRoles, onDone } = props;
   const toast = useToast();
-  const code = `rieng_${user.id.replace(/-/g, '').slice(0, 24)}`;
-  const own = data.roles.find((r) => r.code === code);
-  const groupIds = new Set(myRoles.map((r) => r.role_id).filter((id) => id !== own?.id));
-  const inherited = new Set(data.rolePerms.filter((x) => groupIds.has(x.role_id)).map((x) => x.permission_code));
-  const [value, setValue] = useState<Set<string>>(() => new Set(data.rolePerms.filter((x) => x.role_id === own?.id).map((x) => x.permission_code)));
+  const own = data.roles.find((r) => r.code === `rieng_${user.id.replace(/-/g, '').slice(0, 24)}`);
+  const groupKey = myRoles.map((r) => r.role_id).filter((id) => id !== own?.id).sort().join(',');
+  const inherited = useMemo(() => {
+    const ids = new Set(groupKey.split(','));
+    return new Set(data.rolePerms.filter((x) => ids.has(x.role_id)).map((x) => x.permission_code));
+  }, [data.rolePerms, groupKey]);
+  const [value, setValue] = useState<Set<string> | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void supabase.from('user_permission_denies').select('permission_code').eq('user_id', user.id).then(({ data: d }) => {
+      const deny = new Set(((d ?? []) as { permission_code: string }[]).map((x) => x.permission_code));
+      const mine = data.rolePerms.filter((x) => x.role_id === own?.id).map((x) => x.permission_code);
+      setValue(new Set([...inherited, ...mine].filter((c) => !deny.has(c))));
+    });
+  }, [user.id, own?.id, data.rolePerms, inherited]);
 
   async function save() {
+    if (!value) return;
     setBusy(true);
     try {
-      const codes = [...value].filter((c) => !inherited.has(c));
-      if (own) {
-        await rpc('set_role_permissions', { p_role_id: own.id, p_permissions: codes });
-        if (!myRoles.some((r) => r.role_id === own.id)) await rpc('assign_role', { p_user_id: user.id, p_role_id: own.id, p_scope_type: 'tenant', p_scope_id: null });
-      } else if (codes.length) {
-        await rpc('create_role', { p_code: code, p_name: `Riêng: ${user.full_name}`.slice(0, 80), p_permissions: codes });
-        const { data: r } = await supabase.from('roles').select('id').eq('code', code).single();
-        await rpc('assign_role', { p_user_id: user.id, p_role_id: (r as { id: string }).id, p_scope_type: 'tenant', p_scope_id: null });
-      }
-      toast('ok', `Đã lưu quyền riêng của ${user.full_name}`);
+      await rpc('set_user_permissions', { p_user_id: user.id, p_grants: [...value].filter((c) => !inherited.has(c)), p_denies: [...inherited].filter((c) => !value.has(c)) });
+      toast('ok', `Đã lưu quyền của ${user.full_name}`);
       onDone();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }
+  const groups = myRoles.filter((r) => r.role_id !== own?.id).map((r) => data.roles.find((x) => x.id === r.role_id)?.name).filter(Boolean).join(', ');
   return (
     <div className="sub">
-      <p className="small muted">Ô tích mờ: đã có từ nhóm ({myRoles.filter((r) => r.role_id !== own?.id).map((r) => data.roles.find((x) => x.id === r.role_id)?.name).filter(Boolean).join(', ') || 'chưa vào nhóm nào'}).
-        Tích thêm ô nào là quyền riêng của {user.full_name}, áp dụng toàn nhà xe.</p>
-      <PermMatrix catalog={data.catalog} value={value} onChange={setValue} allowed={allowed} inherited={inherited} readOnly={!canPerm} />
-      {canPerm && <div className="actions"><button className="btn primary" disabled={busy} onClick={() => void save()}>Lưu quyền riêng</button></div>}
+      <p className="small muted">Quyền đang có của {user.full_name} (từ nhóm: {groups || 'chưa vào nhóm nào'}). Sửa được mọi ô:
+        tích thêm là quyền riêng; bỏ tích ô của nhóm thì chỉ người này mất ô đó, người khác trong nhóm không ảnh hưởng.
+        <span className="perm-key"><i className="k-inh" /> có từ nhóm <i className="k-own" /> quyền riêng <i className="k-deny" /> đã bỏ riêng</span></p>
+      {value ? <PermMatrix catalog={data.catalog} value={value} onChange={setValue} allowed={allowed} inherited={inherited} readOnly={!canPerm} />
+        : <p className="muted">Đang tải…</p>}
+      {canPerm && <div className="actions"><button className="btn primary" disabled={busy || !value} onClick={() => void save()}>Lưu quyền {user.full_name}</button></div>}
     </div>
   );
 }

@@ -70,10 +70,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Quyền riêng từng người: ô có từ nhóm hiện tích mờ, tích thêm ô riêng rồi lưu (kiêm nhiệm cộng dồn)
   await page.getByRole('button', { name: 'Phân quyền Nhân viên bán vé' }).click();
   await expect(page.getByLabel('Bán vé: Xem')).toBeChecked();
-  await expect(page.getByLabel('Bán vé: Xem')).toBeDisabled();
+  await expect(page.getByLabel('Bán vé: Xem')).toBeEnabled();
   await page.getByLabel('Báo cáo: Xem').check();
-  await page.getByRole('button', { name: 'Lưu quyền riêng' }).click();
-  await expect(page.getByText('Đã lưu quyền riêng của Nhân viên bán vé')).toBeVisible();
+  await page.getByRole('button', { name: 'Lưu quyền Nhân viên bán vé' }).click();
+  await expect(page.getByText('Đã lưu quyền của Nhân viên bán vé')).toBeVisible();
   await expect(page.getByText('Quyền riêng · Toàn nhà xe')).toBeVisible();
 
   // 5b. Cấu hình bán vé: mặc định 5 phút → đổi 7 phút

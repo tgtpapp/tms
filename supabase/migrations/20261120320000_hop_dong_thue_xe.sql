@@ -5,6 +5,10 @@
 -- PDF hợp đồng lưu vào hồ sơ từng xe (giấy "Hợp đồng thuê xe", có hạn) và Lưu trữ hồ sơ (làm ở giao diện).
 -- Căn cứ pháp lý trong mẫu theo nhà xe cung cấp: cần xác minh.
 -- =====================================================================
+-- Bộ đếm số văn bản dùng chung: thêm loại HĐTX
+alter table public.doc_counters drop constraint doc_counters_code_check;
+alter table public.doc_counters add constraint doc_counters_code_check check (code in ('QD', 'CV', 'TB', 'HDLD', 'HDTX'));
+
 create table public.vehicle_leases (
   id          uuid primary key default gen_random_uuid(),
   tenant_id   uuid not null default app.current_tenant_id() references public.tenants (id),

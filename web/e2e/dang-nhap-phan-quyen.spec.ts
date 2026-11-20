@@ -594,39 +594,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã thêm liên kết')).toBeVisible();
   await expect(page.getByText(/Còn (19|20) ngày/)).toBeVisible();
 
-  // 5s. Chữ ký của tôi: chọn ảnh → ảnh hiện trong khung cắt (điện thoại) → kéo chọn vùng → lưu → bấm × bỏ chữ ký
+  // 5s. Không còn thẻ "Chữ ký của tôi" (chữ ký, ảnh đại diện do quản lý nhân sự cập nhật trong hồ sơ)
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
-  await page.getByLabel('Ảnh chữ ký của tôi').setInputFiles({ name: 'chu-ky.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
-  const cropImg = page.getByRole('img', { name: 'Ảnh cần cắt' });
-  await expect(cropImg).toBeVisible();
-  expect(await cropImg.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
-  const bb = (await cropImg.boundingBox())!;
-  expect(bb.width).toBeGreaterThan(100);
-  await page.mouse.move(bb.x + bb.width * 0.1, bb.y + bb.height * 0.25);
-  await page.mouse.down();
-  await page.mouse.move(bb.x + bb.width * 0.9, bb.y + bb.height * 0.75, { steps: 5 });
-  await page.mouse.up();
-  await page.getByRole('button', { name: 'Dùng vùng đã chọn' }).click();
-  await expect(page.getByText('Đã lưu chữ ký của tôi')).toBeVisible();
-  // Nền giấy đã được xóa: góc ảnh trong suốt, nét mực còn đậm
-  const signImg = page.getByRole('img', { name: 'Chữ ký của tôi' });
-  await expect(signImg).toBeVisible();
-  const alpha = await signImg.evaluate(async (i: HTMLImageElement) => {
-    const bmp = await createImageBitmap(await (await fetch(i.src)).blob());
-    const c = document.createElement('canvas');
-    c.width = bmp.width; c.height = bmp.height;
-    const g = c.getContext('2d')!;
-    g.drawImage(bmp, 0, 0);
-    const d = g.getImageData(0, 0, c.width, c.height).data;
-    let opaque = 0;
-    for (let k = 3; k < d.length; k += 4) if (d[k] > 200) opaque++;
-    return { corner: d[3], opaque, total: d.length / 4 };
-  });
-  expect(alpha.corner).toBe(0);
-  expect(alpha.opaque).toBeGreaterThan(0);
-  expect(alpha.opaque).toBeLessThan(alpha.total * 0.5);
-  await page.getByRole('button', { name: 'Bỏ chữ ký này' }).click();
-  await expect(page.getByText('Đã bỏ chữ ký, có thể tải chữ ký khác')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Chữ ký của tôi' })).toHaveCount(0);
 
   // 5m. Lái xe báo đổ dầu từ app (như app cũ). Thử bằng cách gắn tài khoản chủ vào hồ sơ lái xe Nguyễn Văn Tài:
   // chọn ảnh → (CI không có AI) nhập tay → gửi → Nhiên liệu thấy phiếu chờ duyệt → duyệt thành phiếu đổ ngoài

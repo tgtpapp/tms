@@ -2,11 +2,8 @@ import { InstallApp } from '../components/InstallApp';
 import { Avatar, StaffAvatar } from '../components/StaffAvatar';
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
-import { removeFile, signatureUrl, uploadSignature } from '../lib/documents';
-import { SignNameToggle } from '../components/SignNameToggle';
-import { errMsg, supabase, type AccountContext } from '../lib/supabase';
+import { supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-import { Cropper } from '../components/Cropper';
 import { THEMES, useTheme, type Mode } from '../lib/theme';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
@@ -27,35 +24,6 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
       .then(({ data }) => setStaffId((data as { id: string } | null)?.id ?? null));
   }, [ctx.user_id]);
 
-  const [sign, setSign] = useState<string | null>(null);
-  const [cropping, setCropping] = useState<File | null>(null);
-  useEffect(() => {
-    if (ctx.tenant_id && ctx.user_id) void signatureUrl(ctx.tenant_id, ctx.user_id).then(setSign);
-  }, [ctx.tenant_id, ctx.user_id]);
-
-  async function pickSign(file: File | undefined) {
-    if (!file || !ctx.tenant_id || !ctx.user_id) return;
-    try {
-      await uploadSignature(ctx.tenant_id, ctx.user_id, file);
-      setSign(await signatureUrl(ctx.tenant_id, ctx.user_id));
-      toast('ok', 'Đã lưu chữ ký của tôi');
-    } catch (err) {
-      toast('error', errMsg(err));
-    }
-  }
-
-  /** Bỏ chữ ký hiện tại (không ưng thì bỏ, tải chữ ký khác) */
-  async function dropSign() {
-    if (!ctx.tenant_id || !ctx.user_id) return;
-    try {
-      await removeFile(`${ctx.tenant_id}/chu_ky/${ctx.user_id}.png`);
-      const still = await signatureUrl(ctx.tenant_id, ctx.user_id);
-      setSign(still);
-      toast(still ? 'error' : 'ok', still ? 'Chưa bỏ được chữ ký, thử lại' : 'Đã bỏ chữ ký, có thể tải chữ ký khác');
-    } catch (err) {
-      toast('error', errMsg(err));
-    }
-  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -93,27 +61,6 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
           <dt>Nhà xe</dt><dd>{ctx.tenant_name}</dd>
         </dl>
       </section>
-      {ctx.tenant_id && (
-        <section className="card form">
-          <h2>Chữ ký của tôi</h2>
-          <p className="muted small">Dùng ở mọi bản in có phần ký của bạn: lệnh vận chuyển, bảng phân công, nghiệm thu an toàn, lý lịch xe….. Chụp chữ ký trên giấy trắng, app tự xóa nền. Nền ô caro bên dưới là phần đã trong suốt.</p>
-          {canManage ? (
-            <label className="upload">
-              <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
-              <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { setCropping(e.target.files?.[0] ?? null); e.target.value = ''; }} />
-            </label>
-          ) : <p className="small muted">Muốn đổi ảnh đại diện hoặc chữ ký, nhờ người quản lý nhân sự cập nhật trong hồ sơ của bạn.</p>}
-          {sign && (
-            <div className="img-x">
-              <img src={sign} alt="Chữ ký của tôi" className="sign-preview clear-bg" />
-              {canManage && <button type="button" className="img-x-btn" aria-label="Bỏ chữ ký này" title="Bỏ chữ ký này" onClick={() => void dropSign()}>×</button>}
-            </div>
-          )}
-          {sign && ctx.user_id && canManage && <SignNameToggle who={ctx.user_id} />}
-          {cropping && <Cropper file={cropping} title="Cắt ảnh chữ ký" onCancel={() => setCropping(null)}
-                                onDone={(f) => { setCropping(null); void pickSign(f); }} />}
-        </section>
-      )}
       <form className="card form" onSubmit={submit}>
         <h2>Đổi mật khẩu</h2>
         <label>Mật khẩu mới

@@ -95,11 +95,11 @@ reset role;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
-select lives_ok(format($$ insert into storage.objects (bucket_id, name) values ('giay-to', '%s/chu_ky/00000000-0000-0000-0000-0000000000b2.png') $$,
-  (select v from t.ids where k = 'A')), 'Điều hành tải chữ ký của mình');
+select throws_ok(format($$ insert into storage.objects (bucket_id, name) values ('giay-to', '%s/chu_ky/00000000-0000-0000-0000-0000000000b2.png') $$,
+  (select v from t.ids where k = 'A')), '42501', null, 'Điều hành không tự tải chữ ký của mình (quản lý nhân sự tải trong hồ sơ)');
 select throws_ok(format($$ insert into storage.objects (bucket_id, name) values ('giay-to', '%s/chu_ky/giam_doc.png') $$,
   (select v from t.ids where k = 'A')), '42501', null, 'Điều hành không thay được chữ ký Giám đốc');
-select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 2, 'Điều hành (người in lệnh) xem được chữ ký');
+select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 1, 'Điều hành (người in lệnh) xem được chữ ký');
 reset role;
 
 set local role authenticated;

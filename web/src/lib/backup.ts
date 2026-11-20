@@ -9,6 +9,7 @@ type Step = (msg: string) => void;
 interface Tbl { tbl: string; ord: number; restore: boolean }
 
 const PAGE = 2000;
+interface PageOut { rows: string; sig: string; last: string | null; n: number }
 
 /** Đọc toàn bộ dữ liệu nhà xe theo trang */
 export async function exportTenant(tenant: string, step: Step): Promise<{ file: BackupFile; rows: number }> {
@@ -18,7 +19,7 @@ export async function exportTenant(tenant: string, step: Step): Promise<{ file: 
   for (const [i, t] of tables.entries()) {
     let after: string | null = null;
     for (;;) {
-      const p = await rpc<{ rows: string; sig: string; last: string | null; n: number }>('backup_page', { p_table: t.tbl, p_after: after, p_limit: PAGE });
+      const p: PageOut = await rpc<PageOut>('backup_page', { p_table: t.tbl, p_after: after, p_limit: PAGE });
       if (!p.n) break;
       pages.push({ t: t.tbl, rows: p.rows, sig: p.sig });
       rows += p.n;

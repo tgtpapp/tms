@@ -302,19 +302,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5j4. Văn bản: cấp số tự động 001 trở đi, mỗi loại 1 dãy; xem trước bản in
   await page.getByRole('button', { name: 'Văn bản', exact: true }).click();
-  await page.getByLabel('Soạn văn bản mới').selectOption('cong_van');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="cong_van"]').click();
   await page.getByLabel('Trích yếu (V/v …)').fill('đăng ký khai thác tuyến');
   await page.getByLabel('Kính gửi (mỗi dòng một nơi)').fill('Sở Xây dựng Đồng Nai');
   await page.getByLabel('Nội dung (mỗi dòng một đoạn)').fill('Công ty xin đăng ký khai thác tuyến.');
   await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
   await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
   await expect(page.getByText(/^Đã cấp số 001\/\d{4}\/CV/)).toBeVisible();
-  await page.getByLabel('Soạn văn bản mới').selectOption('qd_bo_nhiem');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="qd_bo_nhiem"]').click();
   await page.getByLabel('Người được bổ nhiệm').selectOption({ label: 'Nguyễn Văn Tài' });
   await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
   await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
   await expect(page.getByText(/^Đã cấp số 001\/\d{4}\/QĐ/)).toBeVisible();
-  await page.getByLabel('Soạn văn bản mới').selectOption('cong_van');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="cong_van"]').click();
   await page.getByLabel('Trích yếu (V/v …)').fill('báo cáo tình hình');
   await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
   await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
@@ -327,7 +327,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // Văn bản tự soạn: mở file Word, ô {…} tự điền theo người được chọn, cấp số chung dãy Quyết định
-  await page.getByLabel('Soạn văn bản mới').selectOption('word_qd');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="word_qd"]').click();
   await page.getByLabel('Mở file Word').setInputFiles('e2e/fixtures/van-ban-mau.docx');
   await expect(page.getByRole('textbox', { name: 'Nội dung văn bản' })).toContainText('Về việc khen thưởng {Ông/Bà} {Họ tên}');
   await page.getByLabel('Trích yếu (Về việc …)').fill('Về việc khen thưởng');
@@ -340,7 +340,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText(/Số: 002\/\d{4}\/QĐ/)).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // QĐ giao nhiệm vụ giám sát ATGT: tự điền người được giao, số chung dãy QĐ, kèm phụ lục
-  await page.getByLabel('Soạn văn bản mới').selectOption('qd_giam_sat');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="qd_giam_sat"]').click();
   await page.getByLabel('Người được giao nhiệm vụ').selectOption({ label: 'Nguyễn Văn Tài' });
   await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
   await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
@@ -350,7 +350,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText('PHỤ LỤC 8 – DANH MỤC HỒ SƠ LƯU TRỮ')).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // Đơn xin nghỉ việc + Quyết định thôi việc: tự điền từ hồ sơ, gợi ý ngày nghỉ theo ngày báo trước, sửa tự do, số dãy riêng QĐTV
-  await page.getByLabel('Soạn văn bản mới').selectOption('qd_thoi_viec');
+  await page.getByRole('button', { name: 'Soạn văn bản mới' }).click(); await page.locator('[data-tpl="qd_thoi_viec"]').click();
   await page.getByLabel('Người nghỉ việc').selectOption({ label: 'Nguyễn Văn Tài' });
   await expect(page.getByText('Ngày nghỉ sớm nhất hợp lệ:')).toBeVisible();
   await expect(page.getByLabel(/^Xin nghỉ từ ngày/)).not.toHaveValue('');

@@ -1015,3 +1015,22 @@ button.dt-g { cursor: pointer; }
 .tv-info { background: var(--p-50, #eff6ff); border: 1px solid var(--p-100, #dbeafe); border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6; margin: 4px 0 10px; }
 .tv-info.warn { background: #fffbeb; border-color: #fde68a; }
 .tv-free { margin: 4px 0 12px; }
+/* Menu chọn (soạn văn bản mới…): thả xuống dưới nút; điện thoại: khay trượt từ dưới lên */
+.pick-menu { position: relative; }
+.pick-backdrop { display: none; }
+.pick-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; width: min(360px, 92vw); max-height: min(70vh, 560px); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); box-shadow: 0 12px 32px rgba(16, 24, 40, .18); padding: 6px 0; }
+.pick-title { display: none; }
+.pick-group + .pick-group { border-top: 1px solid var(--line-soft); margin-top: 4px; padding-top: 4px; }
+.pick-g { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); padding: 6px 14px 2px; }
+.pick-pop [role='menuitem'] { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); font: inherit; font-size: .92rem;
+  padding: 8px 14px; cursor: pointer; line-height: 1.35; }
+.pick-pop [role='menuitem']:hover, .pick-pop [role='menuitem']:focus-visible { background: var(--primary-soft); color: var(--primary-d); outline: none; }
+@media (max-width: 640px) {
+  .pick-backdrop { display: block; position: fixed; inset: 0; z-index: 59; background: rgba(16, 24, 40, .35); }
+  .pick-pop { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 75vh; border-radius: 16px 16px 0 0;
+    padding: 4px 0 calc(10px + env(safe-area-inset-bottom)); animation: pick-up 160ms ease; }
+  .pick-title { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px 4px; position: sticky; top: 0; background: var(--surface); }
+  .pick-pop [role='menuitem'] { padding: 11px 16px; font-size: .95rem; }
+}
+@keyframes pick-up { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }

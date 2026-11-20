@@ -1,19 +1,55 @@
 // Văn bản: sổ công văn / quyết định / thông báo có số. Soạn → xem trước → Lưu & cấp số (001 trở đi, mỗi loại 1 dãy theo năm,
 // không trùng, không dùng lại) → xem / in, lưu PDF vào Lưu trữ hồ sơ. Không xóa, chỉ hủy (giữ số trong sổ).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { PaperView } from '../components/ProfilePapers';
 import { WordEditor } from '../components/WordEditor';
 import { fmtDate, today } from '../components/Documents';
 import { resetFolders } from '../lib/dispatchPapers';
 import {
-  CODE_NAME, TEMPLATES, autoTitle, codeLabel, defaults, docPages, isWord, loadDocCtx, saveDocPdf, tplOf, tvPage, type Content, type DocCtx, type OfficialDoc, type Template,
+  CODE_NAME, autoTitle, codeLabel, defaults, docPages, isWord, loadDocCtx, saveDocPdf, tplOf, tvPage, type Content, type DocCtx, type OfficialDoc, type Template,
 } from '../lib/officialDocs';
 import { TV_HT, TV_LY_DO, earliest, notice, tvFacts } from '../lib/resignation';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
+/** Menu soạn văn bản mới: nhóm gọn, tên ngắn. Điện thoại: khay trượt từ dưới lên; tablet / máy tính: thả xuống dưới nút. */
+const MENU: [string, [Template, string][]][] = [
+  ['Quyết định', [['qd_bo_nhiem', 'Bổ nhiệm người điều hành vận tải'], ['qd_atgt', 'Thành lập Ban An toàn giao thông'],
+    ['qd_giam_sat', 'Giao nhiệm vụ giám sát ATGT (kèm hồ sơ theo dõi)'], ['qd_thoi_viec', 'Thôi việc (kèm đơn xin nghỉ việc)'], ['quyet_dinh', 'Quyết định khác']]],
+  ['Công văn, thông báo', [['cong_van', 'Công văn'], ['thong_bao', 'Thông báo']]],
+  ['Tự soạn từ file Word / AI', [['word_qd', 'Quyết định'], ['word_cv', 'Công văn'], ['word_tb', 'Thông báo']]],
+];
+function NewDocMenu({ onPick }: { onPick: (t: Template) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const out = (e: PointerEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', out); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', out); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  return (
+    <div className="pick-menu" ref={box}>
+      <button type="button" className="btn primary" aria-label="Soạn văn bản mới" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>+ Soạn văn bản</button>
+      {open && <>
+        <div className="pick-backdrop" onClick={() => setOpen(false)} />
+        <div className="pick-pop" role="menu" aria-label="Chọn mẫu văn bản">
+          <div className="pick-title"><b>Soạn văn bản mới</b><button type="button" className="btn small link" onClick={() => setOpen(false)}>Đóng</button></div>
+          {MENU.map(([g, items]) => (
+            <div key={g} className="pick-group"><div className="pick-g">{g}</div>
+              {items.map(([k, name]) => (
+                <button key={k} type="button" role="menuitem" data-tpl={k} title={tplOf(k).name} onClick={() => { setOpen(false); onPick(k); }}>{name}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </>}
+    </div>
+  );
+}
 const addDay = (s: string) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 interface Staff { id: string; full_name: string; is_active: boolean; department: string | null }
 interface Form { id: string | null; number: string | null; template: Template; signed_on: string; title: string; titleAuto: boolean; staff_id: string; content: Content; req: string; archive: boolean }
@@ -248,10 +284,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     <section className="card">
       <div className="item-head">
         <h2>Văn bản ({shown.length})</h2>
-        <select aria-label="Soạn văn bản mới" value="" onChange={(e) => { if (e.target.value) startNew(e.target.value as Template); }}>
-          <option value="">+ Soạn văn bản…</option>
-          {TEMPLATES.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
-        </select>
+        <NewDocMenu onPick={startNew} />
       </div>
       <div className="grid3 form">
         <label>Năm<select value={year} onChange={(e) => setYear(e.target.value)}>{years.map((y) => <option key={y}>{y}</option>)}</select></label>

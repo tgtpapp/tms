@@ -65,7 +65,7 @@ const CONTRACT: Record<string, string> = {
   khong_xac_dinh: 'Không xác định thời hạn', xac_dinh: 'Xác định thời hạn', thu_viec: 'Thử việc', thoi_vu: 'Thời vụ', khoan_viec: 'Khoán việc', khac: 'Khác',
 };
 
-export async function loadDriverPaper(tenantId: string, staffId: string, me: { id: string | null; name: string }, shared?: SharedBase): Promise<DriverPaper> {
+export async function loadDriverPaper(tenantId: string, staffId: string, me: { id: string | null; name: string }, shared?: SharedBase | Promise<SharedBase>): Promise<DriverPaper> {
   const base = await (shared ?? sharedBase());
   const [sm, pv, dc, rc, crew, ch] = await Promise.all([
     supabase.from('staff_members').select('id, full_name, job_title, phone, joined_on, user_id').eq('id', staffId).maybeSingle(),
@@ -192,7 +192,7 @@ export interface VehiclePaper {
   rep: { repaired_on: string; odo_km: number | null; workshop: string | null; text: string; cost: number }[];
 }
 
-export async function loadVehiclePaper(tenantId: string, vehicleId: string, me: { id: string | null; name: string }, shared?: SharedBase): Promise<VehiclePaper> {
+export async function loadVehiclePaper(tenantId: string, vehicleId: string, me: { id: string | null; name: string }, shared?: SharedBase | Promise<SharedBase>): Promise<VehiclePaper> {
   const base = await (shared ?? sharedBase());
   const vr = await supabase.from('vehicles').select('id, plate, vehicle_type_id, chassis_no, engine_no, country_of_origin, manufacture_year, business_type, acquired_on, gsht_provider, gsht_device_no, camera_provider, camera_device_no, gsht_account, odo_start, odo_date, retired_on').eq('id', vehicleId).maybeSingle();
   if (!vr.data) throw new Error('Không tìm thấy xe');

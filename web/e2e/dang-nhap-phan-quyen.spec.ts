@@ -615,6 +615,35 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Bỏ chữ ký này' }).click();
   await expect(page.getByText('Đã bỏ chữ ký, có thể tải chữ ký khác')).toBeVisible();
 
+  // 5m. Lái xe báo đổ dầu từ app (như app cũ). Thử bằng cách gắn tài khoản chủ vào hồ sơ lái xe Nguyễn Văn Tài:
+  // chọn ảnh → (CI không có AI) nhập tay → gửi → Nhiên liệu thấy phiếu chờ duyệt → duyệt thành phiếu đổ ngoài
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await page.getByRole('button', { name: 'Sửa hồ sơ' }).click();
+  const acc = page.getByLabel('Tài khoản đăng nhập (nếu có)');
+  await acc.selectOption((await acc.locator('option', { hasText: '0901000001' }).getAttribute('value'))!);
+  await page.getByRole('button', { name: 'Lưu hồ sơ' }).click();
+  await expect(page.getByText(/Đã lưu/).first()).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Việc của tôi', exact: true }).click();
+  await page.getByRole('button', { name: '⛽ Báo đổ dầu' }).click();
+  await page.getByLabel('Chọn ảnh đổ dầu').setInputFiles(png);
+  await page.getByRole('button', { name: 'Đọc ảnh & gửi (1 ảnh)' }).click();
+  await expect(page.getByText(/AI chưa đọc được/)).toBeVisible();
+  await page.getByLabel('Biển số xe').fill('51B-123.45');
+  await page.getByLabel('Số lít').fill('50');
+  await page.getByLabel('Đơn giá (đ/lít)').fill('27000');
+  await page.getByRole('button', { name: 'Gửi điều hành duyệt' }).click();
+  await expect(page.getByText('Đã gửi phiếu đổ dầu cho điều hành duyệt')).toBeVisible();
+  await expect(page.getByText('Chờ duyệt', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Nhiên liệu', exact: true }).click();
+  const cho = page.getByRole('region', { name: 'Phiếu đổ dầu lái xe gửi chờ duyệt' });
+  await expect(cho.getByText('⛽ 1 phiếu đổ dầu lái xe gửi qua app đang chờ duyệt')).toBeVisible();
+  await cho.getByRole('button', { name: 'Xem, duyệt' }).click();
+  await page.getByRole('button', { name: 'Duyệt, tạo phiếu' }).click();
+  await expect(page.getByText('Đã duyệt phiếu đổ dầu của Nguyễn Văn Tài')).toBeVisible();
+  await expect(cho).toHaveCount(0);
+
   // 5d. Nhật ký thao tác ghi lại việc sửa cấu hình
   await page.getByRole('button', { name: 'Nhật ký', exact: true }).click();
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Cấu hình' });

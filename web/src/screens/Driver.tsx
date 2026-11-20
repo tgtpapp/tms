@@ -7,6 +7,7 @@ import { useToast } from '../lib/toast';
 import { MyTransfers } from './Transfers';
 import { ParcelRow, SHIP_COLS, type Shipment } from './Parcels';
 import { MyCharters } from './Charters';
+import { FuelReportCard } from '../components/FuelReport';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -27,7 +28,7 @@ const addDays = (d: string, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 
-export function DriverScreen() {
+export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { tenantId?: string | null; staffId?: string | null; shareFiles?: File[] | null; onShareDone?: () => void } = {}) {
   const toast = useToast();
   const [day, setDay] = useState(today());
   const [trips, setTrips] = useState<MyTrip[]>([]);
@@ -54,10 +55,19 @@ export function DriverScreen() {
   useEffect(() => {
     void load();
   }, [load]);
+  // Biển số xe mình chạy 7 ngày qua → gợi ý khi báo đổ dầu (xe hôm nay lên đầu)
+  const [plates, setPlates] = useState<string[]>([]);
+  useEffect(() => {
+    void rpc<MyTrip[]>('my_trips', { p_from: addDays(today(), -7), p_to: today() }).then((t) => {
+      const L = [...t].sort((a, b) => b.depart_at.localeCompare(a.depart_at)).map((x) => x.plate).filter((x): x is string => !!x);
+      setPlates([...new Set(L)]);
+    }).catch(() => undefined);
+  }, []);
 
 
   return (
     <>
+      {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <section className="card">
         <h2>Chuyến của tôi · {fmtDate(day)}</h2>
         <div className="inline-form">

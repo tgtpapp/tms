@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
-import { prepareFile, readByAI, uploadFiles } from '../lib/documents';
+import { prepareFile, uploadFiles } from '../lib/documents';
+import { matchPlate, readFuelPhotos } from '../lib/fuelPhoto';
 import { FuelSlip, type FuelSlipData } from '../components/FuelSlip';
 import { PaperView } from '../components/ProfilePapers';
 import { company, head, signCol } from '../lib/profilePapers';
@@ -16,14 +17,20 @@ import { useToast } from '../lib/toast';
 interface Veh { id: string; plate: string; is_active: boolean; fuel_norm: number | null }
 interface Drv { id: string; full_name: string; position: string; is_active: boolean }
 interface Form { id: string | null; kind: FuelKind; entry_date: string; entry_time: string; vehicle_id: string; driver_id: string; odo_km: string; liters: string;
-  unit_price: string; supplier: string; invoice_no: string; note: string; files: string[]; add: File[]; market_price: boolean }
+  unit_price: string; supplier: string; invoice_no: string; note: string; files: string[]; add: File[]; market_price: boolean;
+  report?: { id: string; who: string } }
+/** Phiếu lái xe gửi từ app, chờ điều hành duyệt */
+export interface FuelReport { id: string; staff_id: string; vehicle_id: string; entry_date: string; entry_time: string | null; odo_km: number | null; liters: number;
+  unit_price: number; amount: number | null; supplier: string | null; invoice_no: string | null; note: string | null; files: string[]; status: 'cho' | 'duyet' | 'bo';
+  reject_reason: string | null; created_at: string }
+export const REPORT_COLS = 'id, staff_id, vehicle_id, entry_date, entry_time, odo_km, liters, unit_price, amount, supplier, invoice_no, note, files, status, reject_reason, created_at';
 
 const num = (n: number, d = 0) => n.toLocaleString('vi-VN', { maximumFractionDigits: d });
 const money = (n: number) => `${num(Math.round(n))} đ`;
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`; };
 
-export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
+export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: AccountContext; perms: Permissions; shareFiles?: File[] | null; onShareDone?: () => void }) {
   const toast = useToast();
   const canAdd = perms.has('fuel.add'), canEdit = perms.has('fuel.edit'), canDel = perms.has('fuel.delete');
   const [rows, setRows] = useState<FuelEntry[]>([]);
@@ -43,6 +50,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [gps, setGps] = useState<Map<string, number>>(new Map());
   const [book, setBook] = useState<string | null>(null);
   const [ai, setAi] = useState('');
+  const [reports, setReports] = useState<FuelReport[]>([]);
 
   const load = useCallback(async () => {
     const [e, s, v, d] = await Promise.all([
@@ -59,6 +67,8 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     setVehicles(((v.data ?? []) as Veh[]).map((x) => ({ ...x, fuel_norm: x.fuel_norm == null ? null : Number(x.fuel_norm) })));
     setDrivers((d.data ?? []) as Drv[]);
     setMk(await loadMarket().catch(() => null));
+    const rp = await supabase.from('fuel_reports').select(REPORT_COLS).eq('status', 'cho').order('created_at');
+    setReports(((rp.data ?? []) as FuelReport[]).map((x) => ({ ...x, liters: Number(x.liters) })));
     return fresh;
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
@@ -106,8 +116,10 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         files = [...files, ...(await uploadFiles(ctx.tenant_id, 'xe', owner, f.kind === 'nhap' ? 'BON' : plate(f.vehicle_id), 'nhien_lieu', prepared))];
       }
       const mp = mkPrice(mk, set.fuel_type);
-      const id = await rpc<string>('save_fuel', { p_id: f.id, p: { ...f, add: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp } });
-      toast('ok', f.id ? 'Đã lưu phiếu' : `Đã thêm phiếu ${FUEL_KIND[f.kind].short.toLowerCase()}`);
+      const p = { ...f, add: undefined, report: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp };
+      const id = f.report ? await rpc<string>('approve_fuel_report', { p_id: f.report.id, p })
+        : await rpc<string>('save_fuel', { p_id: f.id, p });
+      toast('ok', f.report ? `Đã duyệt phiếu đổ dầu của ${f.report.who}` : f.id ? 'Đã lưu phiếu' : `Đã thêm phiếu ${FUEL_KIND[f.kind].short.toLowerCase()}`);
       setF(null);
       const fresh = await load();
       if (printAfter && fresh) await printSlips([id], fresh);
@@ -138,33 +150,45 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       invoice_no: '', note: 'Tạo từ ảnh', files: [], add: fs, market_price: false };
     try {
       const prepared = await Promise.all(fs.map(prepareFile));
-      const r = await readByAI('phieu_do_dau', prepared), v = r.fields;
-      const numOf = (x: unknown) => Number(String(x ?? '').replace(/[^\d.,]/g, '').replace(',', '.').replace(/\.(?=.*\.)/g, '')) || 0;
-      let lit = numOf(v.lit), gia = Number(v.don_gia) || 0;
-      const tien = Number(v.thanh_tien) || 0;
-      if (lit > 1000 && tien && gia && Math.abs((lit / 1000) * gia - tien) < Math.abs(lit * gia - tien)) lit /= 1000;   // 44737 đọc thiếu dấu → 44,737
-      if (gia > 0 && gia < 1000) gia = Math.round(gia * 1000);                                                          // 26.82 → 26.820 đ
-      if (!gia && lit && tien) gia = Math.round(tien / lit);
-      if (!lit && gia && tien) lit = Math.round((tien / gia) * 1000) / 1000;
-      const key = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, ''), k = key(String(v['xe.bien_so'] ?? ''));
-      const xe = k.length >= 4 ? vehicles.find((x) => key(x.plate) === k) ?? vehicles.find((x) => key(x.plate).endsWith(k.slice(-5))) ?? vehicles.find((x) => k.endsWith(key(x.plate).slice(-5))) : undefined;
-      const day = typeof v.ngay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.ngay) ? v.ngay : today();
+      const v = await readFuelPhotos(prepared), xe = matchPlate(vehicles, v.plate), day = v.date;
       let drv = '';
       if (xe) {   // lái xe 1 của chuyến xe này trong ngày
         const t = await supabase.from('trips').select('id').eq('vehicle_id', xe.id).eq('service_date', day).eq('status', 'mo').order('depart_at').limit(5);
         const ids = ((t.data ?? []) as { id: string }[]).map((x) => x.id);
         if (ids.length) drv = (((await supabase.from('trip_crew').select('staff_id').in('trip_id', ids).eq('role', 'lai_xe_1').eq('active', true).limit(1)).data ?? []) as { staff_id: string }[])[0]?.staff_id ?? '';
       }
-      const gio = typeof v.gio === 'string' && /^\d{1,2}:\d{2}$/.test(v.gio) ? v.gio.padStart(5, '0') : '';
-      const warn = [!xe && v['xe.bien_so'] ? `AI đọc biển số "${v['xe.bien_so']}" nhưng không thấy trong danh sách xe` : '', ...(r.warnings ?? [])].filter(Boolean);
-      setF({ ...base, entry_date: day, entry_time: gio, vehicle_id: xe?.id ?? '', driver_id: drv, odo_km: v.km ? String(v.km) : '', liters: lit ? String(Math.round(lit * 1000) / 1000) : '',
-        unit_price: gia ? String(gia) : '', supplier: String(v.cay_xang ?? ''), invoice_no: String(v.so_hd ?? ''), market_price: false });
+      const warn = [!xe && v.plate ? `AI đọc biển số "${v.plate}" nhưng không thấy trong danh sách xe` : '', ...v.warnings].filter(Boolean);
+      setF({ ...base, entry_date: day, entry_time: v.time, vehicle_id: xe?.id ?? '', driver_id: drv, odo_km: v.km, liters: v.liters ? String(v.liters) : '',
+        unit_price: v.price ? String(v.price) : '', supplier: v.supplier, invoice_no: v.invoice, market_price: false });
       toast('ok', `AI đã điền sẵn phiếu, kiểm tra lại số lít, tiền, biển số rồi Lưu${warn.length ? ` (${warn.join('; ')})` : ''}`);
     } catch (e) {
       setF(base);
       toast('error', `${errMsg(e)}. Ảnh đã gắn vào phiếu, nhập tay giúp.`);
     } finally { setAi(''); }
   }
+  /** Mở phiếu lái xe gửi để điều hành kiểm tra, sửa rồi duyệt (thành phiếu Đổ ngoài) */
+  function review(r: FuelReport) {
+    setF({ id: null, kind: 'ngoai', entry_date: r.entry_date, entry_time: r.entry_time?.slice(0, 5) ?? '', vehicle_id: r.vehicle_id, driver_id: r.staff_id,
+      odo_km: r.odo_km?.toString() ?? '', liters: String(r.liters), unit_price: String(r.unit_price), supplier: r.supplier ?? '', invoice_no: r.invoice_no ?? '',
+      note: r.note ?? '', files: r.files, add: [], market_price: false, report: { id: r.id, who: driver(r.staff_id) || 'lái xe' } });
+  }
+  async function reject() {
+    if (!f?.report) return;
+    const why = window.prompt(`Bỏ phiếu đổ dầu của ${f.report.who} (không tạo phiếu). Lý do (lái xe sẽ thấy):`, '');
+    if (why === null) return;
+    setBusy(true);
+    try { await rpc('reject_fuel_report', { p_id: f.report.id, p_reason: why }); toast('ok', 'Đã bỏ phiếu'); setF(null); await load(); }
+    catch (e) { toast('error', errMsg(e)); }
+    finally { setBusy(false); }
+  }
+  // Ảnh chia sẻ từ Zalo vào app (Chia sẻ → app): tạo phiếu từ ảnh khi đã tải xong danh sách xe
+  useEffect(() => {
+    if (!shareFiles?.length || !vehicles.length || !canAdd) return;
+    onShareDone?.();
+    void fromPhotos(shareFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareFiles, vehicles.length, canAdd]);
+
   async function del(r: FuelEntry) {
     const { error } = await supabase.from('fuel_entries').delete().eq('id', r.id);
     if (error) return toast('error', errMsg(error));
@@ -237,6 +261,19 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         <MarketCard mk={mk} fuelType={set.fuel_type} avg={led.avg} saved={(() => { const mp = mkPrice(mk, set.fuel_type); return mp ? led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + (mp - (led.map.get(r.id)?.price ?? 0)) * r.liters, 0) : 0; })()}
           bonLit={led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + r.liters, 0)}
           onEdit={canEdit ? () => { setMkEdit(Object.fromEntries(MK.map((k) => [k, mk?.gia[k] ? String(mk.gia[k]) : '']))); setMkAt(new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16)); } : undefined} />
+        {reports.length > 0 && (
+          <div className="fuel-wait" role="region" aria-label="Phiếu đổ dầu lái xe gửi chờ duyệt">
+            <b>⛽ {reports.length} phiếu đổ dầu lái xe gửi qua app đang chờ duyệt</b>
+            {reports.map((r) => (
+              <div key={r.id} className="fuel-wait-row">
+                <div className="grow"><b>{plate(r.vehicle_id)}</b> · {num(r.liters, 3)} lít · {money(r.amount ?? r.liters * r.unit_price)}
+                  <div className="small muted">{driver(r.staff_id)} gửi {fmtDate(r.entry_date)} {r.entry_time?.slice(0, 5) ?? ''}{r.supplier ? ` · ${r.supplier}` : ''}{r.odo_km ? ` · ${num(r.odo_km)} km` : ''}</div>
+                  <FilesViewButton files={r.files} label={`Xem ${r.files.length} ảnh`} /></div>
+                {canAdd && <button type="button" className="btn small primary" onClick={() => review(r)}>Xem, duyệt</button>}
+              </div>
+            ))}
+          </div>
+        )}
         <div className="seg" role="tablist" aria-label="Xem">
           {([['phieu', 'Phiếu'], ['xe', 'Theo xe'], ['cai', 'Thiết lập']] as const).map(([k, l]) =>
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
@@ -316,8 +353,9 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       {tab === 'cai' && <FuelSetup key={`${JSON.stringify(set)}${vehicles.length}`} set={set} vehicles={vehicles} canEdit={canEdit} onSaved={load} />}
 
       {f && (
-        <Modal title={f.id ? `Sửa phiếu · ${FUEL_KIND[f.kind].label}` : FUEL_KIND[f.kind].label} onClose={() => setF(null)}>
+        <Modal title={f.report ? `Duyệt phiếu đổ dầu · ${f.report.who}` : f.id ? `Sửa phiếu · ${FUEL_KIND[f.kind].label}` : FUEL_KIND[f.kind].label} onClose={() => setF(null)}>
           <div className="form">
+            {f.report && <p className="small muted">Lái xe <b>{f.report.who}</b> gửi qua app. Kiểm tra số lít, số tiền, biển số với ảnh, sửa nếu cần rồi bấm Duyệt.</p>}
             <div className="grid2">
               <label>Ngày<input type="date" value={f.entry_date} onChange={(e) => setF({ ...f, entry_date: e.target.value })} /></label>
               <label>Giờ<input type="time" value={f.entry_time} onChange={(e) => setF({ ...f, entry_time: e.target.value })} /></label>
@@ -342,8 +380,9 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             <FilePreviews files={f.files} blobs={f.add} />
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
-              <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>
-              <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>Lưu & in phiếu 80mm</button>
+              <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : f.report ? 'Duyệt, tạo phiếu' : 'Lưu phiếu'}</button>
+              <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>{f.report ? 'Duyệt & in phiếu 80mm' : 'Lưu & in phiếu 80mm'}</button>
+              {f.report && <button type="button" className="btn danger-text" disabled={busy} onClick={() => void reject()}>Bỏ phiếu này</button>}
               <button type="button" className="btn link" onClick={() => setF(null)}>Thôi</button>
             </div>
           </div>

@@ -18,6 +18,8 @@ import { LaborScreen } from './Labor';
 import { TimesheetScreen } from './Timesheet';
 import { SafetyScreen } from './Safety';
 import { FuelPriceAlert } from '../components/FuelPriceAlert';
+import { FuelReportAlert } from '../components/FuelReportAlert';
+import { hasShare, takeSharedFiles } from '../lib/shareIn';
 import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
@@ -45,6 +47,10 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
   const [myStaff, setMyStaff] = useState<string | null>(null);
   const avas = useAvatars(ctx.tenant_id);
+  // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
+  const [share, setShare] = useState<{ to: 'fuel' | 'driver'; files: File[] } | null>(null);
+  const [shareMsg, setShareMsg] = useState('');
+  useEffect(() => { if (!shareMsg) return; const t = window.setTimeout(() => setShareMsg(''), 12_000); return () => window.clearTimeout(t); }, [shareMsg]);
 
   const load = useCallback(async () => {
     try {
@@ -58,6 +64,13 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       setPerms(p);
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
       setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
+      if (hasShare()) {
+        const files = (await takeSharedFiles()).filter((f) => f.type.startsWith('image/'));
+        if (!files.length) setShareMsg('Không nhận được ảnh chia sẻ, thử chia sẻ lại.');
+        else if (p.has('fuel.add')) { setShare({ to: 'fuel', files }); setTab('fuel'); }
+        else if (crew) { setShare({ to: 'driver', files }); setTab('driver'); }
+        else setShareMsg('Tài khoản này chưa được tạo phiếu nhiên liệu hay báo đổ dầu.');
+      }
     } catch (e) {
       setError(errMsg(e));
     }
@@ -152,7 +165,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       </aside>
       <div className="main">
         <main className="content">
-          {tab === 'driver' && <DriverScreen />}
+          {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
+          {tab === 'driver' && <DriverScreen tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
           {tab === 'parcels' && <ParcelsScreen />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
@@ -161,8 +175,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'timesheet' && <TimesheetScreen ctx={ctx} perms={perms} />}
           {tab === 'safety' && <SafetyScreen ctx={ctx} perms={perms} />}
           {perms.has('fuel.view') && ctx.tenant_id && <FuelPriceAlert tenantId={ctx.tenant_id} onOpen={() => setTab('fuel')} />}
+          {perms.has('fuel.add') && ctx.tenant_id && <FuelReportAlert tenantId={ctx.tenant_id} onOpen={() => setTab('fuel')} />}
           {tab === 'repairs' && <RepairsScreen ctx={ctx} perms={perms} />}
-          {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} />}
+          {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} shareFiles={share?.to === 'fuel' ? share.files : null} onShareDone={() => setShare(null)} />}
           {tab === 'km' && <VehicleKmScreen perms={perms} />}
           {tab === 'reports' && <ReportsScreen />}
           {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}

@@ -67,7 +67,9 @@ Deno.serve(async (req) => {
     const { data: perms, error } = await userClient.rpc('my_permissions');
     if (error) throw new ReaderError(401, 'Phiên đăng nhập không hợp lệ');
     const need = fuel ? ['fuel.add'] : PERM_BY_OWNER[def.owner];
-    if (!((perms ?? []) as { permission_code: string }[]).some((p) => need?.includes(p.permission_code))) {
+    // Ảnh đổ dầu: thêm lái xe / nhân viên có hồ sơ (báo đổ dầu từ app lái xe, như app cũ)
+    const crew = fuel && !!(await userClient.rpc('my_staff_id')).data;
+    if (!crew && !((perms ?? []) as { permission_code: string }[]).some((p) => need?.includes(p.permission_code))) {
       throw new ReaderError(403, 'Không có quyền quản lý loại giấy tờ này');
     }
 

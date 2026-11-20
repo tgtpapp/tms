@@ -947,3 +947,15 @@ table.cc { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .nl80 .nl80-box { border: 1.5px solid #000; border-radius: 4px; padding: 3px 6px; margin: 4px 0; display: flex; justify-content: space-between; align-items: center; } .nl80 .nl80-box b { font-size: 16px; }
 .nl80 .nl80-tot { font-size: 13px; border-top: 1px solid #000; padding-top: 2px; }
 .nl80 .nl80-sg { width: 100%; border-collapse: collapse; } .nl80 .nl80-sg td { width: 50%; text-align: center; vertical-align: top; height: 22mm; font-size: 11px; }
+
+/* Lái xe báo đổ dầu: hàng chờ duyệt ở Nhiên liệu, khung chụp ảnh ở Việc của tôi */
+.fuel-wait { background: #fff7ed; border: 1px solid #fdba74; border-radius: 14px; padding: 10px 14px; margin: 10px 0; display: grid; gap: 8px; }
+.fuel-wait-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; border-top: 1px dashed #fed7aa; padding-top: 8px; }
+.fuel-wait-row .grow { flex: 1; min-width: 200px; }
+.fr-thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.fr-thumbs div { position: relative; }
+.fr-thumbs img { width: 76px; height: 76px; object-fit: cover; border-radius: 10px; border: 1px solid #e2e8f0; display: block; }
+.fr-thumbs button { position: absolute; top: -6px; right: -6px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: #ef4444; color: #fff; font-weight: 700; line-height: 24px; padding: 0; cursor: pointer; }
+.fr-big { width: 100%; justify-content: center; padding: 12px; font-size: 16px; }
+.fr-list { display: grid; gap: 6px; margin-top: 8px; }
+.fr-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid #eef1f6; padding-top: 6px; }

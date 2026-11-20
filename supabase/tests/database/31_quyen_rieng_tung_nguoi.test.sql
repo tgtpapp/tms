@@ -5,7 +5,7 @@ select * from no_plan();
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000a1', 'p@test.local'), ('00000000-0000-0000-0000-0000000000b1', 'ua@test.local'),
   ('00000000-0000-0000-0000-0000000000b3', 'nv1@test.local'), ('00000000-0000-0000-0000-0000000000b4', 'nv2@test.local'),
-  ('00000000-0000-0000-0000-0000000000c1', 'ub@test.local');
+  ('00000000-0000-0000-0000-0000000000c1', 'ub@test.local'), ('00000000-0000-0000-0000-0000000000b5', 'lx@test.local');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
 select lives_ok($$ select public.bootstrap_platform_admin() $$, 'Khởi tạo');
@@ -43,6 +43,12 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select throws_ok($$ select public.set_user_permissions('00000000-0000-0000-0000-0000000000b4', array[]::text[], array['sell.view']) $$, 'P0002', null, 'Nhà xe B không sửa quyền người của A');
 select is((select count(*)::int from public.user_permission_denies), 0, 'Nhà xe B không thấy quyền bị chặn của A');
+reset role;
+select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b5', (select id from public.tenants where code = 'nha-xe-a'), '0900000006', 'Lái xe', 'driver') $$, 'Lái xe');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is((select count(*)::int from public.my_permissions()), 0, 'Lái xe: không có ô Xem màn hình chung nào (chỉ việc của mình)');
+select is((select count(*)::int from public.staff_private), 0, 'Lái xe không xem hồ sơ riêng người khác');
 reset role;
 select * from finish();
 rollback;

@@ -1006,3 +1006,6 @@ button.dt-g { cursor: pointer; }
 /* Bán vé: trạng thái lái xe báo về */
 .vxs-crew { font-size: .68rem; font-weight: 700; border-radius: 6px; padding: 0 5px; align-self: flex-start; background: #e0f2fe; color: #0369a1; }
 .vxs-crew.bao_huy, .vxs-crew.vang { background: #fee2e2; color: #b91c1c; } .vxs-crew.thue_bao { background: #fef3c7; color: #92400e; } .vxs-crew.nghe_may, .vxs-crew.tra { background: #dcfce7; color: #15803d; }
+/* Hướng dẫn cài app */
+.pwa-r { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 6px 0; font-size: .9rem; }
+.pwa-r.on { border-color: var(--primary); background: var(--surface-2); }

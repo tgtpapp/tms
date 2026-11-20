@@ -1,3 +1,4 @@
+import { InstallApp } from '../components/InstallApp';
 import { Avatar, StaffAvatar } from '../components/StaffAvatar';
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
@@ -76,6 +77,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
           <div>
             <h2>Thông tin</h2>
             <p className="muted small">{ctx.tenant_name} · {ctx.full_name}</p>
+            <InstallApp name={ctx.tenant_name ?? ''} className="btn small" />
           </div>
           <button className="btn" onClick={() => void supabase.auth.signOut()}>
             <i className="fi fi-rr-sign-out-alt" aria-hidden="true" /> Đăng xuất

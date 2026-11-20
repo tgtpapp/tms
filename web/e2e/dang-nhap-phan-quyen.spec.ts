@@ -724,4 +724,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
   await page.getByRole('button', { name: 'Đăng xuất' }).click();
   await expect(page.getByLabel('Mã nhà xe', { exact: true })).toHaveValue('nha-xe-b');
+  // 10. Cài app vào máy (như app cũ): trình duyệt chưa mời cài thì hiện hướng dẫn theo loại máy
+  await page.getByRole('button', { name: '📲 Cài app vào máy' }).click();
+  await expect(page.getByRole('dialog', { name: /^Cài app/ })).toBeVisible();
+  await expect(page.getByText('🤖 Android (Chrome)')).toBeVisible();
+  await page.getByRole('dialog', { name: /^Cài app/ }).getByRole('button', { name: 'Đóng', exact: true }).click();
 });

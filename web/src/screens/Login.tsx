@@ -1,3 +1,4 @@
+import { InstallApp } from '../components/InstallApp';
 import { useState, type FormEvent } from 'react';
 import { Centered } from '../components/Centered';
 import { config } from '../config';
@@ -81,6 +82,7 @@ export function LoginScreen() {
           </button>
         )}
         <p className="muted small">Quên mật khẩu: liên hệ quản trị nhà xe để đặt lại.</p>
+        <InstallApp name={config.appName} />
       </form>
     </Centered>
   );

@@ -37,7 +37,7 @@ function icon(it: Item) {
 }
 const SEED: [string, string[]][] = [
   ['01. Pháp lý công ty', ['Giấy đăng ký kinh doanh', 'Giấy phép kinh doanh vận tải', 'Con dấu, chữ ký số', 'Điều lệ, quyết định']],
-  ['02. Nhân sự', ['Hợp đồng lao động', 'Hồ sơ lái xe, phụ xe', 'Bằng lái, giấy khám sức khỏe', 'Bảo hiểm xã hội']],
+  ['02. Nhân sự', ['Hợp đồng lao động', 'Hồ sơ lái xe, phụ xe', 'Bằng lái, giấy khám sức khỏe', 'Bảo hiểm xã hội', 'Nghỉ việc']],
   ['03. Phương tiện', ['Đăng ký, đăng kiểm', 'Bảo hiểm xe', 'Phù hiệu, giấy phép lưu hành', 'Hợp đồng thuê xe']],
   ['04. Tài chính - Kế toán', ['Hóa đơn đầu vào', 'Hóa đơn đầu ra', 'Thuế', 'Ngân hàng']],
   ['05. Hợp đồng vận chuyển', ['Hợp đồng đang hiệu lực', 'Hợp đồng đã thanh lý']],

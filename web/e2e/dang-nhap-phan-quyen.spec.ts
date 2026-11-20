@@ -349,6 +349,24 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText(/Giao ông: Nguyễn Văn Tài/)).toBeVisible();
   await expect(vb.getByText('PHỤ LỤC 8 – DANH MỤC HỒ SƠ LƯU TRỮ')).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // Đơn xin nghỉ việc + Quyết định thôi việc: tự điền từ hồ sơ, gợi ý ngày nghỉ theo ngày báo trước, sửa tự do, số dãy riêng QĐTV
+  await page.getByLabel('Soạn văn bản mới').selectOption('qd_thoi_viec');
+  await page.getByLabel('Người nghỉ việc').selectOption({ label: 'Nguyễn Văn Tài' });
+  await expect(page.getByText('Ngày nghỉ sớm nhất hợp lệ:')).toBeVisible();
+  await expect(page.getByLabel(/^Xin nghỉ từ ngày/)).not.toHaveValue('');
+  await page.getByLabel('Ghi rõ lý do (nếu cần)').fill('chuyển về quê');
+  await page.getByRole('button', { name: '✏️ Sửa tự do đơn' }).click();
+  await expect(page.getByRole('textbox', { name: 'Nội dung văn bản' })).toContainText('ĐƠN XIN NGHỈ VIỆC');
+  await expect(page.getByRole('textbox', { name: 'Nội dung văn bản' })).toContainText('chuyển về quê');
+  await page.getByLabel(/chuyển hồ sơ nhân viên sang/).uncheck();
+  await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
+  await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
+  await expect(page.getByText(/^Đã cấp số 001\/\d{4}\/QĐTV/)).toBeVisible();
+  await page.getByRole('button', { name: /^Xem văn bản 001\/\d{4}\/QĐTV/ }).click();
+  await expect(vb.getByRole('heading', { name: 'ĐƠN XIN NGHỈ VIỆC', exact: true })).toBeVisible();
+  await expect(vb.getByText(/Số: 001\/\d{4}\/QĐTV/)).toBeVisible();
+  await expect(vb.getByText(/Chấm dứt hợp đồng lao động và giải quyết cho nghỉ việc/)).toBeVisible();
+  await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j5. Cấu hình › Đóng BHXH & lương chuyển khoản theo tháng: nhập xong tự lưu, mở lại vẫn còn
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
   await page.getByLabel('Đóng BHXH Nguyễn Văn Tài').check();

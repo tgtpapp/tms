@@ -109,6 +109,7 @@ begin
   select coalesce(t.vehicle_type_id, vh.vehicle_type_id) into v_type
   from public.trips t left join public.vehicles vh on vh.tenant_id = t.tenant_id and vh.id = t.vehicle_id
   where t.tenant_id = v_tid and t.id = p_trip_id;
+  if not found then raise exception 'Không tìm thấy chuyến' using errcode = 'P0002'; end if;
   if v_type is null then return null; end if;
   select jsonb_build_object('name', vt.name, 'decks', vt.decks, 'rows', vt.layout_rows, 'cols', vt.layout_cols,
            'seats', coalesce((select jsonb_agg(jsonb_build_object('label', s.label, 'deck', s.deck, 'row', s.row_no, 'col', s.col_no, 'kind', s.kind,

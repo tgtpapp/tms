@@ -20,3 +20,6 @@ verify_jwt = false
 # Lưu trữ hồ sơ trên Google Drive (Apps Script) của nhà xe: tự kiểm tra phiên + quyền bên trong
 [functions.drive]
 verify_jwt = false
+
+[functions.app-install]
+verify_jwt = false

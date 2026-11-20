@@ -51,14 +51,12 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
   const [share, setShare] = useState<{ to: 'fuel' | 'driver'; files: File[] } | null>(null);
   const [shareMsg, setShareMsg] = useState('');
-  // App cài vào máy: tên nhà xe dưới biểu tượng, biểu tượng là ảnh của người đăng nhập (chưa có ảnh: logo nhà xe)
+  // App cài vào máy: tên nhà xe dưới biểu tượng, biểu tượng là ảnh đại diện của người đăng nhập (chưa có ảnh: logo nhà xe)
   const myAva = myStaff ? avas[myStaff] : undefined;
   useEffect(() => {
-    const tid = ctx.tenant_id, name = ctx.tenant_name ?? config.appName;
-    if (!tid) return;
-    if (myAva) { void brandApp(name, myAva); return; }
-    void companyFileUrl(tid, 'logo.png').then((u) => brandApp(name, u)).catch(() => brandApp(name, null));
-  }, [ctx.tenant_id, ctx.tenant_name, myAva]);
+    if (!ctx.tenant_id) return;
+    brandApp(ctx.tenant_name ?? config.appName, ctx.tenant_id, myStaff, myAva ? new URL(myAva).searchParams.get('v') ?? '' : '');
+  }, [ctx.tenant_id, ctx.tenant_name, myStaff, myAva]);
   useEffect(() => { if (!shareMsg) return; const t = window.setTimeout(() => setShareMsg(''), 12_000); return () => window.clearTimeout(t); }, [shareMsg]);
 
   const load = useCallback(async () => {

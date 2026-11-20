@@ -320,6 +320,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
   await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
   await expect(page.getByLabel('Đóng BHXH Nguyễn Văn Tài')).toBeChecked();
+  // 5j5b. Bảng chấm công (như app cũ): lái xe chưa có chuyến nằm ở nhóm "Lái xe chưa có lịch chạy", Lương CK lấy từ bảng tháng
+  await page.getByRole('button', { name: 'Bảng chấm công', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /^Bảng chấm công tháng/ })).toBeVisible();
+  await expect(page.locator('table.cc').getByText('Lái xe chưa có lịch chạy')).toBeVisible();
+  await expect(page.locator('table.cc tr', { hasText: 'Nguyễn Văn Tài' }).getByText('7.000.000')).toBeVisible();
   // 5j6. Hợp đồng lao động: lập HĐ, số 001 tự cấp, lương lấy từ lương chuyển khoản của tháng bắt đầu (sửa được), xem bản in
   const thang = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7);
   await page.getByRole('button', { name: 'Hợp đồng lao động', exact: true }).click();

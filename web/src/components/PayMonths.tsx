@@ -9,7 +9,7 @@ import { boss, bossCol, company, head, signCol, signImg } from '../lib/profilePa
 import { resetFolders, savePdf } from '../lib/dispatchPapers';
 
 interface Staff { id: string; full_name: string; is_active: boolean; left_on: string | null; joined_on: string }
-interface Row { has_bhxh: boolean; transfer_pay: number; bhxh_pay: number }
+interface Row { has_bhxh: boolean; transfer_pay: number; bhxh_pay: number; fixed_pay: number }
 const num = (n: number) => n.toLocaleString('vi-VN');
 const parse = (s: string) => Number(s.replace(/[^0-9]/g, '')) || 0;
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -28,11 +28,11 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
   const load = useCallback(async () => {
     const [s, p] = await Promise.all([
       supabase.from('staff_members').select('id, full_name, is_active, left_on, joined_on'),
-      supabase.from('staff_pay_months').select('staff_id, has_bhxh, transfer_pay, bhxh_pay').eq('month', `${month}-01`),
+      supabase.from('staff_pay_months').select('staff_id, has_bhxh, transfer_pay, bhxh_pay, fixed_pay').eq('month', `${month}-01`),
     ]);
     if (p.error) return toast('error', p.error.message);
     setStaff(((s.data ?? []) as Staff[]).sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi')));
-    setRows(Object.fromEntries(((p.data ?? []) as (Row & { staff_id: string })[]).map((r) => [r.staff_id, { has_bhxh: r.has_bhxh, transfer_pay: Number(r.transfer_pay), bhxh_pay: Number(r.bhxh_pay) }])));
+    setRows(Object.fromEntries(((p.data ?? []) as (Row & { staff_id: string })[]).map((r) => [r.staff_id, { has_bhxh: r.has_bhxh, transfer_pay: Number(r.transfer_pay), bhxh_pay: Number(r.bhxh_pay), fixed_pay: Number(r.fixed_pay) }])));
     dirty.current.clear();
   }, [month, toast]);
   useEffect(() => { void load(); }, [load]);
@@ -40,7 +40,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
   // Người còn làm trong tháng: vào trước cuối tháng, chưa nghỉ trước đầu tháng
   const end = `${month}-31`;
   const list = staff.filter((s) => s.joined_on <= end && (s.is_active || (s.left_on && s.left_on >= `${month}-01`)));
-  const val = (id: string): Row => rows[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0 };
+  const val = (id: string): Row => rows[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0, fixed_pay: 0 };
 
   const flush = useCallback(async (data: Record<string, Row>) => {
     const ids = [...dirty.current];
@@ -48,14 +48,14 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
     dirty.current.clear();
     setState('Đang lưu…');
     try {
-      await rpc('save_pay_month', { p_month: `${month}-01`, p_rows: ids.map((id) => ({ staff_id: id, ...(data[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0 }) })) });
+      await rpc('save_pay_month', { p_month: `${month}-01`, p_rows: ids.map((id) => ({ staff_id: id, ...(data[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0, fixed_pay: 0 }) })) });
       setState('Đã lưu');
     } catch (e) { ids.forEach((id) => dirty.current.add(id)); setState(''); toast('error', errMsg(e)); }
   }, [month, toast]);
   function change(ids: string[], f: (r: Row) => Row) {
     setRows((cur) => {
       const next = { ...cur };
-      for (const id of ids) { next[id] = f(cur[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0 }); dirty.current.add(id); }
+      for (const id of ids) { next[id] = f(cur[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0, fixed_pay: 0 }); dirty.current.add(id); }
       clearTimeout(timer.current);
       timer.current = window.setTimeout(() => void flush(next), 700);
       return next;
@@ -65,12 +65,12 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
   async function fromPrev() {
     const [y, m] = month.split('-').map(Number);
     const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
-    const { data, error } = await supabase.from('staff_pay_months').select('staff_id, has_bhxh, transfer_pay, bhxh_pay').eq('month', `${prev}-01`);
+    const { data, error } = await supabase.from('staff_pay_months').select('staff_id, has_bhxh, transfer_pay, bhxh_pay, fixed_pay').eq('month', `${prev}-01`);
     if (error) return toast('error', error.message);
     const p = new Map(((data ?? []) as (Row & { staff_id: string })[]).map((r) => [r.staff_id, r]));
     const ids = list.map((s) => s.id).filter((id) => p.has(id));
     if (!ids.length) return toast('error', `Tháng ${prev.slice(5)}/${prev.slice(0, 4)} chưa có dữ liệu`);
-    for (const id of ids) { const x = p.get(id)!; change([id], () => ({ has_bhxh: x.has_bhxh, transfer_pay: Number(x.transfer_pay), bhxh_pay: Number(x.bhxh_pay) })); }
+    for (const id of ids) { const x = p.get(id)!; change([id], () => ({ has_bhxh: x.has_bhxh, transfer_pay: Number(x.transfer_pay), bhxh_pay: Number(x.bhxh_pay), fixed_pay: Number(x.fixed_pay) })); }
     toast('ok', `Đã lấy ${ids.length} người theo tháng ${prev.slice(5)}/${prev.slice(0, 4)}`);
   }
 
@@ -108,7 +108,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
     <section className="card">
       <h2>Đóng BHXH &amp; lương chuyển khoản theo tháng</h2>
       <p className="small muted">Chọn tháng, tick nhân viên đóng BHXH, nhập lương chuyển khoản và số tiền Bảo hiểm xã hội (mức lương đóng BHXH); sửa xong tự lưu.
-        Lương chuyển khoản của tháng bắt đầu hợp đồng là số lương mặc định khi in hợp đồng lao động. Có thể lưu bảng thành PDF vào Lưu trữ hồ sơ.</p>
+        Lương chuyển khoản của tháng bắt đầu hợp đồng là số lương mặc định khi in hợp đồng lao động. Lương cố định là tiền công tháng của nhân viên văn phòng trên Bảng chấm công. Có thể lưu bảng thành PDF vào Lưu trữ hồ sơ.</p>
       <div className="actions pay-bar">
         <label>Tháng<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} /></label>
         <button type="button" className="btn small" onClick={() => void fromPrev()}>Lấy theo tháng trước</button>
@@ -119,7 +119,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
       </div>
       <div className="table-wrap">
         <table className="plist pay-table">
-          <thead><tr><th>Tháng</th><th>Tên nhân viên</th><th>Đóng BHXH</th><th>Lương chuyển khoản</th><th>Bảo hiểm xã hội</th></tr></thead>
+          <thead><tr><th>Tháng</th><th>Tên nhân viên</th><th>Đóng BHXH</th><th>Lương chuyển khoản</th><th>Bảo hiểm xã hội</th><th title="Tiền công tháng của nhân viên văn phòng trên Bảng chấm công">Lương cố định</th></tr></thead>
           <tbody>
             {list.map((s) => {
               const v = val(s.id);
@@ -132,10 +132,12 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
                              onChange={(e) => change([s.id], (r) => ({ ...r, transfer_pay: parse(e.target.value) }))} /></td>
                   <td><input className="money" inputMode="numeric" aria-label={`Bảo hiểm xã hội ${s.full_name}`} value={v.bhxh_pay ? num(v.bhxh_pay) : ''} placeholder="0"
                              onChange={(e) => change([s.id], (r) => ({ ...r, bhxh_pay: parse(e.target.value) }))} /></td>
+                  <td><input className="money" inputMode="numeric" aria-label={`Lương cố định ${s.full_name}`} value={v.fixed_pay ? num(v.fixed_pay) : ''} placeholder="0"
+                             onChange={(e) => change([s.id], (r) => ({ ...r, fixed_pay: parse(e.target.value) }))} /></td>
                 </tr>
               );
             })}
-            <tr className="pay-total"><td /><td>Tổng cộng</td><td className="c">{tot.n} người</td><td className="r">{num(tot.ck)}</td><td className="r">{num(tot.ml)}</td></tr>
+            <tr className="pay-total"><td /><td>Tổng cộng</td><td className="c">{tot.n} người</td><td className="r">{num(tot.ck)}</td><td className="r">{num(tot.ml)}</td><td /></tr>
           </tbody>
         </table>
       </div>

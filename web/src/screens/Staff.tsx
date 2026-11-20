@@ -24,7 +24,7 @@ type Contract = 'khong_xac_dinh' | 'xac_dinh' | 'thu_viec' | 'thoi_vu' | 'khoan_
 
 interface Staff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
-  joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null;
+  joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null; department: string | null;
 }
 interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; contract_type: Contract | null; note: string | null }
 interface Option { id: string; label: string }
@@ -105,7 +105,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
-      supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title').order('full_name'),
+      supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title, department').order('full_name'),
       supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note'),
       supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
@@ -176,14 +176,14 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 /* ------------------------------------------------------------------ Thêm / sửa hồ sơ */
 
 const EMPTY = {
-  full_name: '', job_title: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
+  full_name: '', job_title: '', department: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
   user_id: '', birth_date: '', gender: '' as Gender | '', address: '', current_address: '', contract_type: '' as Contract | '', note: '',
 };
 type Form = typeof EMPTY;
 
 function formOf(s: Staff, p: StaffPrivate | undefined): Form {
   return {
-    full_name: s.full_name, job_title: s.job_title ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
+    full_name: s.full_name, job_title: s.job_title ?? '', department: s.department ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
     left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
     gender: p?.gender ?? '', address: p?.address ?? '', current_address: p?.current_address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
   };
@@ -292,6 +292,8 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
           <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
           <label>Chức vụ<input value={f.job_title} onChange={set('job_title')} list="chuc-vu" maxLength={80} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe" /></label>
           <datalist id="chuc-vu">{[...new Set([...props.staff.map((x) => x.job_title?.trim() ?? '').filter(Boolean), 'Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ'])].map((x) => <option key={x} value={x} />)}</datalist>
+          <label>Phòng ban<input value={f.department} onChange={set('department')} list="phong-ban" maxLength={80} placeholder="vd: Văn phòng, Điều hành, Lái xe" /></label>
+          <datalist id="phong-ban">{[...new Set(props.staff.map((x) => x.department?.trim() ?? '').filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist>
           <label>Nhóm (để xếp chuyến, giấy tờ bắt buộc)
             <select value={f.position} onChange={set('position')}>
               {Object.entries(POSITION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}

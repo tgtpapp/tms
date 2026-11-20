@@ -18,12 +18,12 @@ export { DOC_COLS, type Doc } from '../components/Documents';
 export interface VehicleTypeLite { id: string; code: string; name: string; reg_seats: number; reg_berths: number; is_active: boolean }
 export interface Vehicle {
   id: string; plate: string; vehicle_type_id: string; chassis_no: string | null; engine_no: string | null;
-  owner_name: string | null; color: string | null; country_of_origin: string | null; manufacture_year: number | null;
+  owner_name: string | null; color: string | null; country_of_origin: string | null; manufacture_year: number | null; driver_pay: number;
   condition: 'nguyen_chiec' | 'cai_tao'; ownership: 'so_huu' | 'thue' | 'hop_tac' | 'xa_vien'; acquired_on: string | null;
   business_type: 'tuyen_co_dinh' | 'hop_dong' | 'ca_hai'; gsht_provider: string | null; gsht_device_no: string | null;
   camera_provider: string | null; camera_device_no: string | null; note: string | null; is_active: boolean;
 }
-export const VEHICLE_COLS = 'id, plate, vehicle_type_id, chassis_no, engine_no, owner_name, color, country_of_origin, manufacture_year, condition, ownership, acquired_on, business_type, gsht_provider, gsht_device_no, camera_provider, camera_device_no, note, is_active';
+export const VEHICLE_COLS = 'id, plate, vehicle_type_id, chassis_no, engine_no, owner_name, color, country_of_origin, manufacture_year, condition, ownership, acquired_on, business_type, gsht_provider, gsht_device_no, camera_provider, camera_device_no, note, is_active, driver_pay';
 
 const OWNERSHIP = { so_huu: 'Xe của nhà xe', thue: 'Xe thuê', hop_tac: 'Hợp tác kinh doanh', xa_vien: 'Xe của xã viên HTX' } as const;
 const BUSINESS = { tuyen_co_dinh: 'Tuyến cố định', hop_dong: 'Hợp đồng', ca_hai: 'Tuyến cố định + hợp đồng' } as const;
@@ -45,7 +45,7 @@ const EMPTY_VEHICLE = {
   plate: '', vehicle_type_id: '', chassis_no: '', engine_no: '', owner_name: '', color: '', country_of_origin: '',
   manufacture_year: '', condition: 'nguyen_chiec' as Vehicle['condition'], ownership: 'so_huu' as Vehicle['ownership'],
   acquired_on: '', business_type: 'tuyen_co_dinh' as Vehicle['business_type'], gsht_provider: '', gsht_device_no: '',
-  camera_provider: '', camera_device_no: '', note: '',
+  camera_provider: '', camera_device_no: '', note: '', driver_pay: '',
 };
 type VehicleForm = typeof EMPTY_VEHICLE;
 
@@ -56,7 +56,7 @@ function vehicleFormOf(v: Vehicle): VehicleForm {
     owner_name: s(v.owner_name), color: s(v.color), country_of_origin: s(v.country_of_origin), manufacture_year: s(v.manufacture_year),
     condition: v.condition, ownership: v.ownership, acquired_on: s(v.acquired_on), business_type: v.business_type,
     gsht_provider: s(v.gsht_provider), gsht_device_no: s(v.gsht_device_no), camera_provider: s(v.camera_provider),
-    camera_device_no: s(v.camera_device_no), note: s(v.note),
+    camera_device_no: s(v.camera_device_no), note: s(v.note), driver_pay: v.driver_pay ? String(v.driver_pay) : '',
   };
 }
 function vehicleValues(f: VehicleForm) {
@@ -67,6 +67,7 @@ function vehicleValues(f: VehicleForm) {
     manufacture_year: f.manufacture_year ? Number(f.manufacture_year) : null, condition: f.condition, ownership: f.ownership,
     acquired_on: t(f.acquired_on), business_type: f.business_type, gsht_provider: t(f.gsht_provider), gsht_device_no: t(f.gsht_device_no),
     camera_provider: t(f.camera_provider), camera_device_no: t(f.camera_device_no), note: t(f.note),
+    driver_pay: Number(String(f.driver_pay).replace(/[^0-9]/g, '')) || 0,
   };
 }
 
@@ -188,6 +189,8 @@ function VehicleFields({ f, setF, types }: { f: VehicleForm; setF: (f: VehicleFo
         <label>Số khung<input value={f.chassis_no} onChange={set('chassis_no')} /></label>
         <label>Số máy<input value={f.engine_no} onChange={set('engine_no')} /></label>
         <label>Chủ sở hữu (theo đăng ký)<input value={f.owner_name} onChange={set('owner_name')} /></label>
+        <label>Tiền tài (đồng / công lái xe)<input inputMode="numeric" aria-label="Tiền tài" value={f.driver_pay ? Number(String(f.driver_pay).replace(/[^0-9]/g, '')).toLocaleString('vi-VN') : ''} placeholder="0"
+          onChange={(e) => setF({ ...f, driver_pay: e.target.value.replace(/[^0-9]/g, '') })} /></label>
         <label>Năm sản xuất<input type="number" min={1970} max={2100} inputMode="numeric" value={f.manufacture_year} onChange={set('manufacture_year')} /></label>
         <label>Nước sản xuất<input value={f.country_of_origin} onChange={set('country_of_origin')} /></label>
         <label>Màu sơn<input value={f.color} onChange={set('color')} /></label>

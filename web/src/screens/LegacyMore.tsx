@@ -46,7 +46,7 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<string[] | null>(null);
-  const [pick, setPick] = useState({ gio: legacy.schedules.length > 0, gia: legacy.fares.length > 0, ll: legacy.records.length > 0, hd: legacy.charters.length > 0 });
+  const [pick, setPick] = useState({ gio: legacy.schedules.length > 0, gia: legacy.fares.length > 0, ll: legacy.records.length > 0, hd: legacy.charters.length > 0, cc: false });
 
   async function run() {
     setBusy('Đang chuẩn bị…');
@@ -210,6 +210,69 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
         sum.push(`${c} hợp đồng${same ? ` (${same} đã có)` : ''}`);
       }
 
+      // ---------------------------------------------------------------- Dữ liệu chấm công (như app cũ)
+      if (pick.cc) {
+        setBusy('Đang chuyển dữ liệu chấm công…');
+        let nx = 0, nv = 0, np = 0;
+        const num = (v: unknown) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+        // Tiền tài của xe: chỉ điền xe đang để 0
+        for (const x of legacy.vehicles) {
+          const tt = num(x.tienTai), id = vehOf(str(x, 'id'));
+          if (!tt || !id) continue;
+          const up = await supabase.from('vehicles').update({ driver_pay: Math.round(tt) }, { count: 'exact' }).eq('id', id).eq('driver_pay', 0);
+          if (up.error) log.push(`Tiền tài xe ${str(x, 'bks')}: ${up.error.message}`); else if (up.count) nx++;
+        }
+        // Phòng ban: chỉ điền người đang trống
+        for (const x of legacy.employees) {
+          const pb = str(x, 'phongBan'), id = staffOf(str(x, 'id'));
+          if (!pb || !id) continue;
+          try { await rpc('set_staff_department', { p_id: id, p_department: pb }); nv++; } catch (e) { log.push(`Phòng ban ${str(x, 'ten')}: ${errMsg(e)}`); }
+        }
+        // BHXH & lương CK theo tháng (+ lương cố định); tháng đã có dòng của người đó trong TMS thì giữ nguyên
+        const bt = (legacy.settings?.bhxhThang && typeof legacy.settings.bhxhThang === 'object' ? legacy.settings.bhxhThang : {}) as Record<string, Record<string, Raw>>;
+        const cur = now.slice(0, 7);
+        for (const ym of [...new Set([...Object.keys(bt), cur])].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort()) {
+          const ex = await supabase.from('staff_pay_months').select('staff_id').eq('month', `${ym}-01`);
+          if (ex.error) { log.push(`BHXH & lương tháng ${ym}: ${ex.error.message}`); break; }
+          const have = new Set(((ex.data ?? []) as { staff_id: string }[]).map((r) => r.staff_id));
+          const rows: { staff_id: string; has_bhxh: boolean; transfer_pay: number; bhxh_pay: number; fixed_pay: number }[] = [];
+          for (const x of legacy.employees) {
+            const id = staffOf(str(x, 'id'));
+            if (!id || have.has(id) || rows.some((r) => r.staff_id === id)) continue;
+            const rc = bt[ym]?.[str(x, 'id')], cb = num(x.luongCB), lb = num(x.luongBH), fixed = num(x.luongCoDinh);
+            if (!rc && (ym !== cur || (!cb && !lb && !fixed))) continue;
+            const has = rc ? (rc.bh != null ? !!rc.bh : lb > 0) : lb > 0;
+            rows.push({ staff_id: id, has_bhxh: has, transfer_pay: rc && rc.ck != null ? num(rc.ck) : cb,
+              bhxh_pay: has ? (rc && rc.ml != null ? num(rc.ml) : lb || cb) : 0, fixed_pay: fixed });
+          }
+          if (!rows.length) continue;
+          try { np += await rpc<number>('save_pay_month', { p_month: `${ym}-01`, p_rows: rows }); } catch (e) { log.push(`BHXH & lương tháng ${ym}: ${errMsg(e)}`); break; }
+        }
+        // Cài đặt: công/chuyến theo tuyến, % chi phí khác lái xe, công chuẩn, tạm dừng BHXH 14 ngày
+        const S = legacy.settings ?? {}, p: Record<string, unknown> = {};
+        const co = (S.company && typeof S.company === 'object' ? S.company : {}) as Raw;
+        if (str(co, 'cpKhacLX') !== '') p.cp_khac_lx = Math.min(100, Math.max(0, num(co.cpKhacLX)));
+        if (num(S.congChuan) >= 1 && num(S.congChuan) <= 31) p.cong_chuan = Math.round(num(S.congChuan));
+        const nr = (S.noRule && typeof S.noRule === 'object' ? S.noRule : {}) as Raw;
+        if (typeof nr.bh14 === 'boolean') p.bh14 = nr.bh14;
+        const ct = (S.congTuyen && typeof S.congTuyen === 'object' ? S.congTuyen : {}) as Record<string, unknown>;
+        if (Object.keys(ct).length) {
+          const rts = (r.data ?? []) as Route[];
+          const opts = rts.flatMap((x) => (['di', 've'] as Dir[]).map((dd) => ({ id: x.id, d: dd, k: routeKey(dirName(x, dd)) })));
+          const st0 = await supabase.from('tenant_settings').select('value').eq('key', 'cham_cong.cong_tuyen').maybeSingle();
+          const map: Record<string, number> = { ...((st0.data?.value && typeof st0.data.value === 'object' ? st0.data.value : {}) as Record<string, number>) };
+          for (const [k, v] of Object.entries(ct)) {
+            if (v === '' || v == null || num(v) < 0 || num(v) > 10) continue;
+            const hit = opts.find((o) => o.k === routeKey(k));
+            if (!hit) { log.push(`Công/chuyến tuyến "${k}": chưa có tuyến này trong TMS`); continue; }
+            map[k.includes('⇄') ? hit.id : `${hit.id}|${hit.d}`] = num(v);
+          }
+          p.cong_tuyen = map;
+        }
+        if (Object.keys(p).length) { try { await rpc('save_timesheet_settings', { p }); } catch (e) { log.push(`Cài đặt chấm công: ${errMsg(e)}`); } }
+        sum.push(`chấm công: tiền tài ${nx} xe, phòng ban ${nv} người, ${np} dòng BHXH & lương theo tháng${Object.keys(p).length ? ', cài đặt chấm công' : ''}`);
+      }
+
       const msg = `Đã chuyển: ${sum.join(', ')}`;
       toast(log.some((l) => !l.startsWith('Đã tạo')) ? 'error' : 'ok', msg);
       setOut([msg, ...log.slice(0, 60)]);
@@ -223,10 +286,11 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
   const items: [keyof typeof pick, string, number][] = [
     ['gio', 'Giờ chạy cố định', legacy.schedules.length], ['gia', 'Bảng giá vé', legacy.fares.length],
     ['ll', 'Lý lịch hành nghề lái xe', legacy.records.length], ['hd', 'Hợp đồng vận chuyển', legacy.charters.length],
+    ['cc', 'Dữ liệu chấm công (tiền tài xe, phòng ban, lương cố định, BHXH & lương CK theo tháng, công/chuyến theo tuyến)', legacy.employees.length + legacy.vehicles.length],
   ];
   return (
     <div className="sub form">
-      <h3 className="section-title">Giờ chạy, giá vé, lý lịch, hợp đồng</h3>
+      <h3 className="section-title">Giờ chạy, giá vé, lý lịch, hợp đồng, chấm công</h3>
       <p className="muted small">Nên chuyển nhân viên và xe ở trên trước. Giờ chạy áp dụng từ hôm nay (giờ đã có bỏ qua). Giá vé lấy bảng giá đang áp dụng, áp dụng từ hôm nay; chặng nào chưa có điểm dừng trên tuyến sẽ báo để khai thêm.
         Hợp đồng đã qua ghi là Xong, hợp đồng sắp tới ở trạng thái Nháp để kiểm tra rồi ký; không ghi tiền vào sổ.</p>
       {items.map(([k, l, n]) => (

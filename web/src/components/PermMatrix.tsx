@@ -4,7 +4,7 @@
 export const SCREENS: [string, string][] = [
   ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['route', 'Tuyến & giá vé'],
   ['repair', 'Sửa chữa'], ['fuel', 'Nhiên liệu'], ['report', 'Báo cáo'], ['km', 'Km xe'], ['vehicle', 'Xe'], ['staff', 'Lái xe & nhân viên'],
-  ['labor', 'Hợp đồng lao động'], ['salary', 'BHXH & lương chuyển khoản'], ['branch', 'Chi nhánh'], ['office', 'Phòng vé'], ['doc', 'Văn bản'],
+  ['labor', 'Hợp đồng lao động'], ['timesheet', 'Bảng chấm công'], ['salary', 'BHXH & lương chuyển khoản'], ['branch', 'Chi nhánh'], ['office', 'Phòng vé'], ['doc', 'Văn bản'],
   ['archive', 'Lưu trữ hồ sơ'], ['user', 'Người dùng'], ['role', 'Vai trò (phân quyền)'], ['settings', 'Cấu hình'], ['audit', 'Nhật ký'],
 ];
 export const ACTS: [string, string][] = [['view', 'Xem'], ['add', 'Thêm'], ['edit', 'Sửa'], ['delete', 'Xóa'], ['view_all', 'Xem tất cả']];

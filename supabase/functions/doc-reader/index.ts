@@ -5,7 +5,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { docTypeOf } from '../_shared/doc_types.ts';
-import { parseProviders, readDocument, ReaderError, type InputFile } from '../_shared/doc_reader.ts';
+import { parseProviders, readDocument, ReaderError, type InputFile, type ReadDef } from '../_shared/doc_reader.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -20,6 +20,19 @@ const MAX_FILES = 4;
 const MAX_B64 = 8 * 1024 * 1024;   // tổng ~6 MB tệp gốc
 const PERM_BY_OWNER: Record<string, string[]> = { xe: ['vehicle.add', 'vehicle.edit'], nhan_su: ['staff.add', 'staff.edit'], cong_ty: ['settings.edit'] };
 
+// Phiếu đổ dầu từ ảnh (như app cũ): trụ bơm, hóa đơn bán lẻ, biển số, đồng hồ km → điền sẵn phiếu đổ ngoài
+const FUEL_DEF: ReadDef = {
+  code: 'phieu_do_dau', owner: 'xe', name: 'ảnh đổ dầu cho xe khách ở cây xăng (màn hình trụ bơm, hóa đơn bán lẻ, biển số xe, đồng hồ km)', hasExpiry: false, required: false,
+  fields: [
+    { key: 'xe.bien_so', label: 'Biển số xe, vd 60F-004.39', kind: 'text' }, { key: 'lit', label: 'Số lít (giữ phần thập phân, vd 44.737)', kind: 'text' },
+    { key: 'don_gia', label: 'Đơn giá (đồng/lít)', kind: 'money' }, { key: 'thanh_tien', label: 'Thành tiền (đồng)', kind: 'money' },
+    { key: 'cay_xang', label: 'Tên cửa hàng / trạm xăng trên hóa đơn hoặc biển hiệu', kind: 'text' }, { key: 'so_hd', label: 'Số hóa đơn', kind: 'text' },
+    { key: 'ngay', label: 'Ngày trên hóa đơn', kind: 'date' }, { key: 'gio', label: 'Giờ dạng HH:MM', kind: 'text' },
+    { key: 'km', label: 'Số km trên đồng hồ công-tơ-mét (không có ảnh đồng hồ thì null)', kind: 'int' }, { key: 'loai_nl', label: 'Loại nhiên liệu (vd Dầu DO 0,05S)', kind: 'text' },
+  ],
+  hint: 'Màn hình trụ bơm thường có 3 dòng: thành tiền (đồng), số lít, đơn giá (đồng/lít). Số lít có phần thập phân (vd 44.737 nghĩa là 44,737 lít).',
+};
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' } });
 }
@@ -32,7 +45,8 @@ Deno.serve(async (req) => {
     if (!auth.startsWith('Bearer ')) throw new ReaderError(401, 'Chưa đăng nhập');
 
     const body = await req.json().catch(() => null) as { doc_type?: unknown; files?: unknown } | null;
-    const def = typeof body?.doc_type === 'string' ? docTypeOf(body.doc_type) : undefined;
+    const fuel = body?.doc_type === 'phieu_do_dau';
+    const def = fuel ? FUEL_DEF : typeof body?.doc_type === 'string' ? docTypeOf(body.doc_type) : undefined;
     if (!def) throw new ReaderError(400, 'Loại giấy tờ không hợp lệ');
     const files = Array.isArray(body?.files) ? body!.files as InputFile[] : [];
     if (files.length === 0 || files.length > MAX_FILES) throw new ReaderError(400, `Gửi từ 1 đến ${MAX_FILES} ảnh`);
@@ -52,13 +66,14 @@ Deno.serve(async (req) => {
     });
     const { data: perms, error } = await userClient.rpc('my_permissions');
     if (error) throw new ReaderError(401, 'Phiên đăng nhập không hợp lệ');
-    const need = PERM_BY_OWNER[def.owner];
+    const need = fuel ? ['fuel.add'] : PERM_BY_OWNER[def.owner];
     if (!((perms ?? []) as { permission_code: string }[]).some((p) => need?.includes(p.permission_code))) {
       throw new ReaderError(403, 'Không có quyền quản lý loại giấy tờ này');
     }
 
     const result = await readDocument({
       docType: def.code,
+      def,
       files,
       providers: parseProviders(Deno.env.get('AI_PROVIDERS')),
       timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 25000) || 25000,

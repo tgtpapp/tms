@@ -99,7 +99,10 @@ export function nextKey(p: Provider): string {
 
 const KIND_HINT = { text: 'chuỗi', date: 'ngày dạng YYYY-MM-DD', int: 'số nguyên', money: 'số nguyên (đồng)' } as const;
 
-export function buildPrompt(def: DocTypeDef): string {
+/** Danh mục ô đọc riêng (không phải giấy tờ trong danh mục), kèm hướng dẫn thêm cho AI. */
+export type ReadDef = DocTypeDef & { hint?: string };
+
+export function buildPrompt(def: ReadDef): string {
   const lines = def.fields.map((x) => `- "${x.key}": ${x.label} (${KIND_HINT[x.kind]})`).join('\n');
   return [
     `Đây là ảnh/tệp "${def.name}" của Việt Nam${def.sides ? ` (gồm ${def.sides.join(', ').toLowerCase()} theo thứ tự ảnh)` : ''}. Hãy đọc chính xác các thông tin in trên giấy.`,
@@ -107,6 +110,7 @@ export function buildPrompt(def: DocTypeDef): string {
     lines,
     'Quy tắc: không đọc được hoặc giấy không có thì để null; không đoán, không bịa;',
     'giữ nguyên chữ in hoa / dấu tiếng Việt như trên giấy; biển số giữ dạng như 51B-123.45; ngày luôn đổi về YYYY-MM-DD.',
+    ...(def.hint ? [def.hint] : []),
   ].join('\n');
 }
 
@@ -120,7 +124,7 @@ function extractJson(text: string): Record<string, unknown> {
   return v as Record<string, unknown>;
 }
 
-async function callProvider(p: Provider, def: DocTypeDef, files: InputFile[], fetchFn: FetchFn,
+async function callProvider(p: Provider, def: ReadDef, files: InputFile[], fetchFn: FetchFn,
                             timeoutMs: number, noThink = false): Promise<Record<string, unknown>> {
   const key = nextKey(p);
   const prompt = buildPrompt(def);
@@ -249,9 +253,9 @@ export function normalize(def: DocTypeDef, raw: Record<string, unknown>): { fiel
 }
 
 export async function readDocument(opts: {
-  docType: string; files: InputFile[]; providers: Provider[]; timeoutMs: number; fetchFn?: FetchFn;
+  docType: string; files: InputFile[]; providers: Provider[]; timeoutMs: number; fetchFn?: FetchFn; def?: ReadDef;
 }): Promise<ReadResult> {
-  const def = docTypeOf(opts.docType);
+  const def = opts.def ?? docTypeOf(opts.docType);
   if (!def) throw new ReaderError(400, 'Loại giấy tờ không hợp lệ');
   if (opts.providers.length === 0) throw new ReaderError(503, 'Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay');
   const isPdf = opts.files.some((x) => x.mime === 'application/pdf');

@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
-import { prepareFile, uploadFiles } from '../lib/documents';
+import { prepareFile, readByAI, uploadFiles } from '../lib/documents';
+import { FuelSlip, type FuelSlipData } from '../components/FuelSlip';
+import { PaperView } from '../components/ProfilePapers';
+import { company, head, signCol } from '../lib/profilePapers';
 import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, fuelSort, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
 import { loadMarket, MK, mkChanges, mkKey, mkPrice, mkWhen, type Market } from '../lib/fuelMarket';
 import type { Permissions } from '../lib/permissions';
@@ -36,6 +39,11 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [mk, setMk] = useState<Market | null>(null);
   const [mkEdit, setMkEdit] = useState<Record<string, string> | null>(null);
   const [mkAt, setMkAt] = useState('');
+  const [slips, setSlips] = useState<FuelSlipData[] | null>(null);
+  const [printAfter, setPrintAfter] = useState(false);
+  const [gps, setGps] = useState<Map<string, number>>(new Map());
+  const [book, setBook] = useState<string | null>(null);
+  const [ai, setAi] = useState('');
 
   const load = useCallback(async () => {
     const [e, s, v, d] = await Promise.all([
@@ -45,14 +53,25 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       supabase.from('vehicles').select('id, plate, is_active, fuel_norm').order('plate'),
       supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name'),
     ]);
-    if (e.error) return toast('error', e.error.message);
-    setRows((e.data ?? []).map((r) => ({ ...r, liters: Number(r.liters), entry_time: r.entry_time?.slice(0, 5) ?? null })));
+    if (e.error) { toast('error', e.error.message); return null; }
+    const fresh = (e.data ?? []).map((r) => ({ ...r, liters: Number(r.liters), entry_time: r.entry_time?.slice(0, 5) ?? null }));
+    setRows(fresh);
     if (s.data) setSet({ ...(s.data as FuelSettings), capacity_l: Number(s.data.capacity_l), opening_l: Number(s.data.opening_l), alert_l: Number(s.data.alert_l) });
     setVehicles(((v.data ?? []) as Veh[]).map((x) => ({ ...x, fuel_norm: x.fuel_norm == null ? null : Number(x.fuel_norm) })));
     setDrivers((d.data ?? []) as Drv[]);
     setMk(await loadMarket().catch(() => null));
+    return fresh;
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
+  // Km GPS của tháng (Km xe): dùng tính tiêu hao khi không nhập km đồng hồ (như app cũ)
+  useEffect(() => {
+    if (!month) { setGps(new Map()); return; }
+    void supabase.from('vehicle_km').select('vehicle_id, km').gte('run_date', `${month}-01`).lt('run_date', monthEnd(month)).then(({ data }) => {
+      const m = new Map<string, number>();
+      for (const r of (data ?? []) as { vehicle_id: string; km: number }[]) m.set(r.vehicle_id, (m.get(r.vehicle_id) ?? 0) + Number(r.km));
+      setGps(m);
+    });
+  }, [month]);
 
   const led = useMemo(() => fuelLedger(rows, set), [rows, set]);
   const plate = (id: string | null) => (id ? vehicles.find((v) => v.id === id)?.plate ?? '?' : '');
@@ -88,15 +107,65 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         files = [...files, ...(await uploadFiles(ctx.tenant_id, 'xe', owner, f.kind === 'nhap' ? 'BON' : plate(f.vehicle_id), 'nhien_lieu', prepared))];
       }
       const mp = mkPrice(mk, set.fuel_type);
-      await rpc('save_fuel', { p_id: f.id, p: { ...f, add: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp } });
+      const id = await rpc<string>('save_fuel', { p_id: f.id, p: { ...f, add: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp } });
       toast('ok', f.id ? 'Đã lưu phiếu' : `Đã thêm phiếu ${FUEL_KIND[f.kind].short.toLowerCase()}`);
       setF(null);
-      await load();
+      const fresh = await load();
+      if (printAfter && fresh) await printSlips([id], fresh);
     } catch (e) {
       toast('error', errMsg(e));
     } finally {
       setBusy(false);
+      setPrintAfter(false);
     }
+  }
+  /** In phiếu 80mm (dùng sổ mới nhất để có tồn bồn, km chạy, tiêu hao đúng) */
+  async function printSlips(ids: string[], all: FuelEntry[] = rows) {
+    const c = await company();
+    const L = fuelLedger(all, set);
+    setSlips(ids.map((id) => all.find((r) => r.id === id)).filter((r): r is FuelEntry => !!r).map((r) => {
+      const m = L.map.get(r.id);
+      return { company: c.name, address: c.address, kind: r.kind, code: r.code, date: r.entry_date, time: r.entry_time, tank: set.tank_name, fuelType: set.fuel_type,
+        plate: plate(r.vehicle_id), driver: driver(r.driver_id), supplier: r.supplier ?? '', invoice: r.invoice_no ?? '', odo: r.odo_km, kmRun: m?.km ?? 0, per100: m?.per100 ?? 0,
+        norm: vehicles.find((v) => v.id === r.vehicle_id)?.fuel_norm ?? null, liters: r.liters, price: m?.price ?? 0, avgPrice: r.kind === 'bon' && r.unit_price == null,
+        market: !!r.market_price, tankAfter: m?.tank ?? 0, note: r.note ?? '', by: '' };
+    }));
+  }
+  /** Tạo phiếu đổ dầu ngoài từ ảnh (trụ bơm, hóa đơn, biển số, đồng hồ km): AI đọc rồi điền sẵn, người dùng kiểm tra rồi lưu (như app cũ). */
+  async function fromPhotos(files: File[]) {
+    const fs = files.slice(0, 4);
+    if (!fs.length) return;
+    setAi('AI đang đọc trụ bơm, hóa đơn, biển số… (khoảng 10–30 giây)');
+    const base: Form = { id: null, kind: 'ngoai', entry_date: today(), entry_time: '', vehicle_id: '', driver_id: '', odo_km: '', liters: '', unit_price: '', supplier: '',
+      invoice_no: '', note: 'Tạo từ ảnh', files: [], add: fs, market_price: false };
+    try {
+      const prepared = await Promise.all(fs.map(prepareFile));
+      const r = await readByAI('phieu_do_dau', prepared), v = r.fields;
+      const numOf = (x: unknown) => Number(String(x ?? '').replace(/[^\d.,]/g, '').replace(',', '.').replace(/\.(?=.*\.)/g, '')) || 0;
+      let lit = numOf(v.lit), gia = Number(v.don_gia) || 0;
+      const tien = Number(v.thanh_tien) || 0;
+      if (lit > 1000 && tien && gia && Math.abs((lit / 1000) * gia - tien) < Math.abs(lit * gia - tien)) lit /= 1000;   // 44737 đọc thiếu dấu → 44,737
+      if (gia > 0 && gia < 1000) gia = Math.round(gia * 1000);                                                          // 26.82 → 26.820 đ
+      if (!gia && lit && tien) gia = Math.round(tien / lit);
+      if (!lit && gia && tien) lit = Math.round((tien / gia) * 1000) / 1000;
+      const key = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, ''), k = key(String(v['xe.bien_so'] ?? ''));
+      const xe = k.length >= 4 ? vehicles.find((x) => key(x.plate) === k) ?? vehicles.find((x) => key(x.plate).endsWith(k.slice(-5))) ?? vehicles.find((x) => k.endsWith(key(x.plate).slice(-5))) : undefined;
+      const day = typeof v.ngay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.ngay) ? v.ngay : today();
+      let drv = '';
+      if (xe) {   // lái xe 1 của chuyến xe này trong ngày
+        const t = await supabase.from('trips').select('id').eq('vehicle_id', xe.id).eq('service_date', day).eq('status', 'mo').order('depart_at').limit(5);
+        const ids = ((t.data ?? []) as { id: string }[]).map((x) => x.id);
+        if (ids.length) drv = (((await supabase.from('trip_crew').select('staff_id').in('trip_id', ids).eq('role', 'lai_xe_1').eq('active', true).limit(1)).data ?? []) as { staff_id: string }[])[0]?.staff_id ?? '';
+      }
+      const gio = typeof v.gio === 'string' && /^\d{1,2}:\d{2}$/.test(v.gio) ? v.gio.padStart(5, '0') : '';
+      const warn = [!xe && v['xe.bien_so'] ? `AI đọc biển số "${v['xe.bien_so']}" nhưng không thấy trong danh sách xe` : '', ...(r.warnings ?? [])].filter(Boolean);
+      setF({ ...base, entry_date: day, entry_time: gio, vehicle_id: xe?.id ?? '', driver_id: drv, odo_km: v.km ? String(v.km) : '', liters: lit ? String(Math.round(lit * 1000) / 1000) : '',
+        unit_price: gia ? String(gia) : '', supplier: String(v.cay_xang ?? ''), invoice_no: String(v.so_hd ?? ''), market_price: false });
+      toast('ok', `AI đã điền sẵn phiếu, kiểm tra lại số lít, tiền, biển số rồi Lưu${warn.length ? ` (${warn.join('; ')})` : ''}`);
+    } catch (e) {
+      setF(base);
+      toast('error', `${errMsg(e)}. Ảnh đã gắn vào phiếu, nhập tay giúp.`);
+    } finally { setAi(''); }
   }
   async function del(r: FuelEntry) {
     const { error } = await supabase.from('fuel_entries').delete().eq('id', r.id);
@@ -111,8 +180,41 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     const lit = L.reduce((a, r) => a + r.liters, 0), amount = L.reduce((a, r) => a + (led.map.get(r.id)?.amount ?? 0), 0);
     const withKm = L.filter((r) => (led.map.get(r.id)?.km ?? 0) > 0);
     const km = withKm.reduce((a, r) => a + (led.map.get(r.id)?.km ?? 0), 0), litKm = withKm.reduce((a, r) => a + r.liters, 0);
-    return { v, n: L.length, lit, amount, km, per100: km ? (litKm / km) * 100 : 0 };
+    const g = gps.get(v.id) ?? 0;   // không có km đồng hồ thì dùng km GPS của tháng (như app cũ)
+    return { v, n: L.length, lit, amount, km: km || g, src: km ? 'đồng hồ' : g ? 'GPS' : '', per100: km ? (litKm / km) * 100 : g && lit ? (lit / g) * 100 : 0 };
   }).filter((x) => x.n > 0 || (x.v.is_active && !veh));
+
+  // Sổ nhập xuất nhiên liệu (như app cũ): in A4 ngang có chữ ký, tải Excel (CSV)
+  const bookCols = ['Số phiếu', 'Ngày', 'Giờ', 'Loại', 'Xe / Nhà cung cấp', 'Lái xe', 'Cây xăng', 'Km đồng hồ', 'Số lít', 'Đơn giá', 'Thành tiền', 'Km chạy', 'L/100km', 'Tồn bồn sau'];
+  const bookRows = () => led.list.filter((r) => inMonth(r) && (!veh || r.vehicle_id === veh) && (!kind || r.kind === kind)).map((r) => {
+    const m = led.map.get(r.id);
+    return [r.code, r.entry_date.split('-').reverse().join('/'), r.entry_time ?? '', FUEL_KIND[r.kind].short, r.kind === 'nhap' ? r.supplier ?? '' : plate(r.vehicle_id), driver(r.driver_id),
+      r.kind === 'ngoai' ? r.supplier ?? '' : '', r.odo_km ?? '', r.liters, Math.round(m?.price ?? 0), m?.amount ?? 0, m?.km || '', m?.per100 ? Math.round(m.per100 * 10) / 10 : '', r.kind === 'ngoai' ? '' : Math.round((m?.tank ?? 0) * 100) / 100];
+  });
+  const monthTxt = month ? `tháng ${month.slice(5)}/${month.slice(0, 4)}` : 'mọi tháng';
+  function bookCsv() {
+    const q = (v: unknown) => { const x = String(v ?? ''); return /[",\n;]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+    const R = bookRows(), tot = (i: number) => R.reduce((a, r) => a + (Number(r[i]) || 0), 0);
+    const body = [`SỔ NHẬP XUẤT NHIÊN LIỆU ${monthTxt.toUpperCase()}`, bookCols.map(q).join(','), ...R.map((r) => r.map(q).join(',')),
+      ['Cộng', '', '', '', '', '', '', '', Math.round(tot(8) * 100) / 100, '', tot(10), '', '', ''].map(q).join(',')].join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff', body], { type: 'text/csv;charset=utf-8' }));
+    a.download = `So nhien lieu ${month || 'tat ca'}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  async function printBook() {
+    const c = await company(), R = bookRows(), keep = bookCols.map((_, i) => i).filter((i) => i !== 2 && i !== 6);
+    const B = 'border:1px solid #000;padding:3px 4px;font-size:10.5px';
+    const fmt = (v: string | number, i: number) => (typeof v === 'number' ? (i === 8 || i === 13 ? num(v, 2) : i === 12 ? num(v, 1) : num(v)) : v);
+    const tot = (i: number) => R.reduce((a, r) => a + (Number(r[i]) || 0), 0);
+    setBook(`<div style="font-size:12px">${head(c)}<h2 style="text-align:center;margin:8px 0 2px;font-size:16px">SỔ NHẬP XUẤT NHIÊN LIỆU</h2>
+      <div style="text-align:center;margin-bottom:6px">${monthTxt.charAt(0).toUpperCase() + monthTxt.slice(1)} · Tồn bồn hiện tại: ${num(led.tank, 2)} lít</div>
+      <table style="width:100%;border-collapse:collapse"><tr>${keep.map((i) => `<th style="${B};background:#e2e8f0">${bookCols[i]}</th>`).join('')}</tr>
+      ${R.map((r) => `<tr>${keep.map((i) => `<td style="${B};${i >= 7 ? 'text-align:right' : ''}">${fmt(r[i] as string | number, i)}</td>`).join('')}</tr>`).join('')}
+      <tr style="font-weight:bold">${keep.map((i, k) => `<td style="${B};text-align:right">${k === 0 ? 'Cộng' : i === 8 ? num(tot(8), 2) : i === 10 ? num(tot(10)) : ''}</td>`).join('')}</tr></table>
+      <table style="width:100%;border-collapse:collapse;margin-top:10px"><tr>${['NGƯỜI LẬP', 'THỦ KHO', 'KẾ TOÁN', 'GIÁM ĐỐC'].map((t) => signCol(t, '(Ký, họ tên)', '', '', null, 25)).join('')}</tr></table></div>`);
+  }
 
   return (
     <>
@@ -123,7 +225,10 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             <button className="btn primary" onClick={() => open(null, 'bon')}>+ Cấp dầu từ bồn</button>
             <button className="btn" onClick={() => open(null, 'ngoai')}>+ Đổ ngoài</button>
             <button className="btn" onClick={() => open(null, 'nhap')}>+ Nhập bồn</button>
+            <label className="btn">Tạo phiếu từ ảnh<input type="file" accept="image/*" multiple hidden aria-label="Tạo phiếu đổ dầu từ ảnh" disabled={!!ai}
+              onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; void fromPhotos(fs); }} /></label>
           </div>}
+        {ai && <p className="small muted">{ai}</p>}
         </div>
         <div className="fuel-tank">
           <div className={`fuel-bar${low ? ' low' : ''}`} role="meter" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Tồn bồn"><i style={{ width: `${pct}%` }} /></div>
@@ -144,6 +249,8 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           {tab === 'phieu' && <label>Loại<select value={kind} onChange={(e) => setKind(e.target.value as FuelKind | '')}><option value="">Tất cả</option>
             {(Object.keys(FUEL_KIND) as FuelKind[]).map((k) => <option key={k} value={k}>{FUEL_KIND[k].short}</option>)}</select></label>}
           {month && <button className="btn small link" onClick={() => setMonth('')}>Xem mọi tháng</button>}
+          {tab === 'phieu' && <><button className="btn small" onClick={() => void printBook()}>In sổ</button>
+            <button className="btn small" onClick={() => bookCsv()}>Tải Excel (CSV)</button></>}
         </div>}
       </section>
 
@@ -172,7 +279,8 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                       <td>{m ? num(m.amount) : ''}</td>
                       <td>{m?.per100 ? <span className={`badge${lv === 'bad' ? ' locked' : lv === 'warn' ? ' warn-badge' : ''}`}>{num(m.per100, 1)} L/100km</span> : ''}</td>
                       <td className="small">{r.kind !== 'ngoai' && m ? num(m.tank, 2) : ''}</td>
-                      <td className="hs-act">{canEdit && <button className="btn small" onClick={() => open(r)}>Sửa</button>}
+                      <td className="hs-act"><button className="btn small" aria-label={`In phiếu ${r.code}`} onClick={() => void printSlips([r.id])}>In</button>
+                        {canEdit && <button className="btn small" onClick={() => open(r)}>Sửa</button>}
                         {canDel && <button className="btn small link danger-text" onClick={() => void del(r)}>Xóa</button>}</td>
                     </tr>
                   );
@@ -185,7 +293,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
 
       {tab === 'xe' && (
         <section className="card">
-          <p className="small muted">Tiêu hao tính từ km giữa 2 lần đổ dầu liên tiếp có ghi km. Định mức đặt ở thẻ Thiết lập.</p>
+          <p className="small muted">Tiêu hao tính từ km giữa 2 lần đổ dầu liên tiếp có ghi km. Nếu không nhập km đồng hồ, app dùng km GPS của tháng (mục Km xe). Định mức đặt ở thẻ Thiết lập.</p>
           <div className="table-wrap">
             <table className="plist">
               <thead><tr><th>Xe</th><th>Số lần</th><th>Lít</th><th>Tiền</th><th>Km chạy</th><th>Tiêu hao</th><th>Định mức</th></tr></thead>
@@ -194,7 +302,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                   const lv = normLevel(x.per100, x.v.fuel_norm);
                   return (
                     <tr key={x.v.id}>
-                      <td><b>{x.v.plate}</b></td><td>{x.n}</td><td>{num(x.lit, 2)}</td><td>{num(x.amount)}</td><td>{x.km ? num(x.km) : ''}</td>
+                      <td><b>{x.v.plate}</b></td><td>{x.n}</td><td>{num(x.lit, 2)}</td><td>{num(x.amount)}</td><td>{x.km ? <>{num(x.km)} <span className="small muted">({x.src})</span></> : ''}</td>
                       <td>{x.per100 ? <span className={`badge${lv === 'bad' ? ' locked' : lv === 'warn' ? ' warn-badge' : ''}`}>{num(x.per100, 1)} L/100km</span> : ''}</td>
                       <td>{x.v.fuel_norm ? `${num(x.v.fuel_norm, 1)} L/100km` : <span className="muted small">chưa đặt</span>}</td>
                     </tr>
@@ -237,11 +345,14 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
               <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>
+              <button type="button" className="btn" disabled={busy} onClick={() => { setPrintAfter(true); void save(); }}>Lưu & in phiếu 80mm</button>
               <button type="button" className="btn link" onClick={() => setF(null)}>Thôi</button>
             </div>
           </div>
         </Modal>
       )}
+      {slips && <FuelSlip list={slips} onClose={() => setSlips(null)} />}
+      {book && <PaperView title={`Sổ nhập xuất nhiên liệu ${monthTxt}`} pages={[{ html: book, land: true }]} onClose={() => setBook(null)} />}
       {mkEdit && (
         <Modal title="Nhập giá bán lẻ Petrolimex (vùng 1)" onClose={() => setMkEdit(null)}>
           <div className="form">

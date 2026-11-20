@@ -71,7 +71,7 @@ export async function uploadFiles(tenantId: string, ownerKind: OwnerKind, ownerI
 
 /** Gọi AI đọc giấy tờ. Lỗi (chưa cấu hình AI, quá giờ…) trả về câu báo để người dùng nhập tay. */
 export async function readByAI(docType: string, files: PreparedFile[]): Promise<AiResult> {
-  if (!docTypeOf(docType)) throw new Error('Loại giấy tờ không hợp lệ');
+  if (docType !== 'phieu_do_dau' && !docTypeOf(docType)) throw new Error('Loại giấy tờ không hợp lệ');
   const { data, error } = await supabase.functions.invoke('doc-reader', {
     body: { doc_type: docType, files: files.map((f) => ({ mime: f.mime, data: f.base64 })) },
   });

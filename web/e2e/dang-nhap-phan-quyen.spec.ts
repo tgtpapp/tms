@@ -351,6 +351,18 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(bc.getByText(/BÁO CÁO GIÁM SÁT AN TOÀN THÁNG/)).toBeVisible();
   await expect(bc.getByText(/BẢNG TỔNG HỢP VI PHẠM\/CẢNH BÁO/)).toBeVisible();
   await bc.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // 5j5d. Nhiên liệu: giá Petrolimex, nhập bồn tự lưu + in phiếu 80mm, in sổ
+  await page.getByRole('button', { name: 'Nhiên liệu', exact: true }).click();
+  await expect(page.getByText('Giá bán lẻ Petrolimex vùng 1')).toBeVisible();
+  await page.getByRole('button', { name: '+ Nhập bồn' }).click();
+  await page.getByLabel('Số lít').fill('1000');
+  await page.getByLabel(/^Đơn giá/).fill('25000');
+  await page.getByRole('button', { name: 'Lưu & in phiếu 80mm' }).click();
+  await expect(page.getByText('PHIẾU NHẬP DẦU')).toBeVisible();
+  await page.locator('.lenh-overlay').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByRole('button', { name: 'In sổ' }).click();
+  await expect(page.locator('.paper-top').getByText('SỔ NHẬP XUẤT NHIÊN LIỆU')).toBeVisible();
+  await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j6. Hợp đồng lao động: lập HĐ, số 001 tự cấp, lương lấy từ lương chuyển khoản của tháng bắt đầu (sửa được), xem bản in
   const thang = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7);
   await page.getByRole('button', { name: 'Hợp đồng lao động', exact: true }).click();

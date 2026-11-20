@@ -14,7 +14,7 @@ reset role;
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b1', (select id from public.tenants where code = 'nha-xe-a'), '0900000001', 'Chủ A', 'owner') $$, 'Chủ A');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b3', (select id from public.tenants where code = 'nha-xe-a'), '0900000004', 'Bán vé A', 'seller') $$, 'Bán vé A');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000c1', (select id from public.tenants where code = 'nha-xe-b'), '0900000003', 'Chủ B', 'owner') $$, 'Chủ B');
-insert into public.tenant_settings (tenant_id, key, value) values ((select id from public.tenants where code = 'nha-xe-a'), 'lenh.hau_to', '"tgtp"');
+insert into public.tenant_settings (tenant_id, key, value) values ((select id from public.tenants where code = 'nha-xe-a'), 'lenh.hau_to', '"TGTP"');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';

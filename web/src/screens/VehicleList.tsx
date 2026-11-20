@@ -1,5 +1,6 @@
 import { Modal } from '../components/Modal';
 import { VehicleProfile } from '../components/VehicleProfile';
+import { VehicleLeases } from '../components/VehicleLeases';
 import { BulkPaperSave, type Me } from '../components/ProfilePapers';
 import { DeleteButton } from '../components/DeleteButton';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
@@ -302,6 +303,7 @@ export function VehicleList(props: {
                     <div className="sub"><StaffAvatar tenantId={props.tenantId} staffId={v.id} name={v.plate} canEdit={canEdit} dir="anh_xe" /></div>
                     <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
                     <VehicleProfile v={v} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
+                    {v.ownership !== 'so_huu' && <VehicleLeases v={v} vehicles={vehicles} tenantId={props.tenantId} me={props.me} canEdit={canEdit} onSaved={props.reload} />}
                     {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
                   </Modal>
                 )}

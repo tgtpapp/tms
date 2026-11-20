@@ -216,6 +216,22 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(llpt.getByText('Lần 2', { exact: true })).toBeVisible();
   await llpt.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(llpt).toHaveCount(0);
+  // Hợp đồng thuê xe (xe thuê của cá nhân): đổi sang Xe thuê → lập hợp đồng (CCCD chủ xe bổ sung sau) → cấp số …/HĐTX → PDF vào hồ sơ xe
+  const dlx = page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' });
+  await dlx.getByLabel('Hình thức sử dụng').selectOption({ label: 'Xe thuê' });
+  await dlx.getByRole('button', { name: 'Lưu thông tin xe' }).click();
+  await expect(page.getByText('Đã lưu thông tin xe')).toBeVisible();
+  await dlx.getByRole('button', { name: '+ Lập hợp đồng thuê xe' }).click();
+  const hdx = page.getByRole('dialog', { name: 'Lập hợp đồng thuê xe' });
+  await hdx.getByLabel('Họ tên chủ xe').fill('Nguyễn Văn Chủ');
+  await hdx.getByLabel('Giá thuê xe 51B-123.45').fill('8000000');
+  await hdx.getByRole('button', { name: 'Lập & cấp số' }).click();
+  await expect(page.getByText(/Đã lưu hợp đồng \d{3}\/\d{4}\/HĐTX/)).toBeVisible({ timeout: 30_000 });
+  await expect(dlx.getByText('Hợp đồng thuê xe / hợp tác kinh doanh')).toBeVisible();
+  await dlx.getByRole('button', { name: /^Xem hợp đồng \d{3}\/\d{4}\/HĐTX/ }).click();
+  await expect(page.locator('.paper-top').getByText('HỢP ĐỒNG THUÊ XE Ô TÔ')).toBeVisible();
+  await expect(page.locator('.paper-top').getByText(/8\.000\.000 VNĐ\/tháng/)).toBeVisible();
+  await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   // Sơ đồ ghế trong cửa sổ xe: thêm ô tài xế + cửa lên xuống (không bán, không tính chỗ)
   const dlg = page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' });
   await dlg.getByRole('button', { name: 'Sửa sơ đồ' }).click();

@@ -1,7 +1,7 @@
 // Edge Function: quản lý tài khoản đăng nhập bằng số điện thoại + mật khẩu (không SMS).
 // - create_tenant_owner: Super Admin tạo Chủ nhà xe
-// - create_user:         người có quyền user.manage tạo nhân viên trong nhà xe của mình
-// - reset_password:      người có quyền user.manage đặt lại mật khẩu nhân viên nhà xe mình
+// - create_user:         người có quyền Người dùng: Thêm (user.add) tạo nhân viên trong nhà xe của mình
+// - reset_password:      người có quyền Người dùng: Sửa (user.edit) đặt lại mật khẩu nhân viên nhà xe mình
 // Quyền luôn kiểm tra bằng phiên đăng nhập của người gọi; khóa service_role chỉ dùng ở đây.
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
@@ -148,7 +148,12 @@ async function handle(req: Request): Promise<Response> {
     }
 
     case 'reset_password': {
-      if (!ctx.tenant_id || !ctx.can_manage_users) throw new HttpError(403, 'Không có quyền quản lý người dùng');
+      if (!ctx.tenant_id) throw new HttpError(403, 'Không có quyền quản lý người dùng');
+      // Đặt lại mật khẩu = Người dùng: Sửa (toàn nhà xe)
+      const { data: mine } = await userClient.rpc('my_permissions');
+      if (!((mine ?? []) as { permission_code: string; scope_type: string }[]).some((p) => p.permission_code === 'user.edit' && p.scope_type === 'tenant')) {
+        throw new HttpError(403, 'Không có quyền sửa người dùng');
+      }
       const userId = requireString(body, 'user_id');
       const { data: target, error: uErr } = await admin.from('app_users').select('id, tenant_id').eq('id', userId).maybeSingle();
       if (uErr) throw new HttpError(500, `Lỗi đọc dữ liệu người dùng: ${uErr.message}`);

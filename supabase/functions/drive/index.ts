@@ -1,6 +1,6 @@
 // Edge Function: Lưu trữ hồ sơ trên Google Drive của nhà xe qua Apps Script (giống app cũ).
 // - Địa chỉ Web app + mã kết nối của nhà xe đọc ở bảng tenant_drive bằng service_role (trình duyệt không thấy mã).
-// - Quyền: ping (settings.manage / archive.manage), get (archive.view), put / del / del_folder (archive.manage).
+// - Quyền: ping (settings.view / archive.add / archive.edit), get (archive.view), put (archive.add; thay bản mới: archive.edit hoặc .add), del / del_folder (archive.delete).
 // - Dữ liệu hồ sơ ghi bằng phiên đăng nhập của người dùng (RLS nhà xe + quyền áp dụng như thường).
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
 
@@ -75,12 +75,12 @@ Deno.serve(async (req) => {
     const need = (p: string[]) => { if (!p.some((x) => P.has(x))) throw new HttpError(403, 'Không có quyền'); };
 
     if (b.action === 'ping') {
-      need(['settings.manage', 'archive.manage']);
+      need(['settings.view', 'archive.add', 'archive.edit']);
       return json(200, await gas(cfg, { action: 'ping' }, 30000));
     }
 
     if (b.action === 'get') {
-      need(['archive.view', 'archive.manage']);
+      need(['archive.view']);
       const it = await user.from('archive_items').select('drive_id, file_name, name').eq('id', String(b.id ?? '')).maybeSingle();
       if (!it.data?.drive_id) throw new HttpError(404, 'Không tìm thấy hồ sơ');
       const r = await gas(cfg, { action: 'hs_get', id: it.data.drive_id });
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'put') {
-      need(['archive.manage']);
+      need(b.replace_id ? ['archive.edit', 'archive.add'] : ['archive.add']);
       const data = typeof b.data === 'string' ? b.data : '';
       if (!data || data.length > MAX_B64) throw new HttpError(413, 'Tệp trống hoặc lớn hơn 10 MB. Tệp lớn hãy thêm bằng "Liên kết"');
       const folderId = (b.folder_id as string | null) || null;
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'del') {
-      need(['archive.manage']);
+      need(['archive.delete']);
       const it = await user.from('archive_items').select('id, drive_id').eq('id', String(b.id ?? '')).maybeSingle();
       if (!it.data) throw new HttpError(404, 'Không tìm thấy hồ sơ');
       if (it.data.drive_id) await gas(cfg, { action: 'hs_del', id: it.data.drive_id }).catch(() => undefined);   // tệp đã mất trên Drive vẫn xóa được hồ sơ
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
     }
 
     if (b.action === 'del_folder') {
-      need(['archive.manage']);
+      need(['archive.delete']);
       const all = await user.from('archive_folders').select('id, parent_id, name');
       const list = (all.data ?? []) as Folder[];
       const root = String(b.id ?? '');

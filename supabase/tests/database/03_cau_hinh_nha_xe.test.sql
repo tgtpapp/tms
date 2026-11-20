@@ -59,10 +59,10 @@ select throws_ok($$ update public.tenant_settings set value = '"abc"'::jsonb whe
 select throws_ok($$ update public.tenant_settings set value = '99'::jsonb where key = 'ban_ve.nha_ghe_vexere_gio' $$,
   '22023', null, 'Chặn giờ nhả ghế Vexere quá 48');
 
-select lives_ok($$ select public.create_role('thu_ngan', 'Thu ngân', array['user.read']) $$, 'Chủ A tạo vai trò Thu ngân');
+select lives_ok($$ select public.create_role('thu_ngan', 'Thu ngân', array['user.view']) $$, 'Chủ A tạo vai trò Thu ngân');
 select is((select count(*)::int from public.role_permissions rp join public.roles r on r.id = rp.role_id
            where r.code = 'thu_ngan'), 1, 'Vai trò Thu ngân có 1 quyền');
-select throws_ok($$ select public.set_role_permissions((select id from public.roles where code = 'owner'), array['user.read']) $$,
+select throws_ok($$ select public.set_role_permissions((select id from public.roles where code = 'owner'), array['user.view']) $$,
   '42501', null, 'Không sửa được quyền của Chủ nhà xe');
 select ok((select count(*) from public.audit_logs where entity = 'tenant_settings') > 0, 'Nhật ký ghi lại việc sửa cấu hình');
 reset role;

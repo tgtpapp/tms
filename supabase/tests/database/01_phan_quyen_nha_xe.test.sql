@@ -88,7 +88,7 @@ select is((select id from public.app_users), '00000000-0000-0000-0000-0000000000
   'Nhân viên xem được hồ sơ của chính mình');
 select throws_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b2',
   (select id from public.roles where code = 'owner')) $$, '42501', null, 'Nhân viên không tự nâng quyền được');
-select throws_ok($$ select public.create_role('sieu_quyen', 'Siêu quyền', array['user.manage']) $$, '42501', null,
+select throws_ok($$ select public.create_role('sieu_quyen', 'Siêu quyền', array['user.edit']) $$, '42501', null,
   'Nhân viên không tạo được vai trò');
 reset role;
 

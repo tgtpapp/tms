@@ -18,7 +18,7 @@ const CORS = {
 const MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 const MAX_FILES = 4;
 const MAX_B64 = 8 * 1024 * 1024;   // tổng ~6 MB tệp gốc
-const PERM_BY_OWNER: Record<string, string> = { xe: 'vehicle.manage', nhan_su: 'staff.manage', cong_ty: 'settings.manage' };
+const PERM_BY_OWNER: Record<string, string[]> = { xe: ['vehicle.add', 'vehicle.edit'], nhan_su: ['staff.add', 'staff.edit'], cong_ty: ['settings.edit'] };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' } });
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const { data: perms, error } = await userClient.rpc('my_permissions');
     if (error) throw new ReaderError(401, 'Phiên đăng nhập không hợp lệ');
     const need = PERM_BY_OWNER[def.owner];
-    if (!((perms ?? []) as { permission_code: string }[]).some((p) => p.permission_code === need)) {
+    if (!((perms ?? []) as { permission_code: string }[]).some((p) => need?.includes(p.permission_code))) {
       throw new ReaderError(403, 'Không có quyền quản lý loại giấy tờ này');
     }
 

@@ -10,6 +10,17 @@ export interface PermissionGrant {
  * Bộ kiểm tra quyền phía giao diện – CHỈ để ẩn/hiện nút.
  * Database luôn tự kiểm tra lại (app.has_permission) ở mọi thao tác.
  */
+/** Mã quyền cũ (gộp) → các ô mới (màn hình.xem / thêm / sửa / xóa): có 1 ô là đủ. Chỉ dùng phía giao diện để ẩn / hiện. */
+const LEGACY: Record<string, string[]> = {
+  'ticket.sell': ['sell.add', 'sell.edit', 'sell.delete'], 'parcel.manage': ['parcel.add', 'parcel.edit', 'parcel.delete'],
+  'trip.manage': ['trip.add', 'trip.edit', 'trip.delete', 'charter.add', 'charter.edit'], 'route.manage': ['route.add', 'route.edit', 'route.delete'],
+  'fare.manage': ['route.edit'], 'vehicle.manage': ['vehicle.add', 'vehicle.edit', 'vehicle.delete'], 'staff.manage': ['staff.add', 'staff.edit', 'staff.delete'],
+  'salary.manage': ['salary.view', 'labor.view'], 'doc.manage': ['doc.view'], 'archive.manage': ['archive.add', 'archive.edit', 'archive.delete'],
+  'branch.manage': ['branch.add'], 'office.manage': ['branch.add', 'branch.edit'], 'user.read': ['user.view'], 'user.manage': ['user.add', 'user.edit'],
+  'role.manage': ['role.view'], 'settings.manage': ['settings.view'], 'audit.read': ['audit.view'],
+};
+const codes = (perm: string) => LEGACY[perm] ?? [perm];
+
 export class Permissions {
   constructor(private readonly grants: PermissionGrant[]) {}
 
@@ -17,7 +28,7 @@ export class Permissions {
   has(perm: string, branchId?: string | null, officeId?: string | null): boolean {
     return this.grants.some(
       (g) =>
-        g.permission_code === perm &&
+        codes(perm).includes(g.permission_code) &&
         (g.scope_type === 'tenant' ||
           (g.scope_type === 'branch' && !!branchId && g.scope_id === branchId) ||
           (g.scope_type === 'ticket_office' && !!officeId && g.scope_id === officeId)),
@@ -26,7 +37,7 @@ export class Permissions {
 
   /** Có quyền này ở bất kỳ phạm vi nào. */
   hasAnywhere(perm: string): boolean {
-    return this.grants.some((g) => g.permission_code === perm);
+    return this.grants.some((g) => codes(perm).includes(g.permission_code));
   }
 }
 

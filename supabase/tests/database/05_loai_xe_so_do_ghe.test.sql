@@ -27,7 +27,7 @@ select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000c1', (select v from t.ids where k = 'B'), '0900000003', 'Chủ B', 'owner') $$, 'Chủ B');
 
 select ok(exists (select 1 from public.role_permissions rp join public.roles r on r.id = rp.role_id
-                  where r.code = 'owner' and r.tenant_id = (select v from t.ids where k = 'A') and rp.permission_code = 'vehicle.manage'),
+                  where r.code = 'owner' and r.tenant_id = (select v from t.ids where k = 'A') and rp.permission_code = 'vehicle.edit'),
   'Chủ nhà xe có quyền quản lý xe');
 
 -- ---------------------------------------------------------------- Chủ A tạo loại xe

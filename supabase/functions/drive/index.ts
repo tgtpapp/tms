@@ -57,6 +57,19 @@ const pathOf = (all: Folder[], id: string | null) => {
   return out;
 };
 
+/** Đọc đủ mọi dòng (PostgREST trả tối đa 1000 dòng mỗi lần). */
+// deno-lint-ignore no-explicit-any
+async function allRows<T>(make: () => any): Promise<{ data: T[]; error: { message: string } | null }> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const r = await make().order('id').range(from, from + 999);
+    if (r.error) return { data: out, error: r.error };
+    const rows = (r.data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < 1000) return { data: out, error: null };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'Chỉ nhận POST' });
@@ -92,7 +105,7 @@ Deno.serve(async (req) => {
       const data = typeof b.data === 'string' ? b.data : '';
       if (!data || data.length > MAX_B64) throw new HttpError(413, 'Tệp trống hoặc lớn hơn 10 MB. Tệp lớn hãy thêm bằng "Liên kết"');
       const folderId = (b.folder_id as string | null) || null;
-      const all = await user.from('archive_folders').select('id, parent_id, name');
+      const all = await allRows<Folder>(() => user.from('archive_folders').select('id, parent_id, name'));
       if (all.error) throw new HttpError(403, 'Không đọc được thư mục');
       if (folderId && !(all.data ?? []).some((f) => f.id === folderId)) throw new HttpError(404, 'Không tìm thấy thư mục');
       const fileName = String(b.file_name ?? 'tep').slice(0, 200);
@@ -117,7 +130,7 @@ Deno.serve(async (req) => {
       let size = 0;
       for (const x of items) { const d = typeof x.data === 'string' ? x.data : ''; if (!d || d.length > MAX_B64) throw new HttpError(413, 'Tệp trống hoặc quá lớn'); size += d.length; }
       if (size > 40_000_000) throw new HttpError(413, 'Lô tệp quá lớn');
-      const all = await user.from('archive_folders').select('id, parent_id, name, drive_id, drive_path');
+      const all = await allRows<Folder>(() => user.from('archive_folders').select('id, parent_id, name, drive_id, drive_path'));
       if (all.error) throw new HttpError(403, 'Không đọc được thư mục');
       const F = (all.data ?? []) as Folder[];
       const fids = [...new Set(items.map((x) => String(x.folder_id ?? '')))];
@@ -167,7 +180,7 @@ Deno.serve(async (req) => {
       }
       const made = (ins.data ?? []) as { id: string; folder_id: string; note: string | null; name: string }[];
       // Bản cũ cùng mã giấy (hoặc cùng tên, lưu kiểu cũ không có mã) trong thư mục: ẩn, trỏ sang bản mới
-      const cur = await user.from('archive_items').select('id, folder_id, note, name').in('folder_id', fids).eq('is_old', false);
+      const cur = await allRows<{ id: string; folder_id: string; note: string | null; name: string }>(() => user.from('archive_items').select('id, folder_id, note, name').in('folder_id', fids).eq('is_old', false));
       const newIds = new Set(made.map((m) => m.id));
       for (const m of made) {
         const key = /\[([^\]]+)\]\s*$/.exec(m.note ?? '')?.[1];
@@ -191,13 +204,13 @@ Deno.serve(async (req) => {
 
     if (b.action === 'del_folder') {
       need(['archive.delete']);
-      const all = await user.from('archive_folders').select('id, parent_id, name');
+      const all = await allRows<Folder>(() => user.from('archive_folders').select('id, parent_id, name'));
       const list = (all.data ?? []) as Folder[];
       const root = String(b.id ?? '');
       if (!list.some((f) => f.id === root)) throw new HttpError(404, 'Không tìm thấy thư mục');
       const ids = new Set([root]);
       for (let ch = true; ch;) { ch = false; for (const f of list) if (f.parent_id && ids.has(f.parent_id) && !ids.has(f.id)) { ids.add(f.id); ch = true; } }
-      const items = await user.from('archive_items').select('drive_id').in('folder_id', [...ids]).not('drive_id', 'is', null);
+      const items = await allRows<{ drive_id: string }>(() => user.from('archive_items').select('id, drive_id').in('folder_id', [...ids]).not('drive_id', 'is', null));
       const driveIds = (items.data ?? []).map((x) => String(x.drive_id));
       // Xóa trong app trước (nhanh, người dùng thấy ngay); tệp trên Drive cho vào thùng rác sau, chạy song song,
       // không bắt chờ từng tệp một (thư mục nhiều tệp trước đây chờ quá lâu, hết giờ, như không xóa được).

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { fmtDate, today } from '../components/Documents';
 import type { Permissions } from '../lib/permissions';
-import { errMsg, supabase } from '../lib/supabase';
+import { errMsg, fetchAll, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { drive, fileToBase64, openBase64 } from '../lib/drive';
 import { DocViewer } from '../components/DocViewer';
@@ -79,11 +79,13 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
 
   const load = useCallback(async () => {
     const [f, i, st] = await Promise.all([
-      supabase.from('archive_folders').select('id, parent_id, name, note, created_at'),
-      supabase.from('archive_items').select('id, folder_id, kind, name, drive_id, drive_url, file_name, mime, size_bytes, url, expires_on, note, is_old, created_by, created_at'),
+      // Đọc đủ mọi dòng (máy chủ trả tối đa 1000 dòng mỗi lần): kho hồ sơ có hàng nghìn tệp
+      fetchAll<Folder>(() => supabase.from('archive_folders').select('id, parent_id, name, note, created_at').order('id')).then((data) => ({ data, error: null }), (e: Error) => ({ data: null, error: e })),
+      fetchAll<Item>(() => supabase.from('archive_items').select('id, folder_id, kind, name, drive_id, drive_url, file_name, mime, size_bytes, url, expires_on, note, is_old, created_by, created_at').order('id'))
+        .then((data) => ({ data, error: null }), (e: Error) => ({ data: null, error: e })),
       supabase.rpc('drive_status'),
     ]);
-    if (f.error) return toast('error', f.error.message);
+    if (f.error || i.error) return toast('error', (f.error ?? i.error)!.message);
     setFolders((f.data ?? []) as Folder[]);
     setItems((i.data ?? []) as Item[]);
     setDriveOk(!!(st.data as { configured?: boolean } | null)?.configured);

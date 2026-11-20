@@ -6,7 +6,7 @@
 import { mergeRecordPapers } from './recordPapers';
 import { dirName, type Dir } from './routes';
 import { loadSigns, showName, type Sign } from './signatures';
-import { supabase } from './supabase';
+import { fetchAll, supabase } from './supabase';
 import { bytesToBase64, makePdf, pageImg } from './pdfMaker';
 import { drive } from './drive';
 
@@ -214,9 +214,7 @@ let folderPending: Promise<unknown> = Promise.resolve();
 export async function ensurePath(names: string[]): Promise<string> {
   const run = folderPending.then(async () => {      // tạo thư mục lần lượt để 2 việc song song không tạo trùng
     if (!folderList) {
-      const r = await supabase.from('archive_folders').select('id, parent_id, name');
-      if (r.error) throw new Error(r.error.message);
-      folderList = Promise.resolve((r.data ?? []) as Folder[]);
+      folderList = Promise.resolve(await fetchAll<Folder>(() => supabase.from('archive_folders').select('id, parent_id, name').order('id')));
     }
     const all: Folder[] = await folderList;
     let parent: string | null = null;

@@ -9,7 +9,7 @@ import { drive } from './drive';
 import { paginate } from './pdfMaker';
 import { company, head, signCol, type Company } from './profilePapers';
 import { mergeRecordPapers } from './recordPapers';
-import { rpc, supabase } from './supabase';
+import { fetchAll, rpc, supabase } from './supabase';
 
 export const KIND: Record<string, string> = {
   toc_do: 'Tốc độ', thoi_gian_lai: 'Thời gian lái xe', sai_hanh_trinh: 'Sai hành trình', mat_ket_noi: 'Thiết bị mất kết nối / gián đoạn dữ liệu',
@@ -242,7 +242,7 @@ export async function autoArchiveSafety(onStep?: (s: string) => void): Promise<n
   running = true;
   try {
     const b = await loadBase();
-    const { data: items } = await supabase.from('archive_items').select('note').eq('is_old', false).like('note', '%[atgt-%');
+    const items = await fetchAll<{ note: string | null }>(() => supabase.from('archive_items').select('note').eq('is_old', false).like('note', '%[atgt-%').order('id'));
     const sigs = new Map<string, string>();
     for (const r of (items ?? []) as { note: string | null }[]) { const k = /\[(atgt-[^\]]+)\]/.exec(r.note ?? '')?.[1]; const s = /sig:([a-z0-9]+)/.exec(r.note ?? '')?.[1]; if (k) sigs.set(k, s ?? ''); }
     let n = 0;

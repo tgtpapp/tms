@@ -12,4 +12,4 @@ jobs:
       - name: Gọi thử Gemini bằng khóa thật (không in khóa)
         env:
           AI_PROVIDERS: ${{ secrets.AI_PROVIDERS }}
-        run: deno run --allow-net --allow-env scripts/chan_doan_ai.ts
+        run: deno run --allow-net --allow-env --allow-read scripts/chan_doan_ai.ts

@@ -1,5 +1,6 @@
 // Chẩn đoán AI đọc giấy tờ bằng khóa thật (chạy trên GitHub Actions, khóa lấy từ secret, KHÔNG in khóa).
 // In: danh sách model Flash, thời gian + mã lỗi từng kiểu gọi.
+import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { parseProviders } from '../supabase/functions/_shared/doc_reader.ts';
 
 const ps = parseProviders(Deno.env.get('AI_PROVIDERS'));
@@ -15,6 +16,8 @@ const lj = await lr.json().catch(() => ({}));
 const names: string[] = (lj.models ?? []).map((m: { name: string }) => m.name.replace('models/', '')).filter((n: string) => /flash/.test(n));
 console.log(`Danh sách model: HTTP ${lr.status} (${Date.now() - t0} ms): ${names.join(', ')}`);
 
+// Ảnh thử cỡ thật (thẻ mẫu, không phải giấy tờ thật) – giống ảnh người dùng gửi lên sau khi nén
+const JPG = encodeBase64(await Deno.readFile(new URL('./anh-thu-ai.jpg', import.meta.url)));
 // Ảnh PNG 1x1
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 async function call(model: string, label: string, gen: Record<string, unknown>, image: boolean) {
@@ -23,7 +26,7 @@ async function call(model: string, label: string, gen: Record<string, unknown>, 
   const timer = setTimeout(() => ctrl.abort(), 60000);
   try {
     const parts: unknown[] = [{ text: 'Trả về JSON {"ok": true, "mo_ta": "<mô tả ảnh 5 chữ>"}' }];
-    if (image) parts.push({ inline_data: { mime_type: 'image/png', data: PNG } });
+    if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: JPG } });
     const r = await fetch(`${BASE}/models/${model}:generateContent`, {
       method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({ contents: [{ parts }], generationConfig: gen }),
@@ -43,13 +46,15 @@ for (const m of models) {
   await call(m, 'chữ, budget0', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }, false);
   await call(m, 'ảnh, budget0', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }, true);
   await call(m, 'ảnh, mặc định', { temperature: 0, responseMimeType: 'application/json' }, true);
+  await call(m, 'ảnh, level minimal', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'minimal' } }, true);
+  await call(m, 'ảnh, level low', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingLevel: 'low' } }, true);
 }
 
 // Chạy đúng đường đọc giấy tờ của app (lõi doc_reader) với cấu hình thật, ảnh thử 1x1
 import { readDocument } from '../supabase/functions/_shared/doc_reader.ts';
 const t1 = Date.now();
 try {
-  const r = await readDocument({ docType: 'cccd', files: [{ mime: 'image/png', data: PNG }], providers: ps, timeoutMs: 25000 });
+  const r = await readDocument({ docType: 'cccd', files: [{ mime: 'image/jpeg', data: JPG }, { mime: 'image/jpeg', data: JPG }], providers: ps, timeoutMs: 25000 });
   console.log(`Đường đọc của app: dùng ${r.provider} sau ${Date.now() - t1} ms; các lần: ${r.attempts.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
 } catch (e) {
   const at = (e as { attempts?: { provider: string; ms: number; error?: string }[] }).attempts ?? [];

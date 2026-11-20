@@ -108,6 +108,19 @@ jobs:
           supabase status -o env > status.env
           set -a; . ./status.env; set +a
           deno run -A supabase/tests/e2e/admin_users.e2e.ts
+      - name: Làm sạch database cho kiểm thử giao diện (kịch bản đầu-cuối đã tạo tài khoản)
+        if: steps.chg.outputs.sb == 'true'
+        run: |
+          supabase db reset
+          DB=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+          psql "$DB" -v ON_ERROR_STOP=1 -c "revoke all on all tables in schema public from service_role; revoke all on all sequences in schema public from service_role;"
+          psql "$DB" -v ON_ERROR_STOP=1 -f supabase/migrations/20261118150000_quyen_service_role.sql
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:54321/auth/v1/health || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 2
+          done
+          echo "Auth chưa sẵn sàng sau khi làm sạch"; exit 1
       - name: Nhớ trình duyệt Playwright giữa các lần chạy
         uses: actions/cache@v4
         with:

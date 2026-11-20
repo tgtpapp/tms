@@ -99,7 +99,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
   const [showLeft, setShowLeft] = useState(false);
   const canEdit = perms.has('staff.manage');
-  const canView = perms.has('staff.view');
+  const canView = perms.has('staff.view_all');   // không có: chỉ thấy hồ sơ của chính mình
 
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
@@ -115,7 +115,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     ]);
     const err = s.error ?? p.error ?? d.error ?? b.error ?? w.error ?? r.error ?? vt.error ?? lm.error;
     if (err) return toast('error', err.message);
-    // Không có ô Xem nhân viên (vd lái xe): chỉ thấy hồ sơ của chính mình
+    // Không có ô Xem tất cả (vd lái xe): chỉ thấy hồ sơ của chính mình
     setStaff(((s.data ?? []) as Staff[]).filter((x) => canView || x.user_id === ctx.user_id));
     setPriv((p.data ?? []) as StaffPrivate[]);
     setDocs((d.data ?? []) as Doc[]);

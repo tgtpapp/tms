@@ -864,3 +864,7 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .perm-key { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
 .perm-key i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); }
 .perm-key .k-inh { background: #eef2ff; } .perm-key .k-own { background: #dcfce7; } .perm-key .k-deny { background: #fee2e2; }
+/* Ảnh đại diện người đang đăng nhập (menu bên trái) */
+.me-line { display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; }
+.me-line .sc-ava { font-size: .7rem; flex: 0 0 26px; }
+.me-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

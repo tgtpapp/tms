@@ -1,3 +1,4 @@
+import { Avatar, useAvatars } from '../components/StaffAvatar';
 import { useCallback, useEffect, useState } from 'react';
 import { Centered } from '../components/Centered';
 import { config } from '../config';
@@ -37,6 +38,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const setPinned = (v: boolean) => { setPinnedState(v); try { localStorage.setItem('menu.ghim', v ? '1' : '0'); } catch { /* bỏ qua */ } };
   const [tab, setTab] = useState<Tab | null>(null);
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
+  const [myStaff, setMyStaff] = useState<string | null>(null);
+  const avas = useAvatars(ctx.tenant_id);
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +49,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       ]);
       const crew = !!me.data;   // lái xe, phụ xe, người chạy trung chuyển (có hồ sơ nhân viên)
       setIsCrew(crew);
+      setMyStaff((me.data as { id: string } | null)?.id ?? null);
       setPerms(p);
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
       setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
@@ -95,7 +99,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           <Logo tenantId={ctx.tenant_id} />
           <div>
             <b>{ctx.tenant_name ?? config.appName}</b>
-            <small>{ctx.full_name}</small>
+            <span className="me-line"><Avatar name={ctx.full_name ?? '?'} url={myStaff ? avas[myStaff] : undefined} size={26} /><small>{ctx.full_name}</small></span>
           </div>
           <button type="button" className={pinned ? 'side-pin on' : 'side-pin'} aria-pressed={pinned}
                   aria-label={pinned ? 'Bỏ ghim menu (tự ẩn)' : 'Ghim menu'} title={pinned ? 'Bỏ ghim: menu tự thu gọn' : 'Ghim menu luôn mở'}

@@ -11,7 +11,7 @@ import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
-interface Staff { id: string; full_name: string; position: string; job_title: string | null; joined_on: string; left_on: string | null; is_active: boolean }
+interface Staff { id: string; user_id: string | null; full_name: string; position: string; job_title: string | null; joined_on: string; left_on: string | null; is_active: boolean }
 interface Form { id: string | null; number: string | null; staff: Staff; kind: Kind; start_on: string; end_on: string; salary: string; position: string; department: string; job_desc: string; allow: Record<keyof Allow, string>; req: string }
 const POSITION: Record<string, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
 const COLS = 'id, staff_id, year, seq, number, kind, start_on, end_on, salary, position, department, job_desc, allowances, status, cancel_reason';
@@ -38,7 +38,7 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   const load = useCallback(async () => {
     const [s, c, p, m, t] = await Promise.all([
-      supabase.from('staff_members').select('id, full_name, position, job_title, joined_on, left_on, is_active'),
+      supabase.from('staff_members').select('id, user_id, full_name, position, job_title, joined_on, left_on, is_active'),
       supabase.from('labor_contracts').select(COLS).eq('year', year).order('seq'),
       supabase.from('staff_private').select('staff_id, contract_type'),
       supabase.from('staff_pay_months').select('staff_id, month, transfer_pay').gte('month', `${year}-01-01`).lte('month', `${year}-12-01`),
@@ -54,7 +54,8 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   useEffect(() => { void load(); }, [load]);
 
   // Người có làm trong năm: vào trước 31/12, chưa nghỉ trước 01/01
-  const people = staff.filter((s) => s.joined_on <= `${year}-12-31` && (s.is_active || (s.left_on ?? '') >= `${year}-01-01`));
+  const viewAll = perms.has('labor.view_all');   // không có: chỉ thấy hợp đồng của chính mình
+  const people = staff.filter((s) => (viewAll || s.user_id === ctx.user_id) && s.joined_on <= `${year}-12-31` && (s.is_active || (s.left_on ?? '') >= `${year}-01-01`));
   const active = (id: string) => list.find((k) => k.staff_id === id && k.status === 'hieu_luc');
   const missing = people.filter((s) => !active(s.id));
 

@@ -1,4 +1,5 @@
-// Bảng phân quyền như app cũ: mỗi dòng 1 màn hình, cột Xem / Thêm / Sửa / Xóa, cột "Tất cả dòng"; ô không có nghĩa để gạch (—).
+// Bảng phân quyền như app cũ: mỗi dòng 1 màn hình, cột Xem / Thêm / Sửa / Xóa / Xem tất cả, cột "Tất cả dòng"; ô không có nghĩa để gạch (—).
+// Xem = mở mục (dữ liệu theo người: chỉ của chính mình); Xem tất cả = thấy dữ liệu của mọi người.
 // inherited: các ô có từ nhóm (đánh dấu; bỏ tích = chặn riêng người đó). allowed: ô người đang thao tác được cấp (không cấp vượt quyền mình; bỏ tích luôn được).
 export const SCREENS: [string, string][] = [
   ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['route', 'Tuyến & giá vé'],
@@ -6,7 +7,7 @@ export const SCREENS: [string, string][] = [
   ['labor', 'Hợp đồng lao động'], ['salary', 'BHXH & lương chuyển khoản'], ['branch', 'Chi nhánh'], ['office', 'Phòng vé'], ['doc', 'Văn bản'],
   ['archive', 'Lưu trữ hồ sơ'], ['user', 'Người dùng'], ['role', 'Vai trò (phân quyền)'], ['settings', 'Cấu hình'], ['audit', 'Nhật ký'],
 ];
-export const ACTS: [string, string][] = [['view', 'Xem'], ['add', 'Thêm'], ['edit', 'Sửa'], ['delete', 'Xóa']];
+export const ACTS: [string, string][] = [['view', 'Xem'], ['add', 'Thêm'], ['edit', 'Sửa'], ['delete', 'Xóa'], ['view_all', 'Xem tất cả']];
 
 export function PermMatrix({ catalog, value, onChange, allowed, inherited, readOnly }: {
   catalog: Set<string>; value: Set<string>; onChange: (v: Set<string>) => void; allowed: (code: string) => boolean;
@@ -59,5 +60,5 @@ export function PermMatrix({ catalog, value, onChange, allowed, inherited, readO
 /** Nút nhanh dưới bảng: Tích tất cả / Chỉ xem / Bỏ hết. */
 export function quick(kind: 'all' | 'view' | 'none', catalog: Set<string>, allowed: (c: string) => boolean): Set<string> {
   if (kind === 'none') return new Set();
-  return new Set([...catalog].filter((c) => allowed(c) && (kind === 'all' || c.endsWith('.view'))));
+  return new Set([...catalog].filter((c) => allowed(c) && (kind === 'all' || c.endsWith('.view') || c.endsWith('.view_all'))));
 }

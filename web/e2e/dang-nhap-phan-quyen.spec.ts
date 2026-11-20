@@ -361,7 +361,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('PHIẾU NHẬP DẦU')).toBeVisible();
   await page.locator('.lenh-overlay').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByRole('button', { name: 'In sổ' }).click();
-  await expect(page.locator('.paper-top').getByText('SỔ NHẬP XUẤT NHIÊN LIỆU')).toBeVisible();
+  await expect(page.locator('.paper-top').getByText('SỔ NHẬP XUẤT NHIÊN LIỆU', { exact: true })).toBeVisible();
   await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j6. Hợp đồng lao động: lập HĐ, số 001 tự cấp, lương lấy từ lương chuyển khoản của tháng bắt đầu (sửa được), xem bản in
   const thang = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7);

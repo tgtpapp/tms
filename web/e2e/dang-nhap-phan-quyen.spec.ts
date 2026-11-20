@@ -610,6 +610,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Đã lưu/).first()).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Việc của tôi', exact: true }).click();
+  // App cài được (đã đổi tên + biểu tượng theo ảnh người đăng nhập), Chrome không báo lỗi cài đặt
+  const mf = await page.evaluate(async () => { const r = await fetch('/manifest.webmanifest'); return { ct: r.headers.get('content-type'), j: await r.json() }; });
+  expect(mf.j.display).toBe('standalone');
+  const cdp = await page.context().newCDPSession(page);
+  await page.waitForTimeout(3000);
+  const inst = await cdp.send('Page.getInstallabilityErrors') as { installabilityErrors: { errorId: string }[] };
+  console.log('Lỗi cài app:', JSON.stringify(inst.installabilityErrors), 'manifest:', JSON.stringify(await cdp.send('Page.getAppManifest')).slice(0, 300));
+  expect(inst.installabilityErrors.map((x) => x.errorId)).toEqual([]);
   await page.getByRole('button', { name: '⛽ Báo đổ dầu' }).click();
   await page.getByLabel('Chọn ảnh đổ dầu').setInputFiles(png);
   await page.getByRole('button', { name: 'Đọc ảnh & gửi (1 ảnh)' }).click();

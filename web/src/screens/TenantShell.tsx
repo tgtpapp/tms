@@ -119,7 +119,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'reports', label: 'Báo cáo', icon: 'chart-histogram', group: 'Danh mục', show: perms.has('report.view') },
     { key: 'km', label: 'Km xe', icon: 'road', group: 'Danh mục', show: perms.has('km.view') },
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: perms.has('vehicle.view') },
-    { key: 'staff', label: 'Lái xe & nhân viên', icon: 'id-badge', group: 'Danh mục', show: perms.has('staff.view') || isCrew },
+    { key: 'staff', label: perms.has('staff.view_all') ? 'Lái xe & nhân viên' : 'Thông tin của tôi', icon: 'id-badge', group: 'Danh mục', show: perms.has('staff.view') || isCrew },
     { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('labor.view') },
     { key: 'timesheet', label: 'Bảng chấm công', icon: 'calendar-check', group: 'Danh mục', show: perms.has('timesheet.view') },
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: perms.hasAnywhere('branch.view') || perms.hasAnywhere('office.view') },

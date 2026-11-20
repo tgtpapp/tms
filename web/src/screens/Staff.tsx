@@ -150,9 +150,10 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     <>
       <div className="staff-top">
         <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
-          {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
+          {/* chỉ xem được hồ sơ của mình (lái xe, nhân viên): 1 thẻ "Thông tin của tôi" */}
+          {(canView ? [{ key: '', label: 'Tất cả', n: shown.length }, ...tabs] : [{ key: '', label: 'Thông tin của tôi', n: -1 }]).map((t) => (
             <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
-              {t.label} ({t.n})
+              {t.label}{t.n >= 0 ? ` (${t.n})` : ''}
             </button>
           ))}
         </div>
@@ -167,7 +168,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           setTimeout(() => document.getElementById(`nv-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
         }} />}
       </div>
-      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} avas={avas} />
+      <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} avas={avas} selfOnly={!canView} />
       {canEdit && <StaffForm key="new" {...common} staff={staff} />}
     </>
   );
@@ -345,7 +346,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 /* ------------------------------------------------------------------ Danh sách */
 
 function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void;
-  cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void; avas: Record<string, string> }) {
+  cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void; avas: Record<string, string>; selfOnly?: boolean }) {
   const { staff, priv, papers, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft, avas } = props;
   const left = staff.filter((s) => !s.is_active).length;
 
@@ -353,7 +354,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   return (
     <section className="card">
       <div className="item-head">
-        <h2>Lái xe & nhân viên ({staff.filter((s) => s.is_active).length})</h2>
+        <h2>{props.selfOnly ? 'Thông tin của tôi' : `Lái xe & nhân viên (${staff.filter((s) => s.is_active).length})`}</h2>
         {left > 0 && (
           <button className="btn small" onClick={() => setShowLeft(!showLeft)}>
             {showLeft ? 'Ẩn người đã nghỉ' : `Hiện người đã nghỉ (${left})`}

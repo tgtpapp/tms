@@ -1,7 +1,8 @@
 // Xem trước tệp giấy tờ ngay trong form (ảnh, PDF scan), bấm vào để xem lớn; dùng chung cho mọi mục (nhân viên, xe, sửa chữa, nhiên liệu…).
 import { useEffect, useState } from 'react';
 import { signedUrl } from '../lib/documents';
-import { pdfJpegs } from './DocViewer';
+import { FrameView, pdfJpegs } from './DocViewer';
+import { pdfImages } from '../lib/pdfImages';
 
 interface Item { url: string; thumb: string | null; pages: string[]; pdf: boolean; name: string }
 const isPdf = (p: string) => /\.pdf$/i.test(p);
@@ -11,7 +12,9 @@ async function load(path: string): Promise<Item> {
   const name = path.split('/').pop() ?? path;
   if (!isPdf(path)) return { url, thumb: url, pages: [url], pdf: false, name };
   try {
-    const pages = pdfJpegs(new Uint8Array(await (await fetch(url)).arrayBuffer()));
+    const u = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    let pages = await pdfImages(u).catch(() => [] as string[]);
+    if (!pages.length) pages = pdfJpegs(u);
     return { url, thumb: pages[0] ?? null, pages, pdf: true, name };
   } catch {
     return { url, thumb: null, pages: [], pdf: true, name };
@@ -41,7 +44,7 @@ export function FilePreviews({ files = [], blobs = [] }: { files?: string[]; blo
     <>
       <div className="fp-grid">
         {all.map((it, i) => (
-          <button key={i} type="button" className="fp-thumb" title="Xem lớn" onClick={() => (it.pages.length ? setBig(it) : window.open(it.url, '_blank', 'noopener'))}>
+          <button key={i} type="button" className="fp-thumb" title="Xem lớn" onClick={() => setBig(it)}>
             {it.thumb ? <img src={it.thumb} alt={it.name} /> : <span>{it.pdf ? 'PDF' : 'Tệp'}</span>}
             {it.pages.length > 1 && <em>{it.pages.length} trang</em>}
           </button>
@@ -52,7 +55,8 @@ export function FilePreviews({ files = [], blobs = [] }: { files?: string[]; blo
           <div className="doc-big-bar"><b>{big.name}</b>
             <a className="btn small" href={big.url} target="_blank" rel="noopener noreferrer" download>Tải về</a>
             <button type="button" className="btn small" onClick={() => setBig(null)}>Đóng</button></div>
-          <div className="doc-big-pages">{big.pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div>
+          {big.pages.length ? <div className="doc-big-pages">{big.pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div>
+            : <FrameView url={big.url} name={big.name} />}
         </div>
       )}
     </>

@@ -694,6 +694,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã gửi phiếu đổ dầu cho điều hành duyệt')).toBeVisible();
   await expect(page.getByText('Chờ duyệt', { exact: true })).toBeVisible();
   // App lái xe như app cũ: chuyến hôm nay có 3 thẻ Đón khách / Sơ đồ ghế / Trả & hàng; sơ đồ ghế vừa màn hình điện thoại
+  // Tất cả chuyến của tôi trong tháng (như app cũ), có dòng chuyến hôm nay
+  await expect(page.getByRole('heading', { name: /^Tất cả chuyến của tôi · tháng/ })).toBeVisible();
+  await expect(page.locator('tr.me-today').first()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Chuyến 07:00/ })).toBeVisible();
   if (await page.getByRole('tab', { name: 'Sơ đồ ghế' }).count() === 0) await page.getByRole('button', { name: /^Chuyến 07:00/ }).click();
   await expect(page.getByRole('tab', { name: 'Đón khách' })).toBeVisible();

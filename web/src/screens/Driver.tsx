@@ -96,12 +96,64 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
           ))}
         </div>
       </section>
+      <MyMonthTrips routes={routes} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
       <MyTransfers day={day} />
       <MyCharters />
       {open && trips.find((t) => t.trip_id === open) && (
         <TripRun trip={trips.find((t) => t.trip_id === open)!} stopName={(id) => stops[id] ?? '?'} reload={load} />
       )}
     </>
+  );
+}
+
+/** Tất cả chuyến của tôi trong tháng (như app cũ "Thông tin của tôi"): ngày, giờ, tuyến, xe, số khách, trạng thái; bấm 1 dòng để mở chuyến */
+function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: string; name_ve: string | null }>; onPick: (day: string, tripId: string) => void }) {
+  const [ym, setYm] = useState(today().slice(0, 7));
+  const [list, setList] = useState<MyTrip[]>([]);
+  const [pax, setPax] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const [y, m] = ym.split('-').map(Number);
+    const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+    let on = true;
+    void (async () => {
+      const t = await rpc<MyTrip[]>('my_trips', { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).catch(() => [] as MyTrip[]);
+      if (!on) return;
+      setList(t);
+      const ids = t.map((x) => x.trip_id), c: Record<string, number> = {};
+      for (let i = 0; i < ids.length; i += 100) {
+        const r = await supabase.from('seat_inventory').select('trip_id').in('trip_id', ids.slice(i, i + 100)).in('status', ['dat', 'da_tt']);
+        for (const x of (r.data ?? []) as { trip_id: string }[]) c[x.trip_id] = (c[x.trip_id] ?? 0) + 1;
+      }
+      if (on) setPax(c);
+    })();
+    return () => { on = false; };
+  }, [ym]);
+  const td = today(), done = list.filter((t) => t.status !== 'huy');
+  return (
+    <section className="card">
+      <div className="item-head">
+        <h2>Tất cả chuyến của tôi · tháng {ym.slice(5)}/{ym.slice(0, 4)}</h2>
+        <label className="inline-form">Tháng<input type="month" value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} /></label>
+      </div>
+      <p className="small muted">{done.length} chuyến · {done.filter((t) => t.service_date < td).length} đã chạy · {done.filter((t) => t.service_date >= td).length} hôm nay và sắp chạy</p>
+      {list.length === 0 ? <p className="muted">Tháng này chưa có chuyến nào được xếp cho bạn.</p> : (
+        <div className="table-wrap">
+          <table className="plist">
+            <thead><tr><th>Ngày</th><th>Giờ</th><th>Tuyến</th><th>Xe</th><th style={{ textAlign: "right" }}>Khách</th><th /></tr></thead>
+            <tbody>
+              {list.map((t) => (
+                <tr key={t.trip_id} className={t.service_date === td ? 'me-today' : ''} style={{ cursor: 'pointer' }} onClick={() => onPick(t.service_date, t.trip_id)}>
+                  <td>{fmtDate(t.service_date)}</td><td><b>{hhmm(t.depart_at)}</b></td><td>{dirName(routes[t.route_id], t.direction)}</td>
+                  <td>{t.plate ?? '—'}</td><td style={{ textAlign: "right" }}>{pax[t.trip_id] ?? 0}</td>
+                  <td>{t.status === 'huy' ? <span className="badge locked">Đã hủy</span> : t.service_date === td ? <span className="badge warn-badge">Hôm nay</span>
+                    : t.service_date > td ? <span className="badge idle">Sắp chạy</span> : <span className="badge">Đã chạy</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

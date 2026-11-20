@@ -1,6 +1,7 @@
 // Xem hồ sơ như app cũ: cửa sổ có tiêu đề, ảnh xem trước của tài liệu, nút "Xem lớn", "Tải về", "Đóng".
 // PDF scan / PDF do app tạo: lấy ảnh từng trang (JPEG) ngay trong file để xem trước, không cần thư viện.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { pdfImages } from '../lib/pdfImages';
 import { Modal } from './Modal';
 import { openBase64 } from '../lib/drive';
 
@@ -31,18 +32,35 @@ export function pdfJpegs(u: Uint8Array): string[] {
   return out;
 }
 
+/** Tệp không lấy được ảnh trang (PDF chữ, tệp khác): xem trong khung ngay trong app; máy không hiển thị được thì bấm Tải về */
+export function FrameView({ url, name }: { url: string; name: string }) {
+  return (
+    <div className="doc-frame">
+      <iframe src={url} title={name} />
+      <p className="small muted">Nếu khung trên trống (một số điện thoại không xem PDF trực tiếp), bấm "Tải về" để mở.</p>
+    </div>
+  );
+}
+
 export function DocViewer({ title, name, mime, b64, onClose }: { title: string; name: string; mime: string; b64: string; onClose: () => void }) {
   const [big, setBig] = useState(false);
   const isImg = mime.startsWith('image/'), isPdf = mime === 'application/pdf' || /\.pdf$/i.test(name);
-  const pages = useMemo(() => (isImg ? [`data:${mime};base64,${b64}`] : isPdf ? pdfJpegs(b64Bytes(b64)) : []), [b64, mime, isImg, isPdf]);
-  const openBig = () => (pages.length ? setBig(true) : openBase64(name, mime, b64, false));
+  const [pages, setPages] = useState<string[]>(() => (isImg ? [`data:${mime};base64,${b64}`] : []));
+  useEffect(() => {
+    if (!isPdf) return;
+    const u = b64Bytes(b64);
+    void pdfImages(u).catch(() => [] as string[]).then((p) => setPages(p.length ? p : pdfJpegs(u)));
+  }, [b64, isPdf]);
+  const blobUrl = useMemo(() => URL.createObjectURL(new Blob([b64Bytes(b64) as BlobPart], { type: mime || 'application/octet-stream' })), [b64, mime]);
+  useEffect(() => () => URL.revokeObjectURL(blobUrl), [blobUrl]);
+  const openBig = () => setBig(true);
 
   if (big) {
     return (
       <div className="doc-big" role="dialog" aria-label={title}>
         <div className="doc-big-bar"><b>{title}</b><button className="btn small" onClick={() => openBase64(name, mime, b64, true)}>Tải về</button>
           <button className="btn small" onClick={() => setBig(false)}>Đóng</button></div>
-        <div className="doc-big-pages">{pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div>
+        {pages.length ? <div className="doc-big-pages">{pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div> : <FrameView url={blobUrl} name={name} />}
       </div>
     );
   }

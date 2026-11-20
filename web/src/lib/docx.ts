@@ -4,7 +4,7 @@
 
 async function inflate(data: Uint8Array): Promise<Uint8Array> {
   const ds = new DecompressionStream('deflate-raw');
-  const buf = await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer();
+  const buf = await new Response(new Blob([data.slice() as Uint8Array<ArrayBuffer>]).stream().pipeThrough(ds)).arrayBuffer();
   return new Uint8Array(buf);
 }
 

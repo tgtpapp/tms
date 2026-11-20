@@ -378,11 +378,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
   await expect(page.getByLabel('Đóng BHXH Nguyễn Văn Tài')).toBeChecked();
   // Sao lưu & khôi phục (Chủ nhà xe): tải file .json.gz rồi khôi phục lại từ chính file đó (dữ liệu đủ: không thêm dòng nào)
-  const dl = page.waitForEvent('download');
+  const slDl = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Tải bản sao lưu về máy' }).click();
-  const file = await (await dl).path();
+  const slFile = await (await slDl).path();
   await expect(page.getByText(/^Đã tải bản sao lưu: [\d.]+ dòng dữ liệu/)).toBeVisible();
-  await page.getByLabel('Chọn file sao lưu').setInputFiles(file!);
+  await page.getByLabel('Chọn file sao lưu').setInputFiles(slFile!);
   await page.getByRole('dialog').getByRole('button', { name: 'Khôi phục', exact: true }).click();
   await expect(page.getByText('Dữ liệu đang đủ, không có dòng nào cần khôi phục')).toBeVisible({ timeout: 60000 });
   // 5j5b. Bảng chấm công (như app cũ): lái xe chưa có chuyến nằm ở nhóm "Lái xe chưa có lịch chạy", Lương CK lấy từ bảng tháng

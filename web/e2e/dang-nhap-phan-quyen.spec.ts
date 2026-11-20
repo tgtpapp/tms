@@ -620,9 +620,10 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
   await page.getByRole('button', { name: 'Sửa hồ sơ' }).click();
-  const acc = page.getByLabel('Tài khoản đăng nhập (nếu có)');
+  const hsTai = page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' });
+  const acc = hsTai.getByLabel('Tài khoản đăng nhập (nếu có)');
   await acc.selectOption((await acc.locator('option', { hasText: '0901000001' }).getAttribute('value'))!);
-  await page.getByRole('button', { name: 'Lưu hồ sơ' }).click();
+  await hsTai.getByRole('button', { name: 'Lưu hồ sơ' }).click();
   await expect(page.getByText(/Đã lưu/).first()).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Việc của tôi', exact: true }).click();

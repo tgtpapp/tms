@@ -1,0 +1,29 @@
+name: Chẩn đoán hồ sơ (tạm)
+on: workflow_dispatch
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+    steps:
+      - name: Đo
+        run: |
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGPASSWORD="$SUPABASE_DB_PASSWORD" PGDATABASE=postgres PGPORT=5432
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              PGHOST="$host" psql -v ON_ERROR_STOP=1 <<'SQL'
+          select tenant_id, count(*) tong_ho_so, count(*) filter (where not is_old) con_hieu_luc from public.archive_items group by 1;
+          select y.name nam, f.name thang, count(i.*) filter (where not i.is_old) moi, count(i.*) filter (where i.is_old) cu
+            from public.archive_folders f join public.archive_folders k on k.id=f.parent_id and k.name='Nghiệm thu an toàn'
+            join public.archive_folders d on d.id=k.parent_id join public.archive_folders y on y.id=d.parent_id
+            left join public.archive_items i on i.folder_id=f.id group by 1,2 order by 1,2;
+          select to_char(t.service_date,'YYYY-MM') thang, count(distinct (t.service_date, c.staff_id)) can_co
+            from public.trips t join public.trip_crew c on c.trip_id=t.id and c.active and c.role in ('lai_xe_1','lai_xe_2')
+           where t.status='mo' and t.vehicle_id is not null group by 1 order by 1;
+          SQL
+              exit 0
+            fi
+          done
+          exit 1

@@ -433,7 +433,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
         <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
       {props.labor.view && <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
                                            canAdd={props.labor.add} canEdit={props.labor.edit} />}
-      <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />
+      {canEdit && <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />}
       <h3>Giấy tờ</h3>
       <ul className="list">
         {STAFF_DOCS.map((def) => (

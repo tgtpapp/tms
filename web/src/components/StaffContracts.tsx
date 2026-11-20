@@ -1,9 +1,9 @@
 // Mục "Hợp đồng lao động" trong hồ sơ Lái xe & nhân viên (như form nhân viên của app cũ): soạn, sửa, xem trước / in, lưu hồ sơ.
 import { useCallback, useEffect, useState } from 'react';
-import { fmtDate, today } from './Documents';
+import { today } from './Documents';
 import { CONTRACT_COLS, ContractEditor, contractDefaults, formOf, loadPay, useContracts, type CForm, type CStaff, type PayMap } from './ContractEditor';
 import type { Me } from './ProfilePapers';
-import { KIND_NAME, type Contract } from '../lib/laborContract';
+import type { Contract } from '../lib/laborContract';
 import { supabase } from '../lib/supabase';
 
 export function StaffContracts({ s, contractType, tenantId, me, canArchive, canAdd, canEdit }: {
@@ -39,7 +39,7 @@ export function StaffContracts({ s, contractType, tenantId, me, canArchive, canA
         <ul className="list">
           {list.map((k) => (
             <li key={k.id} className={k.status === 'da_huy' ? 'muted' : ''}>
-              <b>{k.number}</b> · {KIND_NAME[k.kind]} · {fmtDate(k.start_on)}{k.end_on ? ` → ${fmtDate(k.end_on)}` : ''} · {Number(k.salary).toLocaleString('vi-VN')} đ
+              <b>{k.number}</b>
               {k.status === 'da_huy' && <span className="small error-text"> · Đã hủy: {k.cancel_reason}</span>}
               {k.status === 'hieu_luc' && (
                 <span className="actions inline-acts">

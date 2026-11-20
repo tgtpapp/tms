@@ -40,7 +40,8 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
   const toast = useToast();
   const viewAll = perms.has('timesheet.view_all');
   const canEdit = perms.has('timesheet.edit');
-  const money_ = perms.has('salary.view');
+  // Lương: người xem bảng lương thấy tất cả; lái xe / nhân viên (chỉ xem của mình) thấy tiền của chính mình (như app cũ)
+  const money_ = perms.has('salary.view') || !viewAll;
   const me: Me = { id: ctx.user_id, name: ctx.full_name ?? '' };
   const [ym, setYm] = useState(nowYm());
   const [d, setD] = useState<Data | null>(null);
@@ -50,7 +51,7 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
   const [page, setPage] = useState(0);
   const [ctOpen, setCtOpen] = useState(false);
   const [poOpen, setPoOpen] = useState(false);
-  const [view, setView] = useState<{ title: string; html: string } | null>(null);
+  const [view, setView] = useState<{ title: string; html: string; land?: boolean } | null>(null);
   const [busy, setBusy] = useState('');
 
   const load = useCallback(async () => {
@@ -246,7 +247,43 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
 
   let lastG: string | null = null;
   const span = days.length + (hideMoney ? 2 : 7);
+  // ---- Công & lương của tôi (người chỉ xem của mình): ô tổng + in phiếu lương (như "Thông tin của tôi" app cũ)
+  const meRow = !viewAll ? base.find(mine) : undefined;
+  async function printSlip(e: TStaff) {
+    const s = T!.summarize(e), o = T!.payOf(e);
+    const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me)]);
+    const B = 'border:1px solid #000;padding:5px 8px;font-size:13px';
+    const r = (n: string, l: string, g: string, v: number | string) => `<tr><td style="${B};text-align:center">${n}</td><td style="${B}">${l}</td><td style="${B}">${esc(g)}</td><td style="${B};text-align:right">${typeof v === 'number' ? money(v) : v}</td></tr>`;
+    setView({ title: `Phiếu lương ${e.full_name} ${monthTxt}`, land: false, html: `<div style="font-size:13px">${head(c)}
+      <h2 style="text-align:center;margin:12px 0 2px;font-size:18px">PHIẾU LƯƠNG</h2><div style="text-align:center;margin-bottom:10px">Kỳ lương ${esc(monthTxt)}</div>
+      <p>Họ và tên: <b>${esc(e.full_name)}</b>${e.job_title ? ` · ${esc(e.job_title)}` : ''}${e.department ? ` · ${esc(e.department)}` : ''}</p>
+      <table style="width:100%;border-collapse:collapse;margin:6px 0"><tr style="background:#e2e8f0"><th style="${B}">STT</th><th style="${B}">Khoản mục</th><th style="${B}">Diễn giải</th><th style="${B}">Số tiền (đ)</th></tr>
+        ${r('1', 'Công làm', '', numf(s.lv))}
+        ${r('2', 'Tiền công', s.drv ? `${numf(s.lc)} công theo tuyến × tiền tài của xe` : 'Lương cố định của tháng', s.tienCong)}
+        ${r('3', 'Chi phí khác', s.drv ? `Tiền công × ${numf(d!.cpPct)}%` : '', s.cpKhac)}
+        ${r('4', 'Lương chuyển khoản', '', o.lck)}
+        ${r('5', 'Trừ BHXH', o.bhSkip ? 'Tạm dừng tháng này' : '', o.bhSkip ? 0 : o.bh)}
+        <tr style="font-weight:bold"><td style="${B}" colspan="3">THỰC NHẬN</td><td style="${B};text-align:right">${o.show ? money(o.thucNhan) : '–'}</td></tr></table>
+      <table style="width:100%;border-collapse:collapse;margin-top:14px"><tr>${signCol('NGƯỜI NHẬN', '(Ký, họ tên)', '', e.full_name, null, 33)}${signCol('KẾ TOÁN', '(Ký, họ tên)', '', '', null, 33)}${bossCol(b.b, 'GIÁM ĐỐC', 34)}</tr></table></div>` });
+  }
+
   return (
+    <>
+    {meRow && (() => {
+      const s = T.summarize(meRow), o = T.payOf(meRow);
+      return (
+        <section className="card">
+          <div className="item-head"><h2>Công &amp; lương của tôi · {monthTxt}</h2>
+            <button type="button" className="btn small primary" onClick={() => void printSlip(meRow)}>In phiếu lương</button></div>
+          <div className="dt-kpi me-pay">
+            <div><b>{numf(s.lv)}</b><span>Công làm</span></div>
+            <div><b>{money(s.tienCong)}</b><span>Tiền công</span></div>
+            <div><b className="ok-text">{o.show ? money(o.thucNhan) : '–'}</b><span>Thực nhận</span></div>
+          </div>
+          <p className="small muted">Chi phí khác {money(s.cpKhac)} · Lương CK {money(o.lck)} · Trừ BHXH {money(o.bhSkip ? 0 : o.bh)}</p>
+        </section>
+      );
+    })()}
     <section className="card cc-screen">
       <div className="item-head">
         <h2>Bảng chấm công {monthTxt}</h2>
@@ -354,7 +391,8 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
       </div>}
       <p className="small muted">Công chuẩn: <b>{d.congChuan}</b> ngày/tháng · Ngày nghỉ tuần: <b>{d.offSat ? 'Thứ 7 và Chủ nhật' : 'Chủ nhật'}</b> (theo cài đặt Hợp đồng lao động) · Lái xe: công lấy từ chuyến đã chạy (lái xe 1); văn phòng: tự điền X ngày làm việc đã qua.
         {money_ && ' Lương CK, BHXH, lương cố định nhập ở Cấu hình › BHXH & lương chuyển khoản theo tháng; tiền tài nhập ở hồ sơ xe.'}</p>
-      {view && <PaperView title={view.title} pages={[{ html: view.html, land: true }]} onClose={() => setView(null)} />}
+      {view && <PaperView title={view.title} pages={[{ html: view.html, land: view.land ?? true }]} onClose={() => setView(null)} />}
     </section>
+    </>
   );
 }

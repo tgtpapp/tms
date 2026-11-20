@@ -25,6 +25,9 @@ const short = (r: BRoute | undefined, d: Dir) => {
   return parts.length >= 2 ? `${ini(parts[0])}-${ini(parts[parts.length - 1])}` : n;
 };
 
+/** Thứ tự tuyến: từng cặp tuyến, chiều đi rồi chiều về (Biên Hòa - Vũng Tàu, Vũng Tàu - Biên Hòa, Hố Nai - Vũng Tàu, Vũng Tàu - Hố Nai…) */
+const byPair = (pa: string, da: string, pb: string, db: string) => pa.localeCompare(pb, 'vi') || (da === 'di' ? 0 : 1) - (db === 'di' ? 0 : 1);
+
 export interface Filter { mode: 'tuyen' | 'nhom'; keys: string[]; group: string }
 export function useBoardFilter() {
   const [f, setF] = useState<Filter>(() => {
@@ -50,8 +53,8 @@ export function RouteFilterBar(props: { routes: BRoute[]; trips: BTrip[]; crew: 
   }, []);
   const opts = useMemo(() => {
     const keys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))];
-    return keys.map((k) => { const [id, d] = k.split('|'); const r = routes.find((x) => x.id === id); return { k, label: dirName(r, d as Dir), short: short(r, d as Dir) }; })
-      .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+    return keys.map((k) => { const [id, d] = k.split('|'); const r = routes.find((x) => x.id === id); return { k, label: dirName(r, d as Dir), short: short(r, d as Dir), pair: r?.name ?? '', d }; })
+      .sort((a, b) => byPair(a.pair, a.d, b.pair, b.d));
   }, [trips, routes]);
   // Chưa tạo nhóm nào: mỗi tuyến (cả 2 chiều) là 1 nhóm
   const shownGroups: Group[] = groups.length ? groups
@@ -174,7 +177,7 @@ export function GridView(props: { routes: BRoute[]; trips: BTrip[]; crew: BCrew[
   }, [ids]);
   const rowsKeys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))]
     .map((k) => { const [id, d] = k.split('|'); const r = routes.find((x) => x.id === id); return { k, r, d: d as Dir }; })
-    .sort((a, b) => dirName(a.r, a.d).localeCompare(dirName(b.r, b.d), 'vi'));
+    .sort((a, b) => byPair(a.r?.name ?? '', a.d, b.r?.name ?? '', b.d));
   const hours = [...new Set(trips.map((t) => hhmm(t.depart_at).slice(0, 2)))].sort();
   if (!trips.length) return <p className="muted">Không có chuyến.</p>;
   return (

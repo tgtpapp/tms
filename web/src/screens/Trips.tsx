@@ -413,6 +413,12 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
   const person = (id: string) => staff.find((s) => s.id === id)?.full_name ?? '?';
 
+  // Nhà xe tắt chuyến trống (chuyen.tao_chuyen_trong = 0): không tự tạo chuyến theo nốt → ẩn nút Tạo chuyến
+  const [autoTrips, setAutoTrips] = useState(true);
+  useEffect(() => {
+    void supabase.from('tenant_settings').select('value').eq('key', 'chuyen.tao_chuyen_trong').maybeSingle()
+      .then(({ data }) => setAutoTrips(!data || Number(data.value) !== 0));
+  }, []);
   async function generate() {
     try {
       const n = await rpc<number>('generate_trips', {});
@@ -443,7 +449,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
       <div className="item-head">
         <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
         {canEdit && <span className="actions"><button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>
-          <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>
+          {autoTrips && <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>}
           <button className="btn small" onClick={() => setPapers(true)}>Phân công &amp; nghiệm thu</button></span>}
       </div>
       <div className="inline-form">
@@ -590,7 +596,7 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
     try {
       const r = await rpc<{ saved: boolean; warnings: string[] }>('assign_trip', {
         p_trip_id: trip.id, p_vehicle_id: f.vehicle || null, p_driver1: f.d1 || null, p_driver2: showExtra ? f.d2 || null : null,
-        p_assistant: showExtra ? f.px || null : null, p_reason: withReason ? reason : null,
+        p_assistant: showExtra ? f.px || null : null, p_reason: withReason ? reason.trim() || 'Đã xem cảnh báo, vẫn xếp' : null,
       });
       if (!r.saved) {
         setWarnings(r.warnings);
@@ -653,12 +659,12 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
         <div className="warn small">
           <b>Cần lưu ý trước khi xếp:</b>
           <ul>{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-          <label>Lý do vẫn xếp<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="vd: dừng nghỉ 20 phút ở Long Thành" /></label>
+          <label>Lý do vẫn xếp (không bắt buộc)<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="vd: dừng nghỉ 20 phút ở Long Thành" /></label>
         </div>
       )}
       <div className="actions">
         {!warnings && <button type="button" className="btn small primary" disabled={busy} onClick={() => void save(false)}>Lưu xếp xe</button>}
-        {warnings && <button type="button" className="btn small primary" disabled={busy || !reason.trim()} onClick={() => void save(true)}>Vẫn lưu</button>}
+        {warnings && <button type="button" className="btn small primary" disabled={busy} onClick={() => void save(true)}>Vẫn lưu</button>}
         <button type="button" className="btn small link" onClick={onClose}>Đóng</button>
         {cancel === null && <button type="button" className="btn small" onClick={() => setCancel('')}>Hủy chuyến</button>}
       </div>

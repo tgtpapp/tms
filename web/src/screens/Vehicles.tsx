@@ -69,7 +69,7 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
       }} />
       {canEdit && <AddVehicle tenantId={tenantId} types={types} reload={load} />}
       <VehicleList tenantId={tenantId} vehicles={vehicles} types={types} docs={docs} warnDays={warnDays} canEdit={canEdit}
-                   open={open} setOpen={setOpen} reload={load}
+                   open={open} setOpen={setOpen} reload={load} canArchive={perms.has('archive.manage')} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }}
                    layout={(typeId) => {
                      const t = types.find((x) => x.id === typeId);
                      return t ? <SeatLayout type={t} seats={seats.filter((s) => s.vehicle_type_id === t.id)} canEdit={canEdit} reload={load} types={types} allSeats={seats} /> : null;

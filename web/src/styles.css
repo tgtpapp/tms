@@ -842,3 +842,6 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .ap-chip { font-size: .8rem; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; }
 .ap-chip.state-het_han { background: #fee2e2; color: #b91c1c; } .ap-chip.state-sap_het { background: #fef3c7; color: #92400e; } .ap-chip.state-thieu { background: #f3f4f6; color: #374151; }
 @media (max-width: 600px) { .ap-items { padding-left: 0; } }
+/* Lý lịch hành nghề / lý lịch phương tiện: xem trước nằm trên cửa sổ hồ sơ */
+.lenh-overlay.paper-top { z-index: 1000; }
+.paper-acts { flex-wrap: wrap; align-items: center; margin: 4px 0 8px; }

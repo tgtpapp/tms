@@ -1,5 +1,6 @@
 import { Modal } from '../components/Modal';
 import { VehicleProfile } from '../components/VehicleProfile';
+import { BulkPaperSave, type Me } from '../components/ProfilePapers';
 import { DeleteButton } from '../components/DeleteButton';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
@@ -223,11 +224,13 @@ function VehicleFields({ f, setF, types }: { f: VehicleForm; setF: (f: VehicleFo
 export function VehicleList(props: {
   tenantId: string; vehicles: Vehicle[]; types: VehicleTypeLite[]; docs: Doc[]; warnDays: number; canEdit: boolean;
   open: string | null; setOpen: (id: string | null) => void; reload: () => Promise<void>;
+  me: Me; canArchive: boolean;
   /** Sơ đồ ghế của loại xe (sửa ngay trong cửa sổ xe) */
   layout?: (typeId: string) => ReactNode;
 }) {
   const { vehicles, types, docs, warnDays, canEdit, open, setOpen } = props;
   const [showInactive, setShowInactive] = useState(false);
+  const [bulk, setBulk] = useState(false);
   const typeName = (id: string) => types.find((t) => t.id === id)?.name ?? '?';
   const inactive = vehicles.filter((v) => !v.is_active).length;
 
@@ -235,12 +238,15 @@ export function VehicleList(props: {
     <section className="card">
       <div className="item-head">
         <h2>Xe ({vehicles.filter((v) => v.is_active).length})</h2>
+        {canEdit && props.canArchive && <button className="btn small" title="Lưu lý lịch phương tiện của tất cả xe đang dùng vào Lưu trữ hồ sơ" onClick={() => setBulk(true)}>💾 Lưu lý lịch xe</button>}
         {inactive > 0 && (
           <button className="btn small" onClick={() => setShowInactive(!showInactive)}>
             {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
           </button>
         )}
       </div>
+      {bulk && <BulkPaperSave kind="vehicle" tenantId={props.tenantId} me={props.me} onClose={() => setBulk(false)}
+        items={vehicles.filter((v) => v.is_active).map((v) => ({ id: v.id, label: v.plate }))} />}
       {vehicles.length === 0 && <p className="muted">Chưa có xe.</p>}
       <ul className="list">
         {vehicles.filter((v) => showInactive || v.is_active).map((v) => {
@@ -262,7 +268,7 @@ export function VehicleList(props: {
               {open === v.id && (
                 <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
                   <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
-                  <VehicleProfile v={v} canEdit={canEdit} />
+                  <VehicleProfile v={v} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
                   {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
                 </Modal>
               )}

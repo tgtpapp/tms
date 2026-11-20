@@ -1,12 +1,10 @@
-// Lý lịch phương tiện kinh doanh vận tải (như app cũ): xem, nhập sự cố, in 4 trang.
+// Lý lịch phương tiện kinh doanh vận tải (như app cũ): xem, nhập sự cố; in / lưu vào hồ sơ qua lib/profilePapers.
 // Thông tin xe, kiểm định, tai nạn lái xe, số chuyến theo tháng lấy sẵn từ dữ liệu app. Mẫu sổ theo quy định hiện hành: cần xác minh.
 import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { fmtDate } from './Documents';
 import { errMsg, fetchAll, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-import { signatureUrl } from '../lib/documents';
-import { loadSigns, showName, type Sign } from '../lib/signatures';
+import { PaperActions, type Me } from './ProfilePapers';
 
 interface V {
   id: string; plate: string; vehicle_type_id: string; chassis_no: string | null; engine_no: string | null; country_of_origin: string | null;
@@ -21,27 +19,24 @@ interface VType { name: string; brand: string | null; model_code: string | null;
 const BUSINESS: Record<string, string> = { tuyen_co_dinh: 'Tuyến cố định', hop_dong: 'Xe hợp đồng', ca_hai: 'Tuyến cố định + Xe hợp đồng' };
 const EMPTY_INC = { occurred_on: '', place: '', summary: '', damage: '', resolution: '' };
 
-export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
+export function VehicleProfile({ v, canEdit, tenantId, me, canSave }: { v: V; canEdit: boolean; tenantId: string; me: Me; canSave: boolean }) {
   const toast = useToast();
   const [ex, setEx] = useState<Extra>({ gsht_account: null, odo_start: null, odo_date: null, retired_on: null });
   const [type, setType] = useState<VType | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [inc, setInc] = useState<Inc[]>([]);
   const [months, setMonths] = useState<{ m: string; days: number; trips: number; km: number | null; run: number }[]>([]);
-  const [company, setCompany] = useState('');
   const [rep, setRep] = useState<{ repaired_on: string; odo_km: number | null; workshop: string | null; text: string; cost: number }[]>([]);
   const [f, setF] = useState(EMPTY_INC);
-  const [printing, setPrinting] = useState(false);
 
   const load = useCallback(async () => {
-    const [e, t, d, i, a, tr, tn] = await Promise.all([
+    const [e, t, d, i, a, tr] = await Promise.all([
       supabase.from('vehicles').select('gsht_account, odo_start, odo_date, retired_on').eq('id', v.id).maybeSingle(),
       supabase.from('vehicle_types').select('name, brand, model_code, reg_seats, reg_berths, reg_standing, gross_weight_kg').eq('id', v.vehicle_type_id).maybeSingle(),
       supabase.from('documents').select('doc_type, doc_no, issuer, issued_on, valid_from, expires_on, is_current, data').eq('vehicle_id', v.id),
       supabase.from('vehicle_incidents').select('id, occurred_on, place, summary, damage, resolution').eq('vehicle_id', v.id).order('occurred_on'),
       supabase.from('staff_records').select('id, occurred_on, title, data').eq('vehicle_id', v.id).eq('kind', 'tai_nan'),
       supabase.from('trips').select('service_date').eq('vehicle_id', v.id).eq('status', 'mo'),
-      supabase.from('tenants').select('name, legal_name').maybeSingle(),
     ]);
     if (e.data) setEx(e.data as Extra);
     setType((t.data ?? null) as VType | null);
@@ -75,29 +70,8 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
       return { repaired_on: o.repaired_on, odo_km: o.odo_km, workshop: o.workshop, text: l.map((x) => `${x.content}${Number(x.qty) > 1 ? ` (x${x.qty})` : ''}`).join('; '),
         cost: l.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0) };
     }));
-    const tt = tn.data as { name: string; legal_name: string | null } | null;
-    setCompany(tt?.legal_name || tt?.name || '');
   }, [v.id, v.vehicle_type_id]);
   useEffect(() => { void load(); }, [load]);
-
-  // Chữ ký: người lập sổ = người đang in; đại diện đơn vị = giám đốc (+ con dấu). Tải xong mới in.
-  const [sg, setSg] = useState<{ me: Sign; meName: string; gd: Sign | null; gdName: string; seal: string | null } | null>(null);
-  useEffect(() => {
-    if (!printing) return;
-    let t = 0;
-    void (async () => {
-      const uid = (await supabase.auth.getUser()).data.user?.id ?? null;
-      const u = uid ? (await supabase.from('app_users').select('tenant_id, full_name').eq('id', uid).maybeSingle()).data as { tenant_id: string; full_name: string } | null : null;
-      const ss = ((await supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'in.chu_ky_giam_doc', 'in.con_dau'])).data ?? []) as { key: string; value: unknown }[];
-      const raw = (k: string) => ss.find((x) => x.key === k)?.value;
-      const m = u ? await loadSigns(u.tenant_id, ['giam_doc', uid]) : new Map<string, Sign>();
-      const seal = u && raw('in.con_dau') !== false ? await signatureUrl(u.tenant_id, 'con_dau').catch(() => null) : null;
-      setSg({ me: (uid && m.get(uid)) || { img: null, hasName: false }, meName: u?.full_name ?? '', gd: raw('in.chu_ky_giam_doc') === false ? null : m.get('giam_doc') ?? null,
-        gdName: String(raw('cong_ty.giam_doc') ?? ''), seal });
-      t = window.setTimeout(() => { window.print(); setPrinting(false); }, 600);
-    })();
-    return () => clearTimeout(t);
-  }, [printing]);
 
   const doc = (code: string) => docs.find((d) => d.doc_type === code && d.is_current);
   const dk = doc('dang_ky'), kd = doc('kiem_dinh');
@@ -134,16 +108,13 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
     await load();
   }
 
-  const dots = (x: string | null | undefined) => (x ? <b>{x}</b> : <span className="vp-dots">…………………………</span>);
-  const dt = (x: string | null | undefined) => (x ? <b>{fmtDate(x)}</b> : <span>…../…../20…..</span>);
-  const blank = (n: number, cols: number) => Array.from({ length: Math.max(0, n) }, (_, i) => <tr key={`b${i}`} className="vp-blank">{Array.from({ length: cols }, (__, j) => <td key={j} />)}</tr>);
 
   return (
     <div className="sub">
       <div className="item-head">
         <h3>Lý lịch phương tiện</h3>
-        <button type="button" className="btn small" onClick={() => setPrinting(true)}>🖨 In lý lịch</button>
       </div>
+      <PaperActions kind="vehicle" id={v.id} label={v.plate} tenantId={tenantId} me={me} canSave={canSave} />
       <div className="vp-sum">{info.map(([l, x]) => <div key={l}><small>{l}</small><b>{x || <span className="muted">—</span>}</b></div>)}</div>
       {canEdit && (
         <div className="grid2 form">
@@ -184,61 +155,6 @@ export function VehicleProfile({ v, canEdit }: { v: V; canEdit: boolean }) {
       )}
       <p className="muted small">Mẫu sổ lý lịch phương tiện theo quy định hiện hành: cần xác minh. Bảo dưỡng / sửa chữa lấy từ mục Sửa chữa ({rep.length} phiếu).</p>
 
-      {printing && createPortal(
-        <div className="print-area vp-print">
-          <div style={{ textAlign: 'center' }}>
-            <h2>LÝ LỊCH PHƯƠNG TIỆN KINH DOANH VẬN TẢI</h2>
-            <div><b>{company}</b></div>
-            <div>SỐ LÝ LỊCH XE: <b>{v.plate}/LLPT</b></div>
-          </div>
-          <h3>TRANG 1: THÔNG TIN CHUNG CỦA PHƯƠNG TIỆN</h3>
-          <ol className="vp-list">
-            <li><b>Biển kiểm soát:</b> {dots(v.plate)}</li>
-            <li><b>Nhãn hiệu / Số loại:</b> {dots(brand)}</li>
-            <li><b>Số khung:</b> {dots(v.chassis_no)} &nbsp; <b>Số máy:</b> {dots(v.engine_no)}</li>
-            <li><b>Năm sản xuất:</b> {dots(v.manufacture_year ? String(v.manufacture_year) : '')} &nbsp; <b>Nước sản xuất:</b> {dots(v.country_of_origin)}</li>
-            <li><b>Số chỗ ngồi / Số chỗ đứng / Số chỗ nằm:</b> {dots(seats)}</li>
-            <li><b>Tải trọng cho phép chở (đối với xe tải / xe đầu kéo):</b> {type?.gross_weight_kg ? <b>{type.gross_weight_kg}</b> : '………………'} kg</li>
-            <li><b>Loại hình kinh doanh vận tải đã đăng ký:</b> {dots(BUSINESS[v.business_type])}</li>
-            <li><b>Giấy chứng nhận đăng ký xe:</b> số {dots(dk?.doc_no)} · ngày cấp {dt(dk?.issued_on)} · nơi cấp {dots(dk?.issuer)}</li>
-            <li><b>Giấy chứng nhận kiểm định ATKT &amp; BVMT:</b> số {dots(kd?.doc_no)} · hết hạn {dt(kd?.expires_on)}
-              <div>○ Bảo hiểm dân sự bắt buộc hết hạn: {dt(doc('bh_tnds')?.expires_on)}</div><div>○ Bảo hiểm vật chất hết hạn: {dt(doc('bh_vat_chat')?.expires_on)}</div></li>
-            <li><b>Thiết bị giám sát hành trình (GPS) &amp; camera:</b>
-              <div>○ Nhà cung cấp / số thiết bị: {dots([v.gsht_provider, v.gsht_device_no].filter(Boolean).join(' · '))}</div>
-              <div>○ Tài khoản truy cập quản lý: {dots(ex.gsht_account)}</div>
-              <div>○ Camera: {dots([v.camera_provider, v.camera_device_no].filter(Boolean).join(' · '))}</div></li>
-            <li><b>Thời hạn phù hiệu / biển hiệu kinh doanh vận tải:</b> đến ngày {dt(doc('phu_hieu')?.expires_on)}</li>
-          </ol>
-          <div className="vp-page">
-            <h3>TRANG 2: THEO DÕI QUÁ TRÌNH HOẠT ĐỘNG, BẢO DƯỠNG VÀ SỬA CHỮA</h3>
-            <p><b>1. Theo dõi bảo dưỡng định kỳ và sửa chữa lớn:</b></p>
-            <table className="vp-tbl"><thead><tr><th>Ngày / Tháng / Năm</th><th>Số km (Odo)</th><th>Nội dung bảo dưỡng / thay thế / sửa chữa</th><th>Đơn vị thực hiện</th><th>Chi phí (đ)</th><th>Xác nhận kỹ thuật / quản lý</th></tr></thead>
-              <tbody>{rep.map((r, i) => <tr key={i}><td>{fmtDate(r.repaired_on)}</td><td>{r.odo_km ? `${r.odo_km.toLocaleString('vi-VN')} km` : ''}</td><td>{r.text}</td><td>{r.workshop}</td><td>{r.cost.toLocaleString('vi-VN')}</td><td /></tr>)}{blank(8 - rep.length, 6)}</tbody></table>
-            <p><b>2. Theo dõi quá trình hoạt động:</b>{ex.odo_start ? ` Odo gốc ${ex.odo_start.toLocaleString('vi-VN')} km${ex.odo_date ? ` ngày ${fmtDate(ex.odo_date)}` : ''}` : ''}</p>
-            <table className="vp-tbl"><thead><tr><th>Tháng</th><th>Số ngày hoạt động</th><th>Số chuyến</th><th>Km chạy trong tháng</th><th>Km lũy kế</th></tr></thead>
-              <tbody>{months.map((r) => <tr key={r.m}><td>{r.m.slice(5)}/{r.m.slice(0, 4)}</td><td>{r.days}</td><td>{r.trips}</td><td>{r.km != null ? r.km.toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : ''}</td><td>{ex.odo_start != null && r.km != null ? (ex.odo_start + r.run).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) : ''}</td></tr>)}{blank(4 - months.length, 5)}</tbody></table>
-            <p><b>3. Theo dõi kiểm định kỹ thuật (Đăng kiểm):</b></p>
-            <table className="vp-tbl"><thead><tr><th>Lần kiểm định</th><th>Ngày kiểm định</th><th>Ngày hết hạn</th><th>Số giấy chứng nhận</th><th>Kết quả</th></tr></thead>
-              <tbody>{kdAll.map((d, i) => <tr key={i}><td>Lần {i + 1}</td><td>{d.valid_from || d.issued_on ? fmtDate((d.valid_from || d.issued_on)!) : ''}</td><td>{d.expires_on ? fmtDate(d.expires_on) : ''}</td><td>{d.doc_no}</td><td>Đạt</td></tr>)}{blank(3 - kdAll.length, 5)}</tbody></table>
-          </div>
-          <div className="vp-page">
-            <h3>TRANG 3: THEO DÕI TAI NẠN GIAO THÔNG &amp; SỰ CỐ KỸ THUẬT (NẾU CÓ)</h3>
-            <table className="vp-tbl"><thead><tr><th>Ngày xảy ra</th><th>Địa điểm</th><th>Tóm tắt sự cố / tai nạn</th><th>Mức độ thiệt hại</th><th>Kết quả xử lý / khắc phục</th></tr></thead>
-              <tbody>{inc.map((x) => <tr key={x.id}><td>{fmtDate(x.occurred_on)}</td><td>{x.place}</td><td>{x.summary}</td><td>{x.damage}</td><td>{x.resolution}</td></tr>)}{blank(6 - inc.length, 5)}</tbody></table>
-          </div>
-          <div className="vp-page">
-            <h3>TRANG 4: THAY ĐỔI THÔNG TIN VÀ XÁC NHẬN CỦA ĐƠN VỊ</h3>
-            <div>○ Thời gian đưa phương tiện vào hoạt động kinh doanh vận tải: {dt(v.acquired_on)}</div>
-            <div>○ Thời gian ngừng hoạt động / thanh lý xe (nếu có): {dt(ex.retired_on)}</div>
-            <p style={{ textAlign: 'right', marginTop: 24 }}><i>……………, ngày ….. tháng ….. năm 20…..</i></p>
-            <table style={{ width: '100%', marginTop: 10 }}><tbody><tr>
-              <td style={{ textAlign: 'center', width: '50%', verticalAlign: 'top' }}><b>NGƯỜI LẬP SỔ LÝ LỊCH</b><br /><i>(Ký, ghi rõ họ tên)</i>
-                <div className="sign-box">{sg?.me.img && <img src={sg.me.img} alt="" />}</div>{sg && showName(sg.me) && <b>{sg.meName}</b>}</td>
-              <td style={{ textAlign: 'center', verticalAlign: 'top' }}><b>ĐẠI DIỆN ĐƠN VỊ KINH DOANH VẬN TẢI</b><br /><i>(Ký, đóng dấu)</i>
-                <div className="sign-box sign-stack">{sg?.seal && <img src={sg.seal} alt="" />}{sg?.gd?.img && <img src={sg.gd.img} alt="" />}</div>{sg && showName(sg.gd) && <b>{sg.gdName}</b>}</td>
-            </tr></tbody></table>
-          </div>
-        </div>, document.body)}
     </div>
   );
 }

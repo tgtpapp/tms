@@ -1,6 +1,7 @@
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
+import { BulkPaperSave, PaperActions, type Me } from '../components/ProfilePapers';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -129,7 +130,10 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   }, [load]);
 
   const tenantId = ctx.tenant_id ?? '';
-  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load };
+  const canArchive = perms.has('archive.manage');
+  const me: Me = { id: ctx.user_id, name: ctx.full_name ?? '' };
+  const [bulk, setBulk] = useState(false);
+  const common = { tenantId, priv, docs, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
@@ -144,6 +148,11 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
             </button>
           ))}
         </div>
+        {canEdit && canArchive && (
+          <button type="button" className="btn small" title="Lưu lý lịch hành nghề của tất cả lái xe đang làm vào Lưu trữ hồ sơ" onClick={() => setBulk(true)}>💾 Lưu lý lịch</button>
+        )}
+        {bulk && <BulkPaperSave kind="driver" tenantId={tenantId} me={me} onClose={() => setBulk(false)}
+          items={staff.filter((x) => x.is_active && x.position === 'lai_xe').map((x) => ({ id: x.id, label: x.full_name }))} />}
         {canEdit && <StaffAlerts staff={staff} priv={priv} docs={docs} warnDays={warnDays} avas={avas} onOpen={(id) => {
           setTab('');
           setOpen(id);
@@ -189,6 +198,7 @@ interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
 interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
+  canArchive: boolean; me: Me;
 }
 
 function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
@@ -515,6 +525,7 @@ function Records(props: Common & { s: Staff }) {
           </button>
         )}
       </div>
+      {s.position === 'lai_xe' && <PaperActions kind="driver" id={s.id} label={s.full_name} tenantId={tenantId} me={props.me} canSave={props.canArchive} />}
       {form && def && (
         <div className="sub form">
           {!form.id && (

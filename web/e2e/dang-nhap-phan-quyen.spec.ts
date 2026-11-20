@@ -181,6 +181,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đọc lại Kiểm định' }).click();
   await expect(page.getByText('Chưa cấu hình AI đọc giấy tờ, vui lòng nhập tay')).toBeVisible();
   await expect(page.getByRole('button', { name: 'AI đọc lại ảnh đã lưu' })).toBeVisible();
+  // Bản in lý lịch phương tiện: tự lấy thông tin xe + các lần kiểm định
+  await page.getByRole('button', { name: '🖨 Xem / in lý lịch phương tiện' }).click();
+  const llpt = page.locator('.paper-top');
+  await expect(llpt.getByRole('heading', { name: 'LÝ LỊCH PHƯƠNG TIỆN KINH DOANH VẬN TẢI', exact: true })).toBeVisible();
+  await expect(llpt.getByText('51B-123.45/LLPT')).toBeVisible();
+  await expect(llpt.getByText('Lần 2', { exact: true })).toBeVisible();
+  await llpt.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(llpt).toHaveCount(0);
   // Sơ đồ ghế trong cửa sổ xe: thêm ô tài xế + cửa lên xuống (không bán, không tính chỗ)
   const dlg = page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' });
   await dlg.getByRole('button', { name: 'Sửa sơ đồ' }).click();
@@ -223,9 +231,17 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Thêm vào lý lịch' }).click();
   await page.getByLabel('Vi phạm: Ngày vi phạm').fill(ngay(-30));
   await page.getByLabel('Vi phạm: Hành vi vi phạm').fill('Dừng đỗ sai quy định');
-  await page.getByRole('button', { name: 'Lưu lý lịch' }).click();
+  await page.getByRole('button', { name: 'Lưu lý lịch', exact: true }).click();
   await expect(page.getByText('Đã lưu lý lịch: Vi phạm')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lý lịch hành nghề (1)' })).toBeVisible();
+  // Bản in lý lịch hành nghề: tự lấy thông tin lái xe + dòng vi phạm vừa ghi
+  await page.getByRole('button', { name: '🖨 Xem / in lý lịch hành nghề' }).click();
+  const llhn = page.locator('.paper-top');
+  await expect(llhn.getByRole('heading', { name: 'LÝ LỊCH HÀNH NGHỀ NGƯỜI LÁI XE', exact: true })).toBeVisible();
+  await expect(llhn.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
+  await expect(llhn.getByText('Dừng đỗ sai quy định')).toBeVisible();
+  await llhn.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(llhn).toHaveCount(0);
   // 5j2. Chữ ký lái xe trong hồ sơ (đang mở trong cửa sổ): chọn ảnh → khung cắt hiện trên cùng → lưu → ảnh chữ ký hiện trong hồ sơ
   await page.getByLabel('Ảnh chữ ký', { exact: true }).setInputFiles({ name: 'chu-ky-lx.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
   await expect(page.getByRole('img', { name: 'Ảnh cần cắt' })).toBeVisible();

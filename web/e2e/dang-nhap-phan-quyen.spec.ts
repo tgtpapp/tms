@@ -293,6 +293,21 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
   await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
   await expect(page.getByLabel('Đóng BHXH Nguyễn Văn Tài')).toBeChecked();
+  // 5j6. Hợp đồng lao động: lập HĐ, số 001 tự cấp, lương lấy từ lương chuyển khoản của tháng bắt đầu (sửa được), xem bản in
+  const thang = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7);
+  await page.getByRole('button', { name: 'Hợp đồng lao động', exact: true }).click();
+  await page.getByRole('button', { name: 'Lập HĐ Nguyễn Văn Tài' }).click();
+  await page.getByLabel('Từ ngày', { exact: true }).fill(`${thang}-01`);
+  await page.getByRole('button', { name: 'Lấy lại' }).click();
+  await expect(page.getByLabel('Lương ghi trên hợp đồng')).toHaveValue('7.000.000');
+  await page.getByRole('button', { name: 'Lập & cấp số' }).click();
+  await expect(page.getByText(/^Đã lập hợp đồng số 001\/\d{4}\/HĐLĐ/)).toBeVisible();
+  await page.getByRole('button', { name: 'Xem HĐ Nguyễn Văn Tài' }).click();
+  const hd = page.locator('.paper-top');
+  await expect(hd.getByText('NGƯỜI LAO ĐỘNG (BÊN B):')).toBeVisible();
+  await expect(hd.getByText(/7\.000\.000 đồng\/tháng/).first()).toBeVisible();
+  await expect(hd.getByText(/PHỤ LỤC II/)).toBeVisible();
+  await hd.getByRole('button', { name: 'Đóng', exact: true }).click();
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();

@@ -95,3 +95,19 @@ export async function toDataUrl(url: string | null): Promise<string | null> {
     return null;
   }
 }
+
+/** Chia các khối HTML thành các trang A4 (đo chiều cao thật), dùng cho văn bản dài như hợp đồng. Khối dài hơn 1 trang đứng riêng 1 trang. */
+export function paginate(blocks: string[], land = false): string[] {
+  const { w, h } = pageBox(land);
+  const limit = h * 0.96;
+  const pages: string[] = [];
+  let cur: string[] = [], used = 0;
+  for (const b of blocks) {
+    const bh = measure(`<div style="display:flow-root">${b}</div>`, w);
+    if (cur.length && used + bh > limit) { pages.push(cur.join('')); cur = []; used = 0; }
+    cur.push(`<div style="display:flow-root">${b}</div>`);
+    used += bh;
+  }
+  if (cur.length) pages.push(cur.join(''));
+  return pages;
+}

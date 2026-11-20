@@ -161,8 +161,9 @@ Deno.serve(async (req) => {
         const r = await gas(cfg, { action: 'hs_put_many', files: items.map((x) => ({ dir: dir.get(String(x.folder_id)), name: String(x.file_name ?? 'tep').slice(0, 200), mime: String(x.mime ?? 'application/pdf'), data: x.data })) }, 180000);
         up.push(...((r.files ?? []) as typeof up));
       } else {
-        for (let i = 0; i < items.length; i += 4) {
-          up.push(...await Promise.all(items.slice(i, i + 4).map((x) => gas(cfg, { action: 'hs_put', path: pathOf(F, String(x.folder_id)), name: String(x.file_name ?? 'tep').slice(0, 200), mime: String(x.mime ?? 'application/pdf'), data: x.data }, 180000)
+        // bản cũ: mỗi tệp giữ khóa của Apps Script khi tìm thư mục → gửi 2 tệp / lượt để không tranh khóa quá lâu
+        for (let i = 0; i < items.length; i += 2) {
+          up.push(...await Promise.all(items.slice(i, i + 2).map((x) => gas(cfg, { action: 'hs_put', path: pathOf(F, String(x.folder_id)), name: String(x.file_name ?? 'tep').slice(0, 200), mime: String(x.mime ?? 'application/pdf'), data: x.data }, 180000)
             .then((r) => ({ id: String(r.id), url: String(r.url ?? ''), size: Number(r.size ?? 0) }), (e) => ({ error: (e as Error).message })))));
         }
       }

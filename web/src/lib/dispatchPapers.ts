@@ -279,6 +279,10 @@ export async function savePdfMany<T extends { spec: () => PdfSpec }>(jobs: T[], 
   let oldScript = false, rendered = 0, sent = 0, next = 0, fatal: string | null = null;
   const ready: { job: T; item: Record<string, unknown> }[] = [];
   const BATCH = 10, MAX_BYTES = 6_000_000;
+  // Tệp lỗi tạm (Apps Script bận / hết thời gian chờ khóa, mạng…) thì đưa lại hàng chờ, thử tối đa 5 lần, chờ tăng dần
+  const tries = new Map<T, number>();
+  const busyErr = (m: string) => transient(new Error(m)) && !/Không lưu được$/.test(m);
+  let pause = 0;
   // 1) Dựng PDF: 6 tệp cùng lúc
   const render = async () => {
     while (next < jobs.length && !fatal) {
@@ -296,31 +300,40 @@ export async function savePdfMany<T extends { spec: () => PdfSpec }>(jobs: T[], 
   // 2) Gửi lô: lấy các tệp đã dựng xong, tối đa 10 tệp / ~6 MB mỗi lô; 6 lô cùng lúc
   const take = () => { const L: typeof ready = []; let b = 0; while (ready.length && L.length < BATCH && (b === 0 || b + String(ready[0]!.item.data).length < MAX_BYTES)) { const x = ready.shift()!; b += String(x.item.data).length; L.push(x); } return L; };
   let renderDone = false;
-  const upload = async () => {
+  const upload = async (idx: number) => {
     for (;;) {
-      if (fatal) return;
+      if (fatal || (oldScript && idx >= 2)) return;
       const L = take();
       if (!L.length) { if (renderDone) return; await new Promise((r) => setTimeout(r, 120)); continue; }
       for (let attempt = 0; ; attempt++) {
         try {
           const r = await drive<{ old_script: boolean; results: ({ id: string } | { error: string })[] }>({ action: 'put_many', items: L.map((x) => x.item) });
           if (r.old_script) oldScript = true;
-          L.forEach((x, i) => { const v = r.results[i]; if (v && 'id' in v && v.id) ok.push(x.job); else failed.push({ job: x.job, error: (v as { error?: string } | undefined)?.error ?? 'Không lưu được' }); });
+          const again: typeof L = [];
+          L.forEach((x, i) => {
+            const v = r.results[i];
+            if (v && 'id' in v && v.id) { ok.push(x.job); sent++; return; }
+            const err = (v as { error?: string } | undefined)?.error ?? 'Không lưu được', n = tries.get(x.job) ?? 0;
+            if (busyErr(err) && n < RETRY_WAIT.length) { tries.set(x.job, n + 1); again.push(x); pause = Math.max(pause, RETRY_WAIT[n]!); }
+            else { failed.push({ job: x.job, error: err }); sent++; }
+          });
+          if (again.length) { const w = pause; pause = 0; await new Promise((ok2) => setTimeout(ok2, w * (0.8 + Math.random() * 0.4))); ready.unshift(...again); }
           break;
         } catch (e) {
           if (!transient(e)) { fatal = e instanceof Error ? e.message : String(e); L.forEach((x) => failed.push({ job: x.job, error: fatal! })); return; }
-          if (attempt >= RETRY_WAIT.length) { L.forEach((x) => failed.push({ job: x.job, error: e instanceof Error ? e.message : String(e) })); break; }
+          if (attempt >= RETRY_WAIT.length) { L.forEach((x) => failed.push({ job: x.job, error: e instanceof Error ? e.message : String(e) })); sent += L.length; break; }
           await new Promise((ok2) => setTimeout(ok2, RETRY_WAIT[attempt]! * (0.8 + Math.random() * 0.4)));
         }
       }
-      sent += L.length;
       onStep(sent, jobs.length, `Đã lưu ${sent}/${jobs.length} tệp lên Google Drive`);
     }
   };
-  const ups = Array.from({ length: 8 }, upload);
+  // Apps Script bản cũ: mỗi tệp phải chờ khóa → chỉ giữ 2 luồng gửi để không tranh khóa quá thời gian chờ
+  const ups = Array.from({ length: 8 }, (_x, i) => upload(i));
   await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, render));
   renderDone = true;
   await Promise.all(ups);
+  while (ready.length && !fatal) await upload(0);   // tệp đưa lại hàng chờ khi các luồng khác đã dừng
   if (fatal) { for (const j of jobs.slice(next)) failed.push({ job: j, error: fatal }); for (const x of ready.splice(0)) failed.push({ job: x.job, error: fatal }); }
   return { ok, failed, oldScript };
 }

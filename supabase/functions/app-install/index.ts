@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
     const sq = src.crop(Math.floor((src.width - side) / 2), Math.floor((src.height - side) / 2), side, side);
     const inner = mask ? Math.round(z * 0.8) : z;
     const out = new Image(z, z).fill(0xffffffff).composite(sq.resize(inner, inner), Math.floor((z - inner) / 2), Math.floor((z - inner) / 2));
-    return new Response(await out.encode(), { headers: { ...CORS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' } });
+    const png = await out.encode();
+    return new Response(new Blob([png as BlobPart], { type: 'image/png' }), { headers: { ...CORS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' } });
   } catch {
     return new Response('Không đọc được ảnh', { status: 422, headers: CORS });
   }

@@ -28,6 +28,11 @@ const FIELDS: Record<Template, Field[]> = {
     { key: 'thanh_vien', label: 'Thành viên (mỗi dòng: Họ tên | Chức vụ tại công ty | Chức danh trong Ban)', area: 5 },
     { key: 'nhiem_vu', label: 'Nhiệm vụ của Ban (mỗi dòng một nhiệm vụ)', area: 6 }, { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 2 },
   ],
+  qd_giam_sat: [
+    { key: 'thoi_han_tu', label: 'Thời hạn thực hiện kể từ ngày', type: 'date', hint: 'Để trống thì lấy ngày hiệu lực' },
+    { key: 'hieu_luc', label: 'Quyết định có hiệu lực từ ngày', type: 'date', hint: 'Để trống thì lấy ngày ký. Bộ phận lấy theo Phòng ban trong hồ sơ nhân viên. Căn cứ VBHN 58/VBHN-BXD, NĐ 218/2026 theo mẫu nhà xe: cần xác minh trước khi ký.' },
+    { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
+  ],
   quyet_dinh: [
     { key: 'can_cu', label: 'Căn cứ (mỗi dòng một căn cứ)', area: 3 }, { key: 'dieu', label: 'Các điều (mỗi dòng là 1 Điều, tự đánh Điều 1, Điều 2…)', area: 6 },
     { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
@@ -109,6 +114,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     if (!f) return;
     if (!f.signed_on || !f.title.trim()) return toast('error', 'Nhập ngày ký và trích yếu');
     if (f.template === 'qd_bo_nhiem' && !f.staff_id) return toast('error', 'Chọn người được bổ nhiệm');
+    if (f.template === 'qd_giam_sat' && !f.staff_id) return toast('error', 'Chọn người được giao nhiệm vụ giám sát');
     if (isWord(f.template) && !(f.content.html ?? '').replace(/<[^>]+>|&nbsp;/g, '').trim()) return toast('error', 'Văn bản đang trống: mở file Word, gõ nội dung hoặc nhờ AI soạn');
     setBusy(f.id ? 'Đang lưu…' : 'Đang cấp số…');
     try {
@@ -189,7 +195,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
               <label>Ngày ký<input type="date" value={f.signed_on} onChange={(e) => setF({ ...f, signed_on: e.target.value })} /></label>
               <label>Nơi ký<input value={f.content.noi ?? ''} onChange={(e) => setC('noi', e.target.value)} placeholder="vd: Đồng Nai" /></label>
               {f.template !== 'qd_atgt' && (
-                <label>{f.template === 'qd_bo_nhiem' ? 'Người được bổ nhiệm' : 'Người liên quan (nếu có)'}
+                <label>{f.template === 'qd_bo_nhiem' ? 'Người được bổ nhiệm' : f.template === 'qd_giam_sat' ? 'Người được giao nhiệm vụ' : 'Người liên quan (nếu có)'}
                   <select value={f.staff_id} onChange={(e) => setF({ ...f, staff_id: e.target.value })}>
                     <option value="">— Chọn nhân viên —</option>
                     {staff.filter((s) => s.is_active || s.id === f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}

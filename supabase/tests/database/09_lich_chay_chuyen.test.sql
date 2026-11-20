@@ -175,6 +175,10 @@ reset role;
 select ok(not has_function_privilege('anon', 'public.assign_trip(uuid, uuid, uuid, uuid, uuid, text)', 'EXECUTE'), 'Khách (anon) không xếp xe được');
 select ok(app.svc_generate_all_trips() >= 0, 'Việc định kỳ tạo chuyến chạy được');
 
+-- Giám sát ATGT: xếp xe vẫn lưu dù có cảnh báo giờ lái → tự ghi sổ giám sát an toàn
+select is((select kind from public.safety_events where trip_id = (select v from t.ids where k = 'T1') and auto), 'thoi_gian_lai', 'Tự ghi sổ giám sát khi xếp xe vẫn lưu dù cảnh báo giờ lái');
+select is((select count(*)::int from public.safety_events where trip_id = (select v from t.ids where k = 'T3')), 0, 'Xếp xe không có cảnh báo: không ghi sổ');
+
 -- Khám sức khỏe ghi trong Lý lịch hành nghề (dữ liệu app cũ) được tính, không báo thiếu
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';

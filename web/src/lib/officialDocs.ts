@@ -6,7 +6,7 @@ import { boss, bossCol, company, type Boss, type Company } from './profilePapers
 import { savePdf } from './dispatchPapers';
 import { paginate } from './pdfMaker';
 
-export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'cong_van' | 'quyet_dinh' | 'thong_bao' | 'word_qd' | 'word_cv' | 'word_tb';
+export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'qd_giam_sat' | 'cong_van' | 'quyet_dinh' | 'thong_bao' | 'word_qd' | 'word_cv' | 'word_tb';
 export const isWord = (t: Template) => t.startsWith('word_');
 export type Content = Record<string, string>;
 export interface OfficialDoc {
@@ -17,6 +17,7 @@ export interface OfficialDoc {
 export const TEMPLATES: { key: Template; name: string; folder: string; code: 'QD' | 'CV' | 'TB' }[] = [
   { key: 'qd_bo_nhiem', name: 'Quyết định bổ nhiệm người điều hành vận tải', folder: 'Quyết định bổ nhiệm người điều hành', code: 'QD' },
   { key: 'qd_atgt', name: 'Quyết định thành lập Ban An toàn giao thông', folder: 'Quyết định thành lập Ban ATGT', code: 'QD' },
+  { key: 'qd_giam_sat', name: 'Quyết định giao nhiệm vụ giám sát, quản lý ATGT (kèm bộ hồ sơ theo dõi)', folder: 'Quyết định giao nhiệm vụ', code: 'QD' },
   { key: 'quyet_dinh', name: 'Quyết định khác', folder: 'Quyết định', code: 'QD' },
   { key: 'cong_van', name: 'Công văn', folder: 'Công văn', code: 'CV' },
   { key: 'thong_bao', name: 'Thông báo', folder: 'Thông báo', code: 'TB' },
@@ -48,6 +49,7 @@ export function defaults(t: Template, noi: string, director: string): Content {
     nhiem_vu: ['Xây dựng, tổ chức thực hiện quy chế quản lý an toàn giao thông của công ty.', 'Kiểm tra điều kiện an toàn kỹ thuật của xe, giấy tờ xe và lái xe trước khi khởi hành.',
       'Quản lý hồ sơ, sức khỏe, thời gian lái xe và tập huấn nghiệp vụ cho lái xe, nhân viên phục vụ trên xe.', 'Phổ biến, nhắc nhở lái xe chấp hành pháp luật giao thông; xử lý hoặc đề xuất xử lý vi phạm.',
       'Thống kê, báo cáo và phối hợp điều tra, giải quyết khi xảy ra tai nạn giao thông.', 'Phối hợp với cơ quan chức năng trong công tác bảo đảm an toàn giao thông.'].join('\n'), noi_nhan: '- Như Điều 4;\n- Lưu: VT.' };
+  if (t === 'qd_giam_sat') return { ...base, hieu_luc: '', thoi_han_tu: '', noi_nhan: '- Như Điều 6;\n- Bộ phận điều hành, kỹ thuật, nhân sự;\n- Lưu: VT, HS.' };
   if (t === 'cong_van') return { ...base, kinh_gui: '', noi_dung: '', noi_nhan: '- Như trên;\n- Lưu: VT.' };
   if (t === 'quyet_dinh') return { ...base, can_cu: 'Căn cứ Điều lệ tổ chức và hoạt động của Công ty;', dieu: '', noi_nhan: '- Như Điều …;\n- Lưu: VT.' };
   return { ...base, noi_dung: '', noi_nhan: '- Toàn thể nhân viên;\n- Lưu: VT.' };
@@ -55,7 +57,8 @@ export function defaults(t: Template, noi: string, director: string): Content {
 /** Trích yếu tự đặt theo mẫu (người dùng vẫn sửa được). */
 export const autoTitle = (t: Template, c: Content) =>
   t === 'qd_bo_nhiem' ? `Về việc bổ nhiệm ${c.chuc_danh || 'Người trực tiếp điều hành hoạt động vận tải'}`
-    : t === 'qd_atgt' ? `Về việc thành lập ${c.ten_ban || 'Ban An toàn giao thông'}` : '';
+    : t === 'qd_atgt' ? `Về việc thành lập ${c.ten_ban || 'Ban An toàn giao thông'}`
+    : t === 'qd_giam_sat' ? 'Về việc giao nhiệm vụ giám sát, quản lý an toàn giao thông và bộ hồ sơ theo dõi thực hiện' : '';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const lines = (s: string | undefined) => String(s ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
@@ -66,7 +69,7 @@ const money = (n: number) => n.toLocaleString('vi-VN');
 
 export interface DocCtx { company: Company; boss: Boss; title: string; person: Person | null }
 interface Person { name: string; birth: string | null; gender: string | null; cccd: string | null; cccdOn: string | null; cccdBy: string | null; address: string | null;
-  current: string | null; phone: string | null; job: string | null; joined: string | null }
+  current: string | null; phone: string | null; job: string | null; joined: string | null; dept: string | null }
 
 /** Lấy dữ liệu để in: công ty, chữ ký giám đốc + con dấu, người liên quan. */
 export async function loadDocCtx(tenantId: string, me: { id: string | null; name: string }, staffId: string | null): Promise<DocCtx> {
@@ -79,16 +82,16 @@ export async function loadDocCtx(tenantId: string, me: { id: string | null; name
 }
 async function loadPerson(id: string): Promise<Person | null> {
   const [s, p, d] = await Promise.all([
-    supabase.from('staff_members').select('full_name, phone, job_title, position, joined_on').eq('id', id).maybeSingle(),
+    supabase.from('staff_members').select('full_name, phone, job_title, position, joined_on, department').eq('id', id).maybeSingle(),
     supabase.from('staff_private').select('birth_date, gender, address, current_address').eq('staff_id', id).maybeSingle(),
     supabase.from('documents').select('doc_no, issued_on, issuer, data').eq('staff_id', id).eq('doc_type', 'cccd').eq('is_current', true).maybeSingle(),
   ]);
   if (!s.data) return null;
   const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null; current_address?: string | null } | null;
-  const sm = s.data as { full_name: string; phone: string | null; job_title: string | null; position: string; joined_on: string };
+  const sm = s.data as { full_name: string; phone: string | null; job_title: string | null; position: string; joined_on: string; department: string | null };
   const cd = d.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
   return { current: pv?.current_address ?? null, phone: sm.phone, job: sm.job_title || ({ lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' } as Record<string, string>)[sm.position] || null,
-    joined: sm.joined_on, name: sm.full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
+    joined: sm.joined_on, dept: sm.department, name: sm.full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
     cccd: cd?.doc_no ?? null, cccdOn: cd?.issued_on ?? null, cccdBy: cd?.issuer ?? null, address: pv?.address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || null };
 }
 
@@ -119,6 +122,7 @@ export function fillFields(html: string, number: string, signed: string, title: 
 }
 /** Các trang in của văn bản: văn bản tự soạn tự chia trang A4; mẫu có sẵn 1 trang (dài thì thu nhỏ vừa trang). */
 export function docPages(t: Template, number: string, signed: string, title: string, c: Content, x: DocCtx): string[] {
+  if (t === 'qd_giam_sat') return paginate(giamSatBlocks(number, signed, title, c, x).map((b) => `<div style="font-size:14px;line-height:1.5;text-align:justify">${b}</div>`));
   if (!isWord(t)) return [docHtml(t, number, signed, title, c, x)];
   const filled = fillFields(c.html || '', number, signed, title, c, x);
   const box = document.createElement('div');
@@ -194,10 +198,120 @@ export function docHtml(t: Template, number: string, signed: string, title: stri
 }
 
 const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-/** Lưu PDF văn bản vào <năm ký> / Pháp lý công ty / <loại>; lưu lại thì thay bản cũ. */
+/** Lưu PDF văn bản vào <năm ký> / Pháp lý công ty / <loại> (QĐ giao nhiệm vụ giám sát: <năm> / An toàn giao thông / Quyết định giao nhiệm vụ). */
 export async function saveDocPdf(d: OfficialDoc, x: DocCtx): Promise<void> {
   const tp = tplOf(d.template);
-  const who = d.template === 'qd_bo_nhiem' && x.person ? ` · ${x.person.name}` : '';
-  await savePdf([String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
+  const who = (d.template === 'qd_bo_nhiem' || d.template === 'qd_giam_sat') && x.person ? ` · ${x.person.name}` : '';
+  await savePdf(d.template === 'qd_giam_sat' ? [String(d.year), 'An toàn giao thông', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
     docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false })), 'Lưu từ Văn bản', `vb:${d.id}`);
+}
+
+// ------------------------------------------------------------------ QĐ giao nhiệm vụ giám sát, quản lý ATGT (theo mẫu nhà xe cung cấp)
+const GS_DIEU: [string, string[]][] = [
+  ['Điều 2. Mục tiêu, nguyên tắc thực hiện', [
+    'Chủ động phòng ngừa nguy cơ, bảo đảm an toàn giao thông; phát hiện, cảnh báo, chấn chỉnh vi phạm kịp thời.',
+    'Giám sát dựa trên dữ liệu, hồ sơ, thông tin xác minh; ghi nhận khách quan, có thời gian và người xử lý.',
+    'Không thay thế trách nhiệm của Giám đốc, người trực tiếp điều hành vận tải, lái xe hoặc bộ phận chuyên môn theo quy định.',
+    'Trường hợp nguy cơ tức thời, ưu tiên cảnh báo, yêu cầu dừng tại vị trí an toàn và báo cáo cấp có thẩm quyền; không yêu cầu lái xe thao tác điện thoại khi đang điều khiển xe.',
+    'Thông tin, dữ liệu cá nhân, hình ảnh, hành trình được truy cập, sử dụng, lưu trữ đúng mục đích và theo quy định pháp luật.']],
+  ['Điều 3. Nhiệm vụ cụ thể của giám sát an toàn giao thông', []],
+  ['#3.1. Kiểm tra, phối hợp trước khi giao chuyến', [
+    'Phối hợp điều hành kiểm tra hồ sơ, điều kiện của lái xe: giấy phép lái xe phù hợp loại xe; giấy chứng nhận/điều kiện tập huấn nghiệp vụ vận tải theo quy định; tình trạng sức khỏe và các điều kiện cần thiết khác.',
+    'Kiểm tra tình trạng pháp lý và điều kiện vận hành của phương tiện: đăng ký, kiểm định, bảo hiểm bắt buộc, phù hiệu và các giấy tờ/điều kiện cần thiết khác còn hiệu lực theo loại hình vận tải.',
+    'Kiểm tra thông tin giao nhiệm vụ: lái xe, phương tiện, tuyến/hành trình, thời gian, điểm đi/đến, yêu cầu đặc thù và phân công liên quan.',
+    'Phối hợp kiểm tra lịch sử dữ liệu giám sát hành trình/camera (đối với phương tiện thuộc diện phải lắp), các cảnh báo chưa xử lý và các nguy cơ có thể ảnh hưởng đến chuyến mới.',
+    'Phối hợp xác nhận thời gian lái xe và nghỉ ngơi; không bố trí lịch có nguy cơ vi phạm giới hạn pháp luật.',
+    'Kiểm tra hoặc phối hợp xác nhận tình trạng thiết bị giám sát hành trình, camera và các thiết bị bắt buộc; báo kỹ thuật/điều hành xử lý nếu lỗi.',
+    'Thông tin cho điều hành và lãnh đạo khi phát hiện xe/lái xe chưa đủ điều kiện; kiến nghị không giao chuyến cho đến khi khắc phục.']],
+  ['#3.2. Theo dõi, giám sát khi xe đang hoạt động', [
+    'Theo dõi dữ liệu thiết bị giám sát hành trình và thiết bị ghi nhận hình ảnh người lái xe (nếu thuộc diện phải lắp), hệ thống quản lý của Công ty.',
+    'Phát hiện, ghi nhận, thông báo và theo dõi khắc phục các trường hợp: vượt tốc độ; vi phạm thời gian lái xe; sai hành trình; dừng/đỗ bất thường; thiết bị mất kết nối hoặc dữ liệu gián đoạn; nguy cơ bất thường khác.',
+    'Khi phát hiện vi phạm thời gian lái xe liên tục, thời gian trong ngày/tuần, sai hành trình hoặc thiết bị không hoạt động, kịp thời thông tin cho lái xe để điều chỉnh/khắc phục và thông báo điều hành.',
+    'Không liên lạc theo cách làm lái xe mất tập trung. Nếu cần liên hệ, ưu tiên thông báo qua điều hành hoặc yêu cầu lái xe dừng tại nơi an toàn trước khi trao đổi.',
+    'Đối với sự cố, thời tiết, đường sá, ùn tắc, tai nạn, nguy cơ trên tuyến: ghi nhận, cảnh báo, phối hợp điều hành phương án an toàn.',
+    'Tiếp nhận phản ánh/đề xuất của lái xe về điều kiện an toàn, phương tiện, hành trình, thời gian làm việc; ghi nhận và phản hồi hoặc chuyển cấp có thẩm quyền.']],
+  ['#3.3. Xử lý cảnh báo và vi phạm', [
+    'Phân loại sự việc theo mức độ: (i) cảnh báo/nhắc nhở; (ii) vi phạm cần xác minh; (iii) nguy cơ nghiêm trọng cần xử lý ngay.',
+    'Đối chiếu dữ liệu, xác minh với lái xe/điều hành và tài liệu liên quan trước khi lập kết luận nội bộ.',
+    'Thông báo nhắc nhở, yêu cầu khắc phục; ghi nhận thời điểm thông báo, người nhận, nội dung, thời hạn khắc phục và kết quả.',
+    'Đề xuất biện pháp theo quy chế Công ty: huấn luyện bổ sung, nhắc nhở, lập biên bản, xem xét kỷ luật theo quy định; hoặc tạm dừng giao nhiệm vụ khi có căn cứ và nguy cơ an toàn.',
+    'Đối với nguy cơ mất an toàn nghiêm trọng hoặc khẩn cấp, báo ngay lãnh đạo/điều hành và đề xuất biện pháp bảo vệ người, phương tiện; không tự ý vượt quá thẩm quyền được giao.',
+    'Định kỳ kiểm tra việc khắc phục và tái phạm; cập nhật hồ sơ lái xe.']],
+  ['#3.4. Kết thúc chuyến/ca làm việc', [
+    'Tổng hợp quãng đường xe đã thực hiện; phối hợp theo dõi lịch bảo dưỡng, sửa chữa và kết quả thực hiện bảo dưỡng của từng phương tiện.',
+    'Thống kê vi phạm tốc độ, thời gian lái xe, sai hành trình, gián đoạn dữ liệu thiết bị giám sát hành trình/camera (nếu thuộc diện), sự cố mất an toàn.',
+    'Báo cáo lãnh đạo/điều hành các vi phạm và sự cố cần xử lý; đề xuất khắc phục, bảo dưỡng, đào tạo hoặc biện pháp quản lý.',
+    'Đối với xe khách, phối hợp nhắc lái xe thực hiện các trách nhiệm kết thúc ca/hành trình theo pháp luật, bao gồm kiểm tra khoang hành khách trước khi rời xe.']],
+  ['#3.5. Công tác định kỳ tháng, quý, năm', [
+    'Thống kê số vụ tai nạn, sự cố, nguyên nhân và mức độ theo từng lái xe và toàn đơn vị; tổng hợp xu hướng và nguy cơ.',
+    'Phối hợp xây dựng, rà soát và thực hiện phương án xử lý sự cố gây mất an toàn giao thông.',
+    'Đối với tai nạn từ nghiêm trọng trở lên trong hoạt động kinh doanh vận tải, phối hợp tổ chức đánh giá, rút kinh nghiệm đối với toàn bộ lái xe theo quy định.',
+    'Phối hợp các bộ phận tổ chức tập huấn nghiệp vụ vận tải, phổ biến quy định mới, nội quy và các điểm nguy cơ.',
+    'Kiến nghị cải thiện tuyến, lịch chạy, phân công, phương tiện, quy trình, công tác giám sát và biện pháp phòng ngừa.',
+    'Định kỳ rà soát hồ sơ, đảm bảo dữ liệu và hồ sơ nhiệm vụ quản lý an toàn được lưu trữ tối thiểu 03 năm theo quy định áp dụng.']],
+  ['Điều 4. Quyền hạn', [
+    'Được cấp quyền truy cập cần thiết vào hệ thống giám sát hành trình, camera, hồ sơ phương tiện, hồ sơ lái xe và dữ liệu chuyến vận tải để thực hiện nhiệm vụ.',
+    'Được yêu cầu các bộ phận và lái xe cung cấp thông tin, phối hợp xác minh, khắc phục vấn đề an toàn.',
+    'Được phát hành cảnh báo/nhắc nhở an toàn theo quy trình nội bộ.',
+    'Được đề xuất điều chỉnh lịch, đổi lái xe/xe, tạm hoãn hoặc tạm dừng giao chuyến khi phát hiện nguy cơ hoặc điều kiện không bảo đảm; việc quyết định và thực hiện theo phân quyền Công ty và quy định pháp luật.',
+    'Được báo cáo trực tiếp Giám đốc khi sự việc khẩn cấp, nghiêm trọng hoặc vượt thẩm quyền.',
+    'Được đề xuất đào tạo, khen thưởng, xử lý vi phạm, sửa chữa/bảo dưỡng, cải tiến quy trình và hệ thống giám sát.']],
+  ['Điều 5. Trách nhiệm, phối hợp và báo cáo', [
+    'Thực hiện nhiệm vụ trung thực, đầy đủ, kịp thời; không bỏ qua, sửa sai lệch hoặc che giấu vi phạm dữ liệu.',
+    'Chịu trách nhiệm về việc ghi nhận, báo cáo và theo dõi xử lý trong phạm vi được giao; không chịu thay trách nhiệm pháp luật của các chủ thể khác.',
+    'Điều hành vận tải chịu trách nhiệm phối hợp bố trí xe/lái xe, lịch vận hành và quyết định điều hành thuộc thẩm quyền.',
+    'Phòng kỹ thuật/đơn vị phụ trách xe chịu trách nhiệm kiểm tra, sửa chữa, bảo dưỡng và xác nhận tình trạng kỹ thuật.',
+    'Lái xe chịu trách nhiệm kiểm tra phương tiện trước khi khởi hành, chấp hành pháp luật, nội quy, thời gian lái xe, hành trình, tốc độ, sử dụng thiết bị theo quy định và báo cáo sự cố.',
+    'Giám sát an toàn báo cáo: (a) ngay khi có sự cố/nguy cơ nghiêm trọng; (b) cuối ngày theo mẫu; (c) tuần/tháng hoặc theo yêu cầu lãnh đạo.']],
+];
+const GS_PL7: string[][] = [
+  ['Trước khi giao chuyến', 'Rà soát điều kiện xe/lái xe, dữ liệu cảnh báo, lịch lái và nghỉ, phối hợp điều hành', 'Checklist trước chuyến; ghi nhận cảnh báo'],
+  ['Trong hành trình', 'Theo dõi dữ liệu; cảnh báo; phối hợp xử lý bất thường; ghi nhận sự cố', 'Sổ giám sát; log cảnh báo'],
+  ['Kết thúc chuyến/ca', 'Tổng hợp quãng đường, vi phạm, thiết bị, sự cố; phối hợp bảo dưỡng', 'Báo cáo cuối ca/ngày'],
+  ['Hằng tuần', 'Rà soát vi phạm tái diễn, tồn đọng và khắc phục; trao đổi điều hành', 'Bảng tổng hợp tuần'],
+  ['Hằng tháng', 'Thống kê tai nạn/sự cố, phân tích, đề xuất, tập huấn, rà soát hồ sơ', 'Báo cáo tháng'],
+  ['Quý/năm hoặc theo yêu cầu', 'Đánh giá xu hướng, phương án sự cố, tập huấn, rà soát quy trình và hồ sơ', 'Báo cáo/biên bản đánh giá'],
+];
+const GS_PL8: string[][] = [
+  ['Quyết định giao nhiệm vụ, phân công và cập nhật', 'Công ty', 'Theo quy định'],
+  ['Checklist kiểm tra trước chuyến / hồ sơ xác nhận', 'Giám sát/điều hành', 'Theo quy định áp dụng'],
+  ['Dữ liệu, báo cáo giám sát; bảng cảnh báo/vi phạm', 'Giám sát an toàn', 'Tối thiểu 03 năm khi thuộc hồ sơ Điều 11'],
+  ['Biên bản xác minh, xử lý và khắc phục', 'Giám sát/nhân sự', 'Theo quy định áp dụng'],
+  ['Báo cáo sự cố, tai nạn và đánh giá rút kinh nghiệm', 'Công ty', 'Theo quy định áp dụng'],
+  ['Hồ sơ tập huấn nghiệp vụ vận tải, phổ biến nội quy', 'Nhân sự/giám sát', 'Theo quy định áp dụng'],
+  ['Hồ sơ bảo dưỡng, sửa chữa, theo dõi quãng đường', 'Kỹ thuật', 'Theo quy định áp dụng'],
+];
+const tb = (head: string[], rows: string[][]) => { const b = 'border:1px solid #000;padding:3px 6px;font-size:12.5px;vertical-align:top';
+  return `<table style="width:100%;border-collapse:collapse;margin:4px 0"><tr>${head.map((h) => `<th style="${b};background:#e2e8f0">${h}</th>`).join('')}</tr>${rows.map((r) => `<tr>${r.map((c) => `<td style="${b}">${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`; };
+/** Các khối nội dung (để tự chia trang A4). */
+export function giamSatBlocks(number: string, signed: string, title: string, c: Content, x: DocCtx): string[] {
+  const e = x.person, ong = e?.gender === 'Nữ' ? 'bà' : 'ông', hl = c.hieu_luc || signed, tu = c.thoi_han_tu || hl, CO = (x.company.name || 'Công ty').toUpperCase();
+  const B: string[] = [];
+  B.push(`${head(x, number, signed, c.noi)}<h2 style="text-align:center;margin:16px 0 0;font-size:19px">QUYẾT ĐỊNH</h2><div style="text-align:center;font-weight:bold">${esc(title)}</div>
+    <div style="text-align:center;font-style:italic;margin-bottom:8px">(Áp dụng cho đơn vị kinh doanh vận tải bằng xe ô tô)</div><div style="text-align:center;font-weight:bold;margin-bottom:8px">GIÁM ĐỐC ${esc(CO)}</div>`);
+  B.push(`<div style="font-style:italic;margin-left:18px"><div>- Căn cứ Luật Đường bộ năm 2024;</div><div>- Căn cứ Luật Trật tự, an toàn giao thông đường bộ năm 2024;</div>
+    <div>- Căn cứ Nghị định 158/2024/NĐ-CP ngày 18/12/2024 của Chính phủ quy định về hoạt động vận tải đường bộ, được sửa đổi, bổ sung và hợp nhất tại Văn bản hợp nhất 58/VBHN-BXD ngày 02/7/2026;</div>
+    <div>- Căn cứ quy định pháp luật hiện hành, nhu cầu tổ chức quản lý và bảo đảm an toàn trong hoạt động vận tải của Công ty;</div></div>
+    <div style="text-align:center;font-weight:bold;margin:12px 0 6px">QUYẾT ĐỊNH:</div>`);
+  B.push(`<p style="margin:4px 0"><b>Điều 1. Giao nhiệm vụ và thông tin người được giao</b></p>
+    <p style="margin:2px 0 2px 18px">Giao ${ong}: ${dots(e?.name, 40)}</p><p style="margin:2px 0 2px 18px">Chức danh/chức vụ: ${dots(e?.job, 40)}</p>
+    <p style="margin:2px 0 2px 18px">Bộ phận: ${dots(e?.dept, 40)}</p><p style="margin:2px 0 2px 18px">Thời hạn thực hiện: kể từ ngày ${dd(tu)} cho đến khi có quyết định thay thế hoặc điều chỉnh.</p>
+    <p style="margin:2px 0 2px 18px">Phạm vi: toàn bộ xe, lái xe, chuyến vận chuyển và hoạt động vận tải thuộc phạm vi quản lý của Công ty; thực hiện phối hợp với điều hành, nhân sự, kỹ thuật, dịch vụ khách hàng và các bộ phận liên quan.</p>`);
+  for (const [h, items] of GS_DIEU) {
+    B.push(`<p style="margin:6px 0 2px">${h.startsWith('#') ? `<b><i>${esc(h.slice(1))}</i></b>` : `<b>${esc(h)}</b>`}</p>`);
+    items.forEach((t) => B.push(`<p style="margin:2px 0 2px 18px">- ${esc(t)}</p>`));
+  }
+  B.push(`<p style="margin:6px 0 2px"><b>Điều 6. Hiệu lực và tổ chức thực hiện</b></p><p style="margin:2px 0 2px 18px">Quyết định có hiệu lực từ ngày ${dd(hl)}. Các bộ phận, cá nhân liên quan và ${ong} ${dots(e?.name, 20)} chịu trách nhiệm thực hiện.</p>`);
+  B.push(`<table style="width:100%;border-collapse:collapse;margin-top:14px"><tr><td style="width:34%;vertical-align:top;font-size:13px"><b><i>Nơi nhận:</i></b>${lines(c.noi_nhan).map((l) => `<br>${esc(l)}`).join('')}</td>
+    <td style="width:30%;text-align:center;vertical-align:top"><b>NGƯỜI ĐƯỢC GIAO NHIỆM VỤ</b><br><i style="font-size:12px">(Ký xác nhận)</i><div style="height:96px"></div><b>${esc(e?.name ?? '')}</b></td>
+    ${bossCol(x.boss, esc(x.title.toUpperCase()), 36)}</tr></table>`);
+  B.push(`<h3 style="margin:18px 0 4px;font-size:15px">PHỤ LỤC 7 – LỊCH CÔNG VIỆC GỢI Ý CHO GIÁM SÁT AN TOÀN</h3>${tb(['Thời điểm', 'Việc thực hiện', 'Hồ sơ / đầu ra'], GS_PL7)}`);
+  B.push(`<h3 style="margin:14px 0 4px;font-size:15px">PHỤ LỤC 8 – DANH MỤC HỒ SƠ LƯU TRỮ</h3>${tb(['STT', 'Hồ sơ', 'Người/bộ phận lưu', 'Thời gian lưu'], GS_PL8.map((r, i) => [String(i + 1), ...r]))}
+    <p style="margin:4px 0;font-size:12.5px"><i>Lưu ý: Văn bản hợp nhất 58/VBHN-BXD nêu thời gian lưu trữ tối thiểu 03 năm đối với các hồ sơ, sổ sách được dẫn chiếu tại khoản 9 Điều 11; cần xác định đúng loại hồ sơ thuộc phạm vi này. Không dùng bảng này để rút ngắn thời hạn lưu trữ khác do pháp luật quy định.</i></p>
+    <p style="margin:4px 0;font-size:12.5px">Hồ sơ lưu tự động trên phần mềm: <b>Lưu trữ hồ sơ › Năm › An toàn giao thông</b> (Quyết định giao nhiệm vụ, Checklist trước chuyến, Sổ giám sát hằng ngày, Biên bản xác minh, Sự cố khẩn cấp, Báo cáo tuần / tháng / năm).</p>`);
+  B.push(`<h3 style="margin:14px 0 4px;font-size:15px">PHỤ LỤC 9 – CĂN CỨ VÀ LƯU Ý KHI ÁP DỤNG</h3>
+    <p style="margin:2px 0">Căn cứ trọng tâm: Điều 11 Văn bản hợp nhất 58/VBHN-BXD ngày 02/7/2026 của Bộ Xây dựng, hợp nhất Nghị định 158/2024/NĐ-CP và nội dung sửa đổi, bổ sung tại Nghị định 218/2026/NĐ-CP.</p>
+    <p style="margin:2px 0">Điều 11 tập trung yêu cầu đơn vị kinh doanh vận tải có bộ phận quản lý an toàn; nhân sự theo dõi, giám sát xe và lái xe; giao nhiệm vụ; rà soát dữ liệu trước chuyến; tiếp nhận phản ánh; phối hợp bố trí lái xe bảo đảm thời gian lái và nghỉ; giám sát trong hành trình; thống kê, báo cáo sau chuyến/ca; nhiệm vụ định kỳ tháng, quý, năm và lưu trữ.</p>
+    <p style="margin:2px 0">Tài liệu này là mẫu quản trị nội bộ, không phải biểu mẫu bắt buộc của cơ quan nhà nước. Công ty cần điều chỉnh tên chức danh, phạm vi xe, loại hình vận tải, phân quyền, quy chế xử lý và quy trình ứng phó sự cố phù hợp thực tế; đối chiếu văn bản pháp luật chính thức khi ký ban hành.</p>`);
+  return B;
 }

@@ -16,6 +16,8 @@ import { ArchiveScreen } from './Archive';
 import { DocsScreen } from './Docs';
 import { LaborScreen } from './Labor';
 import { TimesheetScreen } from './Timesheet';
+import { SafetyScreen } from './Safety';
+import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
 import { VehicleKmScreen } from './VehicleKm';
@@ -29,7 +31,7 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -63,6 +65,14 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // Giám sát ATGT: tự lập checklist trước chuyến, sổ ngày, biên bản, báo cáo tuần / tháng / năm vào Lưu trữ hồ sơ (sau khi mở app, rồi mỗi giờ)
+  const autoAtgt = !!perms && perms.has('safety.view') && perms.has('archive.view') && perms.has('archive.add');
+  useEffect(() => {
+    if (!autoAtgt) return;
+    const run = () => { void autoArchiveSafety().catch((e) => console.warn('Tự lưu hồ sơ ATGT', e)); };
+    const t = window.setTimeout(run, 120_000), iv = window.setInterval(run, 3600_000);
+    return () => { window.clearTimeout(t); window.clearInterval(iv); };
+  }, [autoAtgt]);
   // Hợp đồng lao động năm mới (máy chủ tự lập ngày 01/01): tự lưu PDF còn thiếu vào Lưu trữ hồ sơ, chạy ngầm sau khi mở app
   const autoHd = !!perms && perms.has('labor.view_all') && perms.has('archive.view') && perms.has('archive.add');
   useEffect(() => {
@@ -81,6 +91,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
     { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') },
+    { key: 'safety', label: 'Giám sát ATGT', icon: 'shield-exclamation', group: 'Bán vé & điều hành', show: perms.has('safety.view') },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: perms.has('route.view') },
     { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('repair.view') },
     { key: 'fuel', label: 'Nhiên liệu', icon: 'gas-pump', group: 'Danh mục', show: perms.has('fuel.view') },
@@ -147,6 +158,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'docs' && <DocsScreen ctx={ctx} perms={perms} />}
           {tab === 'labor' && <LaborScreen ctx={ctx} perms={perms} />}
           {tab === 'timesheet' && <TimesheetScreen ctx={ctx} perms={perms} />}
+          {tab === 'safety' && <SafetyScreen ctx={ctx} perms={perms} />}
           {tab === 'repairs' && <RepairsScreen ctx={ctx} perms={perms} />}
           {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} />}
           {tab === 'km' && <VehicleKmScreen perms={perms} />}

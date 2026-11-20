@@ -7,7 +7,7 @@ import { KIND_NAME, type Contract } from '../lib/laborContract';
 import { supabase } from '../lib/supabase';
 
 export function StaffContracts({ s, contractType, tenantId, me, canArchive, canAdd, canEdit }: {
-  s: CStaff; contractType: string | null | undefined; tenantId: string; me: Me; canArchive: boolean; canAdd: boolean; canEdit: boolean;
+  s: CStaff & { user_id: string | null }; contractType: string | null | undefined; tenantId: string; me: Me; canArchive: boolean; canAdd: boolean; canEdit: boolean;
 }) {
   const year = Number(today().slice(0, 4));
   const [list, setList] = useState<Contract[]>([]);
@@ -26,11 +26,14 @@ export function StaffContracts({ s, contractType, tenantId, me, canArchive, canA
   useEffect(() => { void load(); }, [load]);
 
   const hasThisYear = list.some((k) => k.year === year && k.status === 'hieu_luc');
+  // Hợp đồng của chính mình, hoặc không có quyền sửa: chỉ xem bản PDF
+  const mine = s.user_id === me.id;
+  const add = canAdd && !mine, edit = canEdit && !mine;
   return (
     <>
       <div className="item-head">
         <h3>Hợp đồng lao động ({list.filter((k) => k.status === 'hieu_luc').length})</h3>
-        {canAdd && !hasThisYear && <button className="btn small" onClick={() => setF(contractDefaults(s, year, contractType, pay))}>Soạn HĐ năm {year}</button>}
+        {add && !hasThisYear && <button className="btn small" onClick={() => setF(contractDefaults(s, year, contractType, pay))}>Soạn HĐ năm {year}</button>}
       </div>
       {list.length === 0 ? <p className="muted small">Chưa có hợp đồng lao động.</p> : (
         <ul className="list">
@@ -40,9 +43,10 @@ export function StaffContracts({ s, contractType, tenantId, me, canArchive, canA
               {k.status === 'da_huy' && <span className="small error-text"> · Đã hủy: {k.cancel_reason}</span>}
               {k.status === 'hieu_luc' && (
                 <span className="actions inline-acts">
-                  <button className="btn small" aria-label={`Xem HĐ ${k.number}`} disabled={!!C.busy} onClick={() => void C.show(k, s.full_name)}>Xem trước / in</button>
-                  {canEdit && <button className="btn small" onClick={() => setF(formOf(k, s))}>Sửa</button>}
-                  {canArchive && <button className="btn small" disabled={!!C.busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
+                  {edit ? <button className="btn small" aria-label={`Xem HĐ ${k.number}`} disabled={!!C.busy} onClick={() => void C.show(k, s.full_name)}>Xem trước / in</button>
+                    : <button className="btn small" aria-label={`Xem HĐ ${k.number}`} disabled={!!C.busy} onClick={() => void C.showPdf(k, s.full_name)}>Xem hợp đồng (PDF)</button>}
+                  {edit && <button className="btn small" onClick={() => setF(formOf(k, s))}>Sửa</button>}
+                  {edit && canArchive && <button className="btn small" disabled={!!C.busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
                 </span>
               )}
             </li>

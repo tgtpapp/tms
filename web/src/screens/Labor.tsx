@@ -18,7 +18,9 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const tenantId = ctx.tenant_id ?? '';
   const me = useMemo(() => ({ id: ctx.user_id, name: ctx.full_name ?? '' }), [ctx.user_id, ctx.full_name]);
   const canArchive = perms.has('archive.manage');
-  const canTerms = perms.has('settings.manage');
+  const canTerms = perms.has('settings.edit');
+  // Ô quyền Hợp đồng lao động: Thêm / Sửa / Xóa. Không ai tự lập / sửa / hủy hợp đồng của chính mình (chỉ xem bản PDF).
+  const canAdd = perms.has('labor.add'), canEdit = perms.has('labor.edit'), canDel = perms.has('labor.delete');
   const [year, setYear] = useState(Number(today().slice(0, 4)));
   const [staff, setStaff] = useState<Staff[]>([]);
   const [list, setList] = useState<Contract[]>([]);
@@ -52,7 +54,7 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const viewAll = perms.has('labor.view_all');   // không có: chỉ thấy hợp đồng của chính mình
   const people = staff.filter((s) => (viewAll || s.user_id === ctx.user_id) && s.joined_on <= `${year}-12-31` && (s.is_active || (s.left_on ?? '') >= `${year}-01-01`));
   const active = (id: string) => list.find((k) => k.staff_id === id && k.status === 'hieu_luc');
-  const missing = people.filter((s) => !active(s.id));
+  const missing = people.filter((s) => !active(s.id) && s.user_id !== ctx.user_id);
 
   const defaultsOf = (s: Staff) => contractDefaults(s, year, kinds[s.id], pay);
   async function save() {
@@ -106,8 +108,8 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         Lương mặc định lấy từ Lương chuyển khoản của tháng bắt đầu (Cấu hình › BHXH &amp; lương chuyển khoản), sửa được trên từng hợp đồng.
         Lưu hoặc in là tự tạo PDF vào <b>Năm › Nhân sự › Hợp đồng lao động › họ tên</b> (mỗi người mỗi năm 1 bản, như app cũ). Căn cứ pháp lý trong mẫu theo app cũ: cần xác minh.</p>
       <div className="actions" style={{ flexWrap: 'wrap' }}>
-        {missing.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={() => void createAll()}>Lập HĐ cho {missing.length} người chưa có</button>}
-        {canArchive && actives.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void C.archiveMany(actives)}>Lưu hồ sơ tất cả ({actives.length})</button>}
+        {canAdd && missing.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={() => void createAll()}>Lập HĐ cho {missing.length} người chưa có</button>}
+        {canEdit && canArchive && actives.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void C.archiveMany(actives)}>Lưu hồ sơ tất cả ({actives.length})</button>}
         {list.some((k) => k.status === 'da_huy') && <button className="btn small" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn HĐ đã hủy' : 'Hiện HĐ đã hủy'}</button>}
         {busy && <span className="small muted">{busy}</span>}
       </div>
@@ -119,7 +121,7 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
               const k = active(s.id);
               if (!k) return (
                 <tr key={s.id}><td className="muted">Chưa lập</td><td><b>{s.full_name}</b><div className="small muted">{s.job_title || POSITION[s.position]}</div></td><td colSpan={5} />
-                  <td><button className="btn small" aria-label={`Lập HĐ ${s.full_name}`} onClick={() => setF(defaultsOf(s))}>Lập HĐ</button></td></tr>
+                  <td>{canAdd && s.user_id !== ctx.user_id && <button className="btn small" aria-label={`Lập HĐ ${s.full_name}`} onClick={() => setF(defaultsOf(s))}>Lập HĐ</button>}</td></tr>
               );
               const [st, cls] = state(k);
               return (
@@ -127,10 +129,12 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
                   <td><b>{k.number}</b></td><td><b>{s.full_name}</b><div className="small muted">{k.position}</div></td><td>{KIND_NAME[k.kind]}</td>
                   <td>{fmtDate(k.start_on)}</td><td>{k.end_on ? fmtDate(k.end_on) : '—'}</td><td className="r">{num(Number(k.salary))}</td><td className={cls}>{st}</td>
                   <td className="actions">
-                    <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.show(k, s.full_name)}>Xem / in</button>
-                    <button className="btn small" aria-label={`Sửa HĐ ${s.full_name}`} onClick={() => setF(formOf(k, s))}>Sửa</button>
-                    {canArchive && <button className="btn small" disabled={!!busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
-                    <button className="btn small link danger-text" onClick={() => void cancel(k)}>Hủy</button>
+                    {canEdit && s.user_id !== ctx.user_id
+                      ? <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.show(k, s.full_name)}>Xem / in</button>
+                      : <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.showPdf(k, s.full_name)}>Xem hợp đồng (PDF)</button>}
+                    {canEdit && s.user_id !== ctx.user_id && <button className="btn small" aria-label={`Sửa HĐ ${s.full_name}`} onClick={() => setF(formOf(k, s))}>Sửa</button>}
+                    {canEdit && canArchive && s.user_id !== ctx.user_id && <button className="btn small" disabled={!!busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
+                    {canDel && s.user_id !== ctx.user_id && <button className="btn small link danger-text" onClick={() => void cancel(k)}>Hủy</button>}
                   </td>
                 </tr>
               );
@@ -142,7 +146,7 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         </table>
       </div>
 
-      <div className="sub form">
+      {canTerms && <div className="sub form">
         <h3>Điều khoản chung trong hợp đồng</h3>
         <div className="grid3">
           <label>Ngày trả lương hằng tháng<input type="number" min={1} max={31} value={terms.payDay} disabled={!canTerms} onChange={(e) => setTerms({ ...terms, payDay: Number(e.target.value) })} /></label>
@@ -150,8 +154,8 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           <label>Ngày nghỉ hằng tuần<select value={terms.off} disabled={!canTerms} onChange={(e) => setTerms({ ...terms, off: e.target.value as Terms['off'] })}>
             <option value="CN">Chủ nhật (làm Thứ 2 → Thứ 7)</option><option value="T7CN">Thứ 7 và Chủ nhật (làm Thứ 2 → Thứ 6)</option></select></label>
         </div>
-        {canTerms && <div className="actions"><button className="btn small" onClick={() => void saveTerms()}>Lưu điều khoản chung</button></div>}
-      </div>
+        <div className="actions"><button className="btn small" onClick={() => void saveTerms()}>Lưu điều khoản chung</button></div>
+      </div>}
 
       {f && <ContractEditor form={f} setForm={setF} pay={pay} busy={busy} onSave={() => void save()} onClose={() => setF(null)} />}
       {C.viewer}

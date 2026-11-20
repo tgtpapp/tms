@@ -55,5 +55,11 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.labor_contracts), 0, 'Nhà xe B không thấy hợp đồng của A');
 select throws_ok($$ select public.save_labor_contract(null, '00000000-0000-0000-0000-00000000aa01', 'xac_dinh', '2026-01-01', '2026-12-31', 1, null, null, null, '{}', null) $$, 'P0002', null, 'Nhà xe B không lập HĐ cho người của A');
 reset role;
+-- Không tự lập / sửa hợp đồng của chính mình (kể cả có quyền)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa09', '{"full_name":"Chủ A","joined_on":"2024-01-01","position":"nhan_vien","user_id":"00000000-0000-0000-0000-0000000000b1"}') $$, 'Hồ sơ của chính Chủ A');
+select throws_ok($$ select public.save_labor_contract(null, '00000000-0000-0000-0000-00000000aa09', 'xac_dinh', '2026-01-01', '2026-12-31', 1, null, null, null, '{}', null) $$, '42501', null, 'Không tự lập hợp đồng của chính mình');
+reset role;
 select * from finish();
 rollback;

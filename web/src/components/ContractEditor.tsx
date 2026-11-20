@@ -4,6 +4,8 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 import { PaperView, type Me } from './ProfilePapers';
+import { DocViewer } from './DocViewer';
+import { bytesToBase64, makePdf, pageImg } from '../lib/pdfMaker';
 import { resetFolders } from '../lib/dispatchPapers';
 import { KIND_NAME, contractPages, loadLaborCtx, saveContractPdf, type Allow, type Contract, type Kind } from '../lib/laborContract';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -52,6 +54,7 @@ export function useContracts(tenantId: string, me: Me, canArchive: boolean) {
   const toast = useToast();
   const [view, setView] = useState<{ title: string; pages: string[]; k: Contract } | null>(null);
   const [busy, setBusy] = useState('');
+  const [pdf, setPdf] = useState<{ title: string; name: string; b64: string } | null>(null);
 
   async function archive(k: Contract, quiet = false): Promise<boolean> {
     if (!canArchive) return false;
@@ -81,17 +84,27 @@ export function useContracts(tenantId: string, me: Me, canArchive: boolean) {
     try { setView({ title: `Hợp đồng lao động ${k.number} · ${name}`, pages: contractPages(k, await loadLaborCtx(tenantId, me, k.staff_id)), k }); }
     catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
   }
+  /** Chỉ xem bản PDF (nhân viên xem hợp đồng của mình): không sửa, không lưu. */
+  async function showPdf(k: Contract, name: string) {
+    setBusy('Đang tạo bản PDF hợp đồng…');
+    try {
+      const imgs = [];
+      for (const html of contractPages(k, await loadLaborCtx(tenantId, me, k.staff_id))) imgs.push(await pageImg(html, false));
+      setPdf({ title: `Hợp đồng lao động ${k.number} · ${name}`, name: `HĐLĐ ${k.number.replace(/[\\/:*?"<>|]+/g, '-')} - ${name}.pdf`, b64: bytesToBase64(makePdf(imgs)) });
+    } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
+  }
   async function archiveMany(ks: Contract[]) {
     let n = 0;
     for (const [i, k] of ks.entries()) { setBusy(`Đang lưu vào hồ sơ ${i + 1}/${ks.length}…`); if (await archive(k, true)) n++; }
     setBusy('');
     toast('ok', `Xong: ${n}/${ks.length} hợp đồng đã có trong hồ sơ`);
   }
-  const viewer = view && (
-    <PaperView title={view.title} pages={view.pages.map((html) => ({ html, land: false }))} onClose={() => setView(null)}
-               onPrint={() => { void archive(view.k, true); }} />
-  );
-  return { busy, save, show, archive, archiveMany, viewer };
+  const viewer = (<>
+    {view && <PaperView title={view.title} pages={view.pages.map((html) => ({ html, land: false }))} onClose={() => setView(null)}
+                        onPrint={() => { void archive(view.k, true); }} />}
+    {pdf && <DocViewer title={pdf.title} name={pdf.name} mime="application/pdf" b64={pdf.b64} onClose={() => setPdf(null)} />}
+  </>);
+  return { busy, save, show, showPdf, archive, archiveMany, viewer };
 }
 
 export function ContractEditor({ form, setForm, pay, busy, onSave, onClose }: {

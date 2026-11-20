@@ -100,6 +100,14 @@ Deno.serve(async (req) => {
       return json(200, { name: r.name ?? it.data.file_name ?? it.data.name, mime: r.mime, data: r.data });
     }
 
+    // Bản sao lưu dữ liệu nhà xe trên Drive (chỉ Chủ nhà xe: bảng tenant_backups chỉ cho Chủ nhà xe đọc)
+    if (b.action === 'backup_get') {
+      const it = await user.from('tenant_backups').select('drive_id, file_name').eq('id', String(b.id ?? '')).maybeSingle();
+      if (!it.data?.drive_id) throw new HttpError(404, 'Không tìm thấy bản sao lưu');
+      const r = await gas(cfg, { action: 'hs_get', id: it.data.drive_id }, 180000);
+      return json(200, { name: it.data.file_name, mime: r.mime, data: r.data });
+    }
+
     if (b.action === 'put') {
       need(b.replace_id ? ['archive.edit', 'archive.add'] : ['archive.add']);
       const data = typeof b.data === 'string' ? b.data : '';

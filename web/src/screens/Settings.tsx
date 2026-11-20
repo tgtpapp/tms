@@ -3,6 +3,7 @@ import type { Me } from '../components/ProfilePapers';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
+import { BackupPanel } from '../components/BackupPanel';
 import { StorageUsage } from '../components/StorageUsage';
 import { ZaloSettings } from '../components/ZaloSettings';
 import { DriveSettings } from '../components/DriveSettings';
@@ -308,6 +309,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       </>)}
       {canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}
       <StorageUsage />
+      <BackupPanel />
       <LegacyImport tenantId={tenantId} />
     </>
   );

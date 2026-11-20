@@ -14,6 +14,6 @@ Deno.test('manifestOf: tên ngắn bỏ "Nhà xe", biểu tượng theo hồ sơ
   const m = manifestOf('https://a.dev', 'Nhà Xe Thịnh Phát', 'https://x/functions/v1/app-install', 't1', 's1', '9');
   assertEquals(m.short_name, 'Thịnh Phát');
   assertEquals(m.start_url, 'https://a.dev/');
-  assertEquals(m.icons[0]!.src, 'https://x/functions/v1/app-install?t=t1&s=s1&z=192&v=9');
+  assertEquals(m.icons[0]!.src, 'https://x/functions/v1/app-install?t=t1&s=s1&z=192&v=9&k=2');
   assertEquals(m.icons[2]!.purpose, 'maskable');
 });

@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
     const src = await Image.decode(bytes);
     const side = Math.min(src.width, src.height);
     const sq = src.crop(Math.floor((src.width - side) / 2), Math.floor((src.height - side) / 2), side, side);
-    const inner = mask ? Math.round(z * 0.8) : z;
+    // Ảnh phủ kín cả ô (kể cả bản maskable): máy Android tự bo tròn / cắt góc, không để viền trắng xung quanh
+    const inner = z;
+    void mask;
     const out = new Image(z, z).fill(0xffffffff).composite(sq.resize(inner, inner), Math.floor((z - inner) / 2), Math.floor((z - inner) / 2));
     const png = await out.encode();
     return new Response(new Blob([png as BlobPart], { type: 'image/png' }), { headers: { ...CORS, 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' } });

@@ -10,7 +10,7 @@ export function safeOrigin(v: string | null): string | null {
 
 export function manifestOf(origin: string, name: string, self: string, t: string, s: string, v: string) {
   const short = name.replace(/^\s*nhà\s*xe\s+/i, '').trim().slice(0, 24) || name;
-  const icon = (z: number, mask = false) => `${self}?t=${t}&s=${s}&z=${z}${mask ? '&mask=1' : ''}${v ? `&v=${encodeURIComponent(v)}` : ''}`;
+  const icon = (z: number, mask = false) => `${self}?t=${t}&s=${s}&z=${z}${mask ? '&mask=1' : ''}${v ? `&v=${encodeURIComponent(v)}` : ''}&k=2`;   // k: đổi khi đổi cách vẽ biểu tượng để máy lấy lại
   return {
     name, short_name: short, id: `${origin}/`, start_url: `${origin}/`, scope: `${origin}/`, display: 'standalone', lang: 'vi',
     background_color: '#13508a', theme_color: '#13508a',

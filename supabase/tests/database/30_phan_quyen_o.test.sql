@@ -40,7 +40,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b3', (select id from public.roles where code = 'xoa_xe')) $$, 'Kiêm nhiệm: gán thêm nhóm 2');
 select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa01', '{"full_name":"Lái xe Y","joined_on":"2026-01-01"}') $$, 'Chủ thêm nhân viên');
-select lives_ok($$ select public.create_role('sua_nv', 'Sửa nhân viên', array['staff.view', 'staff.edit']) $$, 'Nhóm sửa nhân viên');
+select lives_ok($$ select public.create_role('sua_nv', 'Sửa nhân viên', array['staff.view', 'staff.view_all', 'staff.edit']) $$, 'Nhóm sửa nhân viên');
 select lives_ok($$ select public.assign_role('00000000-0000-0000-0000-0000000000b3', (select id from public.roles where code = 'sua_nv')) $$, 'Kiêm nhiệm: nhóm 3');
 reset role;
 
@@ -49,7 +49,7 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","r
 select lives_ok(format('select public.delete_record(%L, %L)', 'vehicle', (select id from public.vehicles limit 1)), 'Quyền cộng dồn: có ô Xóa từ nhóm 2 → xóa được');
 select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa01', '{"full_name":"Lái xe Y sửa","joined_on":"2026-01-01"}') $$, 'Có ô Sửa nhân viên: sửa được người đã có');
 select throws_ok($$ select public.save_staff(gen_random_uuid(), '{"full_name":"Mới","joined_on":"2026-01-01"}') $$, '42501', null, 'Không có ô Thêm nhân viên: không thêm người mới');
-select is((select count(*)::int from public.staff_private), 1, 'Có ô Xem nhân viên: xem được hồ sơ riêng');
+select is((select count(*)::int from public.staff_private), 1, 'Có ô Xem tất cả nhân viên: xem được hồ sơ riêng người khác');
 select throws_ok($$ select public.create_role('x', 'X', array['vehicle.edit']) $$, '42501', null, 'Không có quyền Vai trò: không tạo nhóm');
 reset role;
 

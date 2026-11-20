@@ -200,7 +200,9 @@ export function safetyPage(d: DayData, x: DriverDay): string {
 
 // ------------------------------------------------------------------ Lưu vào Lưu trữ hồ sơ
 interface Folder { id: string; parent_id: string | null; name: string }
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+// So tên thư mục như app cũ: không phân biệt hoa thường, bỏ số thứ tự đầu ("01. Pháp lý công ty" = "Pháp lý công ty")
+const bare = (x: string) => x.trim().toLowerCase().replace(/^\d+\s*[.)\-]\s*/, '');
+const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase() || (!/^\d{4}$/.test(a.trim()) && bare(a) === bare(b));
 
 /** Tìm / tạo thư mục theo đường dẫn tên, trả id thư mục cuối. Danh sách thư mục tải 1 lần cho cả lượt lưu. */
 let folderList: Promise<Folder[]> | null = null;

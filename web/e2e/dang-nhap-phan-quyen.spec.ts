@@ -257,6 +257,33 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await expect(page.locator('.staff-card').getByRole('img', { name: 'Ảnh Nguyễn Văn Tài' })).toBeVisible();
 
+  // 5j4. Văn bản: cấp số tự động 001 trở đi, mỗi loại 1 dãy; xem trước bản in
+  await page.getByRole('button', { name: 'Văn bản', exact: true }).click();
+  await page.getByLabel('Soạn văn bản mới').selectOption('cong_van');
+  await page.getByLabel('Trích yếu (V/v …)').fill('đăng ký khai thác tuyến');
+  await page.getByLabel('Kính gửi (mỗi dòng một nơi)').fill('Sở Xây dựng Đồng Nai');
+  await page.getByLabel('Nội dung (mỗi dòng một đoạn)').fill('Công ty xin đăng ký khai thác tuyến.');
+  await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
+  await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
+  await expect(page.getByText(/^Đã cấp số 001\/\d{4}\/CV/)).toBeVisible();
+  await page.getByLabel('Soạn văn bản mới').selectOption('qd_bo_nhiem');
+  await page.getByLabel('Người được bổ nhiệm').selectOption({ label: 'Nguyễn Văn Tài' });
+  await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
+  await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
+  await expect(page.getByText(/^Đã cấp số 001\/\d{4}\/QĐ/)).toBeVisible();
+  await page.getByLabel('Soạn văn bản mới').selectOption('cong_van');
+  await page.getByLabel('Trích yếu (V/v …)').fill('báo cáo tình hình');
+  await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
+  await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
+  await expect(page.getByText(/^Đã cấp số 002\/\d{4}\/CV/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Văn bản (3)' })).toBeVisible();
+  await page.getByRole('button', { name: /^Xem văn bản 001\/\d{4}\/QĐ/ }).click();
+  const vb = page.locator('.paper-top');
+  await expect(vb.getByRole('heading', { name: 'QUYẾT ĐỊNH', exact: true })).toBeVisible();
+  await expect(vb.getByText('Về việc bổ nhiệm Người trực tiếp điều hành hoạt động vận tải')).toBeVisible();
+  await expect(vb.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
+  await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
+
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
   // Nhập lịch dán từ Vexere: đọc tuyến / giờ / xe / lái xe, xem trước (chưa có chuyến → tạo chuyến mới), không áp dụng

@@ -17,16 +17,16 @@ const money = (n: number) => n.toLocaleString('vi-VN');
 const uniq = (a: (string | null | undefined)[]) => [...new Set(a.map((x) => (x ?? '').trim()).filter(Boolean))];
 const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
-interface Company { name: string; address: string }
-interface Boss { gd: Sign | null; gdName: string; seal: string | null; me: Sign; meName: string }
+export interface Company { name: string; address: string }
+export interface Boss { gd: Sign | null; gdName: string; seal: string | null; me: Sign; meName: string }
 
 // ------------------------------------------------------------------ phần chung
-async function company(): Promise<Company> {
+export async function company(): Promise<Company> {
   const t = (await supabase.from('tenants').select('name, legal_name, address').maybeSingle()).data as { name?: string; legal_name?: string | null; address?: string | null } | null;
   return { name: t?.legal_name || t?.name || '', address: t?.address ?? '' };
 }
 /** Chữ ký người lập (người đang dùng) + giám đốc + con dấu (theo Cấu hình in). Ảnh dạng data URL để vẽ được vào PDF. */
-async function boss(tenantId: string, me: { id: string | null; name: string }, extra: string[] = []): Promise<{ b: Boss; m: Map<string, Sign> }> {
+export async function boss(tenantId: string, me: { id: string | null; name: string }, extra: string[] = []): Promise<{ b: Boss; m: Map<string, Sign> }> {
   const ss = ((await supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'in.chu_ky_giam_doc', 'in.con_dau'])).data ?? []) as { key: string; value: unknown }[];
   const raw = (k: string) => ss.find((x) => x.key === k)?.value;
   const m = await loadSigns(tenantId, ['giam_doc', me.id, ...extra], true);
@@ -42,7 +42,7 @@ const signImg = (s: Sign | null | undefined) => (s?.img ? `<img src="${s.img}" a
 const signCol = (title: string, hint: string, inner: string, name: string, s: Sign | null | undefined, w: number) =>
   `<td style="width:${w}%;text-align:center;vertical-align:top"><b>${title}</b><br><i style="font-size:12px">${hint}</i>
    <div style="height:96px;display:flex;align-items:center;justify-content:center;position:relative">${inner}</div><b>${showName(s) ? esc(name) : ''}</b></td>`;
-const bossCol = (b: Boss, title: string, w: number) => signCol(title, '(Ký, đóng dấu)',
+export const bossCol = (b: Boss, title: string, w: number) => signCol(title, '(Ký, đóng dấu)',
   `${b.seal ? `<img src="${b.seal}" alt="" style="position:absolute;left:50%;top:0;height:94px;transform:translateX(-78%);opacity:.9">` : ''}${b.gd?.img ? `<img src="${b.gd.img}" alt="" style="position:relative;max-height:70px;max-width:180px">` : ''}`,
   b.gdName, b.gd, w);
 const TH = 'border:1px solid #333;padding:5px 5px;font-size:12.5px;text-align:center;background:#e2e8f0;font-weight:bold';

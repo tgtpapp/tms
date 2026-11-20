@@ -11,6 +11,7 @@ import { DriverScreen } from './Driver';
 import { ParcelsScreen } from './Parcels';
 import { ChartersScreen } from './Charters';
 import { ArchiveScreen } from './Archive';
+import { DocsScreen } from './Docs';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
 import { VehicleKmScreen } from './VehicleKm';
@@ -24,7 +25,7 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -73,6 +74,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: true },
     { key: 'staff', label: 'Lái xe & nhân viên', icon: 'id-badge', group: 'Danh mục', show: true },
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: true },
+    { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.manage') },
     { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') || perms.has('archive.manage') },
     { key: 'users', label: 'Người dùng', icon: 'users', group: 'Quản trị', show: perms.hasAnywhere('user.read') || perms.hasAnywhere('user.manage') },
     { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.manage') },
@@ -125,6 +127,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'parcels' && <ParcelsScreen />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
+          {tab === 'docs' && <DocsScreen ctx={ctx} perms={perms} />}
           {tab === 'repairs' && <RepairsScreen ctx={ctx} perms={perms} />}
           {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} />}
           {tab === 'km' && <VehicleKmScreen perms={perms} />}

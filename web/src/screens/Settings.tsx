@@ -1,3 +1,5 @@
+import { PayMonths } from '../components/PayMonths';
+import type { Me } from '../components/ProfilePapers';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
@@ -29,7 +31,7 @@ const DISPATCH_SETTINGS = [
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
 interface Tier { truoc_gio: number; phi_pt: number }
 
-export function SettingsScreen({ tenantId }: { tenantId: string }) {
+export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenantId: string; me: Me; canSalary: boolean; canArchive: boolean }) {
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
@@ -296,6 +298,7 @@ export function SettingsScreen({ tenantId }: { tenantId: string }) {
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
       </>)}
+      {canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}
       <StorageUsage />
       <LegacyImport tenantId={tenantId} />
     </>

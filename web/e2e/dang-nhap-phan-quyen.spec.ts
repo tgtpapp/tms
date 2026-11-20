@@ -283,6 +283,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText('Về việc bổ nhiệm Người trực tiếp điều hành hoạt động vận tải')).toBeVisible();
   await expect(vb.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // 5j5. Cấu hình › Đóng BHXH & lương chuyển khoản theo tháng: nhập xong tự lưu, mở lại vẫn còn
+  await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByLabel('Đóng BHXH Nguyễn Văn Tài').check();
+  await page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài').fill('7000000');
+  await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
+  await expect(page.locator('.pay-bar').getByText('Đã lưu', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Văn bản', exact: true }).click();
+  await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
+  await expect(page.getByLabel('Đóng BHXH Nguyễn Văn Tài')).toBeChecked();
 
   // 5k. Điều hành: thêm nốt 07:00 → tự tạo chuyến; xếp xe + lái xe (có cảnh báo → ghi lý do)
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();

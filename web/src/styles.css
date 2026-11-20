@@ -845,3 +845,10 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 /* Lý lịch hành nghề / lý lịch phương tiện: xem trước nằm trên cửa sổ hồ sơ */
 .lenh-overlay.paper-top { z-index: 1000; }
 .paper-acts { flex-wrap: wrap; align-items: center; margin: 4px 0 8px; }
+/* Đóng BHXH & lương chuyển khoản theo tháng */
+.pay-bar { flex-wrap: wrap; align-items: flex-end; margin: 6px 0 10px; }
+.pay-table td { vertical-align: middle; }
+.pay-table td.c { text-align: center; } .pay-table td.r { text-align: right; }
+.pay-table input.money { text-align: right; min-width: 120px; width: 100%; }
+.pay-table input[type=checkbox] { width: 20px; height: 20px; }
+.pay-total td { font-weight: bold; background: var(--surface-2); }

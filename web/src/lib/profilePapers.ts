@@ -34,12 +34,12 @@ export async function boss(tenantId: string, me: { id: string | null; name: stri
   return { m, b: { gd: raw('in.chu_ky_giam_doc') === false ? null : m.get('giam_doc') ?? null, gdName: String(raw('cong_ty.giam_doc') ?? ''), seal,
     me: (me.id && m.get(me.id)) || { img: null, hasName: false }, meName: me.name } };
 }
-const head = (c: Company) => `<table style="width:100%;border-collapse:collapse"><tr>
+export const head = (c: Company) => `<table style="width:100%;border-collapse:collapse"><tr>
   <td style="width:45%;text-align:center;vertical-align:top"><b>${esc(c.name.toUpperCase())}</b><br><span style="font-size:12px">${esc(c.address)}</span></td>
   <td style="text-align:center;vertical-align:top"><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><br><b>Độc lập - Tự do - Hạnh phúc</b><div style="width:150px;border-top:1px solid #000;margin:3px auto"></div></td></tr></table>`;
 const today = () => { const [y, m, dd] = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).split('-'); return `ngày ${dd} tháng ${m} năm ${y}`; };
-const signImg = (s: Sign | null | undefined) => (s?.img ? `<img src="${s.img}" alt="" style="max-height:66px;max-width:190px">` : '');
-const signCol = (title: string, hint: string, inner: string, name: string, s: Sign | null | undefined, w: number) =>
+export const signImg = (s: Sign | null | undefined) => (s?.img ? `<img src="${s.img}" alt="" style="max-height:66px;max-width:190px">` : '');
+export const signCol = (title: string, hint: string, inner: string, name: string, s: Sign | null | undefined, w: number) =>
   `<td style="width:${w}%;text-align:center;vertical-align:top"><b>${title}</b><br><i style="font-size:12px">${hint}</i>
    <div style="height:96px;display:flex;align-items:center;justify-content:center;position:relative">${inner}</div><b>${showName(s) ? esc(name) : ''}</b></td>`;
 export const bossCol = (b: Boss, title: string, w: number) => signCol(title, '(Ký, đóng dấu)',

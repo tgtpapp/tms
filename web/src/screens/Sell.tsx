@@ -33,6 +33,19 @@ export interface Ticket {
   passenger_name: string | null; passenger_phone: string | null; pickup_note: string | null; dropoff_note: string | null;
   boarded: boolean; created_by: string | null; paid_by: string | null; pay_method: 'tien_mat' | 'chuyen_khoan' | null;
   tc_don?: boolean; tc_tra?: boolean; printed_at?: string | null; print_count?: number;
+  /** Lái xe báo về: đã gọi / nghe máy / thuê bao / khách báo hủy; vắng; đã trả khách */
+  crew_call?: 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy' | null; no_show?: boolean; dropped?: boolean;
+}
+/** Trạng thái lái xe báo về quầy (hiện trên sơ đồ ghế, danh sách khách) */
+export function crewNote(t: Ticket): { cls: string; text: string } | null {
+  if (t.no_show) return { cls: 'vang', text: 'LX: khách vắng' };
+  if (t.crew_call === 'bao_huy') return { cls: 'bao_huy', text: 'LX: khách báo hủy' };
+  if (t.dropped) return { cls: 'tra', text: 'LX: đã trả khách' };
+  if (t.boarded) return null;
+  if (t.crew_call === 'thue_bao') return { cls: 'thue_bao', text: 'LX: thuê bao / không nghe' };
+  if (t.crew_call === 'nghe_may') return { cls: 'nghe_may', text: 'LX: đã gọi, khách sẽ ra' };
+  if (t.crew_call === 'da_goi') return { cls: 'da_goi', text: 'LX: đã gọi' };
+  return null;
 }
 interface Booking { id: string; code: string; customer_name: string | null; customer_phone: string | null; note: string | null }
 interface Customer { phone: string; name: string | null; last_from_stop: string | null; last_to_stop: string | null; last_pickup_note: string | null; trips_count: number }
@@ -42,7 +55,7 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZo
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const active = (t: Ticket) => (t.status === 'giu' || t.status === 'dat' || t.status === 'da_tt')
   && !(t.hold_until && t.status !== 'da_tt' && Date.parse(t.hold_until) < Date.now());
-const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra, printed_at, print_count';
+const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra, printed_at, print_count, crew_call, no_show, dropped';
 /** Đã thu tiền (kể cả vé chờ xếp ghế). */
 const paid = (t: Ticket) => t.status === 'da_tt' || t.status === 'cho_xep';
 interface Fare { from_stop_id: string; to_stop_id: string; price: number }
@@ -677,6 +690,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
                       <span className="vxs-r"><span>{shortStop(stopName(t.from_stop_id))} - {shortStop(stopName(t.to_stop_id))}</span><b>{money(t.price)}</b></span>
                       <span className="vxs-r"><span>{t.passenger_name ?? ''}</span><b>{t.passenger_phone ?? ''}</b></span>
                       {t.dropoff_note && <span className="vxs-n">Trả: {t.dropoff_note}</span>}
+                      {(() => { const c = crewNote(t); return c && <span className={`vxs-crew ${c.cls}`}>{c.text}</span>; })()}
                       <span className="vxs-r vxs-s"><span>{bookingOf(t.booking_id)?.code ?? ''}</span><span>{ST_LABEL[st.cls] ?? ''}</span></span>
                     </>
                   ) : st.cls !== 'free' && <span className="vxs-s">{ST_LABEL[st.cls] ?? ''}</span>}
@@ -944,7 +958,8 @@ function PassengerList(props: { tickets: Ticket[]; stopName: (id: string | null)
             <tr key={t.id} className={t.boarded ? 'boarded' : ''}>
               <td><button className="btn small link" onClick={() => onOpen(t)}>{t.seat_label}</button></td>
               <td>{t.passenger_name ?? ''}<br /><a href={t.passenger_phone ? `tel:${t.passenger_phone}` : undefined}>{t.passenger_phone ?? ''}</a>
-                <span className="muted small"> {bookingOf(t.booking_id)?.code}</span></td>
+                <span className="muted small"> {bookingOf(t.booking_id)?.code}</span>
+                {(() => { const c = crewNote(t); return c && <><br /><span className={`vxs-crew ${c.cls}`}>{c.text}</span></>; })()}</td>
               <td>{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)}{t.pickup_note ? <><br /><i className="small">{t.pickup_note}</i></> : null}</td>
               <td>{t.id.startsWith('q:') ? <b className="state-sap_het">Chờ gửi</b> : t.status === 'cho_xep' ? <b className="state-het_han">Chờ xếp ghế</b>
                 : paid(t) ? (t.pay_method === 'chuyen_khoan' ? 'Đã thu (CK)' : 'Đã thu')

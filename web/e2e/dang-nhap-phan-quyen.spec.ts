@@ -650,6 +650,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Gửi điều hành duyệt' }).click();
   await expect(page.getByText('Đã gửi phiếu đổ dầu cho điều hành duyệt')).toBeVisible();
   await expect(page.getByText('Chờ duyệt', { exact: true })).toBeVisible();
+  // App lái xe như app cũ: chuyến hôm nay có 3 thẻ Đón khách / Sơ đồ ghế / Trả & hàng; sơ đồ ghế vừa màn hình điện thoại
+  await expect(page.getByRole('button', { name: /^Chuyến 07:00/ })).toBeVisible();
+  if (await page.getByRole('tab', { name: 'Sơ đồ ghế' }).count() === 0) await page.getByRole('button', { name: /^Chuyến 07:00/ }).click();
+  await expect(page.getByRole('tab', { name: 'Đón khách' })).toBeVisible();
+  await expect(page.getByText('Chưa có khách đặt vé.')).toBeVisible();
+  await page.getByRole('tab', { name: 'Sơ đồ ghế' }).click();
+  await expect(page.getByLabel('Ghế A01 trống')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('tab', { name: 'Trả & hàng' }).click();
+  await expect(page.getByText('Không có hàng gửi.')).toBeVisible();
   await page.getByRole('button', { name: 'Nhiên liệu', exact: true }).click();
   const cho = page.getByRole('region', { name: 'Phiếu đổ dầu lái xe gửi chờ duyệt' });
   await expect(cho.getByText('⛽ 1 phiếu đổ dầu lái xe gửi qua app đang chờ duyệt')).toBeVisible();

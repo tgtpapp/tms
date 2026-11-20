@@ -960,3 +960,49 @@ table.cc { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .fr-list { display: grid; gap: 6px; margin-top: 8px; }
 .fr-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid #eef1f6; padding-top: 6px; }
 .staff-card.veh-card { border-top-color: #0ea5e9; }
+
+/* App lái xe: một chuyến (như app cũ) */
+.dt-kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
+.dt-kpi > div { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; }
+.dt-kpi b { display: block; font-size: 1.2rem; font-weight: 800; } .dt-kpi b small { font-size: .8rem; color: var(--muted); }
+.dt-kpi span { font-size: .75rem; color: var(--muted); }
+.dt-sum { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+.dt-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #eef2f6; padding: 4px; border-radius: 14px; position: sticky; top: 0; z-index: 5; margin: 6px 0 10px; }
+.dt-tabs button { border: 0; background: none; font: inherit; font-weight: 700; font-size: .9rem; padding: 10px 4px; border-radius: 11px; color: #475467; cursor: pointer; white-space: nowrap; }
+.dt-tabs button.on { background: #fff; color: #0f172a; box-shadow: 0 1px 3px rgba(15, 23, 42, .12); }
+.dt-stop { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 10px; background: var(--surface); }
+.dt-sh { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid #eef2f6; font-weight: 800; }
+.dt-sh a { color: inherit; text-decoration: none; } .dt-sh span { margin-left: auto; font-size: .8rem; color: var(--muted); }
+.dt-p { padding: 10px 12px; border-top: 1px solid #f1f5f9; } .dt-p:first-of-type { border-top: 0; }
+.dt-p.on { background: #f0fdf4; } .dt-p.vang { background: #fef2f2; opacity: .8; } .dt-p.hl { box-shadow: inset 0 0 0 3px #f59e0b; }
+.dt-pt { display: flex; gap: 10px; align-items: flex-start; } .dt-pt .grow { flex: 1; min-width: 0; }
+.dt-seat { min-width: 42px; height: 42px; border-radius: 12px; background: #eef2ff; color: #3730a3; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.dt-pm { font-size: .8rem; color: var(--muted); } .dt-gc { font-size: .8rem; color: #b45309; font-weight: 600; }
+.dt-money { text-align: right; white-space: nowrap; } .dt-money small { display: block; font-size: .7rem; color: var(--muted); }
+.dt-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; background: #e2e8f0; color: #334155; border: 0; font-family: inherit; }
+.dt-tag.vang, .dt-tag.call.bao_huy { background: #fee2e2; color: #b91c1c; } .dt-tag.call { cursor: pointer; }
+.dt-tag.call.da_goi { background: #e0f2fe; color: #0369a1; } .dt-tag.call.nghe_may { background: #dcfce7; color: #15803d; } .dt-tag.call.thue_bao { background: #fef3c7; color: #92400e; }
+.dt-ask { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 0; }
+.dt-acts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+.dt-b { justify-content: center; text-align: center; padding: 9px 4px; font-weight: 700; text-decoration: none; }
+.dt-b.done { background: var(--ok-soft); color: var(--ok); border-color: transparent; } .dt-b.warn { background: #fee2e2; color: #b91c1c; } .dt-b.pay:not(:disabled) { background: #fffbeb; border-color: #fcd34d; }
+.dt-grid { display: grid; gap: 6px; margin: 6px 0 10px; }
+.dt-g { min-height: 70px; border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 5px; display: flex; flex-direction: column; gap: 1px; text-align: left; font: inherit; overflow: hidden; color: var(--text); }
+.dt-g b { font-size: .85rem; } .dt-g small { font-size: .66rem; color: #475467; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dt-gn { font-size: .78rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .dt-gm { color: #b45309 !important; font-weight: 700; }
+.dt-g.lbl { align-items: center; justify-content: center; background: #f1f5f9; color: var(--muted); font-weight: 700; font-size: .75rem; }
+button.dt-g { cursor: pointer; }
+.dt-g.bk { background: #fffbeb; border-color: #fcd34d; } .dt-g.pd { background: #eff6ff; border-color: #93c5fd; } .dt-g.len { background: #dcfce7; border-color: #86efac; }
+.dt-g.vang { background: #f1f5f9; border-color: #cbd5e1; opacity: .7; } .dt-g.huy { background: #fee2e2; border-color: #fca5a5; }
+.dt-leg { display: flex; gap: 10px; flex-wrap: wrap; font-size: .75rem; color: var(--muted); }
+.dt-leg i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line); margin-right: 4px; vertical-align: -2px; background: #fff; }
+.dt-leg i.bk { background: #fffbeb; border-color: #fcd34d; } .dt-leg i.pd { background: #eff6ff; border-color: #93c5fd; } .dt-leg i.len { background: #dcfce7; border-color: #86efac; }
+.dt-leg i.vang { background: #f1f5f9; } .dt-leg i.huy { background: #fee2e2; border-color: #fca5a5; }
+.dt-foot { position: sticky; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 0 4px; margin-top: 8px; }
+.dt-foot small { display: block; color: var(--muted); font-size: .72rem; } .dt-foot b { font-size: 1.05rem; }
+.dt-amount { text-align: center; font-size: 1.9rem; font-weight: 800; margin: 4px 0 14px; }
+.dt-pay2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 420px) { .dt-acts { grid-template-columns: repeat(2, 1fr); } }
+/* Bán vé: trạng thái lái xe báo về */
+.vxs-crew { font-size: .68rem; font-weight: 700; border-radius: 6px; padding: 0 5px; align-self: flex-start; background: #e0f2fe; color: #0369a1; }
+.vxs-crew.bao_huy, .vxs-crew.vang { background: #fee2e2; color: #b91c1c; } .vxs-crew.thue_bao { background: #fef3c7; color: #92400e; } .vxs-crew.nghe_may, .vxs-crew.tra { background: #dcfce7; color: #15803d; }

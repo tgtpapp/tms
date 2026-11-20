@@ -160,5 +160,44 @@ select is((select count(*)::int from public.my_trips(app.local_today(), app.loca
 select throws_ok($$ select public.trip_mark((select v from t.ids where k = 'T1'), 'den_ben') $$, 'P0002', null, 'Chủ B: không tìm thấy');
 reset role;
 
+-- ---------------------------------------------------------------- Trạng thái khách của lái xe (gọi, thuê bao, báo hủy, vắng, trả) + thu chuyển khoản
+set local session_replication_role = replica;   -- chèn thẳng vé thử vào chuyến đã xuất bến
+insert into public.seat_inventory (id, tenant_id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status)
+values ('77777777-7777-7777-7777-777777777773', (select v from t.ids where k = 'A'), '77777777-7777-7777-7777-777777777771',
+        (select v from t.ids where k = 'T1'), 'A02', (select id from public.stops where code = 'HN'), (select id from public.stops where code = 'VT'), 0, 1, 120000, 'dat');
+set local session_replication_role = origin;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'goi') $$, 'Bấm gọi khách: ghi đã gọi (chuyến đã xuất bến vẫn ghi được)');
+select is((select crew_call from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'da_goi', 'Đã gọi');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'thue_bao') $$, 'Thuê bao');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'goi') $$, 'Gọi lại');
+select is((select crew_call from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'thue_bao', 'Gọi lại không xóa kết quả lần trước');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'bao_huy') $$, 'Khách báo hủy');
+select is((select status from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'dat', 'Lái xe không tự hủy vé (quầy hủy)');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'vang') $$, 'Vắng');
+select is((select no_show::text || boarded::text from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'truefalse', 'Vắng thì không lên xe');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'len') $$, 'Lên xe');
+select lives_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'tra') $$, 'Trả khách');
+select is((select no_show::text || boarded::text || dropped::text from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'falsetruetrue', 'Đã lên, đã trả');
+select throws_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'xoa') $$, '22023', null, 'Thao tác lạ');
+select is(public.crew_collect('77777777-7777-7777-7777-777777777773', 'chuyen_khoan'), 120000, 'Thu chuyển khoản trên xe');
+select is((select pay_method from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'chuyen_khoan', 'Ghi cách thu chuyển khoản');
+select is((select sum(debit - credit) from public.ledger_lines where account = 'ngan_hang')::int, 120000, 'Tiền chuyển khoản vào tài khoản ngân hàng');
+select ok(public.my_trip_layout((select v from t.ids where k = 'T1')) ? 'seats', 'Lái xe xem được sơ đồ ghế chuyến của mình');
+select throws_ok($$ select public.my_trip_layout((select v from t.ids where k = 'T2')) $$, 'P0002', null, 'Chuyến không được xếp: không xem sơ đồ');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select throws_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'goi') $$, 'P0002', null, 'Bán vé không phải tổ lái: không đánh dấu');
+select is((select crew_call from public.seat_inventory where id = '77777777-7777-7777-7777-777777777773'), 'bao_huy', 'Quầy bán vé thấy khách báo hủy');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.crew_mark('77777777-7777-7777-7777-777777777773', 'goi') $$, 'P0002', null, 'Nhà xe B không đánh dấu vé của A');
+select throws_ok($$ select public.my_trip_layout((select v from t.ids where k = 'T1')) $$, 'P0002', null, 'Nhà xe B không xem sơ đồ chuyến của A');
+select is((select count(*)::int from public.seat_inventory where crew_call is not null), 0, 'Nhà xe B không thấy trạng thái vé của A');
+reset role;
+
 select * from finish();
 rollback;

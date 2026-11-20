@@ -364,7 +364,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           const mine = s.user_id === myUserId;
           const canOpen = canEdit || mine;
           const p = priv.find((x) => x.staff_id === s.id);
-          const gplx = docs.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
+          const gplx = papers.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
           const bad = canEdit ? problems(s, p, papers, warnDays).length : 0;
           return (
             <div key={s.id} id={`nv-${s.id}`} className={`staff-card pos-${s.position}${s.is_active ? '' : ' off'}`}>

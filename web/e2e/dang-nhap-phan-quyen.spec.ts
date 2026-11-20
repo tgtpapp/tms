@@ -78,7 +78,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 5c. Tạo vai trò tùy chỉnh
   await page.getByRole('button', { name: 'Vai trò', exact: true }).click();
   await page.getByLabel('Tên vai trò').fill('Thu ngân');
-  await page.getByLabel('Xem người dùng').check();
+  await page.getByLabel('Người dùng: Xem').check();
   await page.getByRole('button', { name: 'Tạo vai trò' }).click();
   await expect(page.getByText('Đã tạo vai trò Thu ngân')).toBeVisible();
 

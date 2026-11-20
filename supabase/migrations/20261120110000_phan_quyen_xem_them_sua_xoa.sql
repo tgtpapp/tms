@@ -14,7 +14,7 @@ from (values
   ('sell', 'Bán vé', 'vaed'), ('parcel', 'Gửi hàng', 'vaed'), ('charter', 'Hợp đồng vận chuyển', 'vaed'), ('trip', 'Điều hành', 'vaed'),
   ('route', 'Tuyến & giá vé', 'vaed'), ('repair', 'Sửa chữa', 'vaed'), ('fuel', 'Nhiên liệu', 'vaed'), ('km', 'Km xe', 'vaed'),
   ('report', 'Báo cáo', 'v'), ('vehicle', 'Xe', 'vaed'), ('staff', 'Lái xe & nhân viên', 'vaed'), ('labor', 'Hợp đồng lao động', 'vaed'),
-  ('salary', 'BHXH & lương chuyển khoản', 've'), ('branch', 'Chi nhánh & phòng vé', 'vaed'), ('doc', 'Văn bản', 'vaed'),
+  ('salary', 'BHXH & lương chuyển khoản', 've'), ('branch', 'Chi nhánh', 'vaed'), ('office', 'Phòng vé', 'vaed'), ('doc', 'Văn bản', 'vaed'),
   ('archive', 'Lưu trữ hồ sơ', 'vaed'), ('user', 'Người dùng', 'vaed'), ('role', 'Vai trò (phân quyền)', 'vaed'),
   ('settings', 'Cấu hình', 've'), ('audit', 'Nhật ký', 'v')) s(k, label, acts)
 join (values ('v', 'view', 'Xem'), ('a', 'add', 'Thêm'), ('e', 'edit', 'Sửa'), ('d', 'delete', 'Xóa')) a(c, act, label) on position(a.c in s.acts) > 0
@@ -37,7 +37,7 @@ select l, s || '.' || a from (values
   ('doc.manage',      array['doc'],                          array['view', 'add', 'edit', 'delete']),
   ('archive.manage',  array['archive'],                      array['view', 'add', 'edit', 'delete']),
   ('branch.manage',   array['branch'],                       array['view', 'add', 'edit', 'delete']),
-  ('office.manage',   array['branch'],                       array['view', 'add', 'edit', 'delete']),
+  ('office.manage',   array['office'],                       array['view', 'add', 'edit', 'delete']),
   ('user.read',       array['user'],                         array['view']),
   ('user.manage',     array['user'],                         array['view', 'add', 'edit', 'delete']),
   ('role.manage',     array['role'],                         array['view', 'add', 'edit', 'delete']),
@@ -49,11 +49,11 @@ insert into public.role_permissions (tenant_id, role_id, permission_code)
 select distinct rp.tenant_id, rp.role_id, pm.code
 from public.role_permissions rp join perm_map pm on pm.legacy = rp.permission_code
 on conflict do nothing;
--- Trước đây ai cũng mở được Tuyến, Xe, Chi nhánh (và Điều hành, trừ lái xe / nhân viên): giữ nguyên
+-- Trước đây ai cũng mở được Tuyến, Xe, Chi nhánh & phòng vé (và Điều hành, trừ lái xe / nhân viên): giữ nguyên
 insert into public.role_permissions (tenant_id, role_id, permission_code)
 select r.tenant_id, r.id, c from public.roles r,
-  unnest(case when r.code in ('driver', 'staff') then array['route.view', 'vehicle.view', 'branch.view']
-              else array['route.view', 'vehicle.view', 'branch.view', 'trip.view'] end) c
+  unnest(case when r.code in ('driver', 'staff') then array['route.view', 'vehicle.view', 'branch.view', 'office.view']
+              else array['route.view', 'vehicle.view', 'branch.view', 'office.view', 'trip.view'] end) c
 on conflict do nothing;
 
 -- ---------------------------------------------------------------- 3. Viết lại các hàm theo ô quyền
@@ -87,9 +87,9 @@ insert into fn_map values
   ('public.extend_booking', 'ticket.sell', '''sell.edit'''),
   ('public.generate_trips', 'trip.manage', '''trip.add'''),
   ('public.hold_seat', 'ticket.sell', '''sell.add'''),
-  ('public.import_legacy_charters', 'trip.manage', '''settings.edit'''),
-  ('public.import_legacy_ops', 'vehicle.manage', '''settings.edit'''),
-  ('public.import_legacy_trips', 'trip.manage', '''settings.edit'''),
+  ('public.import_legacy_charters', 'trip.manage', '''charter.add'''),
+  ('public.import_legacy_ops', 'vehicle.manage', '''repair.add'''),
+  ('public.import_legacy_trips', 'trip.manage', '''trip.add'''),
   ('public.import_vehicle_km', 'vehicle.manage', '''km.add'''),
   ('public.issue_transport_order', 'trip.manage', '''trip.edit'''),
   ('public.mark_manifest_printed', 'ticket.sell', '''sell.view'''), ('public.mark_manifest_printed', 'trip.manage', '''trip.view'''),
@@ -143,7 +143,7 @@ insert into fn_map values
   ('public.zalo_status', 'settings.manage', '''settings.view'''),
   ('public.delete_record', 'route.manage', '''route.delete'''), ('public.delete_record', 'vehicle.manage', '''vehicle.delete'''),
   ('public.delete_record', 'staff.manage', '''staff.delete'''), ('public.delete_record', 'branch.manage', '''branch.delete'''),
-  ('public.delete_record', 'office.manage', '''branch.delete''');
+  ('public.delete_record', 'office.manage', '''office.delete''');
 
 do $$
 declare
@@ -200,8 +200,8 @@ select t, c, l, s from (values
   ('staff_private', 'SELECT', 'staff.manage', 'staff.view'), ('staff_records', 'SELECT', 'staff.manage', 'staff.view'),
   ('tenant_private', 'SELECT', 'settings.manage', 'settings.view'),
   ('tenant_settings', 'INSERT', 'settings.manage', 'settings.edit'), ('tenant_settings', 'UPDATE', 'settings.manage', 'settings.edit'),
-  ('ticket_offices', 'INSERT', 'office.manage', 'branch.add'), ('ticket_offices', 'UPDATE', 'office.manage', 'branch.edit'),
-  ('vehicle_incidents', 'SELECT', 'trip.manage', 'vehicle.view'), ('vehicle_incidents', 'SELECT', 'vehicle.manage', 'vehicle.view'),
+  ('ticket_offices', 'INSERT', 'office.manage', 'office.add'), ('ticket_offices', 'UPDATE', 'office.manage', 'office.edit'),
+  ('vehicle_incidents', 'SELECT', 'trip.manage', 'trip.edit'), ('vehicle_incidents', 'SELECT', 'vehicle.manage', 'vehicle.edit'),
   ('vehicle_incidents', 'INSERT', 'vehicle.manage', 'vehicle.edit'), ('vehicle_incidents', 'UPDATE', 'vehicle.manage', 'vehicle.edit'), ('vehicle_incidents', 'DELETE', 'vehicle.manage', 'vehicle.edit'),
   ('vehicle_km', 'SELECT', 'trip.manage', 'km.view'), ('vehicle_km', 'SELECT', 'vehicle.manage', 'km.view'),
   ('vehicle_km', 'INSERT', 'vehicle.manage', 'km.add'), ('vehicle_km', 'UPDATE', 'vehicle.manage', 'km.edit'), ('vehicle_km', 'DELETE', 'vehicle.manage', 'km.delete'),
@@ -279,7 +279,7 @@ begin
   select p_tenant_id, r.id, x.code
   from public.roles r
   join (values
-    ('branch_manager', 'branch.*'), ('branch_manager', 'user.view'), ('branch_manager', 'archive.view'),
+    ('branch_manager', 'office.*'), ('branch_manager', 'user.view'), ('branch_manager', 'archive.view'),
     ('dispatcher', 'trip.*'), ('dispatcher', 'charter.*'), ('dispatcher', 'sell.*'), ('dispatcher', 'parcel.*'),
     ('dispatcher', 'repair.view'), ('dispatcher', 'fuel.view'), ('dispatcher', 'km.view'), ('dispatcher', 'archive.view'),
     ('office_manager', 'sell.*'), ('office_manager', 'parcel.*'), ('office_manager', 'archive.view'),
@@ -291,8 +291,8 @@ begin
   on conflict do nothing;
   insert into public.role_permissions (tenant_id, role_id, permission_code)
   select p_tenant_id, r.id, c from public.roles r,
-    unnest(case when r.code in ('driver', 'staff') then array['route.view', 'vehicle.view', 'branch.view']
-                else array['route.view', 'vehicle.view', 'branch.view', 'trip.view'] end) c
+    unnest(case when r.code in ('driver', 'staff') then array['route.view', 'vehicle.view', 'branch.view', 'office.view']
+                else array['route.view', 'vehicle.view', 'branch.view', 'office.view', 'trip.view'] end) c
   where r.tenant_id = p_tenant_id and r.code not in ('owner', 'admin')
   on conflict do nothing;
 end;

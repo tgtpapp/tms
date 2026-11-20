@@ -5,6 +5,7 @@ import { config } from '../config';
 import { companyFileUrl } from '../lib/documents';
 import { loadPermissions, type Permissions } from '../lib/permissions';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
+import { archiveMissingContracts } from '../lib/laborAutoArchive';
 import { AccountScreen } from './Account';
 import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
@@ -61,6 +62,13 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // Hợp đồng lao động năm mới (máy chủ tự lập ngày 01/01): tự lưu PDF còn thiếu vào Lưu trữ hồ sơ, chạy ngầm sau khi mở app
+  const autoHd = !!perms && perms.has('labor.view_all') && perms.has('archive.view') && perms.has('archive.add');
+  useEffect(() => {
+    if (!autoHd) return;
+    const t = window.setTimeout(() => { void archiveMissingContracts(ctx.tenant_id, { id: ctx.user_id, name: ctx.full_name ?? '' }).catch(() => undefined); }, 60_000);
+    return () => window.clearTimeout(t);
+  }, [autoHd, ctx.tenant_id, ctx.user_id, ctx.full_name]);
 
   if (error) return <Centered><p className="error-text">{error}</p></Centered>;
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;

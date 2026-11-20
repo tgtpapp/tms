@@ -61,5 +61,20 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","r
 select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa09', '{"full_name":"Chủ A","joined_on":"2024-01-01","position":"nhan_vien","user_id":"00000000-0000-0000-0000-0000000000b1"}') $$, 'Hồ sơ của chính Chủ A');
 select throws_ok($$ select public.save_labor_contract(null, '00000000-0000-0000-0000-00000000aa09', 'xac_dinh', '2026-01-01', '2026-12-31', 1, null, null, null, '{}', null) $$, '42501', null, 'Không tự lập hợp đồng của chính mình');
 reset role;
+-- Sang năm mới tự lập hợp đồng cho mọi nhân viên đang làm (như app cũ)
+set local role service_role;
+select is(app.svc_renew_labor_contracts(2028), 3, 'Năm 2028: tự lập HĐ cho 3 nhân viên đang làm');
+select is(app.svc_renew_labor_contracts(2028), 0, 'Chạy lại không lập trùng');
+reset role;
+select is((select number || '|' || kind || '|' || start_on || '|' || coalesce(end_on::text, '-') || '|' || salary from public.labor_contracts
+           where year = 2028 and staff_id = '00000000-0000-0000-0000-00000000aa01'),
+  '001/2028/HĐLĐ-TP|khong_xac_dinh|2028-01-01|-|8000000', 'Người có HĐ năm trước: số 001, giữ loại HĐ và lương của HĐ gần nhất');
+select is((select kind || '|' || start_on || '|' || end_on from public.labor_contracts where year = 2028 and staff_id = '00000000-0000-0000-0000-00000000aa02'),
+  'thoi_vu|2028-01-01|2028-12-31', 'HĐ có thời hạn: 01/01 → 31/12');
+select is((select count(*)::int from public.labor_contracts where year = 2028 and tenant_id = (select id from public.tenants where code = 'nha-xe-b')), 0, 'Không lập lẫn sang nhà xe B');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select app.svc_renew_labor_contracts(2029) $$, '42501', null, 'Người dùng không gọi được việc định kỳ');
+reset role;
 select * from finish();
 rollback;

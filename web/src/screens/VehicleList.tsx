@@ -2,6 +2,7 @@ import { Modal } from '../components/Modal';
 import { VehicleProfile } from '../components/VehicleProfile';
 import { BulkPaperSave, type Me } from '../components/ProfilePapers';
 import { DeleteButton } from '../components/DeleteButton';
+import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
@@ -234,52 +235,82 @@ export function VehicleList(props: {
   const { vehicles, types, docs, warnDays, canEdit, open, setOpen } = props;
   const [showInactive, setShowInactive] = useState(false);
   const [bulk, setBulk] = useState(false);
+  const [tab, setTab] = useState('');
+  const avas = useAvatars(props.tenantId || null, 'anh_xe');
   const typeName = (id: string) => types.find((t) => t.id === id)?.name ?? '?';
   const inactive = vehicles.filter((v) => !v.is_active).length;
+  const shown = vehicles.filter((v) => showInactive || v.is_active);
+  // Thẻ chọn theo loại xe (như thẻ chức vụ ở Lái xe & nhân viên): chỉ loại đang có xe
+  const tabs = [...new Set(shown.map((v) => v.vehicle_type_id))].map((id) => ({ key: id, label: typeName(id), n: shown.filter((v) => v.vehicle_type_id === id).length }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+  const cur = tabs.some((t) => t.key === tab) ? tab : '';
+  const openCard = (id: string) => { setTab(''); setOpen(id); setTimeout(() => document.getElementById(`xe-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50); };
 
   return (
-    <section className="card">
-      <div className="item-head">
-        <h2>Xe ({vehicles.filter((v) => v.is_active).length})</h2>
-        {canEdit && props.canArchive && <button className="btn small" title="Lưu lý lịch phương tiện của tất cả xe đang dùng vào Lưu trữ hồ sơ" onClick={() => setBulk(true)}>💾 Lưu lý lịch xe</button>}
-        {inactive > 0 && (
-          <button className="btn small" onClick={() => setShowInactive(!showInactive)}>
-            {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
-          </button>
-        )}
+    <>
+      <div className="staff-top">
+        <div className="vx-tabs staff-tabs" role="tablist" aria-label="Loại xe">
+          {[{ key: '', label: 'Tất cả', n: shown.length }, ...tabs].map((t) => (
+            <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
+              {t.label} ({t.n})
+            </button>
+          ))}
+        </div>
+        {canEdit && props.canArchive && <button type="button" className="btn small" title="Lưu lý lịch phương tiện của tất cả xe đang dùng vào Lưu trữ hồ sơ" onClick={() => setBulk(true)}>💾 Lưu lý lịch xe</button>}
+        {bulk && <BulkPaperSave kind="vehicle" tenantId={props.tenantId} me={props.me} onClose={() => setBulk(false)}
+          items={vehicles.filter((v) => v.is_active).map((v) => ({ id: v.id, label: v.plate }))} />}
+        <VehicleAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} avas={avas} typeName={typeName} onOpen={openCard} />
       </div>
-      {bulk && <BulkPaperSave kind="vehicle" tenantId={props.tenantId} me={props.me} onClose={() => setBulk(false)}
-        items={vehicles.filter((v) => v.is_active).map((v) => ({ id: v.id, label: v.plate }))} />}
-      {vehicles.length === 0 && <p className="muted">Chưa có xe.</p>}
-      <ul className="list">
-        {vehicles.filter((v) => showInactive || v.is_active).map((v) => {
-          const mine = docs.filter((d) => d.vehicle_id === v.id && d.is_current);
-          const bad = VEHICLE_DOCS.filter((def) => {
-            const s = docState(def, mine.find((d) => d.doc_type === def.code), warnDays).state;
-            return s === 'het_han' || s === 'sap_het' || (s === 'thieu' && def.required);
-          }).length;
-          return (
-            <li key={v.id} id={`xe-${v.id}`} className="item">
-              <div className="item-head">
-                <div>
-                  <b>{v.plate}</b> <span className="muted small">· {typeName(v.vehicle_type_id)}{v.manufacture_year ? ` · ${v.manufacture_year}` : ''} · {OWNERSHIP[v.ownership]}</span>
-                  {!v.is_active && <span className="badge locked">Ngừng dùng</span>}
-                  {bad > 0 && <span className="badge warn-badge">{bad} giấy tờ cần xử lý</span>}
+      <section className="card">
+        <div className="item-head">
+          <h2>Xe ({vehicles.filter((v) => v.is_active).length})</h2>
+          {inactive > 0 && (
+            <button className="btn small" onClick={() => setShowInactive(!showInactive)}>
+              {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
+            </button>
+          )}
+        </div>
+        {vehicles.length === 0 && <p className="muted">Chưa có xe.</p>}
+        <div className="staff-cards">
+          {shown.filter((v) => !cur || v.vehicle_type_id === cur).map((v) => {
+            const bad = vehicleProblems(v, docs, warnDays).length;
+            const kd = docs.find((d) => d.vehicle_id === v.id && d.doc_type === 'kiem_dinh' && d.is_current);
+            const life = lifeLimit(v.manufacture_year);
+            return (
+              <div key={v.id} id={`xe-${v.id}`} className={`staff-card veh-card${v.is_active ? '' : ' off'}`}>
+                <div className="sc-top">
+                  <Avatar name={v.plate} url={avas[v.id]} text="🚌" />
+                  <div className="sc-name">
+                    <b>{v.plate}</b>
+                    <span className="sc-job">{typeName(v.vehicle_type_id)}</span>
+                  </div>
                 </div>
-                <button className="btn small" aria-label={`Sửa xe ${v.plate}`} onClick={() => setOpen(v.id)}>{canEdit ? 'Sửa' : 'Xem'}</button>
+                <div className="sc-info small">
+                  <span>{v.manufacture_year ? `Năm SX ${v.manufacture_year}` : 'Chưa nhập năm SX'}{life ? ` · ${life.text}` : ''}</span>
+                  <span>Đăng kiểm: {kd?.expires_on ? `đến ${fmtDate(kd.expires_on)}` : 'Chưa có'}</span>
+                  <span>{BUSINESS[v.business_type]}</span>
+                  {v.owner_name && <span className="muted">Chủ xe: {v.owner_name}</span>}
+                </div>
+                <div className="sc-badges">
+                  <span className="badge">{OWNERSHIP[v.ownership]}</span>
+                  {!v.is_active && <span className="badge locked">Ngừng dùng</span>}
+                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+                </div>
+                <button className="btn small sc-open" aria-label={`Sửa xe ${v.plate}`} onClick={() => setOpen(v.id)}>{canEdit ? 'Sửa' : 'Xem'}</button>
+                {open === v.id && (
+                  <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
+                    <div className="sub"><StaffAvatar tenantId={props.tenantId} staffId={v.id} name={v.plate} canEdit={canEdit} dir="anh_xe" /></div>
+                    <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
+                    <VehicleProfile v={v} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
+                    {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
+                  </Modal>
+                )}
               </div>
-              {open === v.id && (
-                <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
-                  <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
-                  <VehicleProfile v={v} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
-                  {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
-                </Modal>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+            );
+          })}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -354,35 +385,56 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
   );
 }
 
-/* ------------------------------------------------------------------ Cảnh báo giấy tờ toàn nhà xe */
+/* ------------------------------------------------------------------ Cảnh báo (như Lái xe & nhân viên) */
 
-export function DocAlerts(props: { vehicles: Vehicle[]; docs: Doc[]; warnDays: number; onOpen: (id: string) => void }) {
-  const { vehicles, docs, warnDays, onOpen } = props;
-  const rows: { v: Vehicle; text: string; state: DocState | 'nien_han' }[] = [];
-  for (const v of vehicles.filter((x) => x.is_active)) {
-    for (const def of VEHICLE_DOCS) {
-      const s = docState(def, docs.find((d) => d.vehicle_id === v.id && d.doc_type === def.code && d.is_current), warnDays);
-      if (s.state === 'het_han' || s.state === 'sap_het' || (s.state === 'thieu' && def.required)) {
-        rows.push({ v, text: `${SHORT[def.code]}: ${s.text}`, state: s.state });
-      }
-    }
-    const life = lifeLimit(v.manufacture_year);
-    if (life && life.state !== 'con_han') rows.push({ v, text: life.text, state: 'nien_han' });
+type Prob = { text: string; state: DocState | 'nien_han' };
+function vehicleProblems(v: Vehicle, docs: Doc[], warnDays: number): Prob[] {
+  const out: Prob[] = [];
+  if (!v.is_active) return out;
+  for (const def of VEHICLE_DOCS) {
+    const s = docState(def, docs.find((d) => d.vehicle_id === v.id && d.doc_type === def.code && d.is_current), warnDays);
+    if (s.state === 'het_han' || s.state === 'sap_het' || (s.state === 'thieu' && def.required)) out.push({ text: `${SHORT[def.code]}: ${s.text}`, state: s.state });
   }
-  if (rows.length === 0) return null;
+  const life = lifeLimit(v.manufacture_year);
+  if (life && life.state !== 'con_han') out.push({ text: life.text, state: 'nien_han' });
+  return out;
+}
+
+/** Cảnh báo dạng chuông: số việc cần xử lý; bấm mở danh sách gộp theo từng xe, bấm biển số mở hồ sơ xe. */
+function VehicleAlerts(props: { vehicles: Vehicle[]; docs: Doc[]; warnDays: number; avas: Record<string, string>; typeName: (id: string) => string; onOpen: (id: string) => void }) {
+  const { vehicles, docs, warnDays, avas, typeName, onOpen } = props;
+  const [show, setShow] = useState(false);
   const order = { het_han: 0, nien_han: 1, sap_het: 2, thieu: 3, con_han: 4, co: 5 };
-  rows.sort((a, b) => order[a.state] - order[b.state]);
+  const list = vehicles.map((v) => ({ v, items: vehicleProblems(v, docs, warnDays).sort((a, b) => order[a.state] - order[b.state]) }))
+    .filter((x) => x.items.length > 0)
+    .sort((a, b) => order[a.items[0]!.state] - order[b.items[0]!.state] || b.items.length - a.items.length || a.v.plate.localeCompare(b.v.plate));
+  const total = list.reduce((n, x) => n + x.items.length, 0);
+  const urgent = list.some((x) => x.items[0]!.state === 'het_han');
   return (
-    <section className="card">
-      <h2>Cảnh báo giấy tờ ({rows.length})</h2>
-      <ul className="list small">
-        {rows.slice(0, 50).map((r, i) => (
-          <li key={i}>
-            <button className="btn small link" onClick={() => onOpen(r.v.id)}>{r.v.plate}</button>
-            <span className={`state-${r.state === 'nien_han' ? 'sap_het' : r.state}`}>{r.text}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <>
+      <button type="button" className={`bell${total ? ' has' : ''}${urgent ? ' urgent' : ''}`} onClick={() => setShow(true)} disabled={!total}
+              aria-label={total ? `Cảnh báo: ${total} việc cần xử lý của ${list.length} xe` : 'Không có cảnh báo'} title={total ? `${total} việc cần xử lý` : 'Không có cảnh báo'}>
+        <span aria-hidden="true">🔔</span>
+        {total > 0 && <b className="bell-n">{total > 99 ? '99+' : total}</b>}
+      </button>
+      {show && (
+        <Modal wide title={`Cảnh báo xe · ${list.length} xe`} onClose={() => setShow(false)}>
+          <ul className="alert-people">
+            {list.map(({ v, items }) => (
+              <li key={v.id}>
+                <button type="button" className="ap-head" onClick={() => { setShow(false); onOpen(v.id); }} aria-label={`Mở hồ sơ xe ${v.plate}`}>
+                  <Avatar name={v.plate} url={avas[v.id]} size={36} text="🚌" />
+                  <span className="ap-name"><b>{v.plate}</b><small className="muted">{typeName(v.vehicle_type_id)}</small></span>
+                  <span className={`badge ${items.some((x) => x.state === 'het_han') ? 'locked' : 'warn-badge'}`}>{items.length}</span>
+                </button>
+                <div className="ap-items">
+                  {items.map((r, i) => <span key={i} className={`ap-chip state-${r.state === 'nien_han' ? 'sap_het' : r.state}`}>{r.text}</span>)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
+    </>
   );
 }

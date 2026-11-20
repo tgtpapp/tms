@@ -959,3 +959,4 @@ table.cc { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .fr-big { width: 100%; justify-content: center; padding: 12px; font-size: 16px; }
 .fr-list { display: grid; gap: 6px; margin-top: 8px; }
 .fr-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid #eef1f6; padding-top: 6px; }
+.staff-card.veh-card { border-top-color: #0ea5e9; }

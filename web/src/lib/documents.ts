@@ -284,7 +284,9 @@ async function fileUrl(full: string): Promise<string | null> {
 
 /* ------------------------------------------------------------------ Ảnh đại diện nhân viên / lái xe */
 
-const avatarPath = (tenantId: string, staffId: string) => `${tenantId}/anh_dai_dien/${staffId}.jpg`;
+/** Thư mục ảnh: anh_dai_dien = nhân viên / lái xe, anh_xe = ảnh xe (cùng cách lưu). */
+export type AvaDir = 'anh_dai_dien' | 'anh_xe';
+const avatarPath = (tenantId: string, staffId: string, dir: AvaDir = 'anh_dai_dien') => `${tenantId}/${dir}/${staffId}.jpg`;
 
 /** Thu ảnh về khung vuông 320px (cắt giữa), JPEG ~20-40 KB. */
 async function prepareAvatar(file: Blob): Promise<Blob> {
@@ -302,21 +304,21 @@ async function prepareAvatar(file: Blob): Promise<Blob> {
   return new Promise((ok, bad) => canvas.toBlob((b) => (b ? ok(b) : bad(new Error('Không nén được ảnh'))), 'image/jpeg', 0.85));
 }
 
-export async function uploadAvatar(tenantId: string, staffId: string, file: Blob): Promise<void> {
+export async function uploadAvatar(tenantId: string, staffId: string, file: Blob, dir: AvaDir = 'anh_dai_dien'): Promise<void> {
   const blob = await prepareAvatar(file);
-  const { error } = await supabase.storage.from(BUCKET).upload(avatarPath(tenantId, staffId), blob, { contentType: 'image/jpeg', upsert: true });
+  const { error } = await supabase.storage.from(BUCKET).upload(avatarPath(tenantId, staffId, dir), blob, { contentType: 'image/jpeg', upsert: true });
   if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
   window.dispatchEvent(new Event('tms-avatar'));
 }
 
-export async function removeAvatar(tenantId: string, staffId: string): Promise<void> {
-  await removeFile(avatarPath(tenantId, staffId));
+export async function removeAvatar(tenantId: string, staffId: string, dir: AvaDir = 'anh_dai_dien'): Promise<void> {
+  await removeFile(avatarPath(tenantId, staffId, dir));
   window.dispatchEvent(new Event('tms-avatar'));
 }
 
 /** Link ảnh đại diện của mọi nhân viên trong nhà xe (1 lần liệt kê + 1 lần ký link), theo staff_id. */
-export async function avatarUrls(tenantId: string): Promise<Record<string, string>> {
-  const dir = `${tenantId}/anh_dai_dien`;
+export async function avatarUrls(tenantId: string, kind: AvaDir = 'anh_dai_dien'): Promise<Record<string, string>> {
+  const dir = `${tenantId}/${kind}`;
   const { data: files, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
   if (error || !files?.length) return {};
   const jpg = files.filter((f) => /^[0-9a-f-]{36}\.jpg$/.test(f.name));

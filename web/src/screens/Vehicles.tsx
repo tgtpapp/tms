@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-import { AddVehicle, DOC_COLS, DocAlerts, VEHICLE_COLS, VehicleList, type Doc, type Vehicle } from './VehicleList';
+import { AddVehicle, DOC_COLS, VEHICLE_COLS, VehicleList, type Doc, type Vehicle } from './VehicleList';
 
 type BodyStyle = 'ghe_ngoi' | 'giuong_nam' | 'limousine' | 'phong_nam' | 'khac';
 type Fuel = 'dau' | 'xang' | 'dien' | 'khi' | 'hybrid';
@@ -63,17 +63,13 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
   const tenantId = ctx.tenant_id ?? '';
   return (
     <>
-      <DocAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} onOpen={(id) => {
-        setOpen(id);
-        setTimeout(() => document.getElementById(`xe-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
-      }} />
-      {canEdit && <AddVehicle tenantId={tenantId} types={types} reload={load} />}
       <VehicleList tenantId={tenantId} vehicles={vehicles} types={types} docs={docs} warnDays={warnDays} canEdit={canEdit}
                    open={open} setOpen={setOpen} reload={load} canArchive={perms.has('archive.manage')} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }}
                    layout={(typeId) => {
                      const t = types.find((x) => x.id === typeId);
                      return t ? <SeatLayout type={t} seats={seats.filter((s) => s.vehicle_type_id === t.id)} canEdit={canEdit} reload={load} types={types} allSeats={seats} /> : null;
                    }} />
+      {canEdit && <AddVehicle tenantId={tenantId} types={types} reload={load} />}
       <VehicleTypesSection types={types} seats={seats} canEdit={canEdit} reload={load} />
     </>
   );

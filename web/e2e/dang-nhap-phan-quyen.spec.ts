@@ -174,6 +174,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Xe (1)', exact: true })).toBeVisible();
 
   // 5h. Thêm kiểm định sắp hết hạn → cảnh báo; thêm bản mới → bản cũ vào "giấy cũ"
+  // Mục Xe giống Lái xe & nhân viên: thẻ theo loại xe, chuông cảnh báo gộp theo xe, ảnh xe
+  await expect(page.getByRole('tab', { name: 'Giường nằm 6 chỗ (1)' })).toBeVisible();
+  await page.getByRole('button', { name: /^Cảnh báo: \d+ việc cần xử lý của 1 xe$/ }).click();
+  await page.getByRole('button', { name: 'Mở hồ sơ xe 51B-123.45' }).click();
+  await expect(page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' })).toBeVisible();
+  await page.getByLabel('Ảnh xe', { exact: true }).setInputFiles(png);
+  await page.getByRole('button', { name: 'Dùng cả ảnh' }).click();
+  await expect(page.getByText('Đã lưu ảnh xe', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
+  await expect(page.locator('.veh-card').getByRole('img', { name: 'Ảnh 51B-123.45' })).toBeVisible();
   await page.getByRole('button', { name: 'Sửa xe 51B-123.45' }).click();
   await expect(page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' })).toBeVisible();
   await expect(page.getByText('Số 012345')).toBeVisible();

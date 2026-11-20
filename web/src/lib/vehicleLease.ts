@@ -7,8 +7,9 @@ import { numberToWords } from './vnWords';
 import { makePdf, pageImg, paginate } from './pdfMaker';
 import { savePdf } from './dispatchPapers';
 import { safeName } from './documents';
+import { loadSigns, type Sign } from './signatures';
 
-export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string }
+export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string; files?: string[] }
 export interface Lease {
   id: string; number: string; year: number; signed_on: string; start_on: string; end_on: string; pay_day: number | null; late_days: number | null;
   tax_party: 'A' | 'B' | null; lessor: Person & { spouse?: Person | null }; bank: { holder?: string; account?: string; bank?: string };
@@ -21,7 +22,10 @@ export interface LeaseVehicle {
   id: string; plate: string; type: string; brand: string | null; model: string | null; color: string | null; engine_no: string | null; chassis_no: string | null;
   seats: string; reg_no: string | null; reg_by: string | null; reg_on: string | null; reg_owner: string | null;
 }
-export interface LeaseCtx { company: Company & { tax: string }; boss: Boss; director: string; directorCccd: string; vehicles: Map<string, LeaseVehicle> }
+export interface LeaseCtx { company: Company & { tax: string }; boss: Boss; director: string; dir: { cccd: string; cccd_on: string; cccd_by: string; phone: string };
+  vehicles: Map<string, LeaseVehicle>; signA: Sign | null; signB: Sign | null }
+/** Mã chữ ký chủ xe / vợ chồng theo hợp đồng (thư mục chu_ky) */
+export const leaseSignKey = (leaseId: string, who: 'a' | 'b') => `hdtx_${leaseId}_${who}`;
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const hv = (x: unknown, d = '……………………') => (x != null && String(x).trim() !== '' ? esc(x) : d);
@@ -29,13 +33,14 @@ const dmy = (x: string | null | undefined) => (x ? x.split('-').reverse().join('
 const money = (n: number) => n.toLocaleString('vi-VN');
 const BODY: Record<string, string> = { ghe_ngoi: 'Xe ô tô khách', giuong_nam: 'Xe ô tô khách giường nằm', limousine: 'Xe ô tô khách (limousine)', phong_nam: 'Xe ô tô khách giường nằm (cabin)', khac: 'Xe ô tô' };
 
-export async function loadLeaseCtx(tenantId: string, me: { id: string | null; name: string }, vehicleIds: string[]): Promise<LeaseCtx> {
-  const [c, t, p, ss, v, docs, { b }] = await Promise.all([
-    company(), supabase.from('tenants').select('tax_code').maybeSingle(), supabase.from('tenant_private').select('director_id_no').maybeSingle(),
+export async function loadLeaseCtx(tenantId: string, me: { id: string | null; name: string }, vehicleIds: string[], leaseId: string | null = null): Promise<LeaseCtx> {
+  const ka = leaseId ? leaseSignKey(leaseId, 'a') : '', kb = leaseId ? leaseSignKey(leaseId, 'b') : '';
+  const [c, t, p, ss, v, docs, { b }, sg] = await Promise.all([
+    company(), supabase.from('tenants').select('tax_code').maybeSingle(), rpc<Record<string, string | null> | null>('lease_company_info', {}).catch(() => null),
     supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc']),
     supabase.from('vehicles').select('id, plate, color, engine_no, chassis_no, owner_name, vehicle_types(name, brand, model_code, body_style, reg_seats, reg_berths)').in('id', vehicleIds),
     supabase.from('documents').select('vehicle_id, doc_no, issuer, issued_on, data').eq('doc_type', 'dang_ky').eq('is_current', true).in('vehicle_id', vehicleIds),
-    boss(tenantId, me),
+    boss(tenantId, me), leaseId ? loadSigns(tenantId, [ka, kb], true) : Promise.resolve(new Map<string, Sign>()),
   ]);
   const dk = new Map(((docs.data ?? []) as { vehicle_id: string; doc_no: string | null; issuer: string | null; issued_on: string | null; data: Record<string, unknown> | null }[]).map((d) => [d.vehicle_id, d]));
   type VRow = { id: string; plate: string; color: string | null; engine_no: string | null; chassis_no: string | null; owner_name: string | null;
@@ -48,8 +53,10 @@ export async function loadLeaseCtx(tenantId: string, me: { id: string | null; na
       reg_owner: String(d?.data?.chu_xe ?? '') || x.owner_name } as LeaseVehicle];
   }));
   const set = (k: string) => String(((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value ?? '');
+  const d = (k: string) => String(p?.[k] ?? '');
   return { company: { ...c, tax: (t.data as { tax_code?: string } | null)?.tax_code ?? '' }, boss: b, director: set('cong_ty.giam_doc'),
-    directorCccd: (p.data as { director_id_no?: string } | null)?.director_id_no ?? '', vehicles };
+    dir: { cccd: d('cccd'), cccd_on: d('cccd_on'), cccd_by: d('cccd_by'), phone: d('phone') }, vehicles,
+    signA: sg.get(ka)?.img ? sg.get(ka)! : null, signB: sg.get(kb)?.img ? sg.get(kb)! : null };
 }
 
 const months = (a: string, b: string) => { const m = (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7)) + (+b.slice(8) >= +a.slice(8) - 1 ? 1 : 0); return Math.max(1, m); };
@@ -84,7 +91,8 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
       + (S?.name ? `<p style="margin:3px 0"><i>(Xe là tài sản chung vợ chồng, cả hai cùng ký tên)</i></p>${person(S)}` : ''),
     H('BÊN THUÊ (Sau đây gọi tắt là Bên B):') + P(`Tên doanh nghiệp: <b>${esc(co.name.toUpperCase())}</b>`) + P(`Mã số doanh nghiệp: ${hv(co.tax)}`)
       + P(`Địa chỉ trụ sở chính: ${hv(co.address)}`) + P(`Đại diện theo pháp luật: Ông <b>${hv(x.director.toUpperCase())}</b> — Chức vụ: Giám đốc`)
-      + P(`Số CCCD: ${hv(x.directorCccd)} — Cấp ngày: ${k.director.cccd_on ? dmy(k.director.cccd_on) : '……………'} — Nơi cấp: ${hv(k.director.cccd_by)}`) + P(`Số điện thoại: ${hv(k.director.phone)}`),
+      + P(`Số CCCD: ${hv(x.dir.cccd)} — Cấp ngày: ${x.dir.cccd_on || k.director.cccd_on ? dmy(x.dir.cccd_on || k.director.cccd_on) : '……………'} — Nơi cấp: ${hv(x.dir.cccd_by || k.director.cccd_by)}`)
+      + P(`Số điện thoại: ${hv(x.dir.phone || k.director.phone)}`),
     P('Sau khi bàn bạc, thỏa thuận, hai bên thống nhất ký kết Hợp đồng thuê xe ô tô với các điều khoản cụ thể như sau:'),
     H('Điều 1. Đặc điểm tài sản cho thuê') + P(`Bên A đồng ý cho Bên B thuê và Bên B đồng ý thuê ${String(V.length).padStart(2, '0')} xe ô tô thuộc quyền sở hữu hợp pháp của Bên A với các thông số kỹ thuật sau:`) + dieu1
       + P(`${one ? '7' : ''}${one ? '. ' : ''}Tình trạng xe khi bàn giao: Xe hoạt động bình thường, đầy đủ giấy tờ pháp lý bản chính/bản sao theo quy định (Giấy đăng ký xe, Giấy chứng nhận kiểm định ATKT &amp; BVMT, Bảo hiểm TNDS bắt buộc còn hiệu lực).`),
@@ -113,7 +121,11 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
       + P('2. Trong quá trình thực hiện, nếu phát sinh tranh chấp, hai bên ưu tiên giải quyết thông qua thương lượng. Trường hợp không thỏa thuận được, tranh chấp sẽ được đưa ra Tòa án nhân dân có thẩm quyền để giải quyết.')
       + P('3. Hợp đồng này có hiệu lực kể từ ngày ký và được lập thành 02 (hai) bản có giá trị pháp lý như nhau, mỗi bên giữ 01 (một) bản.'),
     `<table style="width:100%;border-collapse:collapse;margin-top:12px"><tr>
-      ${signCol('ĐẠI DIỆN BÊN A', '(Ký, ghi rõ họ tên)', '', [A.name, S?.name].filter(Boolean).join(' – ').toUpperCase(), null, 50)}
+      ${S?.name
+        ? `<td style="width:50%;text-align:center;vertical-align:top"><b>ĐẠI DIỆN BÊN A</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i>
+            <table style="width:100%;border-collapse:collapse"><tr>${[[A.name, x.signA], [S.name, x.signB]].map(([n, sg]) => `<td style="width:50%;text-align:center;vertical-align:top">
+            <div style="height:90px;display:flex;align-items:center;justify-content:center">${(sg as Sign | null)?.img ? `<img src="${(sg as Sign).img}" alt="" style="max-height:66px;max-width:140px">` : ''}</div><b>${esc(String(n ?? '').toUpperCase())}</b></td>`).join('')}</tr></table></td>`
+        : signCol('ĐẠI DIỆN BÊN A', '(Ký, ghi rõ họ tên)', x.signA?.img ? `<img src="${x.signA.img}" alt="" style="max-height:66px;max-width:190px">` : '', (A.name ?? '').toUpperCase(), null, 50)}
       ${bossCol(x.boss, 'ĐẠI DIỆN BÊN B', 50)}</tr></table>`,
   ];
   return paginate(blocks.map((b) => `<div style="font-size:12.5px;line-height:1.42;text-align:justify">${b}</div>`));

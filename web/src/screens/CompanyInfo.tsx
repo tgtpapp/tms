@@ -11,7 +11,7 @@ import { Cropper } from '../components/Cropper';
 
 const EMPTY = {
   name: '', legal_name: '', tax_code: '', address: '', phone: '',
-  transport_license_no: '', transport_license_date: '', transport_license_issuer: '', director_id_no: '',
+  transport_license_no: '', transport_license_date: '', transport_license_issuer: '', director_id_no: '', director_id_date: '', director_id_place: '',
 };
 type Info = typeof EMPTY;
 type Slot = 'logo' | 'giay_phep' | 'cccd_truoc' | 'cccd_sau' | 'chu_ky' | 'con_dau';
@@ -46,7 +46,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
   const load = useCallback(async () => {
     const [t, p, s] = await Promise.all([
       supabase.from('tenants').select('name, legal_name, tax_code, address, phone, transport_license_no, transport_license_date, transport_license_issuer').maybeSingle(),
-      supabase.from('tenant_private').select('director_id_no').maybeSingle(),
+      supabase.from('tenant_private').select('director_id_no, director_id_date, director_id_place').maybeSingle(),
       supabase.from('tenant_settings').select('key, value').in('key', ['in.chu_ky_giam_doc', 'in.con_dau']),
     ]);
     if (t.error) return toast('error', t.error.message);
@@ -57,6 +57,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       transport_license_no: v('transport_license_no'), transport_license_date: v('transport_license_date'),
       transport_license_issuer: v('transport_license_issuer'),
       director_id_no: ((p.data ?? {}) as { director_id_no?: string | null }).director_id_no ?? '',
+      director_id_date: ((p.data ?? {}) as { director_id_date?: string | null }).director_id_date ?? '',
+      director_id_place: ((p.data ?? {}) as { director_id_place?: string | null }).director_id_place ?? '',
     });
     const flag = (k: string) => ((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value;
     setFlags({ sign: flag('in.chu_ky_giam_doc') !== false, seal: flag('in.con_dau') !== false });
@@ -77,6 +79,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
         p_transport_license_date: f.transport_license_date || null, p_transport_license_issuer: f.transport_license_issuer,
         p_address: f.address, p_phone: f.phone, p_director_id_no: f.director_id_no,
       });
+      await rpc('set_director_id_info', { p_date: f.director_id_date || null, p_place: f.director_id_place });
       const { error } = await supabase.from('tenant_settings').upsert([
         { key: 'in.chu_ky_giam_doc', value: flags.sign }, { key: 'in.con_dau', value: flags.seal },
       ], { onConflict: 'tenant_id,key' });
@@ -106,7 +109,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       } else {
         const r = await readByAI('cccd', files);
         const so = r.fields.so_giay == null ? '' : String(r.fields.so_giay).replace(/\s/g, '');
-        if (so) setF((cur) => ({ ...cur, director_id_no: so }));
+        const gv = (k: string) => (r.fields[k] == null ? '' : String(r.fields[k]).trim());
+        setF((cur) => ({ ...cur, director_id_no: so || cur.director_id_no, director_id_date: gv('ngay_cap') || cur.director_id_date, director_id_place: gv('noi_cap') || cur.director_id_place }));
       }
       toast('ok', 'AI đã đọc và điền sẵn, kiểm tra rồi bấm "Lưu thông tin công ty"');
     } finally {
@@ -195,6 +199,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       {reading && <p className="upload">{reading}</p>}
       <div className="grid2">
         <label>Số CCCD giám đốc<input value={f.director_id_no} onChange={set('director_id_no')} inputMode="numeric" maxLength={12} /></label>
+        <label>Ngày cấp CCCD giám đốc<input type="date" value={f.director_id_date} onChange={set('director_id_date')} /></label>
+        <label>Nơi cấp CCCD giám đốc<input value={f.director_id_place} onChange={set('director_id_place')} /></label>
         <label>Số GPKD vận tải<input value={f.transport_license_no} onChange={set('transport_license_no')} /></label>
         <label>Ngày cấp GPKD vận tải<input type="date" value={f.transport_license_date} onChange={set('transport_license_date')} /></label>
         <label>Nơi cấp GPKD vận tải<input value={f.transport_license_issuer} onChange={set('transport_license_issuer')} /></label>

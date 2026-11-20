@@ -1010,3 +1010,5 @@ button.dt-g { cursor: pointer; }
 /* Hướng dẫn cài app */
 .pwa-r { border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; margin: 6px 0; font-size: .9rem; }
 .pwa-r.on { border-color: var(--primary); background: var(--surface-2); }
+.lease-sign { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 10px; }
+.lease-sign img { max-height: 60px; max-width: 200px; }

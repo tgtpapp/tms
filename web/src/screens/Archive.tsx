@@ -17,6 +17,11 @@ interface Item {
 }
 const OTHERS = '__o';
 const isYear = (f: Folder) => !f.parent_id && /^\d{4}$/.test(f.name.trim());
+/** Ngày của bản nghiệm thu an toàn (yyyy-mm-dd): lấy từ mã [ntat:ngày:…] hoặc "dd/mm/yyyy" trong tên. */
+const ntDay = (h: { name: string; note: string | null }) => {
+  const k = /\[ntat:(\d{4}-\d{2}-\d{2}):/.exec(h.note ?? ''); if (k) return k[1]!;
+  const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(h.name); return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
 const cmp = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' });
 const size = (n: number | null) => (!n ? '' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric', hour12: false });
@@ -39,6 +44,7 @@ const SEED: [string, string[]][] = [
   ['06. Sửa chữa - Nhiên liệu', ['Phiếu sửa chữa', 'Chứng từ nhiên liệu']],
   ['07. Khác', []],
   ['08. Điều hành xe', ['Bảng phân công lịch tài & xe', 'Nghiệm thu an toàn']],
+  ['09. An toàn giao thông', ['Quyết định giao nhiệm vụ', 'Checklist trước chuyến', 'Sổ giám sát hằng ngày', 'Biên bản xác minh', 'Sự cố khẩn cấp', 'Báo cáo tuần', 'Báo cáo tháng', 'Báo cáo năm']],
 ];
 
 type Dlg =
@@ -115,8 +121,11 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
 
   const cur = sel ? by(sel) : undefined;
   const subs = sel ? kids(sel) : yr === OTHERS ? others : [];
+  // Nghiệm thu an toàn: xếp theo ngày từ nhỏ đến lớn (cùng ngày theo số biên bản); thư mục khác: mới nhất lên đầu
+  const ntat = !!sel && ptxt(sel).includes('Nghiệm thu an toàn');
   const list = items.filter((h) => (h.folder_id ?? '') === sel && (showOld || !h.is_old))
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    .sort(ntat ? (a, b) => ntDay(a).localeCompare(ntDay(b)) || (a.file_name ?? '').localeCompare(b.file_name ?? '', 'vi', { numeric: true })
+      : (a, b) => b.created_at.localeCompare(a.created_at));
   const oldCount = items.filter((h) => (h.folder_id ?? '') === sel && h.is_old).length;
   const ql = q.trim().toLowerCase();
   const found = ql ? items.filter((h) => (showOld || !h.is_old) && [h.name, h.file_name, h.note, h.url, ptxt(h.folder_id)].join(' ').toLowerCase().includes(ql)) : [];

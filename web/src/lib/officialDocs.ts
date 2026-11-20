@@ -202,7 +202,7 @@ const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/
 export async function saveDocPdf(d: OfficialDoc, x: DocCtx): Promise<void> {
   const tp = tplOf(d.template);
   const who = (d.template === 'qd_bo_nhiem' || d.template === 'qd_giam_sat') && x.person ? ` · ${x.person.name}` : '';
-  await savePdf(d.template === 'qd_giam_sat' ? [String(d.year), 'An toàn giao thông', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
+  await savePdf(d.template === 'qd_giam_sat' ? [String(d.year), '09. An toàn giao thông', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
     docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false })), 'Lưu từ Văn bản', `vb:${d.id}`);
 }
 

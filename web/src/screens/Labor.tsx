@@ -104,9 +104,6 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         <h2>Hợp đồng lao động năm {year} ({actives.length})</h2>
         <label className="inline">Năm <input type="number" min={2000} max={2100} value={year} style={{ width: 90 }} onChange={(e) => Number(e.target.value) >= 2000 && setYear(Number(e.target.value))} /></label>
       </div>
-      <p className="small muted">Mỗi người mỗi năm 1 hợp đồng, mặc định từ 01/01 (hoặc ngày vào làm) đến 31/12. Số tự cấp 001/{year}/HĐLĐ-…, không trùng, không dùng lại số đã hủy.
-        Lương mặc định lấy từ Lương chuyển khoản của tháng bắt đầu (Cấu hình › BHXH &amp; lương chuyển khoản), sửa được trên từng hợp đồng.
-        Lưu hoặc in là tự tạo PDF vào <b>Năm › Nhân sự › Hợp đồng lao động › họ tên</b> (mỗi người mỗi năm 1 bản, như app cũ). Căn cứ pháp lý trong mẫu theo app cũ: cần xác minh.</p>
       <div className="actions" style={{ flexWrap: 'wrap' }}>
         {canAdd && missing.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={() => void createAll()}>Lập HĐ cho {missing.length} người chưa có</button>}
         {canEdit && canArchive && actives.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void C.archiveMany(actives)}>Lưu hồ sơ tất cả ({actives.length})</button>}

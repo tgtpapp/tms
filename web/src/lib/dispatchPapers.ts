@@ -245,13 +245,28 @@ export async function savePdf(path: string[], name: string, fileName: string, pa
   for (const p of pages) imgs.push(await pageImg(p.html, p.land));
   const data = bytesToBase64(makePdf(imgs));
   const folder = await ensurePath(path);
-  // Mỗi giấy có 1 mã cố định (ghi cuối ghi chú): lưu lại thì thay bản cũ, không sinh thêm bản thứ hai
+  // Mỗi giấy có 1 mã cố định (ghi cuối ghi chú): lưu lại thì thay bản cũ, không sinh thêm bản thứ hai.
+  // Lỗi mạng / máy chủ bận chốc lát (lưu hàng trăm tệp liền): tự thử lại, mỗi lần tìm lại bản đã lưu để không sinh bản trùng.
   const tag = `[${key}]`;
-  const cur = ((await supabase.from('archive_items').select('id, name, note').eq('folder_id', folder).eq('is_old', false).like('note', `%${tag}%`)).data ?? []) as { id: string }[];
-  const legacy = cur.length ? [] : ((await supabase.from('archive_items').select('id').eq('folder_id', folder).eq('is_old', false).eq('name', name).not('note', 'like', '%[%')).data ?? []) as { id: string }[];
-  const same2 = [...cur, ...legacy];
-  const r = await drive<{ id: string }>({ action: 'put', folder_id: folder, name, file_name: fileName, mime: 'application/pdf', data, expires_on: null,
-    note: `${note} ${tag}`, replace_id: same2[0]?.id ?? null });
-  const extra = same2.slice(1).map((x) => x.id).filter((id) => id !== r.id);
-  if (extra.length) await supabase.from('archive_items').update({ is_old: true, replaced_by: r.id }).in('id', extra);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const cur = ((await supabase.from('archive_items').select('id, name, note').eq('folder_id', folder).eq('is_old', false).like('note', `%${tag}%`)).data ?? []) as { id: string }[];
+      const legacy = cur.length ? [] : ((await supabase.from('archive_items').select('id').eq('folder_id', folder).eq('is_old', false).eq('name', name).not('note', 'like', '%[%')).data ?? []) as { id: string }[];
+      const same2 = [...cur, ...legacy];
+      const r = await drive<{ id: string }>({ action: 'put', folder_id: folder, name, file_name: fileName, mime: 'application/pdf', data, expires_on: null,
+        note: `${note} ${tag}`, replace_id: same2[0]?.id ?? null });
+      const extra = same2.slice(1).map((x) => x.id).filter((id) => id !== r.id);
+      if (extra.length) await supabase.from('archive_items').update({ is_old: true, replaced_by: r.id }).in('id', extra);
+      return;
+    } catch (e) {
+      if (attempt >= RETRY_WAIT.length || !transient(e)) throw e;
+      await new Promise((ok) => setTimeout(ok, RETRY_WAIT[attempt]! * (0.8 + Math.random() * 0.4)));
+    }
+  }
+}
+const RETRY_WAIT = [2000, 5000, 10000, 20000, 30000];
+/** Lỗi tạm thời (mạng chập chờn, máy chủ / Google bận, quá giờ): thử lại được. Lỗi cấu hình / quyền / dữ liệu: không thử lại. */
+export function transient(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return !/sai mã|chưa (kết nối|cấu hình|nhập)|quyền|không tìm thấy|quá lớn|không hợp lệ/i.test(m);
 }

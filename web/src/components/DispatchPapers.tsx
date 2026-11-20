@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 import { fmtDate } from './Documents';
-import { assignPages, driversOf, loadDay, missing, monthPath, newCache, resetFolders, safetyPage, savePdf, type DayData } from '../lib/dispatchPapers';
+import { assignPages, driversOf, loadDay, missing, monthPath, newCache, resetFolders, safetyPage, savePdf, transient, type DayData } from '../lib/dispatchPapers';
 import { errMsg } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -17,6 +17,7 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<string[] | null>(null);
+  const [retry, setRetry] = useState<{ label: string; run: () => Promise<void>; kind: 'pc' | 'nt' }[]>([]);
   const [view, setView] = useState<{ d: DayData; html: { h: string; land: boolean }[] } | null>(null);
 
   async function preview() {
@@ -43,7 +44,7 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
     resetFolders();
     // 1) Đọc dữ liệu các ngày (song song 4 ngày một lượt, dữ liệu chung chỉ tải 1 lần)
     setBusy(`Đang đọc lịch chạy ${days.length} ngày…`);
-    const jobs: { label: string; run: () => Promise<void>; kind: 'pc' | 'nt' }[] = [];
+    const jobs: Job[] = [];
     for (let i = 0; i < days.length; i += 4) {
       const part = await Promise.all(days.slice(i, i + 4).map((d) => loadDay(d, tenantId, me, cache).then((x) => x, (e: unknown) => { log.push(`${fmtDate(d)}: ${errMsg(e)}`); return null; })));
       for (const data of part) {
@@ -59,17 +60,24 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
       }
       setBusy(`Đang đọc lịch chạy ${Math.min(i + 4, days.length)}/${days.length} ngày…`);
     }
-    // 2) Tạo PDF và lưu lên Google Drive, 4 tệp cùng lúc
+    await runJobs(jobs, log, miss);
+  }
+  type Job = { label: string; run: () => Promise<void>; kind: 'pc' | 'nt' };
+  /** Tạo PDF và lưu lên Google Drive, 4 tệp cùng lúc (mỗi tệp tự thử lại khi mạng / máy chủ bận). Mục lỗi giữ lại để bấm "Lưu lại". */
+  async function runJobs(jobs: Job[], log: string[] = [], miss: string[] = []) {
     let done = 0, okPc = 0, okNt = 0, stop = false, next = 0;
+    const failed: Job[] = [];
     const worker = async () => {
-      while (!stop && next < jobs.length) {
-        const j = jobs[next++];
+      while (next < jobs.length) {
+        const j = jobs[next++]!;
+        if (stop) { failed.push(j); continue; }
         try {
           await j.run();
           if (j.kind === 'pc') okPc++; else okNt++;
         } catch (e) {
           log.push(`${j.label}: ${errMsg(e)}`);
-          if (/Drive|kết nối|Apps Script|quyền/i.test(errMsg(e))) stop = true;   // lỗi kết nối / quyền: dừng, không thử tiếp vô ích
+          failed.push(j);
+          if (!transient(e)) stop = true;   // lỗi cấu hình / quyền: dừng, không thử tiếp vô ích
         }
         done++;
         setBusy(`Đang lưu ${done}/${jobs.length} tệp lên Google Drive…`);
@@ -77,9 +85,10 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
     };
     if (jobs.length) { setBusy(`Đang lưu 0/${jobs.length} tệp lên Google Drive…`); await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker)); }
     setBusy(null);
-    const msg = `Đã lưu ${okPc} bảng phân công, ${okNt} bản nghiệm thu an toàn`;
-    setOut([msg, ...(miss.length ? [`${miss.length} ngày còn chuyến thiếu xe / lái xe (chưa lưu):`, ...miss] : []), ...log]);
-    toast(log.length ? 'error' : 'ok', msg);
+    setRetry(failed);
+    const msg = `Đã lưu ${okPc} bảng phân công, ${okNt} bản nghiệm thu an toàn${failed.length ? ` · ${failed.length} tệp chưa lưu được` : ''}`;
+    setOut([msg, ...(miss.length ? [`${miss.length} ngày còn chuyến thiếu xe / lái xe (chưa lưu):`, ...miss] : []), ...log.slice(-30)]);
+    toast(failed.length ? 'error' : 'ok', msg);
   }
 
 
@@ -114,6 +123,7 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
           {canSave && <button className="btn primary" disabled={!!busy || (!pc && !nt)} onClick={() => void save()}>Lưu vào hồ sơ</button>}
         </div>
         {!canSave && <p className="small muted">Lưu vào hồ sơ cần quyền "Lưu trữ hồ sơ: thêm, sửa".</p>}
+        {retry.length > 0 && !busy && <button type="button" className="btn primary" onClick={() => { resetFolders(); void runJobs(retry); }}>Lưu lại {retry.length} tệp chưa lưu được</button>}
         {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i ? 'error-text' : ''}>{x}</li>)}</ul>}
       </div>
     </Modal>

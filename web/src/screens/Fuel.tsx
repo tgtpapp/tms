@@ -40,7 +40,6 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [mkEdit, setMkEdit] = useState<Record<string, string> | null>(null);
   const [mkAt, setMkAt] = useState('');
   const [slips, setSlips] = useState<FuelSlipData[] | null>(null);
-  const [printAfter, setPrintAfter] = useState(false);
   const [gps, setGps] = useState<Map<string, number>>(new Map());
   const [book, setBook] = useState<string | null>(null);
   const [ai, setAi] = useState('');
@@ -96,7 +95,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         unit_price: price, supplier: k !== 'bon' ? last?.supplier ?? '' : '', invoice_no: '', note: '', files: [], add: [], market_price: useMk });
     }
   }
-  async function save() {
+  async function save(printAfter = false) {
     if (!f || !ctx.tenant_id) return;
     setBusy(true);
     try {
@@ -116,7 +115,6 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       toast('error', errMsg(e));
     } finally {
       setBusy(false);
-      setPrintAfter(false);
     }
   }
   /** In phiếu 80mm (dùng sổ mới nhất để có tồn bồn, km chạy, tiêu hao đúng) */
@@ -345,7 +343,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
               <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>
-              <button type="button" className="btn" disabled={busy} onClick={() => { setPrintAfter(true); void save(); }}>Lưu & in phiếu 80mm</button>
+              <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>Lưu & in phiếu 80mm</button>
               <button type="button" className="btn link" onClick={() => setF(null)}>Thôi</button>
             </div>
           </div>
@@ -424,7 +422,7 @@ function FuelInfo({ f, rows, set, mk, plate, norm }: { f: Form; rows: FuelEntry[
   return lines.length ? <div className="nl-info">{lines.map((l, i) => <div key={i}>{l}</div>)}</div> : null;
 }
 
-function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; vehicles: Veh[]; canEdit: boolean; onSaved: () => Promise<void> }) {
+function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; vehicles: Veh[]; canEdit: boolean; onSaved: () => Promise<unknown> }) {
   const toast = useToast();
   const [s, setS] = useState({ ...set, opening_on: set.opening_on ?? '' });
   const [norm, setNorm] = useState<Record<string, string>>(Object.fromEntries(vehicles.map((v) => [v.id, v.fuel_norm?.toString() ?? ''])));

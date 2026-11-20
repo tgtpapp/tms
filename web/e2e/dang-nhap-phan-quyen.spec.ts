@@ -530,6 +530,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Chị Lan')).toBeVisible();
   // Gửi hàng: chọn tuyến / chuyến như Bán vé, điểm gửi – nhận theo thứ tự tuyến, xem trước và in phiếu K80
   await page.getByRole('button', { name: 'Gửi hàng', exact: true }).click();
+  // ô Tuyến luôn có đủ tuyến (kể cả ngày chưa có chuyến)
+  await expect(page.getByLabel('Tuyến', { exact: true }).locator('option', { hasText: 'Vũng Tàu – Hố Nai' })).toHaveCount(1);
   await pickDay(page, ngay(1));
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await expect(page.locator('.gh-cur')).toContainText('07:00');

@@ -79,7 +79,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
         : supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
       supabase.from('trips').select('id, depart_at, route_id, direction, vehicle_id').eq('service_date', day).eq('status', 'mo').order('depart_at'),
       supabase.from('stops').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('routes').select('id, name, name_ve'),
+      supabase.from('routes').select('id, name, name_ve, is_active'),
       supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
     ]);
     const err = s.error ?? t.error ?? st.error ?? r.error ?? rs.error;
@@ -116,7 +116,9 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   }, [rstops]);
   // Tuyến: theo từng cặp, chiều đi rồi chiều về (như Bán vé)
   const routeOpts = useMemo(() => {
-    const keys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))];
+    // Mọi tuyến đang chạy (cả 2 chiều), kể cả ngày chưa có chuyến; cộng thêm tuyến có chuyến trong ngày
+    const keys = [...new Set([...routes.filter((r) => (r as { is_active?: boolean }).is_active !== false).flatMap((r) => [`${r.id}|di`, `${r.id}|ve`]),
+      ...trips.map((t) => `${t.route_id}|${t.direction}`)])];
     return keys.map((k) => { const [rid, d] = k.split('|'); const r = routes.find((x) => x.id === rid); return { key: k, label: dirName(r, d as Dir), pair: r?.name ?? '', d }; })
       .sort((x, y) => x.pair.localeCompare(y.pair, 'vi') || (x.d === 'di' ? 0 : 1) - (y.d === 'di' ? 0 : 1));
   }, [trips, routes]);
@@ -213,7 +215,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
             {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setF((x) => ({ ...x, trip_id: '' })); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
             <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>
           </div>
-          {shown.length === 0 && <p className="muted small">Không có chuyến đang mở trong ngày.</p>}
+          {shown.length === 0 && <p className="muted small">{rfOk ? 'Tuyến này chưa có chuyến trong ngày.' : 'Không có chuyến đang mở trong ngày.'}</p>}
           <div className="vx-trips">{up.map(card)}</div>
           {past.length > 0 && <><h4 className="past-head">Đã qua giờ khởi hành</h4><div className="vx-trips">{past.map(card)}</div></>}
         </aside>

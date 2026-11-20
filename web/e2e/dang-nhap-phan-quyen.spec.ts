@@ -229,8 +229,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Đã lưu hợp đồng \d{3}\/\d{4}\/HĐTX/)).toBeVisible({ timeout: 30_000 });
   await expect(dlx.getByText('Hợp đồng thuê xe / hợp tác kinh doanh')).toBeVisible();
   await dlx.getByRole('button', { name: /^Xem hợp đồng \d{3}\/\d{4}\/HĐTX/ }).click();
-  await expect(page.locator('.paper-top').getByText('HỢP ĐỒNG THUÊ XE Ô TÔ')).toBeVisible();
-  await expect(page.locator('.paper-top').getByText(/8\.000\.000 VNĐ\/tháng/)).toBeVisible();
+  await expect(page.locator('.paper-top').getByText('HỢP ĐỒNG THUÊ XE Ô TÔ').first()).toBeVisible();
+  await expect(page.locator('.paper-top').getByText(/8\.000\.000 VNĐ\/tháng/).first()).toBeVisible();
   await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   // Sơ đồ ghế trong cửa sổ xe: thêm ô tài xế + cửa lên xuống (không bán, không tính chỗ)
   const dlg = page.getByRole('dialog', { name: 'Sửa xe 51B-123.45' });

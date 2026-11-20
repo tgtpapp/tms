@@ -20,9 +20,9 @@ const SALE_SETTINGS = [
 type SaleKey = (typeof SALE_SETTINGS)[number]['key'];
 const DOC_WARN = 'giay_to.canh_bao_truoc_ngay';
 const DEFAULT_TYPE = 'chuyen.loai_xe_mac_dinh';
+const AUTO_TRIPS = 'chuyen.tao_chuyen_trong';
 /** Điều hành. Giới hạn giờ lái theo Luật TTATGT đường bộ 2024, đã sửa bởi Luật 118/2025 (cần xác minh) → để chỉnh được. */
 const DISPATCH_SETTINGS = [
-  { key: 'chuyen.tao_truoc_ngay', label: 'Tự tạo chuyến trước (ngày, tối đa 365)', min: 1, max: 365 },
   { key: 'lai_xe.gio_lien_tuc_toi_da', label: 'Giờ lái liên tục tối đa', min: 1, max: 12 },
   { key: 'lai_xe.gio_ngay_toi_da', label: 'Giờ lái tối đa trong ngày', min: 1, max: 24 },
   { key: 'lai_xe.gio_tuan_toi_da', label: 'Giờ lái tối đa trong tuần', min: 1, max: 168 },
@@ -155,6 +155,8 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       rows.push({ key: d.key, value: v });
     }
     rows.push({ key: DEFAULT_TYPE, value: sale[DEFAULT_TYPE] ?? '' });
+    // Tạo chuyến theo lịch: tự động cả năm (từ 01/12 tạo luôn năm sau) hoặc thủ công
+    rows.push({ key: AUTO_TRIPS, value: sale[AUTO_TRIPS] === '0' ? 0 : 1 }, { key: 'chuyen.tao_ca_nam', value: 1 });
     setBusy(true);
     const { error } = await supabase.from('tenant_settings').upsert(rows, { onConflict: 'tenant_id,key' });
     setBusy(false);
@@ -279,6 +281,12 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
                    value={sale[d.key] ?? ''} onChange={(e) => setSale({ ...sale, [d.key]: e.target.value })} required />
           </label>
         ))}
+        <label>Tạo chuyến theo lịch chạy
+          <select value={sale[AUTO_TRIPS] === '0' ? '0' : '1'} onChange={(e) => setSale({ ...sale, [AUTO_TRIPS]: e.target.value })}>
+            <option value="1">Tự động: tạo sẵn đến hết năm, từ 01/12 tạo luôn cả năm sau</option>
+            <option value="0">Thủ công: bấm "Tạo chuyến theo lịch" ở Điều hành khi cần</option>
+          </select>
+        </label>
         <label>Sơ đồ ghế mặc định khi chuyến chưa xếp xe
           <select value={sale[DEFAULT_TYPE] ?? ''} onChange={(e) => setSale({ ...sale, [DEFAULT_TYPE]: e.target.value })}>
             <option value="">Tự chọn loại xe 16 chỗ</option>

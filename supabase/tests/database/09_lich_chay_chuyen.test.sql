@@ -200,9 +200,19 @@ select is((select count(*)::int from public.trips x where x.vehicle_id is null a
 select ok((select count(*) from public.trips) > 0, 'Chuyến đã xếp xe / tài xế giữ nguyên');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
-select is(public.generate_trips(), 0, 'Tắt chuyến trống: bấm Tạo chuyến không tạo lại');
+select ok(public.generate_trips() > 0, 'Thủ công: bấm "Tạo chuyến theo lịch" thì tạo');
 reset role;
-select is(app.svc_generate_all_trips(), 0, 'Việc hằng đêm không tạo lại chuyến trống');
+select lives_ok($$ select app.purge_empty_trips((select id from public.tenants where code = 'nha-xe-a')) $$, 'Xóa lại chuyến trống');
+select is(app.svc_generate_all_trips(), 0, 'Thủ công: việc hằng đêm không tự tạo chuyến');
+-- Tự động cả năm: tạo đến hết năm (tháng 12 thì đến hết năm sau), không trùng
+update public.tenant_settings set value = '1' where key = 'chuyen.tao_chuyen_trong' and tenant_id = (select id from public.tenants where code = 'nha-xe-a');
+insert into public.tenant_settings (tenant_id, key, value) select id, 'chuyen.tao_ca_nam', '1' from public.tenants where code = 'nha-xe-a';
+select is(app.trip_until((select id from public.tenants where code = 'nha-xe-a')),
+  make_date(extract(year from app.local_today())::int + case when extract(month from app.local_today()) = 12 then 1 else 0 end, 12, 31), 'Hạn tạo chuyến: hết năm (tháng 12: hết năm sau)');
+select ok(app.svc_generate_all_trips() > 0, 'Việc hằng đêm tạo chuyến đến hết năm');
+select ok((select max(service_date) from public.trips where schedule_id is not null and tenant_id = (select id from public.tenants where code = 'nha-xe-a'))
+  >= app.trip_until((select id from public.tenants where code = 'nha-xe-a')) - 7, 'Chuyến xa nhất tới gần ngày hết hạn');
+select is(app.svc_generate_all_trips(), 0, 'Chạy lại không tạo trùng');
 
 select * from finish();
 rollback;

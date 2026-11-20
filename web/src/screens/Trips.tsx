@@ -413,16 +413,10 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
   const person = (id: string) => staff.find((s) => s.id === id)?.full_name ?? '?';
 
-  // Nhà xe tắt chuyến trống (chuyen.tao_chuyen_trong = 0): không tự tạo chuyến theo nốt → ẩn nút Tạo chuyến
-  const [autoTrips, setAutoTrips] = useState(true);
-  useEffect(() => {
-    void supabase.from('tenant_settings').select('value').eq('key', 'chuyen.tao_chuyen_trong').maybeSingle()
-      .then(({ data }) => setAutoTrips(!data || Number(data.value) !== 0));
-  }, []);
   async function generate() {
     try {
       const n = await rpc<number>('generate_trips', {});
-      toast('ok', n ? `Đã tạo thêm ${n} chuyến` : 'Không có chuyến mới cần tạo');
+      toast('ok', n ? `Đã tạo thêm ${n} chuyến theo lịch chạy` : 'Không có chuyến mới cần tạo');
       await reload();
     } catch (e) {
       toast('error', errMsg(e));
@@ -449,7 +443,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
       <div className="item-head">
         <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
         {canEdit && <span className="actions"><button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>
-          {autoTrips && <button className="btn small" onClick={() => void generate()}>Tạo chuyến</button>}
+          <button className="btn small" title="Tạo chuyến theo các giờ trong lịch chạy (đến hết năm; từ 01/12 tạo cả năm sau). Không tạo trùng." onClick={() => void generate()}>Tạo chuyến theo lịch</button>
           <button className="btn small" onClick={() => setPapers(true)}>Phân công &amp; nghiệm thu</button></span>}
       </div>
       <div className="inline-form">

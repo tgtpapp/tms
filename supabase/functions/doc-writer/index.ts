@@ -3,7 +3,7 @@
 // - Chỉ người có quyền Văn bản: Thêm hoặc Sửa gọi được. Dùng chung cấu hình AI_PROVIDERS với AI đọc giấy tờ.
 // - Người soạn luôn xem lại trước khi lưu; AI không tự lưu, không tự cấp số.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { nextKey, parseProviders, ReaderError, type Provider } from '../_shared/doc_reader.ts';
+import { geminiModels, markDeadModel, nextKey, parseProviders, ReaderError, type Provider } from '../_shared/doc_reader.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -50,7 +50,7 @@ async function ask(p: Provider, prompt: string, timeoutMs: number): Promise<stri
       });
     }
     const body = await res.text();
-    if (!res.ok) throw new Error(res.status === 429 ? 'hết lượt (429)' : `HTTP ${res.status}`);
+    if (!res.ok) { if (res.status === 404 && p.type === 'gemini') markDeadModel(model); throw new Error(res.status === 429 ? 'hết lượt (429)' : `HTTP ${res.status}`); }
     const j = JSON.parse(body);
     const text: string = p.type === 'gemini'
       ? (j?.candidates?.[0]?.content?.parts ?? []).filter((x: { thought?: boolean }) => !x.thought).map((x: { text?: string }) => x.text ?? '').join('')
@@ -84,9 +84,15 @@ Deno.serve(async (req) => {
     if (!providers.length) throw new ReaderError(503, 'Chưa cấu hình AI (AI_PROVIDERS)');
     const timeout = Math.max(30000, Number(Deno.env.get('AI_TIMEOUT_MS') ?? 0) || 0);
     const errs: string[] = [];
-    for (const p of providers) {
-      try { return json(200, { html: await ask(p, PROMPT(instruction, html || '<p></p>'), timeout), provider: p.name }); }
-      catch (e) { errs.push(`${p.name}: ${e instanceof Error ? e.message : String(e)}`); }
+    const t0 = Date.now();
+    for (const p0 of providers) {
+      // Gemini: thử lần lượt các model còn dùng được, nhanh trước (model trong cấu hình có thể đã bị Google khóa)
+      const list = p0.type === 'gemini' ? (await geminiModels(p0)).slice(0, 5).map((m) => ({ ...p0, model: m, name: `gemini:${m}` })) : [p0];
+      for (const p of list) {
+        if (Date.now() - t0 > 110_000) break;
+        try { return json(200, { html: await ask(p, PROMPT(instruction, html || '<p></p>'), timeout), provider: p.name }); }
+        catch (e) { errs.push(`${p.name}: ${e instanceof Error ? e.message : String(e)}`); }
+      }
     }
     throw new ReaderError(502, `AI không soạn được: ${errs.join(' · ')}`);
   } catch (e) {

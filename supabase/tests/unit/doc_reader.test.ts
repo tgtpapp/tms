@@ -83,7 +83,7 @@ Deno.test('Chuẩn hóa: số tiền có dấu chấm, ngày sai bị bỏ, cấ
   assertEquals(parseProviders('[{"type":"gemini","keys":["k"]}]')[0].model, 'auto');
 });
 
-Deno.test('Gemini bị khai tử (404) → tự hỏi danh sách model, dùng model Flash mới nhất', async () => {
+Deno.test('Gemini bị khai tử (404) → tự hỏi danh sách model, dùng bản Flash-Lite (nhanh) trước', async () => {
   const urls: string[] = [];
   const r = await readDocument({ docType: 'kiem_dinh', files: IMG, providers: [{ type: 'gemini', model: 'gemini-2.5-flash', keys: ['k'], base_url: 'https://g.test' }],
     timeoutMs: 1000, fetchFn: (u) => {
@@ -98,7 +98,7 @@ Deno.test('Gemini bị khai tử (404) → tự hỏi danh sách model, dùng mo
       if (u.includes('gemini-2.5-flash') || u.includes('latest')) return Promise.resolve(new Response(JSON.stringify({ error: { message: 'no longer available' } }), { status: 404 }));
       return Promise.resolve(geminiReply(GOOD));
     } });
-  assertEquals(r.provider, 'gemini:gemini-3.8-flash');
+  assertEquals(r.provider, 'gemini:gemini-3.6-flash-lite');
   assertEquals(r.attempts[0].error, 'HTTP 404: no longer available');
   assertEquals(urls.some((u) => u.includes('image')), false);
 });

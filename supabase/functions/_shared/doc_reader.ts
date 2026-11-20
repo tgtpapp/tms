@@ -79,14 +79,22 @@ export async function discoverGemini(p: Provider, fetchFn: FetchFn): Promise<str
 
 const deadModels = new Set<string>();
 
-// Thứ tự dự phòng (đã đo bằng khóa thật 19/11/2026: 3.5 Flash và 3.1 Flash-Lite trả lời 1–2 giây;
-// bản mới nhất và "latest" hay quá tải 503 / chậm). Chỉ dùng model Google còn liệt kê; danh sách đổi được trong cấu hình (model).
-const PREFERRED = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-flash-latest'];
+// Thứ tự dùng (đo bằng khóa thật 20/11/2026 với ảnh cỡ thật): bản Flash-Lite trả lời ~1 giây và ổn định;
+// bản Flash thường 19–30 giây hoặc báo quá tải 503; gemini-2.5-* đã bị Google khóa với khóa mới (404).
+// Nên luôn thử Flash-Lite trước; kết quả nghi ngờ (sai dạng số CCCD, biển số…) thì mới nhờ bản Flash đọc lại.
+const PREFERRED = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.5-flash', 'gemini-flash-latest'];
 async function geminiFallbacks(p: Provider, fetchFn: FetchFn): Promise<string[]> {
   const found = await discoverGemini(p, fetchFn);
   const pref = found.length ? PREFERRED.filter((m) => found.includes(m) || /latest/.test(m)) : PREFERRED;
-  return [...new Set([...pref, ...found])].filter((m) => !deadModels.has(m));
+  const rest = found.filter((m) => !pref.includes(m)).sort((a, b) => Number(!/lite/.test(a)) - Number(!/lite/.test(b)));
+  return [...new Set([...pref, ...rest])].filter((m) => !deadModels.has(m));
 }
+/** Danh sách model Gemini nên thử lần lượt (nhanh trước), có cả model trong cấu hình; dùng chung cho AI soạn văn bản. */
+export async function geminiModels(p: Provider, fetchFn: FetchFn = (u, i) => fetch(u, i)): Promise<string[]> {
+  const list = await geminiFallbacks(p, fetchFn);
+  return [...new Set([...list, ...(p.model && p.model !== 'auto' ? [p.model] : [])])].filter((m) => !deadModels.has(m));
+}
+export const markDeadModel = (m: string) => deadModels.add(m);
 
 // Luân phiên khóa: mỗi lần dùng AI nào thì lấy khóa kế tiếp của AI đó.
 const cursors = new Map<string, number>();
@@ -269,8 +277,8 @@ export async function readDocument(opts: {
   // Hàng đợi: Gemini "auto" hoặc model bị khai tử (404) → thêm các model Flash Google còn cho dùng
   const queue: Provider[] = [];
   for (const p of candidates) {
-    if (p.type === 'gemini' && p.model === 'auto') {
-      const list = (await geminiFallbacks(p, fetchFn)).slice(0, 4);
+    if (p.type === 'gemini' && p.model === 'auto') {   // nhanh trước (Flash-Lite)
+      const list = (await geminiModels(p, fetchFn)).slice(0, 6);
       queue.push(...list.map((m) => ({ ...p, model: m, name: `gemini:${m}` })));
     } else queue.push({ ...p, name: p.name ?? `${p.type}:${p.model}` });
   }

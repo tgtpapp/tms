@@ -58,11 +58,11 @@ export function DriveSettings() {
       {st && (st.configured
         ? <p className="small">Đang kết nối: <code>{st.url}</code>{st.updated_at ? ` · cập nhật ${new Date(st.updated_at).toLocaleString('vi-VN')}` : ''}</p>
         : <p className="small state-sap_het">Chưa kết nối Google Drive.</p>)}
-      {ping && (
+      {ping && (<>
         <p className="small state-con_han">Drive đã dùng {mb(ping.used)}{ping.limit ? ` / ${mb(ping.limit)}` : ''} · thư mục gốc{' '}
           <a href={ping.folder} target="_blank" rel="noopener noreferrer">{ping.name}</a></p>
         {(ping.ver ?? 0) < 3 && <p className="small error-text">Mã Apps Script đang là bản cũ nên lưu hồ sơ hàng loạt chậm. Chép lại mã bên dưới vào script.google.com (giữ dòng MA_KET_NOI của bạn), rồi Triển khai → Quản lý bản triển khai → bút chì → Phiên bản: Phiên bản mới → Triển khai.</p>}
-      )}
+      </>)}
       <div className="grid2">
         <label>Địa chỉ Web app<input value={f.url} autoComplete="off" onChange={(e) => setF({ ...f, url: e.target.value.trim() })} placeholder="https://script.google.com/macros/s/…/exec" /></label>
         <label>Mã kết nối{st?.configured ? ' (để trống = giữ mã cũ)' : ''}

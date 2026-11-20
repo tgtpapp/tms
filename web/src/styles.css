@@ -1034,3 +1034,34 @@ button.dt-g { cursor: pointer; }
   .pick-pop [role='menuitem'] { padding: 11px 16px; font-size: .95rem; }
 }
 @keyframes pick-up { from { transform: translateY(24px); opacity: .4; } to { transform: none; opacity: 1; } }
+/* ===== Phiếu gửi hàng K80 (như app cũ) ===== */
+.gh8 .gh8-top { display: flex; align-items: center; gap: 2.5mm; }
+.gh8 .gh8-top img { height: 13mm; max-width: 28mm; object-fit: contain; flex: none; }
+.gh8-co { font-size: 14px; line-height: 1.2; }
+.gh8-s { font-size: 10.5px; }
+.gh8-big { display: flex; justify-content: space-between; align-items: stretch; gap: 4px; margin: 2px 0; }
+.gh8-big > div { display: flex; flex-direction: column; }
+.gh8-big small, .gh8-pt small, .gh8-sg small { font-size: 9.5px; font-weight: 800; letter-spacing: .05em; }
+.gh8-big b { font-size: 22px; line-height: 1.1; }
+.gh8-big em { font-style: normal; font-size: 11px; }
+.gh8-sl { border: 1.5px solid #000; border-radius: 4px; padding: 0 8px; text-align: center; align-items: center; }
+.gh8-route { font-weight: 700; margin: 2px 0; }
+.t8r { display: flex; justify-content: space-between; gap: 6px; }
+.gh8-pt { margin: 2px 0; }
+.gh8-pt b { display: block; font-size: 13px; }
+.gh8-pt em { font-style: normal; font-size: 11px; }
+.gh8-it > b { display: block; font-size: 12.5px; word-break: break-word; }
+.gh8-sum { font-weight: 700; font-size: 13px; }
+.gh8-pay { text-align: center; font-weight: 800; border: 1.5px solid #000; border-radius: 4px; padding: 3px; margin: 4px 0; }
+.gh8-pay.ok { border-style: dashed; }
+.gh8-sg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: center; }
+.gh8-sg b { display: block; font-size: 11px; }
+.gh8-sp { height: 14mm; }
+/* Màn Gửi hàng: form + xem trước phiếu */
+.gh-wrap { display: grid; gap: 12px; align-items: start; }
+@media (min-width: 1200px) { .gh-wrap { grid-template-columns: minmax(0, 1fr) 300px; } .gh-pv { position: sticky; top: 8px; } }
+.gh-pv { background: #e9ecef; border-radius: var(--radius-s); padding: 8px; }
+.gh-pvh { font-size: .8rem; font-weight: 600; color: #475569; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+.gh-pvb { display: flex; justify-content: center; overflow: auto; }
+.gh-pvb .ve { width: 72mm; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
+.gh-cur { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--primary-soft); border-radius: var(--radius-s); padding: 8px 12px; margin-bottom: 10px; }

@@ -528,6 +528,27 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('tab', { name: /^Hành khách/ }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();
+  // Gửi hàng: chọn tuyến / chuyến như Bán vé, điểm gửi – nhận theo thứ tự tuyến, xem trước và in phiếu K80
+  await page.getByRole('button', { name: 'Gửi hàng', exact: true }).click();
+  await pickDay(page, ngay(1));
+  await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
+  await expect(page.locator('.gh-cur')).toContainText('07:00');
+  expect(await page.getByLabel('Gửi tại').inputValue()).not.toBe('');
+  expect(await page.getByLabel('Nhận tại').inputValue()).not.toBe('');
+  await page.getByLabel('SĐT người gửi').fill('0911111111');
+  await page.getByLabel('SĐT người nhận').fill('0922222222');
+  await page.getByLabel('Hàng gì').fill('1 thùng trái cây');
+  await page.getByLabel('Cước (đồng)').fill('30000');
+  const pv = page.getByRole('complementary', { name: 'Xem trước phiếu K80' });
+  await expect(pv).toContainText('PHIẾU GỬI HÀNG');
+  await expect(pv).toContainText('1 thùng trái cây');
+  await expect(pv).toContainText('07:00');
+  await page.evaluate(() => { window.print = () => {}; });
+  await page.getByRole('button', { name: 'Nhận hàng + in K80' }).click();
+  await expect(page.getByText(/^Đã nhận hàng, phiếu /)).toBeVisible();
+  await expect(page.locator('.ve-list').getByText('PHIẾU GỬI HÀNG')).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^In phiếu / })).toHaveCount(1);
 
   // 5n. Chuyển khoản QR, nhân viên xác nhận thủ công
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();

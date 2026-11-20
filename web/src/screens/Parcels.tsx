@@ -1,8 +1,11 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
-import { dirName } from '../lib/routes';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { dirName, type Dir } from '../lib/routes';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { MiniCal } from '../components/MiniCal';
+import { ParcelPrint, ParcelSlip, type SlipData } from '../components/ParcelSlip';
+import { companyFileUrl } from '../lib/documents';
 import { fmtDate, today } from '../components/Documents';
-import { errMsg, rpc, supabase } from '../lib/supabase';
+import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { zaloKick } from '../lib/zalo';
 
@@ -24,49 +27,146 @@ export const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 /** Số tiền còn phải thu khi giao */
 export const dueOnDelivery = (s: Shipment) => (s.fee_paid_at ? 0 : s.fee) + (s.cod_collected_at ? 0 : s.cod_amount);
 
-interface Trip { id: string; depart_at: string; route_id: string; direction: 'di' | 've' }
+interface Trip { id: string; depart_at: string; route_id: string; direction: Dir; vehicle_id?: string | null }
 interface Stop { id: string; name: string }
+interface Route { id: string; name: string; name_ve: string | null }
+interface RouteStop { route_id: string; seq: number; stop_id: string }
+type Co = SlipData['company'];
 const EMPTY = { trip_id: '', from: '', to: '', sender_name: '', sender_phone: '', receiver_name: '', receiver_phone: '', description: '',
   packages: '1', weight: '', value: '', fee: '', payer: 'nguoi_gui' as 'nguoi_gui' | 'nguoi_nhan', cod: '', method: 'tien_mat', note: '' };
+const ROUTE_KEY = 'gui_hang.tuyen';
 
-export function ParcelsScreen() {
+/** Thông tin chuyến in trên phiếu: biển số, lái xe 1 + SĐT */
+async function tripInfo(tripId: string | null): Promise<{ plate: string; driver: string; phone: string }> {
+  const none = { plate: '', driver: '', phone: '' };
+  if (!tripId) return none;
+  const t = (await supabase.from('trips').select('vehicle_id').eq('id', tripId).maybeSingle()).data as { vehicle_id: string | null } | null;
+  const [v, c] = await Promise.all([
+    t?.vehicle_id ? supabase.from('vehicles').select('plate').eq('id', t.vehicle_id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('trip_crew').select('role, staff_id').eq('trip_id', tripId).eq('active', true),
+  ]);
+  const crew = ((c.data ?? []) as { role: string; staff_id: string }[]).sort((x, y) => x.role.localeCompare(y.role));
+  const lx = crew.find((x) => x.role.startsWith('lai_xe'));
+  const st = lx ? (await supabase.from('staff_members').select('full_name, phone').eq('id', lx.staff_id).maybeSingle()).data as { full_name: string; phone: string | null } | null : null;
+  return { plate: (v.data as { plate?: string } | null)?.plate ?? '', driver: st?.full_name ?? '', phone: st?.phone ?? '' };
+}
+
+export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const toast = useToast();
   const [day, setDay] = useState(today());
   const [list, setList] = useState<Shipment[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
-  const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [rstops, setRstops] = useState<RouteStop[]>([]);
   const [f, setF] = useState(EMPTY);
   const [req, setReq] = useState(() => crypto.randomUUID());
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rf, setRf] = useState(() => { try { return localStorage.getItem(ROUTE_KEY) ?? ''; } catch { return ''; } });
+  useEffect(() => { try { localStorage.setItem(ROUTE_KEY, rf); } catch { /* bỏ qua */ } }, [rf]);
+  const [calOpen, setCalOpen] = useState(true);
+  const [co, setCo] = useState<Co>({ name: ctx.tenant_name ?? '', address: '', phone: '', tax: '', logo: null });
+  const [ti, setTi] = useState({ plate: '', driver: '', phone: '' });
+  const [printing, setPrinting] = useState<SlipData[] | null>(null);
+  const [pvOpen, setPvOpen] = useState(true);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const load = useCallback(async () => {
-    const [s, t, st, r] = await Promise.all([
+    const [s, t, st, r, rs] = await Promise.all([
       q.replace(/\D/g, '').length >= 6
         ? supabase.from('shipments').select(SHIP_COLS).or(`receiver_phone.ilike.%${q.replace(/\D/g, '')}%,sender_phone.ilike.%${q.replace(/\D/g, '')}%`).order('created_at', { ascending: false }).limit(50)
         : supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
-      supabase.from('trips').select('id, depart_at, route_id, direction').eq('service_date', day).eq('status', 'mo').order('depart_at'),
+      supabase.from('trips').select('id, depart_at, route_id, direction, vehicle_id').eq('service_date', day).eq('status', 'mo').order('depart_at'),
       supabase.from('stops').select('id, name').eq('is_active', true).order('name'),
       supabase.from('routes').select('id, name, name_ve'),
+      supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
     ]);
-    const err = s.error ?? t.error ?? st.error ?? r.error;
+    const err = s.error ?? t.error ?? st.error ?? r.error ?? rs.error;
     if (err) return toast('error', err.message);
     setList((s.data ?? []) as Shipment[]);
     setTrips((t.data ?? []) as Trip[]);
     setStops((st.data ?? []) as Stop[]);
-    setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
+    setRoutes((r.data ?? []) as Route[]);
+    setRstops((rs.data ?? []) as RouteStop[]);
   }, [day, q, toast]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void (async () => {
+      const [t, logo] = await Promise.all([
+        supabase.from('tenants').select('name, address, phone, tax_code').maybeSingle(),
+        ctx.tenant_id ? companyFileUrl(ctx.tenant_id, 'logo.png').catch(() => null) : Promise.resolve(null),
+      ]);
+      const x = t.data as { name?: string; address?: string | null; phone?: string | null; tax_code?: string | null } | null;
+      setCo({ name: x?.name || ctx.tenant_name || '', address: x?.address ?? '', phone: x?.phone ?? '', tax: x?.tax_code ?? '', logo });
+    })();
+  }, [ctx.tenant_id, ctx.tenant_name]);
+  useEffect(() => { let on = true; void tripInfo(f.trip_id || null).then((x) => { if (on) setTi(x); }).catch(() => undefined); return () => { on = false; }; }, [f.trip_id]);
 
   const stopName = (id: string) => stops.find((s) => s.id === id)?.name ?? '?';
+  const routeName = (t: Trip) => dirName(routes.find((r) => r.id === t.route_id), t.direction);
   const tripName = (id: string | null) => {
     const t = trips.find((x) => x.id === id);
-    return t ? `${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}` : '';
+    return t ? `${hhmm(t.depart_at)} ${routeName(t)}` : '';
   };
+  /** Điểm dừng theo chiều chạy (như Bán vé) */
+  const ordered = useCallback((routeId: string, dir: Dir) => {
+    const l = rstops.filter((x) => x.route_id === routeId).sort((a, b) => a.seq - b.seq).map((x) => x.stop_id);
+    return dir === 'di' ? l : [...l].reverse();
+  }, [rstops]);
+  // Tuyến: theo từng cặp, chiều đi rồi chiều về (như Bán vé)
+  const routeOpts = useMemo(() => {
+    const keys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))];
+    return keys.map((k) => { const [rid, d] = k.split('|'); const r = routes.find((x) => x.id === rid); return { key: k, label: dirName(r, d as Dir), pair: r?.name ?? '', d }; })
+      .sort((x, y) => x.pair.localeCompare(y.pair, 'vi') || (x.d === 'di' ? 0 : 1) - (y.d === 'di' ? 0 : 1));
+  }, [trips, routes]);
+  const rfOk = routeOpts.some((o) => o.key === rf) ? rf : '';
+  const shown = rfOk ? trips.filter((t) => `${t.route_id}|${t.direction}` === rfOk) : trips;
+  const cur = trips.find((t) => t.id === f.trip_id) ?? null;
+  // Điểm gửi / nhận: theo tuyến của chuyến đang chọn (hoặc tuyến đang lọc), xếp theo thứ tự chạy; chưa chọn tuyến thì tất cả
+  const [rk, rd] = cur ? [cur.route_id, cur.direction] : rfOk ? (rfOk.split('|') as [string, Dir]) : ['', 'di' as Dir];
+  const stopOpts = useMemo(() => {
+    if (!rk) return stops;
+    const ids = ordered(rk, rd);
+    return ids.length ? ids.map((id) => stops.find((s) => s.id === id)).filter((x): x is Stop => !!x) : stops;
+  }, [rk, rd, ordered, stops]);
+  /** Chọn chuyến: điểm gửi / nhận mặc định đầu, cuối tuyến (giữ nếu đã chọn đúng tuyến) */
+  const pickTrip = (t: Trip | null) => {
+    if (!t) return setF((x) => ({ ...x, trip_id: '' }));
+    const ids = ordered(t.route_id, t.direction);
+    setF((x) => ({ ...x, trip_id: t.id, from: ids.includes(x.from) ? x.from : ids[0] ?? x.from, to: ids.includes(x.to) ? x.to : ids[ids.length - 1] ?? x.to }));
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
+  const pickRoute = (key: string) => {
+    setRf(key);
+    const l = trips.filter((t) => !key || `${t.route_id}|${t.direction}` === key);
+    const next = l.find((t) => new Date(t.depart_at).getTime() >= Date.now()) ?? l[l.length - 1];
+    if (key && next) pickTrip(next); else setF((x) => ({ ...x, trip_id: '' }));
+  };
+  const counts = useMemo(() => { const c: Record<string, number> = {}; for (const s of list) if (s.trip_id && s.status !== 'huy') c[s.trip_id] = (c[s.trip_id] ?? 0) + 1; return c; }, [list]);
 
-  async function create(e: FormEvent) {
-    e.preventDefault();
+  /** Dữ liệu phiếu từ form (xem trước) hoặc phiếu đã lưu */
+  const slipOf = (x: { code: string | null; trip_id: string | null; from: string; to: string; sender_name: string; sender_phone: string; receiver_name: string; receiver_phone: string;
+    description: string; packages: number; weight: number | null; value: number | null; fee: number; payer: 'nguoi_gui' | 'nguoi_nhan'; cod: number; note: string; at: string },
+  info = ti): SlipData => {
+    const t = trips.find((y) => y.id === x.trip_id) ?? null;
+    return { code: x.code, company: co, departAt: t?.depart_at ?? null, route: t ? routeName(t) : '', plate: info.plate, driver: info.driver, driverPhone: info.phone,
+      from: x.from ? stopName(x.from) : '', to: x.to ? stopName(x.to) : '', senderName: x.sender_name, senderPhone: x.sender_phone, receiverName: x.receiver_name, receiverPhone: x.receiver_phone,
+      description: x.description, packages: x.packages, weight: x.weight, value: x.value, fee: x.fee, payer: x.payer, cod: x.cod, note: x.note, staff: ctx.full_name ?? '', at: x.at };
+  };
+  const draft = slipOf({ code: null, trip_id: f.trip_id || null, from: f.from, to: f.to, sender_name: f.sender_name, sender_phone: f.sender_phone, receiver_name: f.receiver_name,
+    receiver_phone: f.receiver_phone, description: f.description, packages: Number(f.packages) || 1, weight: f.weight ? Number(f.weight) : null, value: f.value ? Number(f.value) : null,
+    fee: Number(f.fee) || 0, payer: f.payer, cod: Number(f.cod) || 0, note: f.note, at: new Date().toISOString() });
+  async function printSaved(s: Shipment) {
+    const info = await tripInfo(s.trip_id).catch(() => ({ plate: '', driver: '', phone: '' }));
+    setPrinting([slipOf({ code: s.code, trip_id: s.trip_id, from: s.from_stop_id, to: s.to_stop_id, sender_name: s.sender_name ?? '', sender_phone: s.sender_phone,
+      receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone, description: s.description, packages: s.packages, weight: s.weight_kg, value: null,
+      fee: s.fee, payer: s.fee_payer, cod: s.cod_amount, note: s.note ?? '', at: new Date().toISOString() }, info)]);
+  }
+
+  async function create(e: FormEvent | null, print: boolean) {
+    e?.preventDefault();
+    if (!formRef.current?.reportValidity()) return;
     setBusy(true);
     try {
       const r = await rpc<{ code: string; repeated: boolean }>('create_shipment', {
@@ -78,6 +178,7 @@ export function ParcelsScreen() {
         p_method: f.payer === 'nguoi_gui' ? f.method : null, p_request_id: req,
       });
       toast('ok', `Đã nhận hàng, phiếu ${r.code}${f.payer === 'nguoi_gui' && Number(f.fee) ? ` · thu cước ${money(Number(f.fee))}` : ''}`);
+      if (print) setPrinting([{ ...draft, code: r.code }]);
       setF({ ...EMPTY, trip_id: f.trip_id, from: f.from, to: f.to });
       setReq(crypto.randomUUID());
       await load();
@@ -88,77 +189,113 @@ export function ParcelsScreen() {
     }
   }
 
+  const nowMs = Date.now();
+  const card = (t: Trip) => (
+    <button key={t.id} type="button" className={['vx-trip', t.id === f.trip_id && 'on', new Date(t.depart_at).getTime() < nowMs && 'past'].filter(Boolean).join(' ')}
+            aria-label={`Chuyến ${hhmm(t.depart_at)} ${routeName(t)}`} onClick={() => pickTrip(t.id === f.trip_id ? null : t)}>
+      <b className="vx-time">{hhmm(t.depart_at)}</b>
+      {!rfOk && <span className="vx-rname">{routeName(t)}</span>}
+      <span className="vx-meta"><span>{counts[t.id] ? `${counts[t.id]} phiếu` : ''}</span></span>
+    </button>
+  );
+  const up = shown.filter((t) => new Date(t.depart_at).getTime() >= nowMs), past = shown.filter((t) => new Date(t.depart_at).getTime() < nowMs);
+
   return (
     <>
-      <form className="card form" onSubmit={(e) => void create(e)}>
-        <h2>Nhận hàng gửi</h2>
-        <div className="grid2">
-          <label>Đi chuyến (có thể chọn sau)
-            <select value={f.trip_id} onChange={(e) => setF({ ...f, trip_id: e.target.value })}>
-              <option value="">Chưa chọn chuyến</option>
-              {trips.map((t) => <option key={t.id} value={t.id}>{tripName(t.id)}</option>)}
-            </select>
-          </label>
-          <label>Hàng gì<input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="vd 1 thùng trái cây" required /></label>
-          <label>Gửi tại
-            <select value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} required>
-              <option value="">Chọn nơi gửi</option>
-              {stops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </label>
-          <label>Nhận tại
-            <select value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} required>
-              <option value="">Chọn nơi nhận</option>
-              {stops.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </label>
-          <label>SĐT người gửi<input inputMode="tel" value={f.sender_phone} onChange={(e) => setF({ ...f, sender_phone: e.target.value })} required /></label>
-          <label>Tên người gửi<input value={f.sender_name} onChange={(e) => setF({ ...f, sender_name: e.target.value })} /></label>
-          <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} required /></label>
-          <label>Tên người nhận<input value={f.receiver_name} onChange={(e) => setF({ ...f, receiver_name: e.target.value })} /></label>
-          <label>Số kiện<input type="number" min={1} inputMode="numeric" value={f.packages} onChange={(e) => setF({ ...f, packages: e.target.value })} /></label>
-          <label>Cân nặng (kg)<input type="number" min={0} step="0.1" inputMode="decimal" value={f.weight} onChange={(e) => setF({ ...f, weight: e.target.value })} /></label>
-          <label>Giá trị khai báo (đồng)<input type="number" min={0} inputMode="numeric" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} /></label>
-          <label>Cước (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.fee} onChange={(e) => setF({ ...f, fee: e.target.value })} required /></label>
-          <label>Người trả cước
-            <select value={f.payer} onChange={(e) => setF({ ...f, payer: e.target.value as 'nguoi_gui' | 'nguoi_nhan' })}>
-              <option value="nguoi_gui">Người gửi (thu ngay)</option>
-              <option value="nguoi_nhan">Người nhận (thu khi giao)</option>
-            </select>
-          </label>
-          {f.payer === 'nguoi_gui' && (
-            <label>Thu cước bằng
-              <select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}>
-                <option value="tien_mat">Tiền mặt</option>
-                <option value="chuyen_khoan">Chuyển khoản</option>
-              </select>
-            </label>
-          )}
-          <label>Thu hộ (COD, đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.cod} onChange={(e) => setF({ ...f, cod: e.target.value })} placeholder="0 nếu không thu hộ" /></label>
-          <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
-        </div>
-        <button className="btn primary" disabled={busy}>Nhận hàng</button>
-      </form>
+      {printing && <ParcelPrint slips={printing} onClose={() => setPrinting(null)} />}
+      <div className="vx">
+        <aside className="vx-left">
+          <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
+            <option value="">Tất cả tuyến</option>
+            {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
+          <div className="vx-cal">
+            {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setF((x) => ({ ...x, trip_id: '' })); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
+            <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>
+          </div>
+          {shown.length === 0 && <p className="muted small">Không có chuyến đang mở trong ngày.</p>}
+          <div className="vx-trips">{up.map(card)}</div>
+          {past.length > 0 && <><h4 className="past-head">Đã qua giờ khởi hành</h4><div className="vx-trips">{past.map(card)}</div></>}
+        </aside>
+        <div className="vx-right">
+          <form ref={formRef} className="card form" onSubmit={(e) => void create(e, false)}>
+            <h2>Nhận hàng gửi</h2>
+            <div className="gh-cur">
+              <span>{cur ? <>Chuyến <b>{hhmm(cur.depart_at)}</b> {routeName(cur)} · {fmtDate(day)}{ti.plate ? ` · Xe ${ti.plate}` : ''}{ti.driver ? ` · LX ${ti.driver}` : ''}</>
+                : <span className="muted">Chưa chọn chuyến (bấm giờ chạy bên trái, hoặc gắn chuyến sau)</span>}</span>
+              {cur && <button type="button" className="btn small link" onClick={() => pickTrip(null)}>Bỏ chọn chuyến</button>}
+            </div>
+            <div className="gh-wrap">
+              <div className="grid2">
+                <label>Gửi tại
+                  <select value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} required>
+                    <option value="">Chọn nơi gửi</option>
+                    {stopOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+                <label>Nhận tại
+                  <select value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} required>
+                    <option value="">Chọn nơi nhận</option>
+                    {stopOpts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+                <label>SĐT người gửi<input inputMode="tel" value={f.sender_phone} onChange={(e) => setF({ ...f, sender_phone: e.target.value })} required /></label>
+                <label>Tên người gửi<input value={f.sender_name} onChange={(e) => setF({ ...f, sender_name: e.target.value })} /></label>
+                <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} required /></label>
+                <label>Tên người nhận<input value={f.receiver_name} onChange={(e) => setF({ ...f, receiver_name: e.target.value })} /></label>
+                <label>Hàng gì<input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="vd 1 thùng trái cây" required /></label>
+                <label>Số kiện<input type="number" min={1} inputMode="numeric" value={f.packages} onChange={(e) => setF({ ...f, packages: e.target.value })} /></label>
+                <label>Cân nặng (kg)<input type="number" min={0} step="0.1" inputMode="decimal" value={f.weight} onChange={(e) => setF({ ...f, weight: e.target.value })} /></label>
+                <label>Giá trị khai báo (đồng)<input type="number" min={0} inputMode="numeric" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} /></label>
+                <label>Cước (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.fee} onChange={(e) => setF({ ...f, fee: e.target.value })} required /></label>
+                <label>Người trả cước
+                  <select value={f.payer} onChange={(e) => setF({ ...f, payer: e.target.value as 'nguoi_gui' | 'nguoi_nhan' })}>
+                    <option value="nguoi_gui">Người gửi (thu ngay)</option>
+                    <option value="nguoi_nhan">Người nhận (thu khi giao)</option>
+                  </select>
+                </label>
+                {f.payer === 'nguoi_gui' && (
+                  <label>Thu cước bằng
+                    <select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value })}>
+                      <option value="tien_mat">Tiền mặt</option>
+                      <option value="chuyen_khoan">Chuyển khoản</option>
+                    </select>
+                  </label>
+                )}
+                <label>Thu hộ (COD, đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.cod} onChange={(e) => setF({ ...f, cod: e.target.value })} placeholder="0 nếu không thu hộ" /></label>
+                <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
+              </div>
+              <aside className="gh-pv no-print" aria-label="Xem trước phiếu K80">
+                <div className="gh-pvh">Xem trước phiếu K80<button type="button" className="btn small link" onClick={() => setPvOpen(!pvOpen)}>{pvOpen ? 'Thu gọn' : 'Mở'}</button></div>
+                {pvOpen && <div className="gh-pvb"><ParcelSlip d={draft} /></div>}
+              </aside>
+            </div>
+            <div className="actions">
+              <button className="btn primary" disabled={busy}>Nhận hàng</button>
+              <button type="button" className="btn" disabled={busy} onClick={() => void create(null, true)}>Nhận hàng + in K80</button>
+            </div>
+          </form>
 
-      <section className="card">
-        <h2>Phiếu gửi hàng {q ? '(tìm theo SĐT)' : `ngày ${fmtDate(day)}`} ({list.length})</h2>
-        <div className="inline-form">
-          <label>Ngày<input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} /></label>
-          <label>Tìm SĐT người gửi / nhận<input inputMode="tel" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ít nhất 6 số" /></label>
+          <section className="card">
+            <h2>Phiếu gửi hàng {q ? '(tìm theo SĐT)' : `ngày ${fmtDate(day)}`} ({list.length})</h2>
+            <div className="inline-form">
+              <label>Tìm SĐT người gửi / nhận<input inputMode="tel" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ít nhất 6 số" /></label>
+            </div>
+            {list.length === 0 && <p className="muted">Chưa có phiếu.</p>}
+            <ul className="list">
+              {list.map((s) => <ParcelRow key={s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
+            </ul>
+          </section>
         </div>
-        {list.length === 0 && <p className="muted">Chưa có phiếu.</p>}
-        <ul className="list">
-          {list.map((s) => <ParcelRow key={s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage />)}
-        </ul>
-      </section>
+      </div>
     </>
   );
 }
 
 /** Một phiếu: dùng ở màn Gửi hàng và màn lái xe (manage = false: chỉ báo đến, giao hàng) */
-export function ParcelRow({ s, stopName, tripName, trips, reload, manage }: {
+export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint }: {
   s: Shipment; stopName: (id: string) => string; tripName: (id: string | null) => string; trips: Trip[] | null;
-  reload: () => Promise<void>; manage: boolean;
+  reload: () => Promise<void>; manage: boolean; onPrint?: () => void;
 }) {
   const toast = useToast();
   const [act, setAct] = useState<'' | 'xe' | 'giao' | 'huy'>('');
@@ -180,6 +317,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage }: {
       <div className="item-head">
         <div>
           <b>{s.code}</b> <span className={`badge ${cls}`}>{lb}</span>
+          {onPrint && <button type="button" className="btn small link" aria-label={`In phiếu ${s.code}`} onClick={onPrint}>🖨 In K80</button>}
           <div className="small">{s.description} · {s.packages} kiện{s.weight_kg ? ` · ${s.weight_kg} kg` : ''} · {stopName(s.from_stop_id)} → {stopName(s.to_stop_id)}</div>
           <div className="small">Nhận: {s.receiver_name ?? ''} <a href={`tel:${s.receiver_phone}`}>{s.receiver_phone}</a> · Gửi: {s.sender_name ?? ''} <a href={`tel:${s.sender_phone}`}>{s.sender_phone}</a></div>
           <div className="small muted">

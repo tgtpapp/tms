@@ -174,7 +174,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
         <main className="content">
           {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
           {tab === 'driver' && <DriverScreen tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
-          {tab === 'parcels' && <ParcelsScreen />}
+          {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
           {tab === 'docs' && <DocsScreen ctx={ctx} perms={perms} />}

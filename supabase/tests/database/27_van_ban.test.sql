@@ -63,5 +63,10 @@ select throws_ok(format('select public.cancel_official_doc(%L, %L)', (select id 
 select is(public.save_official_doc(null, 'cong_van', '2026-04-02', 'V/v B', null, '{}', null) ->> 'number', '001/2026/CV', 'Nhà xe B dãy riêng; chưa có ký hiệu thì bỏ phần cuối');
 reset role;
 select is((select count(*)::int from public.official_docs where status = 'hieu_luc' and number like '%-TP'), 6, 'Nhà xe A còn 6 văn bản hiệu lực');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select is(public.save_official_doc(null, 'word_cv', '2026-07-01', 'V/v tự soạn', null, '{"html":"<p>Số: {Số văn bản}</p>"}', null) ->> 'number', '003/2026/CV-TP', 'Văn bản tự soạn dùng chung dãy Công văn');
+select is(public.save_official_doc(null, 'word_qd', '2026-07-01', 'Về việc tự soạn', null, '{"html":"<p>x</p>"}', null) ->> 'number', '004/2026/QĐ-TP', 'Quyết định tự soạn dùng chung dãy QĐ');
+reset role;
 select * from finish();
 rollback;

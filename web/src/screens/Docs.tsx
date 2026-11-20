@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { PaperView } from '../components/ProfilePapers';
+import { WordEditor } from '../components/WordEditor';
 import { fmtDate, today } from '../components/Documents';
 import { resetFolders } from '../lib/dispatchPapers';
 import {
-  CODE_NAME, TEMPLATES, autoTitle, defaults, docHtml, loadDocCtx, saveDocPdf, tplOf, type Content, type OfficialDoc, type Template,
+  CODE_NAME, TEMPLATES, autoTitle, defaults, docPages, isWord, loadDocCtx, saveDocPdf, tplOf, type Content, type OfficialDoc, type Template,
 } from '../lib/officialDocs';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
@@ -35,6 +36,7 @@ const FIELDS: Record<Template, Field[]> = {
     { key: 'kinh_gui', label: 'Kính gửi (mỗi dòng một nơi)', area: 2 }, { key: 'noi_dung', label: 'Nội dung (mỗi dòng một đoạn)', area: 8 },
     { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
   ],
+  word_qd: [], word_cv: [], word_tb: [],
   thong_bao: [
     { key: 'noi_dung', label: 'Nội dung (mỗi dòng một đoạn)', area: 8 }, { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
   ],
@@ -51,7 +53,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [code, setCode] = useState('');
   const [q, setQ] = useState('');
   const [f, setF] = useState<Form | null>(null);
-  const [view, setView] = useState<{ title: string; html: string } | null>(null);
+  const [view, setView] = useState<{ title: string; pages: string[] } | null>(null);
   const [busy, setBusy] = useState('');
   const [noi, setNoi] = useState('');
   const [director, setDirector] = useState('');
@@ -95,7 +97,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     setBusy('Đang dựng văn bản…');
     try {
       const x = await loadDocCtx(tenantId, me, staffId);
-      setView({ title: `${tplOf(t).name} · ${number}`, html: docHtml(t, number, signed, title, content, x) });
+      setView({ title: `${tplOf(t).name} · ${number}`, pages: docPages(t, number, signed, title, content, x) });
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
   }
   async function archive(d: OfficialDoc) {
@@ -107,6 +109,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     if (!f) return;
     if (!f.signed_on || !f.title.trim()) return toast('error', 'Nhập ngày ký và trích yếu');
     if (f.template === 'qd_bo_nhiem' && !f.staff_id) return toast('error', 'Chọn người được bổ nhiệm');
+    if (isWord(f.template) && !(f.content.html ?? '').replace(/<[^>]+>|&nbsp;/g, '').trim()) return toast('error', 'Văn bản đang trống: mở file Word, gõ nội dung hoặc nhờ AI soạn');
     setBusy(f.id ? 'Đang lưu…' : 'Đang cấp số…');
     try {
       const r = await rpc<{ id: string; number: string }>('save_official_doc', {
@@ -185,7 +188,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
               <label>Số văn bản<input value={f.number ?? 'Tự cấp khi lưu (001 trở đi)'} disabled /></label>
               <label>Ngày ký<input type="date" value={f.signed_on} onChange={(e) => setF({ ...f, signed_on: e.target.value })} /></label>
               <label>Nơi ký<input value={f.content.noi ?? ''} onChange={(e) => setC('noi', e.target.value)} placeholder="vd: Đồng Nai" /></label>
-              {(f.template === 'qd_bo_nhiem' || f.template === 'quyet_dinh' || f.template === 'thong_bao' || f.template === 'cong_van') && (
+              {f.template !== 'qd_atgt' && (
                 <label>{f.template === 'qd_bo_nhiem' ? 'Người được bổ nhiệm' : 'Người liên quan (nếu có)'}
                   <select value={f.staff_id} onChange={(e) => setF({ ...f, staff_id: e.target.value })}>
                     <option value="">— Chọn nhân viên —</option>
@@ -193,9 +196,10 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                   </select></label>
               )}
             </div>
-            <label>{f.template === 'cong_van' ? 'Trích yếu (V/v …)' : 'Trích yếu (Về việc …)'}
+            <label>{f.template === 'cong_van' || f.template === 'word_cv' ? 'Trích yếu (V/v …)' : 'Trích yếu (Về việc …)'}
               <input value={f.title} maxLength={300} onChange={(e) => setF({ ...f, title: e.target.value, titleAuto: false })}
                 placeholder={f.template === 'cong_van' ? 'vd: đăng ký khai thác tuyến' : 'vd: Về việc khen thưởng'} /></label>
+            {isWord(f.template) && <WordEditor html={f.content.html ?? ''} onChange={(h) => setF((x) => (x ? { ...x, content: { ...x.content, html: h } } : x))} />}
             {fields.map((x) => (
               <label key={x.key}>{x.label}
                 {x.area ? <textarea rows={x.area} value={f.content[x.key] ?? ''} onChange={(e) => setC(x.key, e.target.value)} />
@@ -211,7 +215,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           </div>
         </Modal>
       )}
-      {view && <PaperView title={view.title} pages={[{ html: view.html, land: false }]} onClose={() => setView(null)} />}
+      {view && <PaperView title={view.title} pages={view.pages.map((html) => ({ html, land: false }))} onClose={() => setView(null)} />}
     </section>
   );
 }

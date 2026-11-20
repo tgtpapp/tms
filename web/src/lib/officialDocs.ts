@@ -4,8 +4,10 @@
 import { supabase } from './supabase';
 import { boss, bossCol, company, type Boss, type Company } from './profilePapers';
 import { savePdf } from './dispatchPapers';
+import { paginate } from './pdfMaker';
 
-export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'cong_van' | 'quyet_dinh' | 'thong_bao';
+export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'cong_van' | 'quyet_dinh' | 'thong_bao' | 'word_qd' | 'word_cv' | 'word_tb';
+export const isWord = (t: Template) => t.startsWith('word_');
 export type Content = Record<string, string>;
 export interface OfficialDoc {
   id: string; template: Template; code: 'QD' | 'CV' | 'TB'; year: number; seq: number; number: string; signed_on: string; title: string;
@@ -18,6 +20,18 @@ export const TEMPLATES: { key: Template; name: string; folder: string; code: 'QD
   { key: 'quyet_dinh', name: 'Quyết định khác', folder: 'Quyết định', code: 'QD' },
   { key: 'cong_van', name: 'Công văn', folder: 'Công văn', code: 'CV' },
   { key: 'thong_bao', name: 'Thông báo', folder: 'Thông báo', code: 'TB' },
+  { key: 'word_qd', name: 'Quyết định tự soạn (từ file Word / AI)', folder: 'Quyết định', code: 'QD' },
+  { key: 'word_cv', name: 'Công văn tự soạn (từ file Word / AI)', folder: 'Công văn', code: 'CV' },
+  { key: 'word_tb', name: 'Thông báo tự soạn (từ file Word / AI)', folder: 'Thông báo', code: 'TB' },
+];
+/** Các ô điền tự động trong văn bản tự soạn: gõ hoặc chèn vào văn bản, khi xem / in / lưu sẽ thay bằng thông tin thật. */
+export const FIELDS: [string, string][] = [
+  ['{Số văn bản}', 'Số văn bản (cấp khi lưu)'], ['{Ngày ký}', 'ngày … tháng … năm …'], ['{Ngày ký ngắn}', 'dd/mm/yyyy'], ['{Nơi ký}', 'Nơi ký'],
+  ['{Trích yếu}', 'Trích yếu'], ['{Công ty}', 'Tên công ty (in hoa)'], ['{Tên công ty}', 'Tên công ty'], ['{Địa chỉ công ty}', 'Địa chỉ công ty'],
+  ['{Giám đốc}', 'Họ tên giám đốc'], ['{Chữ ký giám đốc}', 'Khối ký: chức danh, chữ ký, con dấu, họ tên'],
+  ['{Ông/Bà}', 'Ông / Bà'], ['{Họ tên}', 'Họ tên người được chọn'], ['{HỌ TÊN}', 'HỌ TÊN in hoa'], ['{Ngày sinh}', 'Ngày sinh'], ['{Giới tính}', 'Giới tính'],
+  ['{Số CCCD}', 'Số CCCD'], ['{Ngày cấp CCCD}', 'Ngày cấp CCCD'], ['{Nơi cấp CCCD}', 'Nơi cấp CCCD'], ['{Địa chỉ thường trú}', 'Nơi thường trú'],
+  ['{Chỗ ở hiện nay}', 'Chỗ ở hiện nay'], ['{Điện thoại}', 'Điện thoại'], ['{Chức vụ}', 'Chức vụ'], ['{Ngày vào làm}', 'Ngày vào công ty'],
 ];
 export const tplOf = (k: Template) => TEMPLATES.find((t) => t.key === k)!;
 export const CODE_NAME: Record<string, string> = { QD: 'Quyết định', CV: 'Công văn', TB: 'Thông báo' };
@@ -25,6 +39,7 @@ export const CODE_NAME: Record<string, string> = { QD: 'Quyết định', CV: 'C
 /** Nội dung mặc định khi soạn mới (theo app cũ). */
 export function defaults(t: Template, noi: string, director: string): Content {
   const base = { noi };
+  if (isWord(t)) return { ...base, html: '' };
   if (t === 'qd_bo_nhiem') return { ...base, chuc_danh: 'Người trực tiếp điều hành hoạt động vận tải', hieu_luc: '', trinh_do: '', tham_nien: '', phu_cap: '',
     noi_nhan: '- Như Điều 4;\n- Sở GTVT (để khai hồ sơ GPKD);\n- Lưu: VT, HS.' };
   if (t === 'qd_atgt') return { ...base, ten_ban: 'Ban An toàn giao thông',
@@ -50,7 +65,8 @@ const dots = (v: string | null | undefined, n = 30) => (v ? `<b>${esc(v)}</b>` :
 const money = (n: number) => n.toLocaleString('vi-VN');
 
 export interface DocCtx { company: Company; boss: Boss; title: string; person: Person | null }
-interface Person { name: string; birth: string | null; gender: string | null; cccd: string | null; cccdOn: string | null; cccdBy: string | null; address: string | null }
+interface Person { name: string; birth: string | null; gender: string | null; cccd: string | null; cccdOn: string | null; cccdBy: string | null; address: string | null;
+  current: string | null; phone: string | null; job: string | null; joined: string | null }
 
 /** Lấy dữ liệu để in: công ty, chữ ký giám đốc + con dấu, người liên quan. */
 export async function loadDocCtx(tenantId: string, me: { id: string | null; name: string }, staffId: string | null): Promise<DocCtx> {
@@ -63,14 +79,16 @@ export async function loadDocCtx(tenantId: string, me: { id: string | null; name
 }
 async function loadPerson(id: string): Promise<Person | null> {
   const [s, p, d] = await Promise.all([
-    supabase.from('staff_members').select('full_name').eq('id', id).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, gender, address').eq('staff_id', id).maybeSingle(),
+    supabase.from('staff_members').select('full_name, phone, job_title, position, joined_on').eq('id', id).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, gender, address, current_address').eq('staff_id', id).maybeSingle(),
     supabase.from('documents').select('doc_no, issued_on, issuer, data').eq('staff_id', id).eq('doc_type', 'cccd').eq('is_current', true).maybeSingle(),
   ]);
   if (!s.data) return null;
-  const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null } | null;
+  const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null; current_address?: string | null } | null;
+  const sm = s.data as { full_name: string; phone: string | null; job_title: string | null; position: string; joined_on: string };
   const cd = d.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
-  return { name: (s.data as { full_name: string }).full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
+  return { current: pv?.current_address ?? null, phone: sm.phone, job: sm.job_title || ({ lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' } as Record<string, string>)[sm.position] || null,
+    joined: sm.joined_on, name: sm.full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
     cccd: cd?.doc_no ?? null, cccdOn: cd?.issued_on ?? null, cccdBy: cd?.issuer ?? null, address: pv?.address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || null };
 }
 
@@ -82,6 +100,32 @@ const foot = (x: DocCtx, noiNhan: string, title?: string[]) => `<table style="wi
   <td style="width:50%;vertical-align:top;font-size:13px"><b><i>Nơi nhận:</i></b>${lines(noiNhan).map((l) => `<br>${esc(l)}`).join('')}</td>
   ${bossCol(x.boss, (title ?? [x.title]).map((l) => esc(l.toUpperCase())).join('<br>'), 50)}</tr></table>`;
 const wrap = (s: string) => `<div style="font-size:14px;line-height:1.5;text-align:justify">${s}</div>`;
+
+/** Văn bản tự soạn: thay các ô {…} bằng thông tin thật. */
+export function fillFields(html: string, number: string, signed: string, title: string, c: Content, x: DocCtx): string {
+  const e = x.person;
+  const sign = `<table style="width:100%;border-collapse:collapse"><tr><td style="width:50%"></td>${bossCol(x.boss, esc(x.title.toUpperCase()), 50)}</tr></table>`;
+  const map: Record<string, string> = {
+    '{Số văn bản}': esc(number), '{Ngày ký}': dm(signed), '{Ngày ký ngắn}': dd(signed), '{Nơi ký}': esc(c.noi || '……………'), '{Trích yếu}': esc(title),
+    '{Công ty}': esc(x.company.name.toUpperCase()), '{Tên công ty}': esc(x.company.name), '{Địa chỉ công ty}': esc(x.company.address),
+    '{Giám đốc}': esc(x.boss.gdName), '{Chữ ký giám đốc}': sign,
+    '{Ông/Bà}': e?.gender === 'Nữ' ? 'Bà' : 'Ông', '{Họ tên}': dots(e?.name), '{HỌ TÊN}': dots(e?.name.toUpperCase()), '{Ngày sinh}': dd(e?.birth),
+    '{Giới tính}': dots(e?.gender, 8), '{Số CCCD}': dots(e?.cccd, 14), '{Ngày cấp CCCD}': dd(e?.cccdOn), '{Nơi cấp CCCD}': dots(e?.cccdBy, 14),
+    '{Địa chỉ thường trú}': dots(e?.address, 30), '{Chỗ ở hiện nay}': dots(e?.current, 30), '{Điện thoại}': dots(e?.phone, 12), '{Chức vụ}': dots(e?.job, 14),
+    '{Ngày vào làm}': dd(e?.joined),
+  };
+  // Word hay tách chữ trong ô {…} ra nhiều đoạn định dạng: gom lại trước khi thay
+  return html.replace(/\{(?:<[^>]+>|[^{}<])*\}/g, (m) => { const k = m.replace(/<[^>]+>/g, ''); return map[k] ?? m; });
+}
+/** Các trang in của văn bản: văn bản tự soạn tự chia trang A4; mẫu có sẵn 1 trang (dài thì thu nhỏ vừa trang). */
+export function docPages(t: Template, number: string, signed: string, title: string, c: Content, x: DocCtx): string[] {
+  if (!isWord(t)) return [docHtml(t, number, signed, title, c, x)];
+  const filled = fillFields(c.html || '', number, signed, title, c, x);
+  const box = document.createElement('div');
+  box.innerHTML = filled;
+  const blocks = Array.from(box.childNodes).map((n) => (n instanceof Element ? n.outerHTML : (n.textContent ?? '').trim() ? `<p>${esc(n.textContent ?? '')}</p>` : '')).filter(Boolean);
+  return paginate(blocks.map((b) => `<div style="font-size:14px;line-height:1.5">${b}</div>`));
+}
 
 /** Trang in của 1 văn bản. number: số đã cấp, hoặc chữ chờ khi xem trước bản chưa lưu. */
 export function docHtml(t: Template, number: string, signed: string, title: string, c: Content, x: DocCtx): string {
@@ -155,5 +199,5 @@ export async function saveDocPdf(d: OfficialDoc, x: DocCtx): Promise<void> {
   const tp = tplOf(d.template);
   const who = d.template === 'qd_bo_nhiem' && x.person ? ` · ${x.person.name}` : '';
   await savePdf([String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
-    [{ html: docHtml(d.template, d.number, d.signed_on, d.title, d.content, x), land: false }], 'Lưu từ Văn bản', `vb:${d.id}`);
+    docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false })), 'Lưu từ Văn bản', `vb:${d.id}`);
 }

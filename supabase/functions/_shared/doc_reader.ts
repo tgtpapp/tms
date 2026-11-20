@@ -90,7 +90,7 @@ async function geminiFallbacks(p: Provider, fetchFn: FetchFn): Promise<string[]>
 
 // Luân phiên khóa: mỗi lần dùng AI nào thì lấy khóa kế tiếp của AI đó.
 const cursors = new Map<string, number>();
-function nextKey(p: Provider): string {
+export function nextKey(p: Provider): string {
   const id = p.name ?? p.model;
   const i = cursors.get(id) ?? 0;
   cursors.set(id, i + 1);

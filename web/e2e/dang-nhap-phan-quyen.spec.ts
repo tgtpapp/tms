@@ -297,6 +297,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(vb.getByText('Về việc bổ nhiệm Người trực tiếp điều hành hoạt động vận tải')).toBeVisible();
   await expect(vb.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // Văn bản tự soạn: mở file Word, ô {…} tự điền theo người được chọn, cấp số chung dãy Quyết định
+  await page.getByLabel('Soạn văn bản mới').selectOption('word_qd');
+  await page.getByLabel('Mở file Word').setInputFiles('e2e/fixtures/van-ban-mau.docx');
+  await expect(page.getByRole('textbox', { name: 'Nội dung văn bản' })).toContainText('Về việc khen thưởng {Ông/Bà} {Họ tên}');
+  await page.getByLabel('Trích yếu (Về việc …)').fill('Về việc khen thưởng');
+  await page.getByLabel('Người liên quan (nếu có)').selectOption({ label: 'Nguyễn Văn Tài' });
+  await page.getByLabel('Lưu PDF vào Lưu trữ hồ sơ').uncheck();
+  await page.getByRole('button', { name: 'Lưu & cấp số' }).click();
+  await expect(page.getByText(/^Đã cấp số 002\/\d{4}\/QĐ/)).toBeVisible();
+  await page.getByRole('button', { name: /^Xem văn bản 002\/\d{4}\/QĐ/ }).click();
+  await expect(vb.getByText(/Khen thưởng Ông NGUYỄN VĂN TÀI/)).toBeVisible();
+  await expect(vb.getByText(/Số: 002\/\d{4}\/QĐ/)).toBeVisible();
+  await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j5. Cấu hình › Đóng BHXH & lương chuyển khoản theo tháng: nhập xong tự lưu, mở lại vẫn còn
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
   await page.getByLabel('Đóng BHXH Nguyễn Văn Tài').check();

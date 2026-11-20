@@ -354,6 +354,18 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Vẫn lưu' }).click();
   await expect(page.getByText('Đã xếp xe cho chuyến')).toBeVisible();
   await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
+  // Vexere: giờ không có tài xế → áp dụng là xóa chuyến; bản dán sau có tài xế → khôi phục và cập nhật lại
+  await page.getByRole('button', { name: '⇪ Nhập lịch Vexere / Excel' }).click();
+  await page.getByLabel('Nội dung dán từ Vexere').fill(`ĐHX\n${vxDay}\nHố Nai - Vũng Tàu\nChọn loại xe\n1 Chuyến (0 Hủy)\nĐổi giờ07:00\nChuyến bán véChuyến chở hàng\nGhế ngồi 14 chỗ\n0% (0 vé: 0 ĐC, 0 T.t, 14 T)\tChưa XB\n`);
+  await expect(page.getByText('Không có tài xế: sẽ xóa chuyến này', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^✔ Áp dụng các dòng đã chọn/ }).click();
+  await expect(page.getByText(/xóa 1 chuyến không có tài xế/)).toBeVisible();
+  await page.getByLabel('Nội dung dán từ Vexere').fill(`ĐHX\n${vxDay}\nHố Nai - Vũng Tàu\nChọn loại xe\n1 Chuyến (0 Hủy)\nĐổi giờ07:00\nChuyến bán véChuyến chở hàng\nVị trí xe\n51B-123.45\nGhế ngồi 14 chỗ\nNGUYỄN VĂN TÀI\n0% (0 vé: 0 ĐC, 0 T.t, 14 T)\tChưa XB\n`);
+  await expect(page.getByText('Chuyến đã xóa trước đó, nay có tài xế: khôi phục và cập nhật', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^✔ Áp dụng các dòng đã chọn/ }).click();
+  await expect(page.getByText(/khôi phục 1 chuyến/)).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
+  await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
 
   // 5l. In lệnh vận chuyển: cấu hình hậu tố TGTP, bấm "In lệnh" → bản in đúng mẫu, số lệnh theo quy ước
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();

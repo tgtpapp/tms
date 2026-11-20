@@ -22,6 +22,8 @@ interface Row {
   route: { id: string | null; dir: Dir; newName?: string; newCode?: string } | null;
   trip: Trip | null; v: Veh | null; e: Staff | null; addV: string | null; addE: string | null;
   curV: string; curE: string; same: boolean; ok: boolean; st: string; tone: 'ok' | 'warn' | 'bad' | 'muted';
+  /** del: giờ không có tài xế → xóa (hủy) chuyến; reopen: chuyến đã xóa trước đó, nay có tài xế → khôi phục rồi cập nhật */
+  del?: boolean; reopen?: Trip | null;
 }
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -38,6 +40,8 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   const [base, setBase] = useState<{ routes: Route[]; vehicles: Veh[]; staff: Staff[]; types: VType[]; defType: string } | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [crew, setCrew] = useState<Crew[]>([]);
+  const [gone, setGone] = useState<Trip[]>([]);          // chuyến đã hủy cùng ngày (để khôi phục khi có tài xế lại)
+  const [busyTrips, setBusyTrips] = useState<Set<string>>(new Set());   // chuyến đã có vé / hàng: không xóa
   const [pick, setPick] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
@@ -63,13 +67,21 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
     if (!days.length) return;
     void (async () => {
       const t = await supabase.from('trips').select('id, route_id, direction, service_date, depart_at, vehicle_id, status, departed_at, edit_unlocked_at')
-        .in('service_date', days).eq('status', 'mo');
-      const list = (t.data ?? []) as Trip[];
+        .in('service_date', days).in('status', ['mo', 'huy']);
+      const all = (t.data ?? []) as Trip[];
+      const list = all.filter((x) => x.status === 'mo');
       setTrips(list);
+      setGone(all.filter((x) => x.status === 'huy'));
       if (list.length) {
-        const c = await supabase.from('trip_crew').select('trip_id, role, staff_id, active').in('trip_id', list.map((x) => x.id)).eq('active', true);
+        const ids = list.map((x) => x.id);
+        const [c, si, sh] = await Promise.all([
+          supabase.from('trip_crew').select('trip_id, role, staff_id, active').in('trip_id', ids).eq('active', true),
+          supabase.from('seat_inventory').select('trip_id').in('trip_id', ids).in('status', ['giu', 'dat', 'da_tt']),
+          supabase.from('shipments').select('trip_id').in('trip_id', ids),
+        ]);
         setCrew((c.data ?? []) as Crew[]);
-      } else setCrew([]);
+        setBusyTrips(new Set([...(si.data ?? []), ...(sh.data ?? [])].map((x) => (x as { trip_id: string }).trip_id)));
+      } else { setCrew([]); setBusyTrips(new Set()); }
     })();
   }, [days]);
 
@@ -116,6 +128,14 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       if (ngay !== day) { r.st = `Khác ngày: lịch ngày ${fmtDate(ngay)}, đang xem ${fmtDate(day)} nên không áp dụng`; r.tone = 'muted'; }
       else if (!route) r.st = 'Không xác định được tuyến';
       else if (!it.gio) r.st = 'Không đọc được giờ';
+      else if (!it.lai) {
+        // Giờ không có tài xế trên Vexere: xóa chuyến đó (hủy, khôi phục được khi bản dán sau có tài xế)
+        const locked = !!(trip?.departed_at && !trip.edit_unlocked_at);
+        if (!trip) { r.st = 'Không có tài xế: không tạo chuyến'; r.tone = 'muted'; }
+        else if (locked) { r.st = 'Không có tài xế nhưng chuyến đã xuất bến: không xóa'; r.tone = 'muted'; }
+        else if (busyTrips.has(trip.id)) { r.st = 'Không có tài xế nhưng chuyến đã có vé / hàng: không xóa, xử lý tay'; r.tone = 'bad'; }
+        else { r.ok = true; r.del = true; r.st = 'Không có tài xế: sẽ xóa chuyến này'; r.tone = 'warn'; }
+      }
       else if ((it.bks && !vOk) || (it.lai && !eOk)) r.st = `Có ${[it.bks && !vOk && 'xe', it.lai && !eOk && 'lái xe'].filter(Boolean).join(', ')} không khớp danh sách, nhập tay`;
       else if (!vOk || !eOk) r.st = !vOk && !eOk ? 'Thiếu cả lái xe và xe' : !eOk ? 'Thiếu lái xe: không có lái xe thì xe không chạy được' : 'Thiếu xe: lái xe chưa biết chạy xe nào';
       else {
@@ -123,13 +143,16 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
         const locked = !!(trip?.departed_at && !trip.edit_unlocked_at);
         if (trip && locked) { r.st = r.same ? 'Khớp lịch hiện có (chuyến đã xuất bến)' : 'Khác lịch hiện có, chuyến đã xuất bến nên không sửa'; r.tone = r.same ? 'ok' : 'muted'; }
         else if (trip) { r.ok = true; r.st = r.same ? 'Khớp lịch hiện có' : !trip.vehicle_id && !d1 ? 'Điền vào chuyến đang trống' : 'Khác lịch hiện có, sẽ cập nhật'; r.tone = r.same ? 'ok' : 'warn'; }
+        else if (route.id && (r.reopen = gone.find((t) => t.route_id === route.id && t.direction === route.dir && t.service_date === ngay && hhmm(t.depart_at) === it.gio) ?? null)) {
+          r.ok = true; r.st = 'Chuyến đã xóa trước đó, nay có tài xế: khôi phục và cập nhật'; r.tone = 'warn';
+        }
         else if (opt.n) { r.ok = true; r.st = route.id ? 'Tạo chuyến mới' : 'Tạo chuyến (tuyến mới)'; r.tone = 'warn'; }
         else r.st = 'Chưa có chuyến này';
         if (r.ok && !r.same && (addE || addV)) r.st += ` + thêm ${[addE && 'lái xe', addV && 'xe'].filter(Boolean).join(', ')} mới`;
       }
       return r;
     });
-  }, [P, base, trips, crew, opt, day]);
+  }, [P, base, trips, crew, opt, day, gone, busyTrips]);
 
   // mặc định chọn các dòng cần áp dụng (bỏ dòng đã khớp)
   useEffect(() => { setPick(new Set(rows.map((r, i) => (r.ok && !r.same ? i : -1)).filter((i) => i >= 0))); }, [rows]);
@@ -179,7 +202,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
     if (!base) return;
     const sel = rows.filter((r, i) => pick.has(i) && r.ok && !r.same);
     if (!sel.length) { toast('error', 'Chưa chọn dòng nào để áp dụng'); return; }
-    let up = 0, nw = 0, warnN = 0;
+    let up = 0, nw = 0, warnN = 0, del = 0, back = 0;
     const errs: string[] = [], madeE: string[] = [], madeV: string[] = [], madeR: string[] = [];
     const routeIds = new Map<string, string>(), vehIds = new Map<string, string>(), empIds = new Map<string, string>();
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: TZ });
@@ -192,6 +215,11 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
     for (const r of sel) {
       const label = `${fmtDate(r.ngay)} ${r.gio} ${r.tuyen}`;
       setBusy(`Đang áp dụng ${label}…`);
+      if (r.del && r.trip) {
+        try { await rpc('cancel_trip', { p_trip_id: r.trip.id, p_reason: `Không có tài xế trên ${src}` }); del++; }
+        catch (e) { errs.push(`${label}: ${errMsg(e)}`); }
+        continue;
+      }
       try {
         // tuyến
         let routeId = r.route?.id ?? null;
@@ -226,7 +254,8 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
         }
         // chuyến
         let tripId = r.trip?.id ?? null;
-        if (!tripId) {
+        if (!tripId && r.reopen) { await rpc('reopen_trip', { p_trip_id: r.reopen.id }); tripId = r.reopen.id; back++; }
+        else if (!tripId) {
           tripId = await rpc<string>('add_extra_trip', { p_route_id: routeId, p_direction: r.route.dir, p_date: r.ngay, p_time: r.gio, p_note: `Nhập từ ${src}` });
           nw++;
         } else up++;
@@ -245,7 +274,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
     setBusy(null);
     const done = `Đã nhập lịch: cập nhật ${up} chuyến, tạo mới ${nw} chuyến`
       + (madeE.length ? `, thêm ${madeE.length} lái xe` : '') + (madeV.length ? `, thêm ${madeV.length} xe` : '') + (madeR.length ? `, thêm ${madeR.length} tuyến` : '')
-      + (warnN ? `, ${warnN} chuyến có cảnh báo (đã ghi lý do)` : '');
+      + (warnN ? `, ${warnN} chuyến có cảnh báo (đã ghi lý do)` : '') + (del ? `, xóa ${del} chuyến không có tài xế` : '') + (back ? `, khôi phục ${back} chuyến` : '');
     toast(errs.length ? 'error' : 'ok', errs.length ? `${done}. ${errs.length} dòng lỗi: ${errs.slice(0, 3).join(' · ')}` : done);
     await onDone();
     setP((p) => (p ? { ...p } : p));   // so sánh lại với lịch vừa cập nhật (dán tiếp được)
@@ -253,8 +282,9 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
 
   const nSame = rows.filter((r) => r.same).length;
   const nDiff = rows.filter((r) => r.ok && r.trip && !r.same && r.st.startsWith('Khác')).length;
-  const nNew = rows.filter((r) => r.ok && !r.trip).length;
+  const nNew = rows.filter((r) => r.ok && !r.trip && !r.reopen).length;
   const nBad = rows.filter((r) => !r.ok && r.tone === 'bad').length;
+  const nDel = rows.filter((r) => r.del).length;
   const cell = (r: Row, k: 'v' | 'e') => {
     const o = k === 'v' ? r.v?.plate : r.e?.full_name, raw = k === 'v' ? r.rb : r.rl, add = k === 'v' ? r.addV : r.addE, cur = k === 'v' ? r.curV : r.curE;
     return (
@@ -272,7 +302,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
         <div>
           <b>Dán lịch từ Vexere</b>
           <p className="small muted">Chỉ áp dụng lịch đúng ngày <b>{fmtDate(day)}</b>. Mở trang Điều hành xe của Vexere, chọn ngày, bôi đen toàn trang (Ctrl+A), Sao chép (Ctrl+C), rồi dán vào ô dưới (Ctrl+V). Cũng dán được bảng chép từ Excel.</p>
-          <textarea rows={3} value={txt} onChange={(e) => setTxt(e.target.value)} aria-label="Nội dung dán từ Vexere"
+          <textarea rows={8} className="paste-box" value={txt} onChange={(e) => setTxt(e.target.value)} aria-label="Nội dung dán từ Vexere"
                     placeholder="Dán nội dung trang Vexere vào đây: dán xong tự đọc và so sánh với lịch ngày đang xem. Dán lại bao nhiêu lần cũng được." />
           {msg && <div className="small">{msg.ok && <span className="state-con_han">{msg.ok}</span>}{msg.warn.map((w) => <div key={w} className="state-het_han">{w}</div>)}</div>}
         </div>
@@ -297,7 +327,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
             <div>
               <b>{src}</b> · <b>{rows.length}</b> chuyến · {days.length === 1 ? `ngày ${fmtDate(days[0])}` : `${days.length} ngày (${fmtDate(days[0])} → ${fmtDate(days[days.length - 1])})`}
               <span className="muted small"> · chữ đỏ là chỗ không khớp danh sách, sẽ không được điền; chữ cam là tên / xe mới sẽ được thêm</span>
-              <div className="small">Khớp lịch hiện có <b>{nSame}</b> · Khác lịch hiện có <b className="state-sap_het">{nDiff}</b> · Chuyến mới <b>{nNew}</b> · Không áp dụng được <b className="state-het_han">{nBad}</b></div>
+              <div className="small">Khớp lịch hiện có <b>{nSame}</b> · Khác lịch hiện có <b className="state-sap_het">{nDiff}</b> · Chuyến mới <b>{nNew}</b> · Xóa (không có tài xế) <b className="state-sap_het">{nDel}</b> · Không áp dụng được <b className="state-het_han">{nBad}</b></div>
             </div>
             <div className="table-wrap import-tbl">
               <table className="plist">

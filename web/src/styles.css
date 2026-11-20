@@ -869,3 +869,4 @@ img.sc-ava { object-fit: cover; background: #e5e7eb; }
 .me-line .sc-ava { font-size: .7rem; flex: 0 0 26px; }
 .me-line small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inline-acts { display: inline-flex; gap: 4px; margin-left: 8px; flex-wrap: wrap; }
+.paste-box { width: 100%; min-height: 180px; resize: vertical; font-size: 14px; box-sizing: border-box; }

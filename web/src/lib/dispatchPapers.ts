@@ -270,3 +270,59 @@ export function transient(e: unknown): boolean {
   const m = e instanceof Error ? e.message : String(e);
   return !/sai mã|chưa (kết nối|cấu hình|nhập)|quyền|không tìm thấy|quá lớn|không hợp lệ/i.test(m);
 }
+
+// ------------------------------------------------------------------ Lưu nhanh hàng loạt
+export interface PdfSpec { path: string[]; name: string; fileName: string; pages: { html: string; land: boolean }[]; note: string; key: string }
+/** Lưu nhiều PDF: dựng trang song song, gửi theo lô (mỗi lô 1 lần gọi Apps Script, nhiều lô cùng lúc).
+    Mỗi lô lỗi mạng / máy chủ bận thì tự thử lại. Trả các mục chưa lưu được kèm lý do. */
+export async function savePdfMany<T extends { spec: () => PdfSpec }>(jobs: T[], onStep: (done: number, total: number, phase: string) => void):
+  Promise<{ ok: T[]; failed: { job: T; error: string }[]; oldScript: boolean }> {
+  const ok: T[] = [], failed: { job: T; error: string }[] = [];
+  let oldScript = false, rendered = 0, sent = 0, next = 0, fatal: string | null = null;
+  const ready: { job: T; item: Record<string, unknown> }[] = [];
+  const BATCH = 10, MAX_BYTES = 6_000_000;
+  // 1) Dựng PDF: 6 tệp cùng lúc
+  const render = async () => {
+    while (next < jobs.length && !fatal) {
+      const job = jobs[next++]!;
+      try {
+        const s = job.spec(), imgs = [];
+        for (const p of s.pages) imgs.push(await pageImg(p.html, p.land));
+        const folder = await ensurePath(s.path);
+        ready.push({ job, item: { folder_id: folder, name: s.name, file_name: s.fileName, mime: 'application/pdf', data: bytesToBase64(makePdf(imgs)), note: s.note, key: s.key } });
+      } catch (e) { failed.push({ job, error: e instanceof Error ? e.message : String(e) }); }
+      rendered++;
+      onStep(sent, jobs.length, `Đang tạo PDF ${rendered}/${jobs.length} · đã lưu ${sent}`);
+    }
+  };
+  // 2) Gửi lô: lấy các tệp đã dựng xong, tối đa 10 tệp / ~6 MB mỗi lô; 6 lô cùng lúc
+  const take = () => { const L: typeof ready = []; let b = 0; while (ready.length && L.length < BATCH && (b === 0 || b + String(ready[0]!.item.data).length < MAX_BYTES)) { const x = ready.shift()!; b += String(x.item.data).length; L.push(x); } return L; };
+  let renderDone = false;
+  const upload = async () => {
+    for (;;) {
+      if (fatal) return;
+      const L = take();
+      if (!L.length) { if (renderDone) return; await new Promise((r) => setTimeout(r, 120)); continue; }
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const r = await drive<{ old_script: boolean; results: ({ id: string } | { error: string })[] }>({ action: 'put_many', items: L.map((x) => x.item) });
+          if (r.old_script) oldScript = true;
+          L.forEach((x, i) => { const v = r.results[i]; if (v && 'id' in v && v.id) ok.push(x.job); else failed.push({ job: x.job, error: (v as { error?: string } | undefined)?.error ?? 'Không lưu được' }); });
+          break;
+        } catch (e) {
+          if (!transient(e)) { fatal = e instanceof Error ? e.message : String(e); L.forEach((x) => failed.push({ job: x.job, error: fatal! })); return; }
+          if (attempt >= RETRY_WAIT.length) { L.forEach((x) => failed.push({ job: x.job, error: e instanceof Error ? e.message : String(e) })); break; }
+          await new Promise((ok2) => setTimeout(ok2, RETRY_WAIT[attempt]! * (0.8 + Math.random() * 0.4)));
+        }
+      }
+      sent += L.length;
+      onStep(sent, jobs.length, `Đã lưu ${sent}/${jobs.length} tệp lên Google Drive`);
+    }
+  };
+  const ups = Array.from({ length: 6 }, upload);
+  await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, render));
+  renderDone = true;
+  await Promise.all(ups);
+  if (fatal) { for (const j of jobs.slice(next)) failed.push({ job: j, error: fatal }); for (const x of ready.splice(0)) failed.push({ job: x.job, error: fatal }); }
+  return { ok, failed, oldScript };
+}

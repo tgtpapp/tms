@@ -49,7 +49,7 @@ async function perms(user: SupabaseClient): Promise<Set<string>> {
   return new Set(((data ?? []) as { permission_code: string }[]).map((p) => p.permission_code));
 }
 
-interface Folder { id: string; parent_id: string | null; name: string }
+interface Folder { id: string; parent_id: string | null; name: string; drive_id?: string | null; drive_path?: string | null }
 const pathOf = (all: Folder[], id: string | null) => {
   const out: string[] = [];
   let cur = all.find((f) => f.id === id);
@@ -106,6 +106,77 @@ Deno.serve(async (req) => {
       if (ins.error) { await gas(cfg, { action: 'hs_del', id: r.id }).catch(() => undefined); throw new HttpError(400, ins.error.message); }
       if (b.replace_id) await user.from('archive_items').update({ is_old: true, replaced_by: ins.data.id }).eq('id', String(b.replace_id));
       return json(200, { id: ins.data.id });
+    }
+
+    // Lưu nhiều tệp một lần (lưu hồ sơ hàng loạt): 1 lần gọi Apps Script cho cả lô, ghi thẳng vào thư mục Drive đã biết mã.
+    // items: [{folder_id, name, file_name, mime, data, note, key}] – key: mã giấy (ghi [key] cuối ghi chú), có bản cũ cùng mã thì ẩn bản cũ.
+    if (b.action === 'put_many') {
+      need(['archive.add']);
+      const items = Array.isArray(b.items) ? b.items as Record<string, unknown>[] : [];
+      if (!items.length || items.length > 25) throw new HttpError(400, 'Mỗi lần gửi 1–25 tệp');
+      let size = 0;
+      for (const x of items) { const d = typeof x.data === 'string' ? x.data : ''; if (!d || d.length > MAX_B64) throw new HttpError(413, 'Tệp trống hoặc quá lớn'); size += d.length; }
+      if (size > 40_000_000) throw new HttpError(413, 'Lô tệp quá lớn');
+      const all = await user.from('archive_folders').select('id, parent_id, name, drive_id, drive_path');
+      if (all.error) throw new HttpError(403, 'Không đọc được thư mục');
+      const F = (all.data ?? []) as Folder[];
+      const fids = [...new Set(items.map((x) => String(x.folder_id ?? '')))];
+      if (fids.some((id) => !F.some((f) => f.id === id))) throw new HttpError(404, 'Không tìm thấy thư mục');
+      // Mã thư mục Drive: dùng lại nếu đường dẫn không đổi; chưa có thì hỏi Apps Script 1 lần cho cả lô
+      const dir = new Map<string, string>(), ask: { id: string; path: string[] }[] = [];
+      for (const id of fids) {
+        const f = F.find((x) => x.id === id)!, path = pathOf(F, id);
+        if (f.drive_id && f.drive_path === path.join('/')) dir.set(id, f.drive_id); else ask.push({ id, path });
+      }
+      let oldScript = false;
+      if (ask.length) {
+        try {
+          const r = await gas(cfg, { action: 'hs_dirs', paths: ask.map((x) => x.path) }, 120000);
+          const ids = (r.ids ?? []) as string[];
+          for (let i = 0; i < ask.length; i++) {
+            if (!ids[i]) continue;
+            dir.set(ask[i]!.id, ids[i]!);
+            await admin.from('archive_folders').update({ drive_id: ids[i], drive_path: ask[i]!.path.join('/') }).eq('tenant_id', t.data).eq('id', ask[i]!.id);
+          }
+        } catch (e) {
+          if (!/Lệnh không hợp lệ/i.test((e as Error).message)) throw e;
+          oldScript = true;   // Apps Script bản cũ: lưu từng tệp như trước (chậm hơn)
+        }
+      }
+      const up: ({ id: string; url?: string; size?: number } | { error: string })[] = [];
+      if (!oldScript) {
+        const r = await gas(cfg, { action: 'hs_put_many', files: items.map((x) => ({ dir: dir.get(String(x.folder_id)), name: String(x.file_name ?? 'tep').slice(0, 200), mime: String(x.mime ?? 'application/pdf'), data: x.data })) }, 180000);
+        up.push(...((r.files ?? []) as typeof up));
+      } else {
+        for (let i = 0; i < items.length; i += 4) {
+          up.push(...await Promise.all(items.slice(i, i + 4).map((x) => gas(cfg, { action: 'hs_put', path: pathOf(F, String(x.folder_id)), name: String(x.file_name ?? 'tep').slice(0, 200), mime: String(x.mime ?? 'application/pdf'), data: x.data }, 180000)
+            .then((r) => ({ id: String(r.id), url: String(r.url ?? ''), size: Number(r.size ?? 0) }), (e) => ({ error: (e as Error).message })))));
+        }
+      }
+      // Ghi hồ sơ cho các tệp đã lên Drive
+      const okIdx = items.map((_, i) => i).filter((i) => up[i] && 'id' in up[i]!);
+      const rows = okIdx.map((i) => {
+        const x = items[i]!, u = up[i] as { id: string; url?: string; size?: number }, fileName = String(x.file_name ?? 'tep').slice(0, 200);
+        return { folder_id: String(x.folder_id), kind: 'file', name: String(x.name ?? fileName).slice(0, 300), drive_id: u.id, drive_url: u.url ?? '', file_name: fileName,
+          mime: String(x.mime ?? ''), size_bytes: Number(u.size ?? 0) || null, expires_on: null, note: `${String(x.note ?? '')}${x.key ? ` [${String(x.key)}]` : ''}`.trim() || null };
+      });
+      const ins = rows.length ? await user.from('archive_items').insert(rows).select('id, folder_id, note, name') : { data: [], error: null };
+      if (ins.error) {
+        await Promise.all(okIdx.map((i) => gas(cfg, { action: 'hs_del', id: (up[i] as { id: string }).id }).catch(() => undefined)));
+        throw new HttpError(400, ins.error.message);
+      }
+      const made = (ins.data ?? []) as { id: string; folder_id: string; note: string | null; name: string }[];
+      // Bản cũ cùng mã giấy (hoặc cùng tên, lưu kiểu cũ không có mã) trong thư mục: ẩn, trỏ sang bản mới
+      const cur = await user.from('archive_items').select('id, folder_id, note, name').in('folder_id', fids).eq('is_old', false);
+      const newIds = new Set(made.map((m) => m.id));
+      for (const m of made) {
+        const key = /\[([^\]]+)\]\s*$/.exec(m.note ?? '')?.[1];
+        const old = ((cur.data ?? []) as typeof made).filter((o) => !newIds.has(o.id) && o.folder_id === m.folder_id
+          && ((!!key && (o.note ?? '').includes(`[${key}]`)) || (!(o.note ?? '').includes('[') && o.name === m.name)));
+        if (old.length) await user.from('archive_items').update({ is_old: true, replaced_by: m.id }).in('id', old.map((o) => o.id));
+      }
+      let k = 0;
+      return json(200, { old_script: oldScript, results: items.map((_, i) => (up[i] && 'id' in up[i]! ? { id: made[k++]?.id } : { error: (up[i] as { error?: string } | undefined)?.error ?? 'Không lưu được' })) });
     }
 
     if (b.action === 'del') {

@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast';
 import { DRIVE_SCRIPT, drive } from '../lib/drive';
 
 interface St { configured: boolean; url: string | null; updated_at: string | null }
-interface Ping { used: number; limit: number; folder: string; name: string }
+interface Ping { used: number; limit: number; folder: string; name: string; ver?: number }
 const mb = (n: number) => (n >= 1073741824 ? `${(n / 1073741824).toFixed(2)} GB` : `${Math.round(n / 1048576)} MB`);
 
 export function DriveSettings() {
@@ -61,6 +61,7 @@ export function DriveSettings() {
       {ping && (
         <p className="small state-con_han">Drive đã dùng {mb(ping.used)}{ping.limit ? ` / ${mb(ping.limit)}` : ''} · thư mục gốc{' '}
           <a href={ping.folder} target="_blank" rel="noopener noreferrer">{ping.name}</a></p>
+        {(ping.ver ?? 0) < 3 && <p className="small error-text">Mã Apps Script đang là bản cũ nên lưu hồ sơ hàng loạt chậm. Chép lại mã bên dưới vào script.google.com (giữ dòng MA_KET_NOI của bạn), rồi Triển khai → Quản lý bản triển khai → bút chì → Phiên bản: Phiên bản mới → Triển khai.</p>}
       )}
       <div className="grid2">
         <label>Địa chỉ Web app<input value={f.url} autoComplete="off" onChange={(e) => setF({ ...f, url: e.target.value.trim() })} placeholder="https://script.google.com/macros/s/…/exec" /></label>

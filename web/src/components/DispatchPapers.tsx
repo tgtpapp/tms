@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
 import { fmtDate } from './Documents';
-import { assignPages, driversOf, loadDay, missing, monthPath, newCache, resetFolders, safetyPage, savePdf, transient, type DayData } from '../lib/dispatchPapers';
+import { assignPages, driversOf, loadDay, missing, monthPath, newCache, resetFolders, safetyPage, savePdfMany, type DayData, type PdfSpec } from '../lib/dispatchPapers';
 import { errMsg } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -17,7 +17,7 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<string[] | null>(null);
-  const [retry, setRetry] = useState<{ label: string; run: () => Promise<void>; kind: 'pc' | 'nt' }[]>([]);
+  const [retry, setRetry] = useState<{ label: string; spec: () => PdfSpec; kind: 'pc' | 'nt' }[]>([]);
   const [view, setView] = useState<{ d: DayData; html: { h: string; land: boolean }[] } | null>(null);
 
   async function preview() {
@@ -51,44 +51,31 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
         if (!data || !data.rows.length) continue;
         const d = data.day, m = missing(data);
         if (m.length && !force) { miss.push(`${fmtDate(d)}: ${m.join('; ')}`); continue; }
-        if (pc) jobs.push({ kind: 'pc', label: `bảng phân công ${fmtDate(d)}`, run: () => savePdf(monthPath(d, 'Bảng phân công lịch tài & xe'),
-          `Bảng phân công lịch tài & xe ngày ${fmtDate(d)}`, `Bang phan cong ${d}.pdf`, assignPages(data).map((html) => ({ html, land: true })),
-          `Lưu từ Điều hành (${data.rows.length} chuyến)`, `pc:${d}`) });
-        if (nt) for (const x of driversOf(data)) jobs.push({ kind: 'nt', label: `nghiệm thu ${x.p.name} ${fmtDate(d)}`, run: () => savePdf(monthPath(d, 'Nghiệm thu an toàn'),
-          `Nghiệm thu an toàn ${fmtDate(d)} · ${x.p.name}`, `${x.no.replace(/\//g, '_')}.pdf`, [{ html: safetyPage(data, x), land: false }],
-          `${x.rows.length} chuyến · Kết luận: ĐẠT`, `ntat:${d}:${x.p.id}`) });
+        if (pc) jobs.push({ kind: 'pc', label: `bảng phân công ${fmtDate(d)}`, spec: () => ({ path: monthPath(d, 'Bảng phân công lịch tài & xe'),
+          name: `Bảng phân công lịch tài & xe ngày ${fmtDate(d)}`, fileName: `Bang phan cong ${d}.pdf`, pages: assignPages(data).map((html) => ({ html, land: true })),
+          note: `Lưu từ Điều hành (${data.rows.length} chuyến)`, key: `pc:${d}` }) });
+        if (nt) for (const x of driversOf(data)) jobs.push({ kind: 'nt', label: `nghiệm thu ${x.p.name} ${fmtDate(d)}`, spec: () => ({ path: monthPath(d, 'Nghiệm thu an toàn'),
+          name: `Nghiệm thu an toàn ${fmtDate(d)} · ${x.p.name}`, fileName: `${x.no.replace(/\//g, '_')}.pdf`, pages: [{ html: safetyPage(data, x), land: false }],
+          note: `${x.rows.length} chuyến · Kết luận: ĐẠT`, key: `ntat:${d}:${x.p.id}` }) });
       }
       setBusy(`Đang đọc lịch chạy ${Math.min(i + 4, days.length)}/${days.length} ngày…`);
     }
     await runJobs(jobs, log, miss);
   }
-  type Job = { label: string; run: () => Promise<void>; kind: 'pc' | 'nt' };
-  /** Tạo PDF và lưu lên Google Drive, 4 tệp cùng lúc (mỗi tệp tự thử lại khi mạng / máy chủ bận). Mục lỗi giữ lại để bấm "Lưu lại". */
+  type Job = { label: string; spec: () => PdfSpec; kind: 'pc' | 'nt' };
+  /** Dựng PDF song song và gửi theo lô lên Google Drive (mỗi lô tự thử lại khi mạng / máy chủ bận). Mục lỗi giữ lại để bấm "Lưu lại". */
   async function runJobs(jobs: Job[], log: string[] = [], miss: string[] = []) {
-    let done = 0, okPc = 0, okNt = 0, stop = false, next = 0;
-    const failed: Job[] = [];
-    const worker = async () => {
-      while (next < jobs.length) {
-        const j = jobs[next++]!;
-        if (stop) { failed.push(j); continue; }
-        try {
-          await j.run();
-          if (j.kind === 'pc') okPc++; else okNt++;
-        } catch (e) {
-          log.push(`${j.label}: ${errMsg(e)}`);
-          failed.push(j);
-          if (!transient(e)) stop = true;   // lỗi cấu hình / quyền: dừng, không thử tiếp vô ích
-        }
-        done++;
-        setBusy(`Đang lưu ${done}/${jobs.length} tệp lên Google Drive…`);
-      }
-    };
-    if (jobs.length) { setBusy(`Đang lưu 0/${jobs.length} tệp lên Google Drive…`); await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, worker)); }
+    const t0 = Date.now();
+    setBusy(`Đang tạo PDF 0/${jobs.length}…`);
+    const r = jobs.length ? await savePdfMany(jobs, (_d, _t, phase) => setBusy(`${phase}…`)) : { ok: [], failed: [], oldScript: false };
     setBusy(null);
-    setRetry(failed);
-    const msg = `Đã lưu ${okPc} bảng phân công, ${okNt} bản nghiệm thu an toàn${failed.length ? ` · ${failed.length} tệp chưa lưu được` : ''}`;
-    setOut([msg, ...(miss.length ? [`${miss.length} ngày còn chuyến thiếu xe / lái xe (chưa lưu):`, ...miss] : []), ...log.slice(-30)]);
-    toast(failed.length ? 'error' : 'ok', msg);
+    const okPc = r.ok.filter((j) => j.kind === 'pc').length, okNt = r.ok.length - okPc;
+    for (const f of r.failed) log.push(`${f.job.label}: ${f.error}`);
+    setRetry(r.failed.map((f) => f.job));
+    const msg = `Đã lưu ${okPc} bảng phân công, ${okNt} bản nghiệm thu an toàn trong ${Math.round((Date.now() - t0) / 1000)} giây${r.failed.length ? ` · ${r.failed.length} tệp chưa lưu được` : ''}`;
+    setOut([msg, ...(r.oldScript ? ['Mã Apps Script trên Google Drive đang là bản cũ nên lưu chậm: vào Cấu hình → Kho hồ sơ Google Drive, chép lại mã mới và triển khai phiên bản mới.'] : []),
+      ...(miss.length ? [`${miss.length} ngày còn chuyến thiếu xe / lái xe (chưa lưu):`, ...miss] : []), ...log.slice(-30)]);
+    toast(r.failed.length ? 'error' : 'ok', msg);
   }
 
 

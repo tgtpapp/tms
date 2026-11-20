@@ -49,6 +49,8 @@ function doPost(e) {
     if (String(b.key) !== String(MA_KET_NOI)) throw new Error('Sai mã kết nối');
     if (b.action === 'ping') out = ping_();
     else if (b.action === 'hs_put') out = put_(b);
+    else if (b.action === 'hs_dirs') out = dirs_(b);
+    else if (b.action === 'hs_put_many') out = putMany_(b);
     else if (b.action === 'hs_get') out = get_(b);
     else if (b.action === 'hs_del') out = del_(b);
     else throw new Error('Lệnh không hợp lệ: ' + b.action);
@@ -64,13 +66,31 @@ function gop_(src, dst) {
 }
 function goc_() { var L = ds_(DriveApp.getFoldersByName(THU_MUC_GOC)); if (!L.length) return DriveApp.createFolder(THU_MUC_GOC); for (var i = 1; i < L.length; i++) gop_(L[i], L[0]); return L[0]; }
 function con_(cha, ten) { ten = String(ten).replace(/[\\\/]/g, '-').trim() || '_'; var L = ds_(cha.getFoldersByName(ten)); if (!L.length) return cha.createFolder(ten); for (var i = 1; i < L.length; i++) gop_(L[i], L[0]); return L[0]; }
-function ping_() { var g = goc_(); return { ok: true, ver: 2, used: DriveApp.getStorageUsed(), limit: DriveApp.getStorageLimit(), folder: g.getUrl(), name: g.getName() }; }
+function ping_() { var g = goc_(); return { ok: true, ver: 3, used: DriveApp.getStorageUsed(), limit: DriveApp.getStorageLimit(), folder: g.getUrl(), name: g.getName() }; }
 function put_(b) {
   var k = LockService.getScriptLock(), f; k.waitLock(30000);
   try { f = goc_(); (b.path || []).forEach(function (n) { f = con_(f, n); }); } finally { k.releaseLock(); }
   var blob = Utilities.newBlob(Utilities.base64Decode(b.data), b.mime || 'application/octet-stream', b.name || 'tep');
   var file = f.createFile(blob);
   return { ok: true, id: file.getId(), url: file.getUrl(), size: file.getSize() };
+}
+// Lưu nhanh hàng loạt: tìm / tạo các thư mục 1 lần (có khóa), rồi ghi thẳng tệp vào thư mục theo mã (không khóa, chạy song song được)
+function dirs_(b) {
+  var k = LockService.getScriptLock(); k.waitLock(30000);
+  try {
+    var g = goc_(), memo = {};
+    return { ok: true, ids: (b.paths || []).map(function (p) { var f = g, key = ''; p.forEach(function (n) { key += '/' + n; f = memo[key] || (memo[key] = con_(f, n)); }); return f.getId(); }) };
+  } finally { k.releaseLock(); }
+}
+function putMany_(b) {
+  var dirs = {};
+  return { ok: true, files: (b.files || []).map(function (x) {
+    try {
+      var d = dirs[x.dir] || (dirs[x.dir] = DriveApp.getFolderById(x.dir));
+      var file = d.createFile(Utilities.newBlob(Utilities.base64Decode(x.data), x.mime || 'application/pdf', x.name || 'tep'));
+      return { id: file.getId(), url: file.getUrl(), size: file.getSize() };
+    } catch (e) { return { error: String(e.message || e) }; }
+  }) };
 }
 function get_(b) { var file = DriveApp.getFileById(b.id), blob = file.getBlob(); return { ok: true, name: file.getName(), mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) }; }
 function del_(b) { DriveApp.getFileById(b.id).setTrashed(true); return { ok: true }; }

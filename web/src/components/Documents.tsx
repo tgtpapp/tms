@@ -190,7 +190,7 @@ const ADD_RPC: Partial<Record<OwnerKind, { fn: string; idParam: string }>> = {
 };
 
 export function DocRow(props: {
-  def: DocTypeDef; doc?: Doc; tenantId: string; owner: DocOwner; warnDays: number; canEdit: boolean; required?: boolean;
+  def: DocTypeDef; doc?: Doc; tenantId: string; owner: DocOwner; warnDays: number; canEdit: boolean; required?: boolean; extraFiles?: string[];
   reload: () => Promise<void>; check?: (values: Values) => ReactNode;
   /** Ngày hết hạn theo Lý lịch hành nghề (khám sức khỏe / tập huấn); undefined = lý lịch không có */
   recordExp?: string | null;
@@ -275,6 +275,7 @@ export function DocRow(props: {
         </div>
         <div className="actions">
           {doc && <FilesButton files={doc.files} />}
+          {!!props.extraFiles?.length && <FilesViewButton files={props.extraFiles} label={`Xem ${props.extraFiles.length} tệp (lý lịch)`} />}
           {canEdit && mode === 'view' && (
             <>
               {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}

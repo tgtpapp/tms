@@ -1,4 +1,4 @@
-import { mergeRecordPapers, recordExpiry } from '../lib/recordPapers';
+import { mergeRecordPapers, RECORD_OF, recordExpiry } from '../lib/recordPapers';
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
@@ -13,7 +13,7 @@ import {
 } from '../components/Documents';
 import { DOC_TYPES, docTypeOf, type DocTypeDef } from '../lib/docTypes';
 import type { FieldValue } from '../lib/documents';
-import { uploadFiles } from '../lib/documents';
+import { prepareFile, uploadFiles } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -419,7 +419,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
 
   return (
     <div className="sub">
-      <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit || props.mine} />
+      <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
       <dl className="info small">
         <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
         <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
@@ -439,6 +439,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
         {STAFF_DOCS.map((def) => (
           <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
                   recordExp={recordExpiry(props.records, s.id, def.code)}
+                  extraFiles={RECORD_OF[def.code] ? props.records.filter((r) => r.staff_id === s.id && r.kind === RECORD_OF[def.code]).flatMap((r) => r.files) : undefined}
                   owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
                   required={required.includes(def.code)} reload={reload} />
         ))}
@@ -496,6 +497,21 @@ function Records(props: Common & { s: Staff }) {
   const [busy, setBusy] = useState(false);
   const mine = records.filter((r) => r.staff_id === s.id);
   const shown = mine.filter((r) => !filter || r.kind === filter);
+
+  /** Gắn ảnh / PDF vào dòng lý lịch chưa có tệp (vd giấy khám SK, giấy tập huấn chuyển từ app cũ) */
+  async function attach(r: StaffRecord, fs: File[]) {
+    if (!fs.length) return;
+    setBusy(true);
+    try {
+      const prepared = await Promise.all(fs.slice(0, 6).map(prepareFile));
+      const paths = await uploadFiles(tenantId, 'nhan_su', s.id, s.full_name, defOfKind(r.kind).code, prepared);
+      await rpc('attach_staff_record_files', { p_id: r.id, p_files: paths });
+      toast('ok', `Đã gắn ${paths.length} tệp vào lý lịch`);
+      await reload();
+    } catch (e) {
+      toast('error', errMsg(e));
+    } finally { setBusy(false); }
+  }
 
   async function save() {
     if (!form) return;
@@ -592,6 +608,11 @@ function Records(props: Common & { s: Staff }) {
                 </div>
                 <div className="actions">
                   <FilesButton files={r.files} />
+                  {canEdit && r.files.length === 0 && (
+                    <label className="btn small">📎 Gắn tệp
+                      <input type="file" accept="image/*,application/pdf" multiple hidden aria-label={`Gắn tệp lý lịch ${fmtDate(r.occurred_on)} ${d.name}`}
+                             onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; void attach(r, fs); }} /></label>
+                  )}
                   {canEdit && <button className="btn small" onClick={() => setForm({ id: r.id, code: d.code, values: recordValues(d, r), scanned: null, req: crypto.randomUUID() })}>Sửa</button>}
                 </div>
               </div>

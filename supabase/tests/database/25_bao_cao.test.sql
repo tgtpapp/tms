@@ -59,6 +59,8 @@ select throws_ok($$ select public.set_signature_has_name('giam_doc', false) $$, 
 select is((select count(*)::int from public.signature_settings), 3, 'Cùng nhà xe đọc được cài đặt chữ ký');
 select ok(not app.can_write_signature('nv_' || (select id from public.staff_members limit 1) || '.png'), 'Bán vé không tải chữ ký lái xe');
 select ok(not app.can_write_avatar((select id from public.staff_members where full_name = 'Lái xe X') || '.jpg'), 'Bán vé không đổi ảnh đại diện người khác');
+select ok(not app.can_write_signature('00000000-0000-0000-0000-0000000000b3.png'), 'Nhân viên không tự đổi chữ ký của mình');
+select throws_ok($$ select public.set_signature_has_name('00000000-0000-0000-0000-0000000000b3', true) $$, '42501', null, 'Nhân viên không tự đổi cài đặt chữ ký');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';

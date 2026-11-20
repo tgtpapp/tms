@@ -105,5 +105,27 @@ reset role;
 
 select ok(not has_function_privilege('anon', 'public.license_matrix()', 'EXECUTE'), 'Khách (anon) không gọi được license_matrix');
 
+-- ---------------------------------------------------------------- Gắn tệp vào dòng lý lịch chưa có tệp
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.attach_staff_record_files((select id from public.staff_records limit 1), array['x/nhan_su/y/a.jpg']) $$, 'P0002', null, 'Chủ B không gắn tệp vào lý lịch nhà xe A');
+reset role;
+select is((select count(*)::int from public.staff_records where staff_id = (select v from t.ids where k = 'S1') and cardinality(files) = 0) > 0, true, 'Có dòng lý lịch chưa có tệp');
+insert into t.ids select 'R1', id from public.staff_records where staff_id = (select v from t.ids where k = 'S1') and cardinality(files) = 0 limit 1;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select throws_ok($$ select public.attach_staff_record_files((select v from t.ids where k = 'R1'), array['x']) $$, '42501', null, 'Bán vé không gắn tệp lý lịch');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok(format($$ select public.attach_staff_record_files('%s', array['%s/nhan_su/00000000-0000-0000-0000-000000000099/a.jpg']) $$,
+  (select v from t.ids where k = 'R1'), (select v from t.ids where k = 'A')), '22023', null, 'Tệp phải thuộc đúng người');
+select lives_ok(format($$ select public.attach_staff_record_files('%s', array['%s/nhan_su/%s/ksk.jpg']) $$,
+  (select v from t.ids where k = 'R1'), (select v from t.ids where k = 'A'), (select v from t.ids where k = 'S1')), 'Gắn ảnh giấy khám vào dòng lý lịch');
+select is((select cardinality(files) from public.staff_records where id = (select v from t.ids where k = 'R1')), 1, 'Đã có tệp');
+select throws_ok(format($$ select public.attach_staff_record_files('%s', array['%s/nhan_su/%s/khac.jpg']) $$,
+  (select v from t.ids where k = 'R1'), (select v from t.ids where k = 'A'), (select v from t.ids where k = 'S1')), '22023', null, 'Dòng đã có tệp thì giữ nguyên');
+reset role;
+
 select * from finish();
 rollback;

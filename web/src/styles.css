@@ -671,8 +671,9 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .doc-big-pages img { width: 100%; max-width: 1000px; height: auto; background: #fff; }
 /* Xem trước tệp giấy tờ trong form */
 .fp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 6px 0; }
-.fp-thumb { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; aspect-ratio: 3 / 4; cursor: zoom-in; display: flex; align-items: center; justify-content: center; }
-.fp-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.fp-grid { align-items: start; }
+.fp-thumb { position: relative; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: #fff; overflow: hidden; cursor: zoom-in; display: flex; align-items: center; justify-content: center; min-height: 90px; }
+.fp-thumb img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; }
 .fp-thumb span { font-weight: 800; font-size: 1.4rem; color: var(--muted); }
 .fp-thumb em { position: absolute; right: 6px; bottom: 6px; font-style: normal; font-size: .75rem; background: rgba(0,0,0,.6); color: #fff; border-radius: 999px; padding: 1px 8px; }
 .fp-pop { flex-basis: 100%; width: 100%; }

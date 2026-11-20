@@ -10,7 +10,8 @@ import { Cropper } from '../components/Cropper';
 import { THEMES, useTheme, type Mode } from '../lib/theme';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
-export function AccountScreen({ ctx }: { ctx: AccountContext }) {
+/** canManage: có quyền Sửa hồ sơ Lái xe & nhân viên. Nhân viên thường không tự đổi ảnh đại diện, chữ ký (nhờ quản lý nhân sự). */
+export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext; canManage?: boolean }) {
   const toast = useToast();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -83,7 +84,7 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
             <i className="fi fi-rr-sign-out-alt" aria-hidden="true" /> Đăng xuất
           </button>
         </div>
-        {ctx.tenant_id && staffId && <StaffAvatar tenantId={ctx.tenant_id} staffId={staffId} name={ctx.full_name ?? ''} canEdit />}
+        {ctx.tenant_id && staffId && <StaffAvatar tenantId={ctx.tenant_id} staffId={staffId} name={ctx.full_name ?? ''} canEdit={canManage} />}
         {staffId === null && <div className="ava-field"><Avatar name={ctx.full_name ?? '?'} size={88} />
           <span className="small muted">Tài khoản chưa gắn với hồ sơ lái xe / nhân viên nên chưa có ảnh đại diện. Nhờ người quản lý nhân sự chọn tài khoản này trong hồ sơ của bạn (hoặc để số điện thoại hồ sơ trùng số đăng nhập).</span></div>}
         <dl className="info">
@@ -96,17 +97,19 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
         <section className="card form">
           <h2>Chữ ký của tôi</h2>
           <p className="muted small">Dùng ở mọi bản in có phần ký của bạn: lệnh vận chuyển, bảng phân công, nghiệm thu an toàn, lý lịch xe….. Chụp chữ ký trên giấy trắng, app tự xóa nền. Nền ô caro bên dưới là phần đã trong suốt.</p>
-          <label className="upload">
-            <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
-            <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { setCropping(e.target.files?.[0] ?? null); e.target.value = ''; }} />
-          </label>
+          {canManage ? (
+            <label className="upload">
+              <span>{sign ? 'Đổi ảnh chữ ký' : 'Tải ảnh chữ ký'}</span>
+              <input type="file" accept="image/*" aria-label="Ảnh chữ ký của tôi" onChange={(e) => { setCropping(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+            </label>
+          ) : <p className="small muted">Muốn đổi ảnh đại diện hoặc chữ ký, nhờ người quản lý nhân sự cập nhật trong hồ sơ của bạn.</p>}
           {sign && (
             <div className="img-x">
               <img src={sign} alt="Chữ ký của tôi" className="sign-preview clear-bg" />
-              <button type="button" className="img-x-btn" aria-label="Bỏ chữ ký này" title="Bỏ chữ ký này" onClick={() => void dropSign()}>×</button>
+              {canManage && <button type="button" className="img-x-btn" aria-label="Bỏ chữ ký này" title="Bỏ chữ ký này" onClick={() => void dropSign()}>×</button>}
             </div>
           )}
-          {sign && ctx.user_id && <SignNameToggle who={ctx.user_id} />}
+          {sign && ctx.user_id && canManage && <SignNameToggle who={ctx.user_id} />}
           {cropping && <Cropper file={cropping} title="Cắt ảnh chữ ký" onCancel={() => setCropping(null)}
                                 onDone={(f) => { setCropping(null); void pickSign(f); }} />}
         </section>

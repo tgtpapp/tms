@@ -2,7 +2,8 @@
 // Mọi thao tác qua hàm có kiểm tra quyền; nhập lại không trùng (giờ đã có, lý lịch cùng mã, hợp đồng cùng số được bỏ qua).
 import { useState } from 'react';
 import { today } from '../components/Documents';
-import { day, plateKey, stableId, str, type LegacyBackup } from '../lib/legacyImport';
+import { day, fromDataUrl, plateKey, stableId, str, type LegacyBackup } from '../lib/legacyImport';
+import { uploadFiles } from '../lib/documents';
 import { dirName, type Dir } from '../lib/routes';
 import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -154,7 +155,7 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
       // ---------------------------------------------------------------- Lý lịch hành nghề lái xe
       if (pick.ll) {
         setBusy('Đang chuyển lý lịch hành nghề…');
-        let n = 0, miss = 0;
+        let n = 0, miss = 0, nf = 0;
         for (const x of legacy.records) {
           const staffId = staffOf(str(x, 'lai')), d = day(str(x, 'ngay'));
           if (!staffId || !d || d > now) { miss++; continue; }
@@ -167,12 +168,22 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
             : null;
           if (!m) { miss++; continue; }
           try {
-            await rpc('save_staff_record', { p_id: null, p_staff_id: staffId, p_kind: m.kind, p_occurred_on: d, p_doc_no: ('doc' in m ? m.doc : '') || null,
-              p_title: m.title, p_plate: ('plate' in m ? m.plate : '') || null, p_data: m.data, p_files: [], p_request_id: await stableId(tenantId, 'lylich', str(x, 'id') || `${staffId}|${loai}|${d}`) });
+            // Ảnh / PDF đính kèm dòng lý lịch (giấy khám SK, giấy tập huấn…) nằm sẵn trong file sao lưu thì chuyển theo;
+            // ảnh trên Google Drive của app cũ không có trong file nên không chuyển được.
+            const raw = Array.isArray(x.files) ? (x.files as unknown[]).map(String) : [];
+            const blobs = raw.map(fromDataUrl).filter((f): f is NonNullable<typeof f> => f !== null).slice(0, 6);
+            const req = await stableId(tenantId, 'lylich', str(x, 'id') || `${staffId}|${loai}|${d}`);
+            const had = (await supabase.from('staff_records').select('id, files').eq('request_id', req).maybeSingle()).data as { id: string; files: string[] } | null;
+            if (had && (had.files.length || !blobs.length)) { n++; continue; }   // đã chuyển rồi
+            const paths = blobs.length ? await uploadFiles(tenantId, 'nhan_su', staffId, oldEmp.get(str(x, 'lai')) ?? 'NV', m.kind === 'suc_khoe' ? 'kham_suc_khoe' : m.kind === 'dao_tao' ? 'tap_huan' : 'ly_lich', blobs) : [];
+            if (had) await rpc('attach_staff_record_files', { p_id: had.id, p_files: paths });
+            else await rpc('save_staff_record', { p_id: null, p_staff_id: staffId, p_kind: m.kind, p_occurred_on: d, p_doc_no: ('doc' in m ? m.doc : '') || null,
+              p_title: m.title, p_plate: ('plate' in m ? m.plate : '') || null, p_data: m.data, p_files: paths, p_request_id: req });
+            if (paths.length) nf += paths.length;
             n++;
           } catch (e) { log.push(`Lý lịch ${oldEmp.get(str(x, 'lai')) ?? ''} ${d}: ${errMsg(e)}`); }
         }
-        sum.push(`${n} dòng lý lịch${miss ? ` (${miss} dòng không khớp lái xe / thiếu ngày)` : ''}`);
+        sum.push(`${n} dòng lý lịch${nf ? ` (kèm ${nf} tệp)` : ''}${miss ? ` (${miss} dòng không khớp lái xe / thiếu ngày)` : ''}`);
       }
 
       // ---------------------------------------------------------------- Hợp đồng vận chuyển

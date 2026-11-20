@@ -42,7 +42,7 @@ async function call(model: string, label: string, gen: Record<string, unknown>, 
   }
 }
 const models = [...new Set(['gemini-flash-latest', 'gemini-flash-lite-latest', ...names.filter((n) => /^gemini-[\d.]+-flash(-lite)?$/.test(n)).slice(0, 4)])];
-for (const m of models) {
+for (const m of (Deno.env.get('DO_MODELS') ? models : [])) {
   await call(m, 'chữ, budget0', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }, false);
   await call(m, 'ảnh, budget0', { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } }, true);
   await call(m, 'ảnh, mặc định', { temperature: 0, responseMimeType: 'application/json' }, true);
@@ -52,11 +52,13 @@ for (const m of models) {
 
 // Chạy đúng đường đọc giấy tờ của app (lõi doc_reader) với cấu hình thật, ảnh thử 1x1
 import { readDocument } from '../supabase/functions/_shared/doc_reader.ts';
+for (let lan = 1; lan <= 3; lan++) {
 const t1 = Date.now();
 try {
   const r = await readDocument({ docType: 'cccd', files: [{ mime: 'image/jpeg', data: JPG }, { mime: 'image/jpeg', data: JPG }], providers: ps, timeoutMs: 25000 });
-  console.log(`Đường đọc của app: dùng ${r.provider} sau ${Date.now() - t1} ms; các lần: ${r.attempts.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
+  console.log(`Lần ${lan} – đường đọc của app: dùng ${r.provider} sau ${Date.now() - t1} ms; các lần: ${r.attempts.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
 } catch (e) {
   const at = (e as { attempts?: { provider: string; ms: number; error?: string }[] }).attempts ?? [];
-  console.log(`Đường đọc của app: LỖI sau ${Date.now() - t1} ms: ${(e as Error).message}; các lần: ${at.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
+  console.log(`Lần ${lan} – đường đọc của app: LỖI sau ${Date.now() - t1} ms: ${(e as Error).message}; các lần: ${at.map((a) => `${a.provider} ${a.ms}ms ${a.error ?? 'ok'}`).join(' | ')}`);
+}
 }

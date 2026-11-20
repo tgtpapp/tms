@@ -47,7 +47,7 @@ reset role;
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b5', (select id from public.tenants where code = 'nha-xe-a'), '0900000006', 'Lái xe', 'driver') $$, 'Lái xe');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
-select is((select count(*)::int from public.my_permissions()), 0, 'Lái xe: không có ô Xem màn hình chung nào (chỉ việc của mình)');
+select is((select count(*)::int from public.my_permissions() where permission_code <> 'timesheet.view'), 0, 'Lái xe: không có ô Xem màn hình chung nào (chỉ việc của mình; bảng chấm công chỉ của mình)');
 select is((select count(*)::int from public.staff_private), 0, 'Lái xe không xem hồ sơ riêng người khác');
 reset role;
 set local role authenticated;

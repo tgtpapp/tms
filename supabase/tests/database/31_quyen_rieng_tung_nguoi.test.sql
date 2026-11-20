@@ -68,5 +68,13 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
 select is((select count(*)::int from public.staff_private), 2, 'Ô Xem tất cả: thấy hồ sơ mọi người');
 reset role;
+-- Tự gắn tài khoản với hồ sơ theo số điện thoại (hồ sơ lưu không chọn tài khoản)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa07', '{"full_name":"Bán vé 2","joined_on":"2026-01-01","phone":"0900000005"}') $$, 'Hồ sơ trùng số tài khoản Bán vé 2');
+select is((select user_id::text from public.staff_members where id = '00000000-0000-0000-0000-00000000aa07'), '00000000-0000-0000-0000-0000000000b4', 'Tự gắn tài khoản theo số điện thoại');
+select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa07', '{"full_name":"Bán vé 2","joined_on":"2026-01-01","phone":"0900000005","user_id":""}') $$, 'Sửa hồ sơ để trống ô tài khoản');
+select is((select user_id::text from public.staff_members where id = '00000000-0000-0000-0000-00000000aa07'), '00000000-0000-0000-0000-0000000000b4', 'Không bị mất gắn khi sửa');
+reset role;
 select * from finish();
 rollback;

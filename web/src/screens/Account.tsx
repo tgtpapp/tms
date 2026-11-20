@@ -1,3 +1,4 @@
+import { Avatar, StaffAvatar } from '../components/StaffAvatar';
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
 import { removeFile, signatureUrl, uploadSignature } from '../lib/documents';
@@ -14,11 +15,14 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
+  const [staffId, setStaffId] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!ctx.user_id) return;
     void supabase.from('app_users').select('phone').eq('id', ctx.user_id).maybeSingle()
       .then(({ data }) => setPhone((data as { phone: string } | null)?.phone ?? ''));
+    void supabase.from('staff_members').select('id').eq('user_id', ctx.user_id).maybeSingle()
+      .then(({ data }) => setStaffId((data as { id: string } | null)?.id ?? null));
   }, [ctx.user_id]);
 
   const [sign, setSign] = useState<string | null>(null);
@@ -77,6 +81,9 @@ export function AccountScreen({ ctx }: { ctx: AccountContext }) {
             <i className="fi fi-rr-sign-out-alt" aria-hidden="true" /> Đăng xuất
           </button>
         </div>
+        {ctx.tenant_id && staffId && <StaffAvatar tenantId={ctx.tenant_id} staffId={staffId} name={ctx.full_name ?? ''} canEdit />}
+        {staffId === null && <div className="ava-field"><Avatar name={ctx.full_name ?? '?'} size={88} />
+          <span className="small muted">Tài khoản chưa gắn với hồ sơ lái xe / nhân viên nên chưa có ảnh đại diện. Nhờ người quản lý nhân sự chọn tài khoản này trong hồ sơ của bạn (hoặc để số điện thoại hồ sơ trùng số đăng nhập).</span></div>}
         <dl className="info">
           <dt>Họ tên</dt><dd>{ctx.full_name}</dd>
           <dt>Số điện thoại</dt><dd>{phone}</dd>

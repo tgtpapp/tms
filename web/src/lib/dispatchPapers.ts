@@ -287,7 +287,7 @@ export async function savePdfMany<T extends { spec: () => PdfSpec }>(jobs: T[], 
       const job = jobs[next++]!;
       try {
         const s = job.spec(), imgs = [];
-        for (const p of s.pages) imgs.push(await pageImg(p.html, p.land));
+        for (const p of s.pages) imgs.push(await pageImg(p.html, p.land, 1.4, true));
         const folder = await ensurePath(s.path);
         ready.push({ job, item: { folder_id: folder, name: s.name, file_name: s.fileName, mime: 'application/pdf', data: bytesToBase64(makePdf(imgs)), note: s.note, key: s.key } });
       } catch (e) { failed.push({ job, error: e instanceof Error ? e.message : String(e) }); }
@@ -319,7 +319,7 @@ export async function savePdfMany<T extends { spec: () => PdfSpec }>(jobs: T[], 
       onStep(sent, jobs.length, `Đã lưu ${sent}/${jobs.length} tệp lên Google Drive`);
     }
   };
-  const ups = Array.from({ length: 6 }, upload);
+  const ups = Array.from({ length: 8 }, upload);
   await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, render));
   renderDone = true;
   await Promise.all(ups);

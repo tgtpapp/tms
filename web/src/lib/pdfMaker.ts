@@ -1,7 +1,31 @@
 // Tạo PDF không cần thư viện (như app cũ): mỗi trang HTML → ảnh (SVG foreignObject) → JPEG → ghép vào PDF A4.
 // HTML trang phải tự chứa kiểu (style inline), ảnh phải là data URL.
 
-export interface PdfPage { w: number; h: number; d: Uint8Array; land: boolean }
+export interface PdfPage { w: number; h: number; d: Uint8Array; land: boolean; idx?: boolean }
+
+// Bảng 16 màu cho giấy tờ chữ (lưu hàng loạt): 12 mức xám + đỏ, xanh dương, xanh đậm, xanh lá.
+// Ảnh 4 bit nén Flate: nhỏ hơn JPEG ~10 lần (≈20 KB / trang A4) mà chữ vẫn sắc nét.
+const PAL: [number, number, number][] = [...Array.from({ length: 12 }, (_, i) => { const v = Math.round((i * 255) / 11); return [v, v, v] as [number, number, number]; }),
+  [185, 28, 28], [29, 78, 216], [30, 58, 138], [21, 128, 61]];
+const PAL_HEX = PAL.map((c) => c.map((v) => v.toString(16).padStart(2, '0')).join('')).join('');
+const canIdx = typeof CompressionStream !== 'undefined';
+
+async function idx4(g: CanvasRenderingContext2D, w: number, h: number): Promise<Uint8Array> {
+  const d = g.getImageData(0, 0, w, h).data, rowB = Math.ceil(w / 2), out = new Uint8Array(rowB * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4, r = d[i]!, gg = d[i + 1]!, b = d[i + 2]!;
+      const mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), lum = r * 0.299 + gg * 0.587 + b * 0.114;
+      let k: number;
+      if (mx - mn < 48 || lum > 200) k = Math.round((lum / 255) * 11);
+      else { k = 12; let best = Infinity; for (let j = 12; j < 16; j++) { const c = PAL[j]!, e = (c[0] - r) ** 2 + (c[1] - gg) ** 2 + (c[2] - b) ** 2; if (e < best) { best = e; k = j; } } }
+      const o = y * rowB + (x >> 1);
+      out[o] = (out[o] ?? 0) | ((x & 1) ? k : k << 4);
+    }
+  }
+  const z = new Blob([out]).stream().pipeThrough(new CompressionStream('deflate'));
+  return new Uint8Array(await new Response(z).arrayBuffer());
+}
 const PAD = Math.round((12 / 25.4) * 96);   // lề 12 mm
 
 /** Kích thước vùng nội dung (px) của 1 trang A4 dọc / ngang. */
@@ -18,7 +42,8 @@ function measure(html: string, w: number): number {
   return h;
 }
 
-export async function pageImg(html: string, land: boolean, scale = 1.4): Promise<PdfPage> {
+/** compact: giấy tờ chữ lưu hàng loạt → ảnh 16 màu nén (tệp nhỏ, gửi nhanh). */
+export async function pageImg(html: string, land: boolean, scale = 1.4, compact = false): Promise<PdfPage> {
   const W = land ? 1123 : 794, H = land ? 794 : 1123, { w, h } = pageBox(land);
   const real = measure(html, w);
   const k = real > h ? h / real : 1;                // nội dung dài hơn trang: thu nhỏ cho vừa 1 trang
@@ -43,6 +68,7 @@ export async function pageImg(html: string, land: boolean, scale = 1.4): Promise
   g.fillStyle = '#fff';
   g.fillRect(0, 0, c.width, c.height);
   g.drawImage(img, 0, 0, c.width, c.height);
+  if (compact && canIdx) return { w: c.width, h: c.height, d: await idx4(g, c.width, c.height), land, idx: true };
   const blob = await new Promise<Blob | null>((r) => c.toBlob(r, 'image/jpeg', 0.78));
   if (!blob) throw new Error('Không tạo được ảnh trang PDF');
   return { w: c.width, h: c.height, d: new Uint8Array(await blob.arrayBuffer()), land };
@@ -63,7 +89,9 @@ export function makePdf(pages: PdfPage[]): Uint8Array {
     obj(pg, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw} ${ph}] /Resources << /XObject << /Im0 ${im} 0 R >> >> /Contents ${ct} 0 R >>`);
     obj(ct, `<< /Length ${c.length} >>\nstream\n${c}\nendstream`);
     off[im] = len;
-    put(`${im} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.d.length} >>\nstream\n`);
+    put(p.idx
+      ? `${im} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace [/Indexed /DeviceRGB 15 <${PAL_HEX}>] /BitsPerComponent 4 /Filter /FlateDecode /Length ${p.d.length} >>\nstream\n`
+      : `${im} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.d.length} >>\nstream\n`);
     put(p.d);
     put('\nendstream\nendobj\n');
   });

@@ -1,0 +1,34 @@
+name: Cập nhật giá dầu Petrolimex
+# Như app cũ: 08:00 và 15:00 giờ VN mỗi ngày, thêm 15:20 thứ Năm (kỳ điều hành giá). Giá không đổi thì chỉ ghi giờ kiểm tra.
+on:
+  schedule:
+    - cron: "0 1,8 * * *"
+    - cron: "20 8 * * 4"
+  workflow_dispatch:
+jobs:
+  gia:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Đọc giá và ghi vào database
+        run: |
+          J=$(node scripts/gia-dau.mjs)
+          echo "$J"
+          GIA=$(echo "$J" | python3 -c 'import json,sys;print(json.dumps(json.load(sys.stdin)["gia"]))')
+          SRC=$(echo "$J" | python3 -c 'import json,sys;print(json.load(sys.stdin)["source"])')
+          PW=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["SUPABASE_DB_PASSWORD"],safe=""))')
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            url="postgresql://postgres.${SUPABASE_PROJECT_REF}:${PW}@${host}:5432/postgres"
+            echo "::add-mask::$url"
+            if psql "$url" -tAc 'select 1' >/dev/null 2>&1; then
+              echo "select app.svc_set_fuel_market(:'gia'::jsonb, :'src');" | psql "$url" -v ON_ERROR_STOP=1 -v gia="$GIA" -v src="$SRC" -tA
+              exit 0
+            fi
+          done
+          echo "Không kết nối được database"; exit 1

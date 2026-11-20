@@ -917,3 +917,27 @@ table.cc { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .cc-x { margin-left: 6px; font-size: 10.5px; background: #fef3c7; color: #92400e; border-radius: 6px; padding: 1px 5px; }
 .cc-pager { justify-content: center; margin-top: 6px; }
 @media (max-width: 700px) { .cc .nm { min-width: 120px; max-width: 140px; padding: 0 6px; } .cc-wrap { max-height: none; } }
+/* Giá dầu thị trường (như app cũ) */
+.nl-mk { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; background: #fff; border: 1px solid #e6e9f0; border-radius: 14px; padding: 12px 16px; margin: 10px 0; }
+.nl-mk-h b { display: block; font-size: 13.5px; } .nl-mk-h small { color: #667085; font-size: 12px; }
+.nl-chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.nl-chip { border: 1px solid #e6e9f0; border-radius: 10px; padding: 6px 10px; min-width: 118px; background: #fafbfc; }
+.nl-chip.on { border-color: var(--primary, #2563eb); background: #eff6ff; }
+.nl-chip small { display: block; font-size: 11px; color: #667085; font-weight: 600; } .nl-chip b { font-size: 15px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.nl-chip em, .gdn-c em { font-style: normal; font-size: 11.5px; font-weight: 700; color: #98a2b3; }
+.nl-chip em.up, .gdn-c.up em { color: #dc2626; } .nl-chip em.dn, .gdn-c.dn em { color: #16a34a; }
+.nl-cmp { font-size: 12.5px; line-height: 1.5; padding: 6px 10px; border-radius: 10px; background: #f0fdf4; color: #166534; flex-basis: 100%; }
+.nl-cmp.bad { background: #fef2f2; color: #991b1b; }
+.nl-mk.empty-mk { color: #667085; font-size: 13px; }
+.nl-info { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; font-size: 13px; line-height: 1.6; margin: 6px 0; }
+.gdn-push { position: fixed; top: 16px; right: 16px; z-index: 390; width: 400px; max-width: calc(100vw - 24px); background: #fff; border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(2, 32, 71, .28); border: 1px solid #e2e8f0; border-left: 4px solid #22c55e; overflow: hidden; }
+.gdn-push.up { border-left-color: #ef4444; }
+.gdn-ph { display: flex; gap: 10px; align-items: flex-start; padding: 12px 10px 6px 14px; } .gdn-ph > div { flex: 1; }
+.gdn-ph small { display: block; font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; } .gdn-ph b { display: block; font-size: 15px; } .gdn-ph span { font-size: 12px; color: #64748b; }
+.gdn-cs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 4px 14px 10px; }
+.gdn-c { border: 1px solid #e6e9f0; border-radius: 10px; padding: 6px 10px; background: #fafbfc; } .gdn-c.my { border-color: var(--primary, #2563eb); background: #eff6ff; }
+.gdn-c small { display: block; font-size: 11px; color: #667085; font-weight: 600; } .gdn-c b { font-size: 15px; margin-right: 6px; }
+.gdn-imp { margin: 0 14px 10px; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; background: #fef2f2; color: #991b1b; } .gdn-imp.dn { background: #f0fdf4; color: #166534; }
+.gdn-pf { display: flex; gap: 6px; justify-content: flex-end; padding: 8px 14px 12px; border-top: 1px solid #f1f5f9; }
+@media (max-width: 700px) { .gdn-push { top: auto; bottom: 80px; left: 12px; right: 12px; width: auto; } }

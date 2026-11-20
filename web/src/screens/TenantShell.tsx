@@ -17,6 +17,7 @@ import { DocsScreen } from './Docs';
 import { LaborScreen } from './Labor';
 import { TimesheetScreen } from './Timesheet';
 import { SafetyScreen } from './Safety';
+import { FuelPriceAlert } from '../components/FuelPriceAlert';
 import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
@@ -159,6 +160,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'labor' && <LaborScreen ctx={ctx} perms={perms} />}
           {tab === 'timesheet' && <TimesheetScreen ctx={ctx} perms={perms} />}
           {tab === 'safety' && <SafetyScreen ctx={ctx} perms={perms} />}
+          {perms.has('fuel.view') && ctx.tenant_id && <FuelPriceAlert tenantId={ctx.tenant_id} onOpen={() => setTab('fuel')} />}
           {tab === 'repairs' && <RepairsScreen ctx={ctx} perms={perms} />}
           {tab === 'fuel' && <FuelScreen ctx={ctx} perms={perms} />}
           {tab === 'km' && <VehicleKmScreen perms={perms} />}

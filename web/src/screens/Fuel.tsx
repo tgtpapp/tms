@@ -1,10 +1,11 @@
 // Nhiên liệu (như app cũ): nhập dầu vào bồn, cấp dầu từ bồn cho xe, đổ ngoài cây xăng; tồn bồn, giá bình quân, tiêu hao theo xe.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
 import { prepareFile, uploadFiles } from '../lib/documents';
-import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
+import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, fuelSort, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
+import { loadMarket, MK, mkChanges, mkKey, mkPrice, mkWhen, type Market } from '../lib/fuelMarket';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, fetchAll, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -12,7 +13,7 @@ import { useToast } from '../lib/toast';
 interface Veh { id: string; plate: string; is_active: boolean; fuel_norm: number | null }
 interface Drv { id: string; full_name: string; position: string; is_active: boolean }
 interface Form { id: string | null; kind: FuelKind; entry_date: string; entry_time: string; vehicle_id: string; driver_id: string; odo_km: string; liters: string;
-  unit_price: string; supplier: string; invoice_no: string; note: string; files: string[]; add: File[] }
+  unit_price: string; supplier: string; invoice_no: string; note: string; files: string[]; add: File[]; market_price: boolean }
 
 const num = (n: number, d = 0) => n.toLocaleString('vi-VN', { maximumFractionDigits: d });
 const money = (n: number) => `${num(Math.round(n))} đ`;
@@ -21,7 +22,7 @@ const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number); ret
 
 export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
-  const canEdit = perms.has('vehicle.manage');
+  const canAdd = perms.has('fuel.add'), canEdit = perms.has('fuel.edit'), canDel = perms.has('fuel.delete');
   const [rows, setRows] = useState<FuelEntry[]>([]);
   const [set, setSet] = useState<FuelSettings>(DEFAULT_FUEL);
   const [vehicles, setVehicles] = useState<Veh[]>([]);
@@ -32,12 +33,15 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [kind, setKind] = useState<FuelKind | ''>('');
   const [f, setF] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mk, setMk] = useState<Market | null>(null);
+  const [mkEdit, setMkEdit] = useState<Record<string, string> | null>(null);
+  const [mkAt, setMkAt] = useState('');
 
   const load = useCallback(async () => {
     const [e, s, v, d] = await Promise.all([
-      fetchAll<FuelEntry>(() => supabase.from('fuel_entries').select('id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files').order('id'))
+      fetchAll<FuelEntry>(() => supabase.from('fuel_entries').select('id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files, market_price').order('id'))
         .then((data) => ({ data, error: null }), (err: Error) => ({ data: null, error: err })),
-      supabase.from('fuel_settings').select('tank_name, fuel_type, capacity_l, opening_l, opening_price, opening_on, alert_l').maybeSingle(),
+      supabase.from('fuel_settings').select('tank_name, fuel_type, capacity_l, opening_l, opening_price, opening_on, alert_l, issue_price_mode').maybeSingle(),
       supabase.from('vehicles').select('id, plate, is_active, fuel_norm').order('plate'),
       supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name'),
     ]);
@@ -46,6 +50,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     if (s.data) setSet({ ...(s.data as FuelSettings), capacity_l: Number(s.data.capacity_l), opening_l: Number(s.data.opening_l), alert_l: Number(s.data.alert_l) });
     setVehicles(((v.data ?? []) as Veh[]).map((x) => ({ ...x, fuel_norm: x.fuel_norm == null ? null : Number(x.fuel_norm) })));
     setDrivers((d.data ?? []) as Drv[]);
+    setMk(await loadMarket().catch(() => null));
   }, [toast]);
   useEffect(() => { void load(); }, [load]);
 
@@ -61,9 +66,16 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   function open(r: FuelEntry | null, k: FuelKind = 'bon') {
     if (r) setF({ id: r.id, kind: r.kind, entry_date: r.entry_date, entry_time: r.entry_time ?? '', vehicle_id: r.vehicle_id ?? '', driver_id: r.driver_id ?? '',
       odo_km: r.odo_km?.toString() ?? '', liters: String(r.liters), unit_price: r.unit_price?.toString() ?? '', supplier: r.supplier ?? '', invoice_no: r.invoice_no ?? '',
-      note: r.note ?? '', files: r.files, add: [] });
-    else setF({ id: null, kind: k, entry_date: today(), entry_time: nowTime(), vehicle_id: k === 'nhap' ? '' : veh, driver_id: '', odo_km: '', liters: '',
-      unit_price: k === 'bon' ? '' : String(k === 'nhap' ? Math.round(led.avg) || '' : ''), supplier: '', invoice_no: '', note: '', files: [], add: [] });
+      note: r.note ?? '', files: r.files, add: [], market_price: !!r.market_price });
+    else {
+      // Như app cũ: nhập bồn lấy nhà cung cấp + giá lần nhập trước; đổ ngoài lấy cây xăng lần trước + giá niêm yết;
+      // cấp từ bồn lấy giá niêm yết (Thiết lập chọn "giá niêm yết") hoặc để trống = giá bình quân bồn.
+      const last = led.list.filter((r) => r.kind === k).slice(-1)[0], mp = mkPrice(mk, set.fuel_type);
+      const useMk = (k === 'bon' && set.issue_price_mode === 'tt' && mp > 0) || (k === 'ngoai' && mp > 0);
+      const price = useMk ? String(mp) : k === 'nhap' && last?.unit_price ? String(last.unit_price) : k === 'ngoai' && last?.unit_price ? String(last.unit_price) : '';
+      setF({ id: null, kind: k, entry_date: today(), entry_time: nowTime(), vehicle_id: k === 'nhap' ? '' : veh, driver_id: '', odo_km: '', liters: '',
+        unit_price: price, supplier: k !== 'bon' ? last?.supplier ?? '' : '', invoice_no: '', note: '', files: [], add: [], market_price: useMk });
+    }
   }
   async function save() {
     if (!f || !ctx.tenant_id) return;
@@ -75,7 +87,8 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         const owner = f.kind === 'nhap' || !f.vehicle_id ? 'bon-dau' : f.vehicle_id;
         files = [...files, ...(await uploadFiles(ctx.tenant_id, 'xe', owner, f.kind === 'nhap' ? 'BON' : plate(f.vehicle_id), 'nhien_lieu', prepared))];
       }
-      await rpc('save_fuel', { p_id: f.id, p: { ...f, add: undefined, files } });
+      const mp = mkPrice(mk, set.fuel_type);
+      await rpc('save_fuel', { p_id: f.id, p: { ...f, add: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp } });
       toast('ok', f.id ? 'Đã lưu phiếu' : `Đã thêm phiếu ${FUEL_KIND[f.kind].short.toLowerCase()}`);
       setF(null);
       await load();
@@ -106,7 +119,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       <section className="card">
         <div className="item-head">
           <h2>Nhiên liệu</h2>
-          {canEdit && <div className="actions">
+          {canAdd && <div className="actions">
             <button className="btn primary" onClick={() => open(null, 'bon')}>+ Cấp dầu từ bồn</button>
             <button className="btn" onClick={() => open(null, 'ngoai')}>+ Đổ ngoài</button>
             <button className="btn" onClick={() => open(null, 'nhap')}>+ Nhập bồn</button>
@@ -118,6 +131,9 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             · giá bình quân <b>{money(led.avg)}</b>/lít · {set.fuel_type}
             {low && <span className="badge locked">Dưới mức cảnh báo {num(set.alert_l)} lít, cần nhập thêm</span>}</div>
         </div>
+        <MarketCard mk={mk} fuelType={set.fuel_type} avg={led.avg} saved={(() => { const mp = mkPrice(mk, set.fuel_type); return mp ? led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + (mp - (led.map.get(r.id)?.price ?? 0)) * r.liters, 0) : 0; })()}
+          bonLit={led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + r.liters, 0)}
+          onEdit={canEdit ? () => { setMkEdit(Object.fromEntries(MK.map((k) => [k, mk?.gia[k] ? String(mk.gia[k]) : '']))); setMkAt(new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16)); } : undefined} />
         <div className="seg" role="tablist" aria-label="Xem">
           {([['phieu', 'Phiếu'], ['xe', 'Theo xe'], ['cai', 'Thiết lập']] as const).map(([k, l]) =>
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
@@ -152,12 +168,12 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                         <FilesViewButton files={r.files} label={`Xem ${r.files.length} chứng từ`} /></td>
                       <td>{r.odo_km ? num(r.odo_km) : ''}{m?.km ? <div className="small muted">+{num(m.km)} km</div> : null}</td>
                       <td className={r.kind === 'nhap' ? 'ok-text' : ''}><b>{r.kind === 'nhap' ? '+' : ''}{num(r.liters, 2)}</b></td>
-                      <td>{m ? num(Math.round(m.price)) : ''}{r.kind === 'bon' && r.unit_price == null && <div className="small muted">bình quân</div>}</td>
+                      <td>{m ? num(Math.round(m.price)) : ''}{r.kind === 'bon' && r.unit_price == null && <div className="small muted">bình quân</div>}{r.market_price && <div className="small muted">niêm yết</div>}</td>
                       <td>{m ? num(m.amount) : ''}</td>
                       <td>{m?.per100 ? <span className={`badge${lv === 'bad' ? ' locked' : lv === 'warn' ? ' warn-badge' : ''}`}>{num(m.per100, 1)} L/100km</span> : ''}</td>
                       <td className="small">{r.kind !== 'ngoai' && m ? num(m.tank, 2) : ''}</td>
-                      <td className="hs-act">{canEdit && <><button className="btn small" onClick={() => open(r)}>Sửa</button>
-                        <button className="btn small link danger-text" onClick={() => void del(r)}>Xóa</button></>}</td>
+                      <td className="hs-act">{canEdit && <button className="btn small" onClick={() => open(r)}>Sửa</button>}
+                        {canDel && <button className="btn small link danger-text" onClick={() => void del(r)}>Xóa</button>}</td>
                     </tr>
                   );
                 })}
@@ -213,7 +229,7 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
               {f.kind !== 'bon' && <label>Số hóa đơn<input value={f.invoice_no} onChange={(e) => setF({ ...f, invoice_no: e.target.value })} /></label>}
               <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
             </div>
-            <p className="small"><b>Thành tiền: {money((Number(f.liters) || 0) * (Number(f.unit_price) || (f.kind === 'bon' ? led.avg : 0)))}</b></p>
+            <FuelInfo f={f} rows={rows} set={set} mk={mk} plate={plate} norm={vehicles.find((v) => v.id === f.vehicle_id)?.fuel_norm ?? null} />
             <label>Ảnh hóa đơn / trụ bơm / phiếu
               <input type="file" multiple accept="image/*,application/pdf" onChange={(e) => setF({ ...f, add: [...f.add, ...Array.from(e.target.files ?? [])] })} />
             </label>
@@ -226,8 +242,75 @@ export function FuelScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           </div>
         </Modal>
       )}
+      {mkEdit && (
+        <Modal title="Nhập giá bán lẻ Petrolimex (vùng 1)" onClose={() => setMkEdit(null)}>
+          <div className="form">
+            <p className="small muted">Dùng khi app không tự cập nhật được giá. Nhập giá niêm yết, đơn vị đ/lít. Lần tự cập nhật sau mới hơn thì app dùng lại giá tự cập nhật.</p>
+            <div className="grid2">
+              {MK.map((k) => <label key={k}>{k}<input inputMode="numeric" aria-label={`Giá ${k}`} value={mkEdit[k] ?? ''} onChange={(e) => setMkEdit({ ...mkEdit, [k]: e.target.value.replace(/\D/g, '') })} /></label>)}
+              <label>Hiệu lực từ<input type="datetime-local" value={mkAt} onChange={(e) => setMkAt(e.target.value)} /></label>
+            </div>
+            <div className="actions"><button type="button" className="btn primary" disabled={busy} onClick={() => void (async () => {
+              const gia = Object.fromEntries(Object.entries(mkEdit).filter(([, v]) => Number(v) > 0).map(([k, v]) => [k, Number(v)]));
+              if (!Object.keys(gia).length) return toast('error', 'Nhập ít nhất một giá');
+              try { await rpc('save_fuel_market_manual', { p_prices: gia, p_effective_at: mkAt ? `${mkAt}:00+07:00` : null }); toast('ok', 'Đã cập nhật giá dầu'); setMkEdit(null); await load(); }
+              catch (e) { toast('error', errMsg(e)); }
+            })()}>Lưu giá</button></div>
+          </div>
+        </Modal>
+      )}
     </>
   );
+}
+
+/** Giá bán lẻ Petrolimex vùng 1: từng mặt hàng (▲▼ so với kỳ trước), so giá bình quân bồn với giá niêm yết. */
+function MarketCard({ mk, fuelType, avg, saved, bonLit, onEdit }: { mk: Market | null; fuelType: string; avg: number; saved: number; bonLit: number; onEdit?: () => void }) {
+  if (!mk) return <div className="nl-mk empty-mk"><span>Chưa có giá thị trường. Giá Petrolimex tự cập nhật sau mỗi kỳ điều hành (chiều thứ Năm).</span>{onEdit && <button type="button" className="btn small" onClick={onEdit}>Nhập giá</button>}</div>;
+  const mp = mkPrice(mk, fuelType), gap = mp && avg ? mp - avg : 0;
+  return (
+    <div className="nl-mk">
+      <div className="nl-mk-h"><b>Giá bán lẻ {mk.source.replace(/\s*\(.*\)$/, '')} vùng 1</b>
+        <small>Hiệu lực từ {mkWhen(mk.hieuLuc)} · {mk.tay ? 'nhập tay lúc' : 'kiểm tra lúc'} {mkWhen(mk.capNhat)} · đ/lít</small></div>
+      <div className="nl-chips">
+        {mkChanges(mk, fuelType).map((c) => (
+          <div key={c.k} className={`nl-chip${c.my ? ' on' : ''}`} title={c.my ? 'Loại nhiên liệu của bồn công ty' : undefined}>
+            <small>{c.k}</small><b>{num(c.p)}</b>{c.df ? <em className={c.df > 0 ? 'up' : 'dn'}>{c.df > 0 ? '▲' : '▼'} {num(Math.abs(c.df))}</em> : <em>—</em>}
+          </div>
+        ))}
+      </div>
+      {onEdit && <button type="button" className="btn small" onClick={onEdit}>Nhập giá</button>}
+      {mp > 0 && avg > 0 && <div className={`nl-cmp ${gap >= 0 ? 'good' : 'bad'}`}>Giá bình quân bồn <b>{num(Math.round(avg))}</b> {gap >= 0 ? 'thấp hơn' : 'cao hơn'} giá niêm yết <b>{num(Math.abs(Math.round(gap)))} đ/lít</b>
+        {bonLit > 0 && Math.round(saved) !== 0 && <><br />{saved >= 0 ? 'Tiết kiệm' : 'Chi thêm'} <b>{money(Math.abs(saved))}</b> cho {num(bonLit, 2)} lít cấp từ bồn tháng này so với đổ ngoài</>}</div>}
+    </div>
+  );
+}
+
+/** Thông tin khi lập phiếu (như app cũ): tồn bồn trước / sau, giá tính cho xe, lần đổ trước, tiêu hao, so với giá Petrolimex, thành tiền. */
+function FuelInfo({ f, rows, set, mk, plate, norm }: { f: Form; rows: FuelEntry[]; set: FuelSettings; mk: Market | null; plate: (id: string | null) => string; norm: number | null }) {
+  const me: FuelEntry = { id: f.id ?? '__moi', code: f.id ? rows.find((r) => r.id === f.id)?.code ?? '' : 'zz', kind: f.kind, entry_date: f.entry_date || today(), entry_time: f.entry_time || null,
+    vehicle_id: f.vehicle_id || null, driver_id: null, odo_km: Number(f.odo_km) || null, liters: Number(f.liters) || 0, unit_price: f.unit_price === '' ? null : Number(f.unit_price), supplier: null, invoice_no: null, note: null, files: [] };
+  const others = rows.filter((r) => r.id !== me.id);
+  const L = fuelLedger([...others, me], set), x = L.map.get(me.id), before = fuelLedger([...others, { ...me, liters: 0 }], set).map.get(me.id);
+  const lines: ReactNode[] = [];
+  if (f.kind !== 'ngoai' && x) {
+    lines.push(<>{set.tank_name}: tồn trước phiếu <b>{num(before?.tank ?? 0, 2)} lít</b> → sau phiếu <b>{num(x.tank, 2)} lít</b>{set.capacity_l ? ` (${Math.round((x.tank / set.capacity_l) * 100)}% sức chứa)` : ''}</>);
+    if (f.kind === 'bon') lines.push(<>Giá tính cho xe: <b>{num(Math.round(x.price))} đ/lít</b> <span className="muted">· giá vốn bình quân bồn {num(Math.round(x.avg))} đ/lít</span></>);
+  }
+  if (f.kind !== 'nhap' && f.vehicle_id) {
+    const last = others.filter((r) => r.kind !== 'nhap' && r.vehicle_id === f.vehicle_id && fuelSort(r, me) < 0).sort(fuelSort).slice(-1)[0];
+    if (last) lines.push(<>Lần đổ trước của {plate(f.vehicle_id)}: {last.entry_date.split('-').reverse().join('/')}{last.odo_km ? ` · ${num(last.odo_km)} km` : ''} · {num(last.liters, 2)} lít</>);
+    if (me.odo_km && last?.odo_km && me.odo_km <= last.odo_km) lines.push(<span className="badge locked">Km đồng hồ phải lớn hơn lần trước ({num(last.odo_km)} km)</span>);
+    if (x?.km) lines.push(<>Đã chạy <b>{num(x.km)} km</b> từ lần đổ trước · tiêu hao <b>{num(x.per100, 1)} L/100km</b>{norm ? ` (định mức ${num(norm, 1)})` : ''}</>);
+  }
+  const mp = mkPrice(mk, set.fuel_type);
+  if (mp && mk) {
+    const g = f.kind === 'bon' ? x?.price ?? 0 : Number(f.unit_price) || 0, df = g ? g - mp : 0;
+    lines.push(<>Giá Petrolimex vùng 1 ({mkKey(set.fuel_type)}): <b>{num(mp)} đ/lít</b> <span className="muted">· hiệu lực {mkWhen(mk.hieuLuc)}</span>
+      {g && Math.abs(df) >= 1 ? <> · {f.kind === 'nhap' ? 'nhà cung cấp' : f.kind === 'bon' ? 'giá bồn' : 'cây xăng'} {df < 0 ? 'thấp hơn' : 'cao hơn'} <b className={df < 0 ? 'ok-text' : 'danger-text'}>{num(Math.abs(df))} đ/lít</b>{f.kind === 'nhap' ? ` (${num((Math.abs(df) / mp) * 100, 1)}%)` : ''}</> : null}</>);
+  }
+  const tt = Math.round((Number(f.liters) || 0) * (x?.price ?? 0));
+  if (tt) lines.push(<b>Thành tiền: {money(tt)}</b>);
+  return lines.length ? <div className="nl-info">{lines.map((l, i) => <div key={i}>{l}</div>)}</div> : null;
 }
 
 function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; vehicles: Veh[]; canEdit: boolean; onSaved: () => Promise<void> }) {
@@ -240,7 +323,7 @@ function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; veh
     try {
       const r = await supabase.from('fuel_settings').upsert({ tank_name: s.tank_name.trim() || DEFAULT_FUEL.tank_name, fuel_type: s.fuel_type.trim() || DEFAULT_FUEL.fuel_type,
         capacity_l: Number(s.capacity_l) || 0, opening_l: Number(s.opening_l) || 0, opening_price: Math.round(Number(s.opening_price) || 0),
-        opening_on: s.opening_on || null, alert_l: Number(s.alert_l) || 0 });
+        opening_on: s.opening_on || null, alert_l: Number(s.alert_l) || 0, issue_price_mode: s.issue_price_mode });
       if (r.error) throw r.error;
       for (const v of vehicles) {
         const n = norm[v.id] ? Number(norm[v.id]) : null;
@@ -268,6 +351,9 @@ function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; veh
         <label>Tồn đầu kỳ (lít)<input type="number" step="0.01" value={s.opening_l} disabled={!canEdit} onChange={(e) => setS({ ...s, opening_l: Number(e.target.value) })} /></label>
         <label>Giá tồn đầu kỳ (đ/lít)<input type="number" min={0} value={s.opening_price} disabled={!canEdit} onChange={(e) => setS({ ...s, opening_price: Number(e.target.value) })} /></label>
         <label>Ngày tồn đầu kỳ<input type="date" value={s.opening_on} disabled={!canEdit} onChange={(e) => setS({ ...s, opening_on: e.target.value })} /></label>
+        <label>Giá tính khi cấp dầu từ bồn cho xe<select value={s.issue_price_mode} disabled={!canEdit} onChange={(e) => setS({ ...s, issue_price_mode: e.target.value as 'tt' | 'bq' })}>
+          <option value="tt">Giá niêm yết Petrolimex vùng 1 (tự cập nhật)</option><option value="bq">Giá bình quân bồn (giá vốn thực tế đã mua)</option></select>
+          <span className="small muted">Chỉ áp dụng cho phiếu tạo mới. Phiếu cũ giữ nguyên giá đã ghi.</span></label>
       </div>
       <p className="small muted">Phiếu trước ngày tồn đầu kỳ không tính vào tồn bồn (vẫn tính tiêu hao). Để trống ngày = tính mọi phiếu.</p>
       <h3 className="section-title">Định mức tiêu hao từng xe (lít / 100 km)</h3>

@@ -3,8 +3,9 @@ export type FuelKind = 'nhap' | 'bon' | 'ngoai';
 export interface FuelEntry {
   id: string; code: string; kind: FuelKind; entry_date: string; entry_time: string | null; vehicle_id: string | null; driver_id: string | null;
   odo_km: number | null; liters: number; unit_price: number | null; supplier: string | null; invoice_no: string | null; note: string | null; files: string[];
+  market_price?: boolean;
 }
-export interface FuelSettings { tank_name: string; fuel_type: string; capacity_l: number; opening_l: number; opening_price: number; opening_on: string | null; alert_l: number }
+export interface FuelSettings { tank_name: string; fuel_type: string; capacity_l: number; opening_l: number; opening_price: number; opening_on: string | null; alert_l: number; issue_price_mode: 'tt' | 'bq' }
 export interface FuelRow { tank: number; avg: number; price: number; amount: number; km: number; per100: number }
 
 export const FUEL_KIND: Record<FuelKind, { label: string; short: string }> = {
@@ -12,7 +13,7 @@ export const FUEL_KIND: Record<FuelKind, { label: string; short: string }> = {
   bon: { label: 'Cấp dầu từ bồn', short: 'Cấp từ bồn' },
   ngoai: { label: 'Đổ ngoài cây xăng', short: 'Đổ ngoài' },
 };
-export const DEFAULT_FUEL: FuelSettings = { tank_name: 'Bồn dầu công ty', fuel_type: 'Dầu DO 0,05S', capacity_l: 5000, opening_l: 0, opening_price: 0, opening_on: null, alert_l: 500 };
+export const DEFAULT_FUEL: FuelSettings = { tank_name: 'Bồn dầu công ty', fuel_type: 'Dầu DO 0,05S', capacity_l: 5000, opening_l: 0, opening_price: 0, opening_on: null, alert_l: 500, issue_price_mode: 'tt' };
 
 export const fuelSort = (a: FuelEntry, b: FuelEntry) =>
   a.entry_date.localeCompare(b.entry_date) || (a.entry_time ?? '').localeCompare(b.entry_time ?? '') || a.code.localeCompare(b.code);

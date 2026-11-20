@@ -193,8 +193,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Kiểm định: Có hiệu lực đến').fill(ngay(10));
   await page.getByRole('button', { name: 'Lưu giấy tờ' }).click();
   await expect(page.getByText('Đã lưu Giấy chứng nhận kiểm định (đăng kiểm)')).toBeVisible();
-  await expect(page.getByRole('heading', { name: /^Cảnh báo giấy tờ/ })).toBeVisible();
+  // Cảnh báo ở chuông (gộp theo xe), bấm biển số mở lại hồ sơ xe
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
+  await page.getByRole('button', { name: /^Cảnh báo: \d+ việc cần xử lý của 1 xe$/ }).click();
   await expect(page.getByText(/Kiểm định: Sắp hết hạn/)).toBeVisible();
+  await page.getByRole('button', { name: 'Mở hồ sơ xe 51B-123.45' }).click();
   await page.getByRole('button', { name: 'Thêm Kiểm định' }).click();
   await page.getByLabel('Tải ảnh Kiểm định').setInputFiles(png);
   await page.getByLabel('Kiểm định: Có hiệu lực đến').fill(ngay(200));

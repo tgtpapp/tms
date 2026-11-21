@@ -419,11 +419,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await rl.locator('.c-sl input').fill('8');
   await rl.locator('.c-dg input').fill('90000');
   await expect(rl.locator('.c-tt b')).toHaveText(/720\.000/);
-  const boxes = async () => Promise.all(['.c-nd input', '.c-dvt input', '.c-sl input', '.c-dg input'].map(async (c) => (await rl.locator(c).boundingBox())!));
+  const repBoxes = async () => Promise.all(['.c-nd input', '.c-dvt input', '.c-sl input', '.c-dg input'].map(async (c) => (await rl.locator(c).boundingBox())!));
   for (const vp of [{ width: 412, height: 915 }, { width: 820, height: 1180 }, { width: 1366, height: 800 }]) {
     await page.setViewportSize(vp);
-    const b = await boxes(), dlg = (await page.locator('.rep-lines').boundingBox())!;
-    for (const x of b) { expect(x.width).toBeGreaterThan(50); expect(x.x + x.width).toBeLessThanOrEqual(dlg.x + dlg.width + 1); }
+    const b = await repBoxes(), rbox = (await page.locator('.rep-lines').boundingBox())!;
+    for (const x of b) { expect(x.width).toBeGreaterThan(50); expect(x.x + x.width).toBeLessThanOrEqual(rbox.x + rbox.width + 1); }
     if (vp.width > 720) expect(Math.abs(b[0]!.y - b[3]!.y)).toBeLessThan(4);   // máy tính / máy tính bảng: 1 hàng
     else expect(b[1]!.y).toBeGreaterThan(b[0]!.y + 20);                       // điện thoại: nội dung 1 hàng, ĐVT / SL / giá hàng dưới
     await page.screenshot({ path: `test-results/sua-chua-${vp.width}.png` });

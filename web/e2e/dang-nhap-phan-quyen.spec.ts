@@ -431,6 +431,15 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.setViewportSize({ width: 412, height: 915 });
   await page.getByRole('button', { name: 'Lưu phiếu' }).click();
   await expect(page.getByText('THAY NHỚT (x8)')).toBeVisible();
+  // danh sách trên điện thoại / máy tính bảng: dạng thẻ, không tràn ngang, nội dung đọc được
+  for (const vp of [{ width: 412, height: 915 }, { width: 820, height: 1180 }]) {
+    await page.setViewportSize(vp);
+    const card = (await page.locator('.rep-table tbody tr').first().boundingBox())!, nd = (await page.locator('.rep-table .c-nd').first().boundingBox())!;
+    expect(card.x + card.width).toBeLessThanOrEqual(vp.width);
+    expect(nd.width).toBeGreaterThan(card.width * 0.8);
+    await page.screenshot({ path: `test-results/ds-sua-chua-${vp.width}.png` });
+  }
+  await page.setViewportSize({ width: 412, height: 915 });
   await page.getByRole('button', { name: 'Sửa', exact: true }).first().click();
   await expect(page.getByLabel('ĐVT 1')).toHaveValue('LÍT');
   await page.getByRole('button', { name: 'Thôi' }).click();

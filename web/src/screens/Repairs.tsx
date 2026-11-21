@@ -111,22 +111,22 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
       <section className="card">
         {orders.length === 0 && <p className="muted">Chưa có phiếu sửa chữa.</p>}
         <div className="table-wrap">
-          <table className="plist">
+          <table className="plist rep-table">
             <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Xe</th><th>Km</th><th>Nội dung</th><th>Gara</th><th>Tiền</th><th /></tr></thead>
             <tbody>
               {orders.map((o) => {
                 const its = itemsOf(o.id);
                 return (
                   <tr key={o.id}>
-                    <td><b>{o.code}</b><div className="small muted">{KIND[o.kind]}</div></td>
-                    <td>{fmtDate(o.repaired_on)}</td>
-                    <td>{plate(o.vehicle_id)}</td>
-                    <td>{o.odo_km ? o.odo_km.toLocaleString('vi-VN') : ''}</td>
-                    <td className="small">{its.map((x) => `${x.content}${Number(x.qty) > 1 ? ` (x${x.qty})` : ''}`).join('; ')}{o.note && <div className="muted">{o.note}</div>}
+                    <td className="c-code"><b>{o.code}</b><div className="small muted">{KIND[o.kind]}</div></td>
+                    <td className="c-date" data-l="Ngày">{fmtDate(o.repaired_on)}</td>
+                    <td className="c-xe" data-l="Xe">{plate(o.vehicle_id)}</td>
+                    <td className="c-km" data-l="Km">{o.odo_km ? o.odo_km.toLocaleString('vi-VN') : ''}</td>
+                    <td className="small c-nd">{its.map((x) => `${x.content}${Number(x.qty) > 1 ? ` (x${x.qty})` : ''}`).join('; ')}{o.note && <div className="muted">{o.note}</div>}
                       <FilesViewButton files={o.files} label={`Xem ${o.files.length} hóa đơn`} /></td>
-                    <td className="small">{o.workshop}</td>
-                    <td><b>{money(total(its))}</b></td>
-                    <td className="hs-act">{canEdit && <><button className="btn small" onClick={() => open(o)}>Sửa</button>
+                    <td className="small c-gara" data-l="Gara">{o.workshop}</td>
+                    <td className="c-tien"><b>{money(total(its))}</b></td>
+                    <td className="hs-act c-act">{canEdit && <><button className="btn small" onClick={() => open(o)}>Sửa</button>
                       <button className="btn small link danger-text" onClick={() => void del(o)}>Xóa</button></>}</td>
                   </tr>
                 );

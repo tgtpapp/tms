@@ -1160,3 +1160,20 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
   .rep-line .c-x { align-self: end; grid-column: 4; grid-row: 2; }
   .rep-line .c-tt { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
 }
+/* Danh sách sửa chữa: điện thoại / máy tính bảng hiện dạng thẻ, đủ nội dung không phải kéo ngang */
+@media (max-width: 1024px) {
+  .rep-table { display: block; border: 0; background: none; overflow: visible; }
+  .rep-table thead { display: none; }
+  .rep-table tbody { display: flex; flex-direction: column; gap: 10px; }
+  .rep-table tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; padding: 12px;
+    grid-template-areas: "code code tien" "date xe km" "nd nd nd" "gara gara act";
+    border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--surface); }
+  .rep-table tbody tr:nth-child(even) td, .rep-table tbody tr:hover td { background: none; }
+  .rep-table td { display: block; padding: 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .rep-table td[data-l]::before { content: attr(data-l); display: block; font-size: .72rem; color: var(--muted); }
+  .rep-table .c-code { grid-area: code; } .rep-table .c-tien { grid-area: tien; text-align: right; font-size: 1.05rem; }
+  .rep-table .c-date { grid-area: date; } .rep-table .c-xe { grid-area: xe; } .rep-table .c-km { grid-area: km; }
+  .rep-table .c-nd { grid-area: nd; font-size: .95rem; padding-top: 6px; border-top: 1px dashed var(--line); }
+  .rep-table .c-gara { grid-area: gara; } .rep-table .c-gara:empty::before, .rep-table .c-km:empty::before { content: none; }
+  .rep-table .c-act { grid-area: act; display: flex; justify-content: flex-end; align-items: end; gap: 6px; }
+}

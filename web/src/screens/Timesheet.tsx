@@ -2,6 +2,7 @@
 // Lọc theo phòng ban, nhóm tuyến, lái xe chạy chéo; công/chuyến theo từng tuyến; quy tắc trừ tiền khi không đủ;
 // in / tải Excel bảng chấm công và bảng lái xe theo nhóm tuyến.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MonthPicker } from '../components/MonthPicker';
 import { PaperView, type Me } from '../components/ProfilePapers';
 import { boss, bossCol, company, head, signCol } from '../lib/profilePapers';
 import type { Permissions } from '../lib/permissions';
@@ -288,7 +289,7 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
       <div className="item-head">
         <h2>Bảng chấm công {monthTxt}</h2>
         <span className="actions">
-          <label className="inline">Kỳ lương <input type="month" value={ym} onChange={(e) => { if (e.target.value) { setYm(e.target.value); setPage(0); } }} /></label>
+          <MonthPicker label="Kỳ lương" value={ym} onChange={(v) => { setYm(v); setPage(0); }} />
           <button type="button" className="btn small" disabled={!!busy} onClick={() => void printMain()}>Xem / in</button>
           <button type="button" className="btn small" onClick={() => csv(`Bang cham cong ${ym}`, [{ title: `BẢNG CHẤM CÔNG ${monthTxt.toUpperCase()}`, cols, rows: found.map((x) => rowOf(x.e)) }])}>Tải Excel (CSV)</button>
           {busy && <span className="small muted">{busy}</span>}

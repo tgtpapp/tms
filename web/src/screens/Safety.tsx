@@ -1,6 +1,7 @@
 // Giám sát an toàn giao thông: sổ giám sát (cảnh báo / vi phạm / sự cố), xem / in các phụ lục,
 // hồ sơ tự lưu vào Lưu trữ hồ sơ › Năm › An toàn giao thông (checklist trước chuyến, sổ ngày, biên bản, sự cố, báo cáo tuần / tháng / năm).
 import { useCallback, useEffect, useState } from 'react';
+import { MonthPicker } from '../components/MonthPicker';
 import { Modal } from '../components/Modal';
 import { PaperView } from '../components/ProfilePapers';
 import type { Permissions } from '../lib/permissions';
@@ -141,7 +142,7 @@ export function SafetyScreen({ ctx, perms }: { ctx: AccountContext; perms: Permi
         {busy && <span className="small muted">{busy}</span>}
       </div>
       <div className="grid3 form">
-        <label>Tháng<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} /></label>
+        <MonthPicker value={month} onChange={setMonth} />
         <label>Trạng thái<select value={st} onChange={(e) => setSt(e.target.value as '' | 'mo' | 'dong')}><option value="">Tất cả</option><option value="mo">Đang theo dõi</option><option value="dong">Đã đóng</option></select></label>
       </div>
       {shown.length === 0 ? <p className="muted">Tháng {month.slice(5)}/{month.slice(0, 4)} chưa có sự việc nào.</p> : (

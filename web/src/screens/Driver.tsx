@@ -1,5 +1,6 @@
 // App lái xe (như app cũ): chuyến của tôi; mỗi chuyến có Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả & hàng; gọi khách ghi trạng thái báo về quầy; thu tiền mặt / chuyển khoản; xuất bến / đến bến.
 import { dirName } from '../lib/routes';
+import { MonthPicker } from '../components/MonthPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -111,6 +112,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
   const [ym, setYm] = useState(today().slice(0, 7));
   const [list, setList] = useState<MyTrip[]>([]);
   const [pax, setPax] = useState<Record<string, number>>({});
+  const [show, setShow] = useState(false);
   useEffect(() => {
     const [y, m] = ym.split('-').map(Number);
     const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
@@ -133,10 +135,13 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
     <section className="card">
       <div className="item-head">
         <h2>Tất cả chuyến của tôi · tháng {ym.slice(5)}/{ym.slice(0, 4)}</h2>
-        <label className="inline-form">Tháng<input type="month" value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} /></label>
+        <MonthPicker value={ym} onChange={setYm} />
       </div>
-      <p className="small muted">{done.length} chuyến · {done.filter((t) => t.service_date < td).length} đã chạy · {done.filter((t) => t.service_date >= td).length} hôm nay và sắp chạy</p>
-      {list.length === 0 ? <p className="muted">Tháng này chưa có chuyến nào được xếp cho bạn.</p> : (
+      <div className="item-head">
+        <p className="small muted">{done.length} chuyến · {done.filter((t) => t.service_date < td).length} đã chạy · {done.filter((t) => t.service_date >= td).length} hôm nay và sắp chạy</p>
+        {list.length > 0 && <button type="button" className="btn small" aria-expanded={show} onClick={() => setShow(!show)}>{show ? 'Ẩn chi tiết chuyến' : 'Hiện chi tiết chuyến'}</button>}
+      </div>
+      {list.length === 0 ? <p className="muted">Tháng này chưa có chuyến nào được xếp cho bạn.</p> : !show ? null : (
         <div className="table-wrap">
           <table className="plist">
             <thead><tr><th>Ngày</th><th>Giờ</th><th>Tuyến</th><th>Xe</th><th style={{ textAlign: "right" }}>Khách</th><th /></tr></thead>

@@ -1,5 +1,6 @@
 // Km xe đã chạy (như app cũ "Km xe (Skysoft)"): nhập báo cáo GPS (file hoặc dán bảng), nhập tay; tổng km tháng, km lũy kế theo Odo gốc.
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MonthPicker } from '../components/MonthPicker';
 import { Modal } from '../components/Modal';
 import { fmtDate, today } from '../components/Documents';
 import { parseKmReport, type KmParse } from '../lib/kmImport';
@@ -76,7 +77,7 @@ export function VehicleKmScreen({ perms }: { perms: Permissions }) {
             <button className="btn" onClick={() => setOne({ id: null, vehicle_id: '', run_date: today(), km: '' })}>+ Nhập tay</button>
           </div>}
         </div>
-        <div className="inline-form"><label>Tháng<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} /></label></div>
+        <div className="inline-form"><MonthPicker value={month} onChange={setMonth} /></div>
       </section>
       <section className="card">
         <div className="table-wrap">
@@ -269,7 +270,7 @@ function KmStats({ vehicles }: { vehicles: Veh[] }) {
         </div>
       </div>
       <div className="inline-form">
-        {(unit === 'day' || unit === 'week') && <label>Tháng<input type="month" value={ym} onChange={(e) => e.target.value && setYm(e.target.value)} /></label>}
+        {(unit === 'day' || unit === 'week') && <MonthPicker value={ym} onChange={setYm} />}
         {(unit === 'month' || unit === 'year') && <label>{unit === 'year' ? 'Đến năm' : 'Năm'}<input type="number" min={2000} max={2100} value={y} onChange={(e) => /^\d{4}$/.test(e.target.value) && setY(e.target.value)} /></label>}
         <button className="btn small" onClick={csv}>Tải Excel (CSV)</button>
       </div>

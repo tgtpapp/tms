@@ -1,6 +1,7 @@
 // Đóng BHXH & lương chuyển khoản theo tháng (như Cài đặt của app cũ): chọn tháng, tick người đóng BHXH, nhập lương chuyển khoản
 // và mức lương đóng BHXH; sửa xong tự lưu. Lưu bảng thành PDF vào Năm › Tài chính - Kế toán › BHXH & lương chuyển khoản.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MonthPicker } from './MonthPicker';
 import { today } from './Documents';
 import { PaperView, type Me } from './ProfilePapers';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -108,7 +109,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
     <section className="card">
       <h2>Đóng BHXH &amp; lương chuyển khoản theo tháng</h2>
       <div className="actions pay-bar">
-        <label>Tháng<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} /></label>
+        <MonthPicker value={month} onChange={setMonth} />
         <button type="button" className="btn small" onClick={() => void fromPrev()}>Lấy theo tháng trước</button>
         <button type="button" className="btn small" onClick={() => change(list.map((s) => s.id), (r) => ({ ...r, has_bhxh: true }))}>Tick đóng BHXH tất cả</button>
         <button type="button" className="btn small" disabled={!!busy} onClick={() => void preview()}>Xem / in</button>

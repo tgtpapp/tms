@@ -1,5 +1,6 @@
 // Nhiên liệu (như app cũ): nhập dầu vào bồn, cấp dầu từ bồn cho xe, đổ ngoài cây xăng; tồn bồn, giá bình quân, tiêu hao theo xe.
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { MonthPicker } from '../components/MonthPicker';
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
@@ -279,7 +280,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
         </div>
         {tab !== 'cai' && <div className="inline-form">
-          <label>Tháng<input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
+          <MonthPicker value={month} onChange={setMonth} allowEmpty />
           <label>Xe<select value={veh} onChange={(e) => setVeh(e.target.value)}><option value="">Tất cả xe</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>
           {tab === 'phieu' && <label>Loại<select value={kind} onChange={(e) => setKind(e.target.value as FuelKind | '')}><option value="">Tất cả</option>
             {(Object.keys(FUEL_KIND) as FuelKind[]).map((k) => <option key={k} value={k}>{FUEL_KIND[k].short}</option>)}</select></label>}

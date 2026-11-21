@@ -1084,3 +1084,11 @@ button.dt-g { cursor: pointer; }
 .prof-pane .info { font-size: .95rem; }
 @media (max-width: 640px) { .prof-pane .info { grid-template-columns: 1fr; gap: 0 0; } .prof-pane .info dt { margin-top: 8px; font-size: .8rem; } }
 .actions:has(> .fp-pop) { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; }
+/* Ô chọn tháng gọn */
+.month-pick { display: inline-flex; flex-direction: column; gap: 4px; flex: 0 0 auto !important; }
+.mp-lbl { font-size: .85rem; color: var(--muted); }
+.mp-box { display: inline-flex; align-items: stretch; border: 1px solid var(--input-line); border-radius: var(--radius-s); overflow: hidden; background: var(--surface); height: 40px; }
+.mp-box > button { border: 0; background: var(--surface-2); color: var(--text); font-size: 1.1rem; width: 36px; cursor: pointer; }
+.mp-box > button:hover { background: var(--primary-soft); color: var(--primary-d); }
+.mp-val { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 92px; padding: 0 10px; font-weight: 600; border-left: 1px solid var(--line); border-right: 1px solid var(--line); cursor: pointer; }
+.mp-val input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; min-height: 0 !important; padding: 0 !important; border: 0; cursor: pointer; }

@@ -1,5 +1,6 @@
 // Sửa chữa xe (như app cũ): phiếu PSX…, xe, ngày, km, gara, hạng mục (nội dung · SL · đơn giá), ảnh hóa đơn.
 import { useCallback, useEffect, useState } from 'react';
+import { MonthPicker } from '../components/MonthPicker';
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
@@ -96,7 +97,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
           {canEdit && <button className="btn primary" onClick={() => open(null)}>+ Phiếu sửa chữa</button>}
         </div>
         <div className="inline-form">
-          <label>Tháng<input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
+          <MonthPicker value={month} onChange={setMonth} allowEmpty />
           <label>Xe
             <select value={veh} onChange={(e) => setVeh(e.target.value)}>
               <option value="">Tất cả xe</option>

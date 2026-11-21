@@ -1273,3 +1273,8 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 .support-reply textarea { flex: 1; min-width: 0; }
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .screen-error { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.support-checks { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.support-checks li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; }
+.support-checks li.ok { background: var(--ok-soft); color: var(--ok); }
+.support-checks li.bad { background: var(--danger-soft); color: var(--danger); }
+.support-checks li span:nth-child(2) { flex: 1; min-width: 150px; color: var(--text); }

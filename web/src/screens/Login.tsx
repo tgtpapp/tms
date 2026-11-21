@@ -95,7 +95,7 @@ export function LoginScreen() {
 }
 
 /** Báo sự cố khi chưa đăng nhập được: gửi tới người quản lý tài khoản của nhà xe (chưa xác minh người gửi) */
-function LoginReport({ code, askCode, phone, onClose }: { code: string; askCode: boolean; phone: string; onClose: () => void }) {
+export function LoginReport({ code, askCode, phone, onClose }: { code: string; askCode: boolean; phone: string; onClose: () => void }) {
   const [c, setC] = useState(code);
   const [p, setP] = useState(phone);
   const [text, setText] = useState('');

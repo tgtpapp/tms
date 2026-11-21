@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Centered } from './components/Centered';
-import { missingConfig } from './config';
+import { config, missingConfig } from './config';
 import { loadAccountContext, rpc, supabase, type AccountContext } from './lib/supabase';
 import { clearCache } from './lib/offline';
 import { ToastProvider } from './lib/toast';
 import { BootstrapScreen } from './screens/Bootstrap';
-import { LoginScreen } from './screens/Login';
+import { LoginReport, LoginScreen } from './screens/Login';
 import { PlatformScreen } from './screens/Platform';
 import { TenantShell } from './screens/TenantShell';
 
@@ -92,11 +92,24 @@ function Root() {
     case 'tenant':
       return <TenantShell ctx={view.ctx} />;
     case 'no_access':
-      return (
-        <Centered>
-          <p>Tài khoản chưa thuộc nhà xe nào hoặc đã bị khóa.</p>
-          <button className="btn" onClick={() => void supabase.auth.signOut()}>Đăng xuất</button>
-        </Centered>
-      );
+      return <NoAccess />;
   }
+}
+
+/** Đăng nhập được nhưng tài khoản bị khóa / chưa thuộc nhà xe / nhà xe tạm ngưng: vẫn báo sự cố được */
+function NoAccess() {
+  const [report, setReport] = useState<{ code: string; phone: string } | null>(null);
+  async function open() {
+    const { data } = await supabase.auth.getUser();
+    const m = (data.user?.user_metadata ?? {}) as { tenant_code?: string; phone?: string };
+    setReport({ code: m.tenant_code ?? config.tenantCode, phone: m.phone ?? '' });
+  }
+  return (
+    <Centered>
+      <p>Tài khoản chưa thuộc nhà xe nào hoặc đã bị khóa.</p>
+      <button className="btn" onClick={() => void open()}>Báo sự cố</button>
+      <button className="btn" onClick={() => void supabase.auth.signOut()}>Đăng xuất</button>
+      {report && <LoginReport code={report.code} askCode={!report.code} phone={report.phone} onClose={() => setReport(null)} />}
+    </Centered>
+  );
 }

@@ -169,7 +169,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
               <div className="side-group-title">{g}</div>
               {shown.filter((t) => t.group === g).map((t) => (
                 <button key={t.key} className={tab === t.key ? 'side-link on' : 'side-link'} aria-current={tab === t.key ? 'page' : undefined}
-                        onClick={() => { if (t.key === 'support' && tab !== 'support') setLastScreen(tabs.find((x) => x.key === tab)?.label ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
+                        onClick={() => { if (t.key === 'support' && tab !== 'support') setLastScreen(tab ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
                   <i className={`fi fi-rr-${t.icon}`} aria-hidden="true" />
                   <span>{t.label}</span>
                 </button>
@@ -184,7 +184,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       <div className="main">
         <main className="content">
           <ScreenGuard key={tab} name={tabs.find((x) => x.key === tab)?.label ?? ''}
-                       onReport={(text) => { setLastScreen(tabs.find((x) => x.key === tab)?.label ?? ''); setReport(text); setTab('support'); }}>
+                       onReport={(text) => { setLastScreen(tab ?? ''); setReport(text); setTab('support'); }}>
           {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
           {tab === 'driver' && <DriverScreen tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
@@ -212,7 +212,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} />}
           {tab === 'audit' && <AuditScreen />}
           {tab === 'account' && <AccountScreen ctx={ctx} canManage={perms.has('staff.edit')} />}
-          {tab === 'support' && <SupportScreen me={ctx.user_id} canHandle={perms.has('user.edit')} screen={lastScreen || undefined}
+          {tab === 'support' && <SupportScreen me={ctx.user_id} canHandle={perms.has('user.edit')} lastKey={lastScreen || undefined}
                                                prefill={report || undefined} onPrefillUsed={clearReport} />}
           </ScreenGuard>
         </main>

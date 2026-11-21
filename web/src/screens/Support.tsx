@@ -2,12 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { errMsg, rpc, supabase } from '../lib/supabase';
-import { supportContext } from '../lib/support';
+import { clearAppCacheAndReload, clientChecks, guessScreen, supportContext } from '../lib/support';
 
 interface Ticket {
   id: string; no: number; channel: 'app' | 'login'; status: 'mo' | 'dong'; created_by: string | null;
   reporter_name: string | null; reporter_phone: string | null; summary: string;
-  context: { screen?: string; path?: string; ua?: string; online?: boolean; errors?: string[] };
+  context: {
+    screen?: string; path?: string; ua?: string; online?: boolean; new_version?: boolean; session?: 'ok' | 'loi'; errors?: string[]; need?: string[];
+    checks?: { tai_khoan?: string; user_id?: string; quyen?: { code: string; name: string; ok: boolean; chan: boolean }[] };
+  };
   created_at: string; updated_at: string;
 }
 interface Msg { id: string; sender: 'nguoi_bao' | 'xu_ly' | 'bot'; user_id: string | null; body: string; created_at: string }
@@ -15,8 +18,8 @@ interface Msg { id: string; sender: 'nguoi_bao' | 'xu_ly' | 'bot'; user_id: stri
 const COLS = 'id, no, channel, status, created_by, reporter_name, reporter_phone, summary, context, created_at, updated_at';
 const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
 
-export function SupportScreen({ me, canHandle, screen, prefill, onPrefillUsed }: {
-  me: string | null; canHandle: boolean; screen?: string; prefill?: string; onPrefillUsed?: () => void;
+export function SupportScreen({ me, canHandle, lastKey, prefill, onPrefillUsed }: {
+  me: string | null; canHandle: boolean; lastKey?: string; prefill?: string; onPrefillUsed?: () => void;
 }) {
   const [list, setList] = useState<Ticket[]>([]);
   const [err, setErr] = useState('');
@@ -36,7 +39,10 @@ export function SupportScreen({ me, canHandle, screen, prefill, onPrefillUsed }:
   async function send() {
     setBusy(true); setErr('');
     try {
-      const id = await rpc<string>('support_open', { p_text: text.trim(), p_context: supportContext(screen) });
+      // kiểm tra trên máy + đoán màn hình người dùng nói tới; quyền do máy chủ tự đối chiếu
+      const g = guessScreen(text, lastKey);
+      const cc = await clientChecks();
+      const id = await rpc<string>('support_open', { p_text: text.trim(), p_context: { ...supportContext(g?.label), ...cc, need: g ? [g.perm] : [] } });
       setText('');
       await load();
       const r = await supabase.from('support_tickets').select(COLS).eq('id', id).maybeSingle();
@@ -93,9 +99,10 @@ export function SupportScreen({ me, canHandle, screen, prefill, onPrefillUsed }:
   );
 }
 
-function Thread({ t, me, canHandle, onClose }: { t: Ticket; me: string | null; canHandle: boolean; onClose: () => void }) {
+function Thread({ t: t0, me, canHandle, onClose }: { t: Ticket; me: string | null; canHandle: boolean; onClose: () => void }) {
+  const [t, setT] = useState(t0);
   const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [status, setStatus] = useState(t.status);
+  const status = t.status;
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -103,11 +110,11 @@ function Thread({ t, me, canHandle, onClose }: { t: Ticket; me: string | null; c
   const load = useCallback(async () => {
     const [m, s] = await Promise.all([
       supabase.from('support_messages').select('id, sender, user_id, body, created_at').eq('ticket_id', t.id).order('created_at'),
-      supabase.from('support_tickets').select('status').eq('id', t.id).maybeSingle(),
+      supabase.from('support_tickets').select(COLS).eq('id', t0.id).maybeSingle(),
     ]);
     if (m.error) setErr(m.error.message); else setMsgs((m.data ?? []) as Msg[]);
-    if (s.data) setStatus((s.data as { status: 'mo' | 'dong' }).status);
-  }, [t.id]);
+    if (s.data) setT(s.data as Ticket);
+  }, [t0.id]);
   useEffect(() => { void load(); const iv = window.setInterval(() => void load(), 10_000); return () => window.clearInterval(iv); }, [load]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [msgs.length]);
 
@@ -118,6 +125,7 @@ function Thread({ t, me, canHandle, onClose }: { t: Ticket; me: string | null; c
   const reply = () => act(async () => { await rpc('support_reply', { p_ticket: t.id, p_text: text.trim() }); setText(''); });
   const setSt = (s: 'mo' | 'dong') => act(() => rpc('support_set_status', { p_ticket: t.id, p_status: s }));
   const c = t.context ?? {};
+  const fix = (action: 'cap_quyen' | 'mo_khoa', perm?: string) => act(() => rpc('support_fix', { p_ticket: t.id, p_action: action, p_perm: perm ?? null }));
 
   return (
     <Modal title={`Sự cố #${t.no}`} onClose={onClose}>
@@ -125,13 +133,13 @@ function Thread({ t, me, canHandle, onClose }: { t: Ticket; me: string | null; c
         <div className="support-info small">
           <div><b>Người gửi:</b> {t.reporter_name ?? 'Không rõ'}{t.reporter_phone && ` · ${t.reporter_phone}`}{t.channel === 'login' && ' · màn hình đăng nhập, chưa xác minh'}</div>
           {c.screen && <div><b>Màn hình:</b> {c.screen}</div>}
-          {c.online === false && <div><b>Mạng:</b> máy đang mất mạng khi gửi</div>}
           {c.errors && c.errors.length > 0 && (
             <details><summary>Lỗi gần nhất trên máy ({c.errors.length})</summary><ul>{c.errors.map((e, i) => <li key={i}>{e}</li>)}</ul></details>
           )}
           {c.ua && <details><summary>Thiết bị</summary><p className="muted">{c.ua}</p></details>}
         </div>
       )}
+      <Checks t={t} mine={t.created_by === me} canHandle={canHandle} busy={busy} onFix={(a, p) => void fix(a, p)} />
       <div className="support-thread">
         {msgs.map((m) => (
           <div key={m.id} className={`bubble ${m.sender === 'bot' ? 'bot' : m.user_id === me ? 'me' : 'them'}`}>
@@ -152,5 +160,39 @@ function Thread({ t, me, canHandle, onClose }: { t: Ticket; me: string | null; c
           : <button type="button" className="btn" disabled={busy} onClick={() => void setSt('mo')}>Mở lại</button>}
       </div>
     </Modal>
+  );
+}
+
+/** Kết quả kiểm tra tự động + nút xử lý (máy người gửi: tải bản mới, đăng nhập lại, xóa bộ nhớ tạm; người quản lý: cấp quyền, mở khóa) */
+function Checks({ t, mine, canHandle, busy, onFix }: {
+  t: Ticket; mine: boolean; canHandle: boolean; busy: boolean; onFix: (a: 'cap_quyen' | 'mo_khoa', perm?: string) => void;
+}) {
+  const c = t.context ?? {}, k = c.checks ?? {};
+  const lines: { ok: boolean; text: string; btn?: { label: string; run: () => void } }[] = [];
+  const manage = canHandle && !mine;
+  if (k.tai_khoan === 'locked') lines.push({ ok: false, text: 'Tài khoản đang bị khóa', btn: manage && k.user_id ? { label: 'Mở khóa', run: () => onFix('mo_khoa') } : undefined });
+  else if (k.tai_khoan === 'khong_co') lines.push({ ok: false, text: 'Số điện thoại chưa có tài khoản trong nhà xe' });
+  else if (k.tai_khoan === 'active') lines.push({ ok: true, text: 'Tài khoản đang hoạt động' });
+  for (const q of k.quyen ?? []) {
+    lines.push(q.ok ? { ok: true, text: `Có quyền ${q.name}` } : {
+      ok: false, text: `Chưa có quyền ${q.name}${q.chan ? ' (bị chặn riêng)' : ''}`,
+      btn: manage && t.created_by ? { label: 'Cấp quyền', run: () => onFix('cap_quyen', q.code) } : undefined,
+    });
+  }
+  if (c.online === false) lines.push({ ok: false, text: 'Máy mất mạng khi gửi' });
+  if (c.new_version === true) lines.push({ ok: false, text: 'Máy đang chạy bản app cũ', btn: mine ? { label: 'Tải bản mới', run: () => window.location.reload() } : undefined });
+  if (c.session === 'loi') lines.push({ ok: false, text: 'Phiên đăng nhập bị lỗi', btn: mine ? { label: 'Đăng nhập lại', run: () => void supabase.auth.signOut() } : undefined });
+  if (c.errors?.length) lines.push({ ok: false, text: `Có ${c.errors.length} lỗi gần đây trên máy`, btn: mine ? { label: 'Xóa bộ nhớ tạm, tải lại', run: () => void clearAppCacheAndReload() } : undefined });
+  if (!lines.length) return null;
+  return (
+    <ul className="support-checks">
+      {lines.map((l, i) => (
+        <li key={i} className={l.ok ? 'ok' : 'bad'}>
+          <span aria-hidden="true">{l.ok ? '✓' : '✗'}</span>
+          <span>{l.text}</span>
+          {l.btn && <button type="button" className="btn small primary" disabled={busy} onClick={l.btn.run}>{l.btn.label}</button>}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -46,7 +46,8 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.support_tickets), 0, 'Nhà xe B không thấy sự cố nhà xe A');
 select throws_ok(format('select public.support_reply(%L, %L)', (select id from tk), 'x'), 'P0002', null, 'Nhà xe B trả lời: không tìm thấy');
 select throws_ok(format('select public.support_set_status(%L, %L)', (select id from tk), 'dong'), 'P0002', null, 'Nhà xe B đóng: không tìm thấy');
-select is((select no from public.support_tickets where id = public.support_open('Máy in lỗi', '{}')), 1, 'Số sự cố đếm riêng từng nhà xe');
+create temp table tkb as select public.support_open('Máy in lỗi', '{}') id;
+select is((select no from public.support_tickets where id = (select id from tkb)), 1, 'Số sự cố đếm riêng từng nhà xe');
 
 -- Chủ A xử lý
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';

@@ -95,7 +95,7 @@ export function BulkPaperSave({ kind, items, tenantId, me, onClose }: { kind: Ki
       <div className="form">
         <p className="small">Tự lấy thông tin của từng {kind === 'driver' ? 'lái xe' : 'xe'} ({items.length}) và lưu mỗi {kind === 'driver' ? 'người' : 'xe'} 1 tệp PDF vào <b>{path}</b>.
           Đã có thì thay bằng bản mới (bản cũ ẩn).</p>
-        <p className="small muted">Mẫu theo app cũ của nhà xe; căn cứ pháp lý của mẫu sổ: cần xác minh.</p>
+        <p className="small muted">Mẫu sổ: cần xác minh.</p>
         {busy && <p className="upload">{busy}</p>}
         <div className="actions">
           <button className="btn primary" disabled={!!busy || !items.length} onClick={() => void run()}>Lưu {items.length} tệp</button>

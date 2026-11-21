@@ -107,8 +107,6 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
   return (
     <section className="card">
       <h2>Đóng BHXH &amp; lương chuyển khoản theo tháng</h2>
-      <p className="small muted">Chọn tháng, tick nhân viên đóng BHXH, nhập lương chuyển khoản và số tiền Bảo hiểm xã hội (mức lương đóng BHXH); sửa xong tự lưu.
-        Lương chuyển khoản của tháng bắt đầu hợp đồng là số lương mặc định khi in hợp đồng lao động. Lương cố định là tiền công tháng của nhân viên văn phòng trên Bảng chấm công. Có thể lưu bảng thành PDF vào Lưu trữ hồ sơ.</p>
       <div className="actions pay-bar">
         <label>Tháng<input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} /></label>
         <button type="button" className="btn small" onClick={() => void fromPrev()}>Lấy theo tháng trước</button>

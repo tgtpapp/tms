@@ -112,7 +112,6 @@ export function ReportsScreen() {
               <div><span className="muted small">Đặt chưa trả</span><b>{fmt(t.unpaid)} đ</b></div>
               <div><span className="muted small">Chuyến · lấp đầy</span><b>{fmt(t.trips)} · {fill == null ? '—' : `${fill}%`}</b></div>
             </div>
-            <p className="small muted">Vé tính theo ngày chạy của chuyến (vé đặt và vé đã thanh toán). Lấp đầy = số vé / tổng chỗ của các xe đã xếp (bán theo chặng có thể vượt 100%).</p>
           </section>
           <Table title="Theo ngày" file={`ban-ve-theo-ngay_${tag}`} rows={sa.days} cols={[['day', 'Ngày', 'date'], ['trips', 'Chuyến', 'num'], ['seats', 'Chỗ', 'num'], ['tickets', 'Vé', 'num'], ['revenue', 'Đã thu (đ)', 'money'], ['unpaid', 'Chưa trả (đ)', 'money']]} />
           <Table title="Theo tuyến" file={`ban-ve-theo-tuyen_${tag}`} rows={sa.routes} cols={[['name', 'Tuyến', 'text'], ['trips', 'Chuyến có vé', 'num'], ['tickets', 'Vé', 'num'], ['revenue', 'Đã thu (đ)', 'money'], ['unpaid', 'Chưa trả (đ)', 'money']]} />

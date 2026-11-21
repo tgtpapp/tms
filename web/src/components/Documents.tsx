@@ -274,8 +274,6 @@ export function DocRow(props: {
           <div className={`small state-${st.state}`}>{st.text}{doc?.doc_no ? ` · Số ${doc.doc_no}` : ''}{doc?.issuer ? ` · ${doc.issuer}` : ''}</div>
         </div>
         <div className="actions">
-          {doc && <FilesButton files={doc.files} />}
-          {!!props.extraFiles?.length && <FilesViewButton files={props.extraFiles} label={`Xem ${props.extraFiles.length} tệp (lý lịch)`} />}
           {canEdit && mode === 'view' && (
             <>
               {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
@@ -289,6 +287,8 @@ export function DocRow(props: {
           )}
         </div>
       </div>
+      {/* ảnh giấy tờ hiện sẵn, bấm vào xem lớn ngay trong app */}
+      {((doc?.files.length ?? 0) > 0 || !!props.extraFiles?.length) && <FilePreviews files={[...(doc?.files ?? []), ...(props.extraFiles ?? [])]} />}
       {mode !== 'view' && (
         <div className="sub">
           {mode === 'add' && (
@@ -305,7 +305,6 @@ export function DocRow(props: {
               {scanned && <p className="muted small">{scanned.aiNote} · {scanned.files.length} tệp</p>}
               {scanned && <FilePreviews blobs={scanned.files.map((f) => f.blob)} />}
               {scanned && scanned.warnings.length > 0 && <ul className="warn small">{scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
-              {doc && <p className="muted small">Lưu bản mới thì bản hiện tại chuyển sang giấy cũ (vẫn giữ lại).</p>}
             </>
           )}
           {mode === 'edit' && doc && <FilePreviews files={doc.files} />}

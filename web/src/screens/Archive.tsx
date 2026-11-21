@@ -453,7 +453,6 @@ function ArchiveDialog(props: {
         {d.k === 'upload' && (
           <>
             <ul className="small">{d.files.map((f) => <li key={f.name}>{f.name} · {(f.size / 1048576).toFixed(2)} MB</li>)}</ul>
-            {d.replace && <p className="small muted">Thay cho “{d.replace.name}”: bản cũ được ẩn (xem lại bằng nút “Xem bản cũ”).</p>}
             <label>Ngày hết hạn (nếu có)<input type="date" value={d.expires} onChange={(e) => set({ expires: e.target.value })} /></label>
             {actions(busy ? 'Đang tải lên…' : 'Lưu lên Google Drive')}
           </>
@@ -463,7 +462,6 @@ function ArchiveDialog(props: {
           return (
             <>
               <p>Xóa thư mục <b>{props.title(d.id)}</b>{c.folders ? <> cùng <b>{c.folders}</b> thư mục con</> : null}{c.items ? <> và <b>{c.items}</b> hồ sơ bên trong</> : null}?</p>
-              <p className="small muted">Tệp trên Google Drive vào thùng rác, khôi phục được trong 30 ngày.</p>
               {busy && <p className="upload">Đang xóa, chờ trong giây lát…</p>}
               {actions('Xóa', true)}
             </>
@@ -472,7 +470,6 @@ function ArchiveDialog(props: {
         {d.k === 'delI' && (
           <>
             <p>Xóa hồ sơ <b>{props.itemName(d.id)}</b>?</p>
-            <p className="small muted">Tệp trên Google Drive vào thùng rác, khôi phục được trong 30 ngày.</p>
             {actions('Xóa', true)}
           </>
         )}

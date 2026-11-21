@@ -291,8 +291,6 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         <label>Loại<select value={code} onChange={(e) => setCode(e.target.value)}><option value="">Tất cả</option>{Object.entries(CODE_NAME).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label>Tìm<input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Số, trích yếu, người liên quan" /></label>
       </div>
-      <p className="small muted">Số tự cấp khi lưu: mỗi loại (Quyết định / Quyết định thôi việc / Công văn / Thông báo) một dãy riêng theo năm ký, bắt đầu 001, không trùng, không dùng lại số đã hủy.
-        Lưu PDF vào Lưu trữ hồ sơ: <b>Năm › Pháp lý công ty › loại văn bản</b>. Căn cứ pháp lý trong mẫu theo app cũ: cần xác minh.</p>
       {busy && <p className="upload">{busy}</p>}
       {shown.length === 0 ? <p className="muted">Chưa có văn bản năm {year}.</p> : (
         <div className="table-wrap">

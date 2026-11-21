@@ -328,7 +328,6 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
               ))}
             </div>
           ))}
-          <p className="small muted">Mỗi tuyến (chiều đi, chiều về) chấm công riêng: số công trong ô ngày = số chuyến của từng tuyến × công/chuyến của tuyến đó. Danh sách lái xe được gom theo nhóm tuyến (sửa nhóm ở Điều hành › Nhóm tuyến đường).</p>
         </div>
       </details>}
 

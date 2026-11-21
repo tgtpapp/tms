@@ -85,14 +85,13 @@ export function ZaloSettings() {
         </div>
       ) : (
         <>
-          <p className="small muted">Kết nối Zalo Official Account của nhà xe để tự gửi tin xác nhận vé và báo hàng đến cho khách. Cần tài khoản quản trị OA để cấp quyền.</p>
           <div className="actions"><button className="btn primary" disabled={busy} onClick={() => void connect()}>Kết nối Zalo OA</button></div>
           <p className="small muted">Địa chỉ gọi về khai báo trong ứng dụng Zalo của nền tảng: <code>{zaloRedirectUri}</code></p>
         </>
       ))}
 
       <h3>Mẫu tin ZNS</h3>
-      <p className="small muted">Đăng ký mẫu với Zalo (ZNS) rồi nhập mã mẫu đã duyệt. Phí gửi tin và điều kiện duyệt mẫu theo Zalo (cần xác minh).</p>
+      <p className="small muted">Nhập mã mẫu ZNS đã được Zalo duyệt.</p>
       {KINDS.map((k) => (
         <div key={k.kind} className="grid2">
           <label>{k.label}

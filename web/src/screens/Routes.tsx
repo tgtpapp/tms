@@ -436,7 +436,6 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
             <button type="button" className="btn small primary" disabled={busy} onClick={() => void saveStops()}>Lưu điểm dừng</button>
             <button type="button" className="btn small link" onClick={() => setEditing(false)}>Hủy</button>
           </div>
-          <p className="muted small">Thời gian tính bằng phút kể từ điểm đầu. Chiều về tự đi ngược thứ tự.</p>
         </div>
       )}
       <FareSection route={route} data={data} canFare={canFare} saved={saved} stopName={stopName} reload={reload} />

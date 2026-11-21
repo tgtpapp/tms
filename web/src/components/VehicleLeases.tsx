@@ -116,7 +116,6 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
   };
   const person = (x: P, set: (x: P) => void, who: string, w: 'a' | 'b') => (
     <>
-    <p className="small muted">Quét 2 mặt CCCD {who}: AI tự điền họ tên, năm sinh, số CCCD, ngày cấp, nơi cấp, địa chỉ (kiểm tra lại). Chưa có thì bổ sung sau.</p>
     <Scanner def={CCCD} onScanned={(sc) => { if (!sc.files.length) { toast('error', sc.aiNote); return; } setPend((pp) => ({ ...pp, scan: { ...pp.scan, [w]: sc } })); set(fromScan(sc, x)); toast('ok', sc.aiNote); }} />
     {(pend.scan[w] || (w === 'a' ? f?.filesA : f?.filesB)?.length) ? <p className="small ok-text">Đã có ảnh CCCD {who}</p> : null}
     <div className="grid2">
@@ -138,7 +137,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
       <div className="item-head"><h3>Hợp đồng thuê xe ({list.length})</h3>
         <button type="button" className="btn small primary" disabled={!!busy} onClick={() => void openNew()}>+ Lập hợp đồng thuê xe</button></div>
       {busy && <p className="small muted">{busy}</p>}
-      {list.length === 0 && <p className="small muted">Xe thuê của cá nhân: lập hợp đồng để làm phù hiệu và hạch toán chi phí (căn cứ pháp lý trong mẫu: cần xác minh).</p>}
+      {list.length === 0 && <p className="small muted">Chưa có hợp đồng thuê.</p>}
       <ul className="list small">
         {list.map((k) => (
           <li key={k.id} className="item"><div className="item-head">

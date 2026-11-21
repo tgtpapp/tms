@@ -328,7 +328,6 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
 
       {tab === 'xe' && (
         <section className="card">
-          <p className="small muted">Tiêu hao tính từ km giữa 2 lần đổ dầu liên tiếp có ghi km. Nếu không nhập km đồng hồ, app dùng km GPS của tháng (mục Km xe). Định mức đặt ở thẻ Thiết lập.</p>
           <div className="table-wrap">
             <table className="plist">
               <thead><tr><th>Xe</th><th>Số lần</th><th>Lít</th><th>Tiền</th><th>Km chạy</th><th>Tiêu hao</th><th>Định mức</th></tr></thead>
@@ -393,7 +392,6 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
       {mkEdit && (
         <Modal title="Nhập giá bán lẻ Petrolimex (vùng 1)" onClose={() => setMkEdit(null)}>
           <div className="form">
-            <p className="small muted">Dùng khi app không tự cập nhật được giá. Nhập giá niêm yết, đơn vị đ/lít. Lần tự cập nhật sau mới hơn thì app dùng lại giá tự cập nhật.</p>
             <div className="grid2">
               {MK.map((k) => <label key={k}>{k}<input inputMode="numeric" aria-label={`Giá ${k}`} value={mkEdit[k] ?? ''} onChange={(e) => setMkEdit({ ...mkEdit, [k]: e.target.value.replace(/\D/g, '') })} /></label>)}
               <label>Hiệu lực từ<input type="datetime-local" value={mkAt} onChange={(e) => setMkAt(e.target.value)} /></label>
@@ -503,7 +501,6 @@ function FuelSetup({ set, vehicles, canEdit, onSaved }: { set: FuelSettings; veh
           <option value="tt">Giá niêm yết Petrolimex vùng 1 (tự cập nhật)</option><option value="bq">Giá bình quân bồn (giá vốn thực tế đã mua)</option></select>
           <span className="small muted">Chỉ áp dụng cho phiếu tạo mới. Phiếu cũ giữ nguyên giá đã ghi.</span></label>
       </div>
-      <p className="small muted">Phiếu trước ngày tồn đầu kỳ không tính vào tồn bồn (vẫn tính tiêu hao). Để trống ngày = tính mọi phiếu.</p>
       <h3 className="section-title">Định mức tiêu hao từng xe (lít / 100 km)</h3>
       <div className="grid2">
         {vehicles.filter((v) => v.is_active || v.fuel_norm).map((v) => (

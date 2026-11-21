@@ -595,7 +595,6 @@ function TripSell(props: TripSellProps) {
       {waiting.length > 0 && (
         <section className="card waiting">
           <h2>Vé chờ xếp ghế ({waiting.length})</h2>
-          <p className="muted small">Vé bán khi mất mạng hoặc vé giấy bị trùng ghế. Khách đã trả tiền: bấm vào vé để chuyển sang ghế trống, hoặc hủy / hoàn.</p>
           <div className="chips">
             {waiting.map((t) => (
               <button key={t.id} className="btn small" onClick={() => setSelected(t)}>
@@ -1333,7 +1332,6 @@ function PaperForm(props: {
   return (
     <form className="card form paper" onSubmit={(e) => void save(e)}>
       <h2>Nhập vé giấy · {props.tripLabel}</h2>
-      <p className="muted small">Vé viết tay khi mất mạng. Mỗi số vé giấy chỉ nhập được một lần. Trùng ghế với vé đã bán thì vé vẫn được lưu, chờ xếp ghế.</p>
       <div className="grid2">
         <label>Số vé giấy<input value={f.no} onChange={(e) => setF({ ...f, no: e.target.value.toUpperCase() })} placeholder="vd 0012345" required /></label>
         <label>Ghế

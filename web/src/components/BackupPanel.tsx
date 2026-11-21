@@ -66,10 +66,7 @@ export function BackupPanel() {
   return (
     <section className="card">
       <h2>Sao lưu &amp; khôi phục dữ liệu</h2>
-      <p className="small muted">
-        Mỗi đêm app tự sao lưu toàn bộ dữ liệu nhà xe vào Kho hồ sơ Google Drive (thư mục "Sao lưu dữ liệu", giữ 30 bản gần nhất).
-        Ảnh, tệp giấy tờ không nằm trong file sao lưu (vẫn ở kho tệp của app và Google Drive). Chỉ Chủ nhà xe dùng được mục này.
-      </p>
+      <p className="small muted">Tự sao lưu mỗi đêm vào Google Drive (giữ 30 bản). Ảnh, tệp giấy tờ không nằm trong file sao lưu.</p>
       <div className="actions">
         <button type="button" className="btn primary" disabled={!!busy} onClick={() => void download()}>Tải bản sao lưu về máy</button>
         <label className={busy ? 'btn disabled' : 'btn'}>Khôi phục từ file…

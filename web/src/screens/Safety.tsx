@@ -131,9 +131,6 @@ export function SafetyScreen({ ctx, perms }: { ctx: AccountContext; perms: Permi
           {canArchive && <button type="button" className="btn small" disabled={!!busy} onClick={() => void archiveNow()}>Lưu hồ sơ ngay</button>}
         </span>
       </div>
-      <p className="small muted">Tự động: xếp xe vẫn lưu dù có cảnh báo (giờ lái, giấy tờ hết hạn, sai hạng…) thì tự ghi sổ; cảnh báo của chuyến đã chạy xong tự đóng.
-        Đóng sự việc là vi phạm / sự cố thì tự ghi Lý lịch hành nghề lái xe, lý lịch phương tiện. Hồ sơ tự lưu vào <b>Lưu trữ hồ sơ › Năm › An toàn giao thông</b>:
-        checklist trước chuyến mỗi ngày, sổ giám sát (chỉ ngày có sự việc), biên bản xác minh, báo cáo sự cố, báo cáo tuần / tháng / năm. Căn cứ pháp lý của mẫu: cần xác minh.</p>
       <div className="actions" style={{ flexWrap: 'wrap' }}>
         <label className="inline">Ngày <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} /></label>
         <button type="button" className="btn small" disabled={!!busy} onClick={() => void show('ck')}>Checklist trước chuyến</button>

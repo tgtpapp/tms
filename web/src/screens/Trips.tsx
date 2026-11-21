@@ -648,7 +648,6 @@ function Assign(props: Ctx & { trip: Trip; onClose: () => void }) {
         </label>
         </>}
       </div>
-      {vt && <p className="muted small">Xe {vt.name} ({vt.reg_seats + vt.reg_berths} chỗ): {big ? 'xếp thêm lái xe 2, phụ xe nếu cần' : '1 tài xế'} · bán vé theo sơ đồ ghế của xe này</p>}
       {warnings && (
         <div className="warn small">
           <b>Cần lưu ý trước khi xếp:</b>

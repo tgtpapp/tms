@@ -95,7 +95,6 @@ export function VehicleKmScreen({ perms }: { perms: Permissions }) {
             </tbody>
           </table>
         </div>
-        <p className="small muted">Km lũy kế = Odo gốc của xe + km đã chạy từ ngày ghi Odo đến hết tháng đang xem. Nhập lại cùng xe, cùng ngày thì ghi đè.</p>
       </section>
       <KmStats vehicles={vehicles} />
       {open && (

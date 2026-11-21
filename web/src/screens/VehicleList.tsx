@@ -219,7 +219,6 @@ function VehicleFields({ f, setF, types }: { f: VehicleForm; setF: (f: VehicleFo
         <label>Số thiết bị camera<input value={f.camera_device_no} onChange={set('camera_device_no')} /></label>
         <label>Ghi chú<input value={f.note} onChange={set('note')} /></label>
       </div>
-      {f.ownership !== 'so_huu' && <p className="muted small">Xe không thuộc sở hữu nhà xe: cần hợp đồng thuê / hợp tác (thêm ở mục Giấy tờ).</p>}
     </>
   );
 }

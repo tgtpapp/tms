@@ -138,7 +138,6 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
       {f && (
         <Modal title="⛽ Báo đổ dầu" onClose={() => { if (!busy) setF(null); }}>
           <div className="form">
-            <p className="small muted">Kiểm tra số lít, số tiền, biển số. Gửi xong điều hành duyệt là thành phiếu dầu.</p>
             <div className="grid2">
               <label>Biển số xe<input list="fr-plates" value={f.plate} onChange={(e) => setF({ ...f, plate: e.target.value })} /></label>
               <datalist id="fr-plates">{plates.map((p) => <option key={p} value={p} />)}</datalist>

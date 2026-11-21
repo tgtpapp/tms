@@ -1083,3 +1083,4 @@ button.dt-g { cursor: pointer; }
 .prof-pane { animation: pick-up 140ms ease; }
 .prof-pane .info { font-size: .95rem; }
 @media (max-width: 640px) { .prof-pane .info { grid-template-columns: 1fr; gap: 0 0; } .prof-pane .info dt { margin-top: 8px; font-size: .8rem; } }
+.actions:has(> .fp-pop) { flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; }

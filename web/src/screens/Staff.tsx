@@ -333,7 +333,6 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
           {editing && <label>Ngày nghỉ việc<input type="date" value={f.left_on} onChange={set('left_on')} /></label>}
           <label>Ghi chú<input value={f.note} onChange={set('note')} /></label>
         </div>
-        <p className="muted small">Ngày sinh, giới tính, nơi thường trú, giấy tờ cá nhân: chỉ người quản lý nhân sự và chính người đó xem được.</p>
         <div className="actions">
           <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : editing ? 'Lưu hồ sơ' : 'Lưu nhân viên'}</button>
           {editing && <button type="button" className="btn link" onClick={onDone}>Hủy</button>}
@@ -515,7 +514,7 @@ function LicenseCheck({ rows, types }: { rows: LicenseRow[]; types: Option[] }) 
           </li>
         ))}
       </ul>
-      <p className="muted small">Hạng cần theo số chỗ trên giấy kiểm định (đã trừ chỗ người lái); quy đổi GPLX cấp trước 2025: cần xác minh.</p>
+      <p className="muted small">Quy đổi GPLX cấp trước 2025: cần xác minh.</p>
     </>
   );
 }

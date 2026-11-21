@@ -217,8 +217,6 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       </form>
       <form className="card form tiers" onSubmit={(e) => void saveCancel(e)}>
         <h2>Hủy / đổi vé</h2>
-        <p className="muted small">Phí hủy tính theo số giờ còn lại trước giờ chạy: lấy mốc lớn nhất mà số giờ còn lại ≥ mốc. Phí 100% là không hoàn tiền.
-          Quy định hoàn vé theo pháp luật: cần xác minh.</p>
         {tiers.map((x, i) => (
           <div key={i} className="tier">
             <label>Hủy trước (giờ)
@@ -241,7 +239,6 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       </form>
       <form className="card form" onSubmit={(e) => void saveBank(e)}>
         <h2>Tài khoản nhận chuyển khoản (QR)</h2>
-        <p className="muted small">Bán vé chọn "Chuyển khoản (QR)": app tạo mã VietQR có sẵn số tiền và nội dung là mã vé. Nhân viên thấy tiền về thì bấm xác nhận.</p>
         <label>Ngân hàng
           <select value={BANKS.some((b) => b.bin === sale['tt.ngan_hang_bin']) ? sale['tt.ngan_hang_bin'] : sale['tt.ngan_hang_bin'] ? 'khac' : ''}
                   onChange={(e) => setSale({ ...sale, 'tt.ngan_hang_bin': e.target.value === 'khac' ? '' : e.target.value })}>
@@ -271,7 +268,6 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         <label>Họ tên người ký lệnh
           <input value={sale['cong_ty.giam_doc'] ?? ''} onChange={(e) => setSale({ ...sale, 'cong_ty.giam_doc': e.target.value })} placeholder="vd: Hà Văn Thịnh" />
         </label>
-        <p className="muted small">Chữ ký giám đốc và con dấu: tải ở phần "Hồ sơ pháp lý & chữ ký" bên trên.</p>
         <button className="btn primary" disabled={busy}>Lưu cấu hình lệnh vận chuyển</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDispatch(e)}>
@@ -294,8 +290,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
             {vtypes.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.reg_seats + t.reg_berths} chỗ)</option>)}
           </select>
         </label>
-        <p className="muted small">Xếp xe nào cho chuyến thì bán vé tự theo sơ đồ ghế của xe đó.</p>
-        <p className="muted small">Giới hạn giờ lái: Luật TTATGT đường bộ 2024 (Điều 64), đã được sửa bởi Luật số 118/2025 từ 01/7/2026 – cần xác minh con số đang áp dụng.</p>
+        <p className="muted small">Giới hạn giờ lái: cần xác minh theo Luật 118/2025.</p>
         <button className="btn primary" disabled={busy}>Lưu cấu hình điều hành</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDoc(e)}>

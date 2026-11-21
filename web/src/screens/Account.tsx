@@ -98,7 +98,6 @@ function ThemePicker() {
           </button>
         ))}
       </div>
-      <p className="muted small">Lưu trên máy này. Bản in (vé, lệnh vận chuyển) luôn nền trắng.</p>
     </section>
   );
 }

@@ -351,7 +351,6 @@ function TripRun({ trip, stopName, reload }: { trip: MyTrip; stopName: (id: stri
           ))}
           <div className="dt-leg"><span><i className="bk" />Chưa thu</span><span><i className="pd" />Đã thu</span><span><i className="len" />Đã lên xe</span>
             <span><i className="vang" />Vắng</span><span><i className="huy" />Báo hủy</span><span><i />Trống</span></div>
-          <p className="small muted">Bấm vào ghế có khách để xem và gọi khách.</p>
         </>
       ) : <p className="muted">Xe chưa có sơ đồ ghế.</p>)}
 

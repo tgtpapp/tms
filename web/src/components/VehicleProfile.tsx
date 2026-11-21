@@ -153,7 +153,7 @@ export function VehicleProfile({ v, canEdit, tenantId, me, canSave }: { v: V; ca
           <div className="actions"><button type="button" className="btn small" onClick={() => void addInc()}>+ Thêm sự cố</button></div>
         </div>
       )}
-      <p className="muted small">Mẫu sổ lý lịch phương tiện theo quy định hiện hành: cần xác minh. Bảo dưỡng / sửa chữa lấy từ mục Sửa chữa ({rep.length} phiếu).</p>
+      <p className="muted small">Mẫu sổ: cần xác minh.</p>
 
     </div>
   );

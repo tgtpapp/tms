@@ -102,8 +102,6 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
         <label className="check"><input type="checkbox" checked={pc} onChange={(e) => setPc(e.target.checked)} /> Bảng phân công lịch tài &amp; xe (1 bản / ngày)</label>
         <label className="check"><input type="checkbox" checked={nt} onChange={(e) => setNt(e.target.checked)} /> Nghiệm thu an toàn (1 bản chung cho các giờ trong ngày của từng lái xe)</label>
         <label className="check"><input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> Vẫn lưu ngày còn chuyến thiếu xe / lái xe</label>
-        <p className="small muted">Lưu PDF vào Lưu trữ hồ sơ: <b>Năm › 08. Điều hành xe › Bảng phân công lịch tài &amp; xe / Nghiệm thu an toàn › Tháng MM-YYYY</b>.
-          Ngày đã lưu thì thay bằng bản mới (bản cũ ẩn). Giờ chưa xếp xe và lái xe không đưa vào bảng.</p>
         {busy && <p className="upload">{busy}</p>}
         <div className="actions">
           <button className="btn" disabled={!!busy || (!pc && !nt)} onClick={() => void preview()}>Xem / in ngày {fmtDate(from)}</button>

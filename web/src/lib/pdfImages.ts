@@ -57,7 +57,8 @@ export async function pdfImages(u: Uint8Array): Promise<string[]> {
     let p = sAt + 6;
     if (text[p] === '\r') p++;
     if (text[p] === '\n') p++;
-    const len = num('Length'), endAt = text.indexOf('endstream', p);
+    // /Length có thể là tham chiếu ("/Length 12 0 R"): khi đó lấy tới "endstream"
+    const lm = /\/Length\s+(\d+)(\s+\d+\s+R)?/.exec(dict), len = lm && !lm[2] ? Number(lm[1]) : 0, endAt = text.indexOf('endstream', p);
     const data = u.subarray(p, len > 0 && p + len <= u.length && (endAt < 0 || p + len <= endAt) ? p + len : endAt > 0 ? endAt : u.length);
     re.lastIndex = endAt > 0 ? endAt : sAt + 6;
     if (isBanner(w, h)) continue;

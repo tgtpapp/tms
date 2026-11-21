@@ -38,7 +38,7 @@ Tệp này là "hiến pháp" của dự án. Mọi phiên làm việc phải đ
 - Trình duyệt **không được** INSERT/UPDATE/DELETE trực tiếp bảng ghế và bảng tiền; chỉ qua hàm RPC có kiểm tra quyền.
 - Hàm mới trong schema public: `revoke execute ... from public, anon, authenticated` rồi GRANT tường minh. Hàm nội bộ đặt tên `svc_*`, chỉ GRANT cho `service_role`.
 - Truy cập sai tenant phải trả "không tìm thấy". Mỗi module mới phải có kiểm thử truy cập chéo tenant.
-- Super Admin không mặc nhiên đọc dữ liệu cá nhân / tài chính của nhà xe.
+- Super Admin chỉ tạo nhà xe mới (và Chủ nhà xe khi nhà xe chưa có Chủ); không can thiệp, không xem dữ liệu bên trong nhà xe (Luật BVDLCN 91/2025: nền tảng là bên xử lý dữ liệu).
 - Người dùng luôn xem được dữ liệu của chính mình, không xem được của người khác.
 
 ## 5. Ghế và tiền

@@ -123,6 +123,15 @@ async function handle(req: Request): Promise<Response> {
       const { data: tenant, error: tErr } = await admin.from('tenants').select('id, code').eq('id', tenantId).maybeSingle();
       if (tErr) throw new HttpError(500, `Lỗi đọc dữ liệu nhà xe: ${tErr.message}`);
       if (!tenant) throw new HttpError(404, 'Không tìm thấy nhà xe');
+      // Super Admin chỉ tạo Chủ cho nhà xe mới (chưa có Chủ); đã có Chủ thì mọi việc trong nhà xe do Chủ nhà xe tự làm
+      const { data: ownerRole, error: rErr } = await admin.from('roles').select('id').eq('tenant_id', tenant.id).eq('code', 'owner').maybeSingle();
+      if (rErr) throw new HttpError(500, `Lỗi đọc vai trò: ${rErr.message}`);
+      if (ownerRole) {
+        const { count, error: cErr } = await admin.from('user_roles').select('id', { count: 'exact', head: true })
+          .eq('tenant_id', tenant.id).eq('role_id', ownerRole.id);
+        if (cErr) throw new HttpError(500, `Lỗi đọc vai trò: ${cErr.message}`);
+        if ((count ?? 0) > 0) throw new HttpError(409, 'Nhà xe đã có Chủ nhà xe. Super Admin không thêm tài khoản vào nhà xe đã hoạt động.');
+      }
       const userId = await createMember(admin, tenant.id, tenant.code,
         validatePhone(requireString(body, 'phone')), requireString(body, 'full_name'),
         validatePassword(requireString(body, 'password')), 'owner');

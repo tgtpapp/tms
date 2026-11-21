@@ -65,6 +65,9 @@ check(r.status === 200, 'Super Admin tạo Chủ nhà xe A', r);
 r = await callFn(sup.token, { action: 'create_tenant_owner', tenant_id: tenantB, phone: '0901000001',
   full_name: 'Chủ nhà xe B', password: 'chub123' });
 check(r.status === 200, 'Cùng số điện thoại vẫn tạo được ở nhà xe khác', r);
+r = await callFn(sup.token, { action: 'create_tenant_owner', tenant_id: tenantA, phone: '0901000009',
+  full_name: 'Chủ thứ hai', password: 'chu2abc9' });
+check(r.status === 409, 'Nhà xe đã có Chủ: Super Admin không thêm được tài khoản', r);
 
 // 3. Chủ A đăng nhập bằng số điện thoại + mật khẩu
 const ownerA = await signIn(loginEmail('0901000001', 'thinh-phat', DOMAIN), 'chu123');

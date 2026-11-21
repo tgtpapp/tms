@@ -9,6 +9,7 @@ interface TenantRow {
   code: string;
   name: string;
   status: string;
+  has_owner: boolean;
 }
 
 /** Trang Super Admin: danh sách nhà xe, tạo nhà xe + Chủ nhà xe. */
@@ -19,9 +20,7 @@ export function PlatformScreen() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from('tenants').select('id, code, name, status').order('created_at');
-    if (error) toast('error', error.message);
-    else setTenants((data ?? []) as TenantRow[]);
+    try { setTenants(await rpc<TenantRow[]>('platform_tenants')); } catch (e) { toast('error', errMsg(e)); }
   }, [toast]);
 
   useEffect(() => {
@@ -63,7 +62,7 @@ export function PlatformScreen() {
           <h2>Nhà xe ({tenants.length})</h2>
           {tenants.length === 0 && <p className="muted">Chưa có nhà xe nào.</p>}
           <ul className="list">
-            {tenants.map((t) => <TenantItem key={t.id} tenant={t} />)}
+            {tenants.map((t) => <TenantItem key={t.id} tenant={t} onDone={() => void load()} />)}
           </ul>
         </section>
         <form className="card form" onSubmit={submit}>
@@ -91,8 +90,8 @@ export function PlatformScreen() {
   );
 }
 
-/** Một nhà xe trong danh sách + nút thêm Chủ nhà xe (khi tạo nhà xe xong mà chưa tạo được chủ). */
-function TenantItem({ tenant }: { tenant: TenantRow }) {
+/** Một nhà xe trong danh sách + nút thêm Chủ nhà xe (chỉ khi nhà xe chưa có Chủ: tạo nhà xe xong mà chưa tạo được chủ). */
+function TenantItem({ tenant, onDone }: { tenant: TenantRow; onDone: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', phone: '', password: '' });
@@ -110,6 +109,7 @@ function TenantItem({ tenant }: { tenant: TenantRow }) {
       toast('ok', `Đã tạo Chủ nhà xe cho ${tenant.name}`);
       setF({ name: '', phone: '', password: '' });
       setOpen(false);
+      onDone();
     } catch (e2) {
       toast('error', errMsg(e2));
     } finally {
@@ -124,9 +124,9 @@ function TenantItem({ tenant }: { tenant: TenantRow }) {
           <b>{tenant.name}</b> <span className="muted">· {tenant.code}</span>
           <span className={`badge ${tenant.status}`}>{tenant.status === 'active' ? 'Hoạt động' : tenant.status}</span>
         </div>
-        <button className="btn small" onClick={() => setOpen(!open)}>Thêm Chủ nhà xe</button>
+        {!tenant.has_owner && <button className="btn small" onClick={() => setOpen(!open)}>Thêm Chủ nhà xe</button>}
       </div>
-      {open && (
+      {open && !tenant.has_owner && (
         <form className="form" onSubmit={submit}>
           <div className="grid2">
             <label>Họ tên<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>

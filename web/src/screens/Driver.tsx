@@ -32,8 +32,11 @@ const TZ = 'Asia/Ho_Chi_Minh';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const ROLE = { lai_xe_1: 'Lái xe 1', lai_xe_2: 'Lái xe 2', phu_xe: 'Phụ xe' } as const;
-/** Chuyến còn phải chạy: chưa hủy, chưa đến bến, và đang chạy hoặc chưa tới giờ xuất bến */
-const isUpcoming = (t: MyTrip, now: number) => t.status !== 'huy' && !t.arrived_at && (!!t.departed_at || new Date(t.depart_at).getTime() >= now);
+/** Chuyến còn phải chạy: chưa hủy, chưa đến bến, đang chạy hoặc chưa tới giờ xuất bến,
+ *  và chưa có chuyến sau nó tới giờ / đã xuất bến (tới giờ chuyến sau thì chuyến trước coi như đã kết thúc). */
+const isUpcoming = (t: MyTrip, all: MyTrip[], now: number) =>
+  t.status !== 'huy' && !t.arrived_at && (!!t.departed_at || new Date(t.depart_at).getTime() >= now)
+  && !all.some((x) => x.status !== 'huy' && x.depart_at > t.depart_at && (!!x.departed_at || new Date(x.depart_at).getTime() <= now));
 const addDays = (d: string, n: number) => {
   const x = new Date(`${d}T00:00:00Z`);
   x.setUTCDate(x.getUTCDate() + n);
@@ -85,13 +88,13 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
     const t = setInterval(() => { setNow(Date.now()); if (!document.hidden && day === today()) void load(); }, 60_000);
     return () => clearInterval(t);
   }, [day, load]);
-  const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, now)) - Number(isUpcoming(a, now)) || a.depart_at.localeCompare(b.depart_at));
-  const first = sorted.find((t) => isUpcoming(t, now));
+  const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, trips, now)) - Number(isUpcoming(a, trips, now)) || a.depart_at.localeCompare(b.depart_at));
+  const first = sorted.find((t) => isUpcoming(t, trips, now));
   const open = picked === '' ? null : picked ?? first?.trip_id ?? (trips.length === 1 ? trips[0]!.trip_id : null);
   const cur = open ? trips.find((t) => t.trip_id === open) : undefined;
   const cut = cur ? sorted.indexOf(cur) + 1 : first ? 1 : 0;   // chi tiết chuyến nằm ngay dưới thẻ chuyến đang mở
   const chip = (t: MyTrip) => (
-    <button key={t.trip_id} className={['trip-chip', open === t.trip_id && 'on', !isUpcoming(t, now) ? 'past' : t === first ? 'next' : 'later'].filter(Boolean).join(' ')}
+    <button key={t.trip_id} className={['trip-chip', open === t.trip_id && 'on', !isUpcoming(t, trips, now) ? 'past' : t === first ? 'next' : 'later'].filter(Boolean).join(' ')}
             onClick={() => setOpen(open === t.trip_id ? '' : t.trip_id)} aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
       <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
       <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>

@@ -1,0 +1,22 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'tong_tai_khoan: '||count(*)||' khoa='||count(*) filter (where status<>'active') from public.app_users"
+          psql -Atc "select 'tai_khoan_'||row_number() over (order by u.created_at)||': trang_thai='||u.status
+             ||' vai_tro='||coalesce((select string_agg(r.code||'@'||ur.scope_type, ',') from public.user_roles ur join public.roles r on r.tenant_id=ur.tenant_id and r.id=ur.role_id where ur.user_id=u.id),'-')
+             ||' quyen_sua_chua_theo_vai_tro='||coalesce((select string_agg(distinct rp.permission_code, ',') from public.user_roles ur join public.role_permissions rp on rp.tenant_id=ur.tenant_id and rp.role_id=ur.role_id where ur.user_id=u.id and rp.permission_code like 'repair.%'),'-')
+             ||' bi_bo_quyen='||coalesce((select string_agg(d.permission_code, ',') from public.user_permission_denies d where d.user_id=u.id and d.permission_code like 'repair.%'),'-')
+             ||' gan_nhan_vien='||exists(select 1 from public.staff_members m where m.user_id=u.id)
+             from public.app_users u order by u.created_at"

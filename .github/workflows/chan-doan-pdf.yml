@@ -24,13 +24,24 @@ jobs:
             [ -z "$f" ] && continue; n=$((n+1))
             curl -sS -o "f$n.pdf" -H "Authorization: Bearer $KEY" -H "apikey: $KEY" "https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1/object/giay-to/$f"
             python3 - "f$n.pdf" <<'PY'
-          import re, sys
-          b = open(sys.argv[1], 'rb').read(); t = b.decode('latin1')
-          print('Tệp', len(b), 'byte, đầu', t[:8])
+          import re, sys, io
+          from PIL import Image
+          b = open(sys.argv[1], 'rb').read(); t = b.decode('latin1'); ok = bad = skip = 0
           for m in re.finditer(r'/Subtype\s*/Image', t):
-              s = t.rfind('obj', 0, m.start()); e = t.find('stream', m.start())
-              d = re.sub(r'<[0-9a-fA-F\s]{20,}>', '<...>', t[s:e]).replace('\n', ' ')[:220]
-              print('ẢNH:', d)
+              s = t.rfind('obj', 0, m.start()); e = t.find('stream', m.start()); d = t[s:e]
+              w = int(re.search(r'/Width\s+(\d+)', d).group(1)); h = int(re.search(r'/Height\s+(\d+)', d).group(1))
+              if w / h >= 4 or (w < 120 and h < 120): skip += 1; continue
+              p = e + 6
+              if t[p] == '\r': p += 1
+              if t[p] == '\n': p += 1
+              lm = re.search(r'/Length\s+(\d+)(\s+\d+\s+R)?', d); ln = int(lm.group(1)) if lm and not lm.group(2) else 0
+              end = t.find('endstream', p); data = b[p:p + ln] if ln else b[p:end]
+              k = len(data)
+              while k > 2 and data[k - 1] != 0xd9: k -= 1
+              try:
+                  im = Image.open(io.BytesIO(data[:k])); im.load(); ok += 1
+              except Exception as x: bad += 1
+          print(f'Ảnh trang đọc được {ok}, hỏng {bad}, bỏ dải quảng cáo {skip}')
           PY
           done < files.txt
           rm -f f*.pdf files.txt

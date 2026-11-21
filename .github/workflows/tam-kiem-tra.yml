@@ -1,0 +1,23 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'tong: nha_xe='||count(distinct tenant_id)||' phieu='||count(*)||' tu='||min(repaired_on)||' den='||max(repaired_on)||' ma_min='||min(code)||' ma_max='||max(code) from public.repair_orders"
+          psql -Atc "select 'thang '||to_char(repaired_on,'YYYY-MM')||': '||count(*)||' phieu, '||coalesce(sum((select count(*) from public.repair_items i where i.tenant_id=o.tenant_id and i.order_id=o.id)),0)||' hang muc' from public.repair_orders o group by 1 order by 1"
+          psql -Atc "select 'thieu_so: '||coalesce(string_agg(lpad(g::text,4,'0'),','),'-') from generate_series(1,(select max(nullif(regexp_replace(code,'\D','','g'),'')::int) from public.repair_orders where code like 'PSX%')) g where not exists (select 1 from public.repair_orders where nullif(regexp_replace(code,'\D','','g'),'')::int = g and code like 'PSX%')"
+          psql -Atc "select 'ma_khac_PSX: '||count(*) from public.repair_orders where code not like 'PSX%'"
+          psql -Atc "select 'trung_ma: '||count(*) from (select code from public.repair_orders group by tenant_id, code having count(*)>1) x"
+          psql -Atc "select 'phieu_0_hang_muc: '||count(*) from public.repair_orders o where not exists (select 1 from public.repair_items i where i.tenant_id=o.tenant_id and i.order_id=o.id)"
+          psql -Atc "select 'hang_muc: '||count(*)||' co_dvt='||count(unit)||' tong_tien='||sum(qty*unit_price)::bigint from public.repair_items"
+          psql -Atc "select 'tao_luc: '||to_char(created_at at time zone 'Asia/Ho_Chi_Minh','YYYY-MM-DD HH24')||'h: '||count(*) from public.repair_orders group by 1 order by 1" 2>/dev/null || echo "khong_co_created_at"

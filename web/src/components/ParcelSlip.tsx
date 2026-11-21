@@ -1,4 +1,5 @@
 // Phiếu gửi hàng khổ K80 (như app cũ): xem trước ngay khi nhập, in máy in nhiệt 80mm (hoặc 58mm).
+import { printThermal } from '../lib/thermalPrint';
 import { useEffect, useRef, useState } from 'react';
 
 export interface SlipData {
@@ -71,7 +72,7 @@ export function ParcelPrint({ slips, onClose }: { slips: SlipData[]; onClose: ()
   useEffect(() => {
     if (done.current) return;
     done.current = true;
-    setTimeout(() => window.print(), 150);
+    setTimeout(() => printThermal(), 150);
   }, []);
   const change = (w: '80' | '58') => { setWidth(w); try { localStorage.setItem(KEY, w); } catch { /* chỉ áp dụng lần này */ } };
   return (
@@ -80,7 +81,7 @@ export function ParcelPrint({ slips, onClose }: { slips: SlipData[]; onClose: ()
         <b>Phiếu gửi hàng{slips.length === 1 ? ` ${slips[0]!.code ?? ''}` : ` · ${slips.length} phiếu`}</b>
         <button className={width === '80' ? 'btn small primary' : 'btn small'} onClick={() => change('80')}>Khổ 80mm</button>
         <button className={width === '58' ? 'btn small primary' : 'btn small'} onClick={() => change('58')}>Khổ 58mm</button>
-        <button className="btn small primary" onClick={() => window.print()}>In lại</button>
+        <button className="btn small primary" onClick={() => printThermal()}>In lại</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
       <div className={`ve-list w${width}`}>{slips.map((d, i) => <ParcelSlip key={i} d={d} i={i} n={slips.length} />)}</div>

@@ -562,6 +562,12 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Nhận hàng + in K80' }).click();
   await expect(page.getByText(/^Đã nhận hàng, phiếu /)).toBeVisible();
   await expect(page.locator('.ve-list').getByText('PHIẾU GỬI HÀNG')).toBeVisible();
+  // In nhiệt: mỗi phiếu 1 trang khổ 80mm dài đúng bằng nội dung (không in cả trang A4 / 297mm)
+  await page.getByRole('button', { name: 'In lại' }).click();
+  const pg = await page.evaluate(() => [...document.querySelectorAll('style')].map((x) => x.textContent ?? '').join('').match(/@page tpg0\{size:(\d+)mm (\d+)mm/));
+  expect(pg?.[1]).toBe('80');
+  expect(Number(pg?.[2])).toBeGreaterThan(60);
+  expect(Number(pg?.[2])).toBeLessThan(260);
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByRole('button', { name: /^In phiếu / })).toHaveCount(1);
 

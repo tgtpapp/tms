@@ -1,4 +1,5 @@
 // Vé xe in máy in nhiệt khổ 80mm (mặc định) hoặc 58mm (máy in cầm tay). Mỗi ghế 1 vé.
+import { printThermal } from '../lib/thermalPrint';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
@@ -42,7 +43,7 @@ export function TicketPrint({ data, onClose }: { data: TicketPrintData; onClose:
   useEffect(() => {
     if (!qr || printed.current) return;
     printed.current = true;
-    setTimeout(() => window.print(), 100);
+    setTimeout(() => printThermal(), 100);
   }, [qr]);
 
   function changeWidth(w: '80' | '58') {
@@ -60,7 +61,7 @@ export function TicketPrint({ data, onClose }: { data: TicketPrintData; onClose:
         <b>Vé {data.code} · {data.tickets.length} ghế</b>
         <button className={width === '80' ? 'btn small primary' : 'btn small'} onClick={() => changeWidth('80')}>Khổ 80mm</button>
         <button className={width === '58' ? 'btn small primary' : 'btn small'} onClick={() => changeWidth('58')}>Khổ 58mm</button>
-        <button className="btn small primary" onClick={() => window.print()}>In lại</button>
+        <button className="btn small primary" onClick={() => printThermal()}>In lại</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
       <div className={`ve-list w${width}`}>

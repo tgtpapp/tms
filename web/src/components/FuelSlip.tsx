@@ -1,4 +1,5 @@
 // Phiếu nhiên liệu in máy in nhiệt khổ 80mm (như app cũ): phiếu nhập dầu / xuất dầu / đổ dầu ngoài.
+import { printThermal } from '../lib/thermalPrint';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { moneyWords } from '../lib/vnWords';
@@ -13,13 +14,13 @@ const TITLE = { nhap: 'PHIẾU NHẬP DẦU', bon: 'PHIẾU XUẤT DẦU', ngoai
 
 export function FuelSlip({ list, onClose }: { list: FuelSlipData[]; onClose: () => void }) {
   const printed = useRef(false);
-  useEffect(() => { if (printed.current) return; printed.current = true; setTimeout(() => window.print(), 150); }, []);
+  useEffect(() => { if (printed.current) return; printed.current = true; setTimeout(() => printThermal(), 150); }, []);
   const now = new Date(), pad = (x: number) => String(x).padStart(2, '0');
   return createPortal(
     <div className="lenh-overlay">
       <div className="lenh-bar no-print">
         <b>{list.length === 1 ? `Phiếu ${list[0]!.code}` : `${list.length} phiếu dầu`} · khổ 80mm</b>
-        <button className="btn small primary" onClick={() => window.print()}>In lại</button>
+        <button className="btn small primary" onClick={() => printThermal()}>In lại</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
       <div className="ve-list w80">

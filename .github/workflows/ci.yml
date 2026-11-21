@@ -247,7 +247,7 @@ jobs:
         if: steps.cf.outputs.ok == 'true'
         with:
           node-version: 22
-      - name: Lấy cấu hình project (tài khoản, biến VITE_* bản chạy thật) từ Cloudflare
+      - name: Lấy cấu hình project Cloudflare (biến VITE_* nếu có)
         if: steps.cf.outputs.ok == 'true'
         run: |
           api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "$@"; }
@@ -268,9 +268,10 @@ jobs:
                   raise SystemExit('Biến %s trên Cloudflare đang để dạng bí mật: biến VITE_* là công khai, đổi sang dạng chữ thường' % k)
               out.write('%s<<__EOF__\n%s\n__EOF__\n' % (k, v['value']))
               names.append(k)
-          if 'VITE_SUPABASE_URL' not in names:
-              raise SystemExit('Project Cloudflare thiếu biến VITE_SUPABASE_URL')
-          print('Biến lấy từ Cloudflare:', ', '.join(sorted(names)))
+          # cấu hình chính nằm ở web/.env.production; biến đặt trên Cloudflare (nếu có) được ưu tiên như khi Cloudflare tự dựng
+          if 'VITE_SUPABASE_URL' not in names and 'VITE_SUPABASE_URL=' not in open('web/.env.production').read():
+              raise SystemExit('Thiếu VITE_SUPABASE_URL (web/.env.production hoặc biến trên Cloudflare)')
+          print('Biến lấy từ Cloudflare:', ', '.join(sorted(names)) or 'không có (dùng web/.env.production)')
           PY
       - name: Dựng giao diện
         if: steps.cf.outputs.ok == 'true'

@@ -238,7 +238,9 @@ reset role;
 
 -- ---------------------------------------------------------------- Thông báo: lái xe được báo chuyến hôm nay; người bán được báo khi lái xe báo khách
 insert into t.ids select 'T0', id from public.trips where direction = 'di' and service_date = app.local_today() and status = 'mo' limit 1;
+set local session_replication_role = replica;
 delete from public.trip_crew where staff_id = (select v from t.ids where k = 'D1');   -- tránh trùng giờ với chuyến thử trước
+set local session_replication_role = origin;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select lives_ok($$ select public.assign_trip((select v from t.ids where k = 'T0'), null, (select v from t.ids where k = 'D1'), null, null, 'Thử') $$, 'Xếp lái xe 1 chuyến hôm nay');

@@ -420,7 +420,7 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
         const d = day(str(r, 'ngay'));
         if (!vehicle_id || !d) { noVeh++; return []; }
         const items = (Array.isArray(r.items) ? r.items : []).filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
-          .map((x) => ({ content: str(x, 'nd') || str(x, 'noiDung'), qty: numOf(x, 'sl') ?? 1, unit_price: Math.round(numOf(x, 'gia') ?? 0) }));
+          .map((x) => ({ content: str(x, 'nd') || str(x, 'noiDung'), unit: str(x, 'dvt'), qty: numOf(x, 'sl') ?? 1, unit_price: Math.round(numOf(x, 'gia') ?? 0) }));
         return [{ code: str(r, 'so') || null, vehicle_id, repaired_on: d, odo_km: numOf(r, 'km'), workshop: str(r, 'donVi'), note: str(r, 'ghiChu'), items }];
       });
       const fuel = legacy.fuel.flatMap((r) => {

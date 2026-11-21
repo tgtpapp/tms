@@ -10,15 +10,15 @@ import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface Order { id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; kind: string; note: string | null; files: string[] }
-interface Item { order_id: string; seq: number; content: string; qty: number; unit_price: number }
+interface Item { order_id: string; seq: number; content: string; unit: string | null; qty: number; unit_price: number }
 interface Veh { id: string; plate: string; is_active: boolean }
-interface Line { content: string; qty: string; unit_price: string }
+interface Line { content: string; unit: string; qty: string; unit_price: string }
 interface Form { id: string | null; vehicle_id: string; repaired_on: string; odo_km: string; workshop: string; kind: string; note: string; files: string[]; add: File[]; lines: Line[] }
 
 const KIND: Record<string, string> = { bao_duong: 'Bảo dưỡng', sua_chua: 'Sửa chữa', thay_the: 'Thay thế phụ tùng' };
 const money = (n: number) => `${Math.round(n).toLocaleString('vi-VN')} đ`;
 const total = (l: { qty: number; unit_price: number }[]) => l.reduce((a, x) => a + Number(x.qty) * Number(x.unit_price), 0);
-const EMPTY_LINE: Line = { content: '', qty: '1', unit_price: '' };
+const EMPTY_LINE: Line = { content: '', unit: '', qty: '1', unit_price: '' };
 
 export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
@@ -45,7 +45,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
     setOrders(list);
     setVehicles((v.data ?? []) as Veh[]);
     if (list.length) {
-      const it = await supabase.from('repair_items').select('order_id, seq, content, qty, unit_price').in('order_id', list.map((x) => x.id)).order('seq');
+      const it = await supabase.from('repair_items').select('order_id, seq, content, unit, qty, unit_price').in('order_id', list.map((x) => x.id)).order('seq');
       setItems((it.data ?? []) as Item[]);
     } else setItems([]);
   }, [month, veh, toast]);
@@ -57,7 +57,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
 
   function open(o: Order | null) {
     setF(o ? { id: o.id, vehicle_id: o.vehicle_id, repaired_on: o.repaired_on, odo_km: o.odo_km?.toString() ?? '', workshop: o.workshop ?? '', kind: o.kind, note: o.note ?? '', files: o.files, add: [],
-      lines: [...itemsOf(o.id).map((x) => ({ content: x.content, qty: String(x.qty), unit_price: String(x.unit_price) })), { ...EMPTY_LINE }] }
+      lines: [...itemsOf(o.id).map((x) => ({ content: x.content, unit: x.unit ?? '', qty: String(x.qty), unit_price: String(x.unit_price) })), { ...EMPTY_LINE }] }
       : { id: null, vehicle_id: veh || vehicles.find((v) => v.is_active)?.id || '', repaired_on: today(), odo_km: '', workshop: '', kind: 'sua_chua', note: '', files: [], add: [], lines: [{ ...EMPTY_LINE }] });
   }
   async function save() {
@@ -71,7 +71,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
         files = [...files, ...(await uploadFiles(ctx.tenant_id, 'xe', f.vehicle_id, plate(f.vehicle_id), 'sua_chua', prepared))];
       }
       await rpc('save_repair', { p_id: f.id, p: { vehicle_id: f.vehicle_id, repaired_on: f.repaired_on, odo_km: f.odo_km, workshop: f.workshop, kind: f.kind, note: f.note, files },
-        p_items: f.lines.filter((l) => l.content.trim()).map((l) => ({ content: l.content, qty: Number(l.qty) || 1, unit_price: Number(l.unit_price) || 0 })) });
+        p_items: f.lines.filter((l) => l.content.trim()).map((l) => ({ content: l.content, unit: l.unit.trim(), qty: Number(l.qty) || 1, unit_price: Number(l.unit_price) || 0 })) });
       toast('ok', f.id ? 'Đã lưu phiếu sửa chữa' : 'Đã thêm phiếu sửa chữa');
       setF(null);
       await load();
@@ -146,21 +146,20 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
               <label>Gara / xưởng<input value={f.workshop} onChange={(e) => setF({ ...f, workshop: e.target.value })} /></label>
               <label>Ghi chú<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
             </div>
-            <table className="plist">
-              <thead><tr><th>Nội dung</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th /></tr></thead>
-              <tbody>
-                {f.lines.map((l, i) => (
-                  <tr key={i}>
-                    <td><input value={l.content} aria-label={`Nội dung ${i + 1}`} onChange={(e) => setLine(i, { content: e.target.value })} placeholder="vd: Thay nhớt" /></td>
-                    <td style={{ width: 70 }}><input type="number" min={0} step="0.5" inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                    <td style={{ width: 140 }}><input type="number" min={0} step={1000} inputMode="numeric" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></td>
-                    <td>{money((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</td>
-                    <td><button type="button" className="btn small link" aria-label="Bỏ dòng" onClick={() => setF({ ...f, lines: f.lines.filter((_, k) => k !== i) })}>×</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="actions">
+            <div className="rep-lines">
+              <div className="rep-line rep-head"><span>Nội dung</span><span>ĐVT</span><span>SL</span><span>Đơn giá</span><span>Thành tiền</span><span /></div>
+              {f.lines.map((l, i) => (
+                <div className="rep-line" key={i}>
+                  <label className="c-nd"><span>Nội dung</span><input value={l.content} aria-label={`Nội dung ${i + 1}`} onChange={(e) => setLine(i, { content: e.target.value })} placeholder="vd: Thay nhớt" /></label>
+                  <label className="c-dvt"><span>ĐVT</span><input value={l.unit} maxLength={30} aria-label={`ĐVT ${i + 1}`} onChange={(e) => setLine(i, { unit: e.target.value })} placeholder="cái" /></label>
+                  <label className="c-sl"><span>SL</span><input type="number" min={0} step="0.5" inputMode="decimal" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></label>
+                  <label className="c-dg"><span>Đơn giá</span><input type="number" min={0} step={1000} inputMode="numeric" value={l.unit_price} onChange={(e) => setLine(i, { unit_price: e.target.value })} /></label>
+                  <div className="c-tt"><span>Thành tiền</span><b>{money((Number(l.qty) || 0) * (Number(l.unit_price) || 0))}</b></div>
+                  <button type="button" className="btn small link c-x" aria-label="Bỏ dòng" onClick={() => setF({ ...f, lines: f.lines.filter((_, k) => k !== i) })}>×</button>
+                </div>
+              ))}
+            </div>
+            <div className="rep-sum">
               <button type="button" className="btn small" onClick={() => setF({ ...f, lines: [...f.lines, { ...EMPTY_LINE }] })}>+ Thêm dòng</button>
               <b>Tổng: {money(f.lines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0))}</b>
             </div>

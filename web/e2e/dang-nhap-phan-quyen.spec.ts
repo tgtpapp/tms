@@ -410,6 +410,30 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(bc.getByText(/BÁO CÁO GIÁM SÁT AN TOÀN THÁNG/)).toBeVisible();
   await expect(bc.getByText(/BẢNG TỔNG HỢP VI PHẠM\/CẢNH BÁO/)).toBeVisible();
   await bc.getByRole('button', { name: 'Đóng', exact: true }).click();
+  // 5j5c2. Sửa chữa: hạng mục có ĐVT; ô nhập cân đối trên điện thoại và máy tính (không tràn, đủ rộng)
+  await page.getByRole('button', { name: 'Sửa chữa', exact: true }).click();
+  await page.getByRole('button', { name: '+ Phiếu sửa chữa' }).click();
+  const rl = page.locator('.rep-line:not(.rep-head)').first();
+  await page.getByLabel('Nội dung 1').fill('THAY NHỚT');
+  await page.getByLabel('ĐVT 1').fill('LÍT');
+  await rl.locator('.c-sl input').fill('8');
+  await rl.locator('.c-dg input').fill('90000');
+  await expect(rl.locator('.c-tt b')).toHaveText(/720\.000/);
+  const boxes = async () => Promise.all(['.c-nd input', '.c-dvt input', '.c-sl input', '.c-dg input'].map(async (c) => (await rl.locator(c).boundingBox())!));
+  for (const vp of [{ width: 412, height: 915 }, { width: 820, height: 1180 }, { width: 1366, height: 800 }]) {
+    await page.setViewportSize(vp);
+    const b = await boxes(), dlg = (await page.locator('.rep-lines').boundingBox())!;
+    for (const x of b) { expect(x.width).toBeGreaterThan(50); expect(x.x + x.width).toBeLessThanOrEqual(dlg.x + dlg.width + 1); }
+    if (vp.width > 720) expect(Math.abs(b[0]!.y - b[3]!.y)).toBeLessThan(4);   // máy tính / máy tính bảng: 1 hàng
+    else expect(b[1]!.y).toBeGreaterThan(b[0]!.y + 20);                       // điện thoại: nội dung 1 hàng, ĐVT / SL / giá hàng dưới
+    await page.screenshot({ path: `test-results/sua-chua-${vp.width}.png` });
+  }
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.getByRole('button', { name: 'Lưu phiếu' }).click();
+  await expect(page.getByText('THAY NHỚT (x8)')).toBeVisible();
+  await page.getByRole('button', { name: 'Sửa', exact: true }).first().click();
+  await expect(page.getByLabel('ĐVT 1')).toHaveValue('LÍT');
+  await page.getByRole('button', { name: 'Thôi' }).click();
   // 5j5d. Nhiên liệu: giá Petrolimex, nhập bồn tự lưu + in phiếu 80mm, in sổ
   await page.getByRole('button', { name: 'Nhiên liệu', exact: true }).click();
   await expect(page.getByText('Giá bán lẻ Petrolimex vùng 1')).toBeVisible();

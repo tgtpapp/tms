@@ -1136,3 +1136,27 @@ button.dt-g { cursor: pointer; }
 .trip-chip.past { background: #eceff1; border-color: #cfd8dc; color: #546e7a; }
 html[data-mode='dark'] .trip-chip.next { border-color: #166534; }
 html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #37474f; color: #b0bec5; }
+/* Phiếu sửa chữa: dòng hạng mục cân đối trên máy tính / máy tính bảng / điện thoại */
+.rep-lines { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px; }
+.rep-line { display: grid; grid-template-columns: minmax(0, 1fr) 90px 80px 150px 130px 36px; gap: 10px; align-items: center; }
+.rep-line > label { display: block; margin: 0; min-width: 0; }
+.rep-line > label > span, .rep-line .c-tt > span { display: none; }
+.rep-line input { width: 100%; min-width: 0; }
+.rep-line .c-tt { text-align: right; white-space: nowrap; }
+.rep-line .c-x { justify-self: center; font-size: 1.3rem; padding: 0 8px; }
+.rep-head { font-size: .78rem; font-weight: 600; text-transform: uppercase; color: var(--muted); }
+.rep-head > span:nth-child(5) { text-align: right; }
+.rep-sum { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rep-sum b { font-size: 1.05rem; }
+@media (max-width: 900px) and (min-width: 721px) {
+  .rep-line { grid-template-columns: minmax(0, 1fr) 70px 64px 120px 110px 32px; gap: 8px; }
+}
+@media (max-width: 720px) {
+  .rep-head { display: none; }
+  .rep-line { grid-template-columns: minmax(0, 1fr) minmax(0, .8fr) minmax(0, 1.4fr) 36px; gap: 6px 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+  .rep-line:last-child { border-bottom: 0; padding-bottom: 0; }
+  .rep-line > label > span, .rep-line .c-tt > span { display: block; font-size: .75rem; color: var(--muted); }
+  .rep-line .c-nd { grid-column: 1 / -1; }
+  .rep-line .c-x { align-self: end; grid-column: 4; grid-row: 2; }
+  .rep-line .c-tt { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; }
+}

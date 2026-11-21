@@ -1,4 +1,5 @@
 import { InstallApp } from '../components/InstallApp';
+import { NotifySettings } from '../components/NotifySettings';
 import { Avatar, StaffAvatar } from '../components/StaffAvatar';
 import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD } from '../lib/login';
@@ -40,6 +41,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
 
   return (
     <>
+      <NotifySettings />
       <ThemePicker />
       <section className="card">
         <div className="item-head">

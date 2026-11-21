@@ -12,9 +12,13 @@ export function errMsg(e: unknown): string {
 }
 
 /** Gọi hàm RPC trong database; lỗi trả về câu tiếng Việt từ database. */
+let afterWrite: ((fn: string) => void) | null = null;
+/** Việc chạy sau mỗi lệnh RPC thành công (gửi thông báo đẩy đang chờ) */
+export const setAfterWrite = (f: (fn: string) => void) => { afterWrite = f; };
 export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
   if (error) throw new Error(error.message);
+  afterWrite?.(fn);
   return data as T;
 }
 

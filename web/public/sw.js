@@ -46,3 +46,21 @@ self.addEventListener('fetch', (e) => {
     })));
   }
 });
+
+// Thông báo đẩy (kể cả khi đóng app): hiện lên màn hình, bấm vào mở app
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: 'Thông báo', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Thông báo', {
+    body: d.body || '', tag: d.tag, icon: '/icon-192.png', badge: '/icon-192.png', data: { url: d.url || '/' }, renotify: !!d.tag,
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ws) => {
+    const w = ws.find((x) => new URL(x.url).origin === self.location.origin);
+    if (w) { w.postMessage({ type: 'mo-thong-bao' }); return w.focus(); }
+    return self.clients.openWindow(url + (url.includes('?') ? '&' : '?') + 'thong-bao=1');
+  }));
+});

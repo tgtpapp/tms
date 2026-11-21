@@ -1,4 +1,5 @@
 import { Avatar, useAvatars } from '../components/StaffAvatar';
+import { NotifyBell } from '../components/NotifyBell';
 import { useCallback, useEffect, useState } from 'react';
 import { Centered } from '../components/Centered';
 import { config } from '../config';
@@ -144,6 +145,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
             <b>{ctx.tenant_name ?? config.appName}</b>
             <span className="me-line"><Avatar name={ctx.full_name ?? '?'} url={myStaff ? avas[myStaff] : undefined} size={26} /><small>{ctx.full_name}</small></span>
           </div>
+          <NotifyBell />
           <button type="button" className={pinned ? 'side-pin on' : 'side-pin'} aria-pressed={pinned}
                   aria-label={pinned ? 'Bỏ ghim menu (tự ẩn)' : 'Ghim menu'} title={pinned ? 'Bỏ ghim: menu tự thu gọn' : 'Ghim menu luôn mở'}
                   onClick={() => setPinned(!pinned)}>

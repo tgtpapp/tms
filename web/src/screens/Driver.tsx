@@ -1,5 +1,6 @@
 // App lái xe (như app cũ): chuyến của tôi; mỗi chuyến có Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả & hàng; gọi khách ghi trạng thái báo về quầy; thu tiền mặt / chuyển khoản; xuất bến / đến bến.
 import { dirName } from '../lib/routes';
+import { NotifyBell } from '../components/NotifyBell';
 import { MonthPicker } from '../components/MonthPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
@@ -77,7 +78,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
     <>
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <section className="card">
-        <h2>Chuyến của tôi · {fmtDate(day)}</h2>
+        <div className="item-head"><h2>Chuyến của tôi · {fmtDate(day)}</h2><NotifyBell inline /></div>
         <div className="inline-form">
           <button className="btn small" aria-label="Ngày trước" onClick={() => { setDay(addDays(day, -1)); setOpen(null); }}>‹</button>
           <label>Ngày<input type="date" value={day} onChange={(e) => { if (e.target.value) { setDay(e.target.value); setOpen(null); } }} /></label>

@@ -236,5 +236,52 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.repair_orders), 0, 'Nhà xe khác không thấy phiếu sửa chữa');
 reset role;
 
+-- ---------------------------------------------------------------- Thông báo: lái xe được báo chuyến hôm nay; người bán được báo khi lái xe báo khách
+insert into t.ids select 'T0', id from public.trips where direction = 'di' and service_date = app.local_today() and status = 'mo' limit 1;
+delete from public.trip_crew where staff_id = (select v from t.ids where k = 'D1');   -- tránh trùng giờ với chuyến thử trước
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select lives_ok($$ select public.assign_trip((select v from t.ids where k = 'T0'), null, (select v from t.ids where k = 'D1'), null, null, 'Thử') $$, 'Xếp lái xe 1 chuyến hôm nay');
+reset role;
+set constraints all immediate;
+select is((select count(*)::int from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'xep_chuyen' and trip_id = (select v from t.ids where k = 'T0')),
+  1, 'Lái xe được báo được xếp chuyến hôm nay');
+insert into public.bookings (id, tenant_id, code, customer_phone, created_by) values ('77777777-7777-7777-7777-777777777781', (select v from t.ids where k = 'A'), 'TBAO01', '0912345678', '00000000-0000-0000-0000-0000000000b4');
+insert into public.seat_inventory (id, tenant_id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status)
+values ('77777777-7777-7777-7777-777777777782', (select v from t.ids where k = 'A'), '77777777-7777-7777-7777-777777777781',
+        (select v from t.ids where k = 'T0'), 'B01', (select id from public.stops where code = 'HN'), (select id from public.stops where code = 'VT'), 0, 1, 100000, 'dat');
+select is((select body from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'khach' order by created_at desc limit 1),
+  'Thêm 1 khách 0912345678', 'Lái xe được báo thêm khách');
+select like((select title from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'khach' limit 1), 'Chuyến 07:00 · %', 'Ghi giờ chuyến');
+update public.seat_inventory set status = 'huy' where id = '77777777-7777-7777-7777-777777777782';
+select is((select count(*)::int from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and body like 'Khách 0912345678 hủy vé%'), 1, 'Lái xe được báo khách hủy vé');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+update public.seat_inventory set status = 'dat' where id = '77777777-7777-7777-7777-777777777782';
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+update public.seat_inventory set crew_call = 'thue_bao' where id = '77777777-7777-7777-7777-777777777782';
+select is((select body from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b4' and kind = 'lai_xe_bao'),
+  'Khách 0912345678 thuê bao / không nghe máy', 'Người bán vé được báo lái xe báo khách thuê bao');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select ok((select count(*) from public.notifications) >= 3, 'Lái xe thấy thông báo của mình');
+select is((select count(*)::int from public.notifications where user_id <> '00000000-0000-0000-0000-0000000000b5'), 0, 'Không thấy thông báo của người khác');
+select lives_ok($$ select public.mark_notifications_read() $$, 'Đánh dấu đã đọc');
+select is((select count(*)::int from public.notifications where read_at is null), 0, 'Đã đọc hết');
+select lives_ok($$ select public.set_notify_prefs('{khach}') $$, 'Tắt loại khách đặt / hủy');
+select lives_ok($$ select public.save_push_subscription('https://push.example/abc', 'k1', 'a1', 'thu') $$, 'Bật nhận trên máy');
+select throws_ok($$ select public.save_push_subscription('http://x', 'k1', 'a1', null) $$, '22023', null, 'Địa chỉ nhận phải https');
+select is((select count(*)::int from public.push_subscriptions), 1, 'Thấy máy của mình');
+reset role;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+update public.seat_inventory set status = 'huy' where id = '77777777-7777-7777-7777-777777777782';
+select is((select count(*)::int from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and body like 'Khách 0912345678 hủy vé%'), 1, 'Tắt loại thì không báo thêm');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select is((select count(*)::int from public.notifications), 0, 'Nhà xe khác không thấy thông báo');
+select is((select count(*)::int from public.push_subscriptions), 0, 'Nhà xe khác không thấy máy nhận');
+select throws_ok($$ select * from public.push_config $$, '42501', null, 'Người dùng không đọc được khóa thông báo đẩy');
+reset role;
+
 select * from finish();
 rollback;

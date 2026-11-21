@@ -1092,3 +1092,21 @@ button.dt-g { cursor: pointer; }
 .mp-box > button:hover { background: var(--primary-soft); color: var(--primary-d); }
 .mp-val { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 92px; padding: 0 10px; font-weight: 600; border-left: 1px solid var(--line); border-right: 1px solid var(--line); cursor: pointer; }
 .mp-val input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; min-height: 0 !important; padding: 0 !important; border: 0; cursor: pointer; }
+/* Chuông thông báo của từng người */
+.nb { position: relative; flex: none; }
+.nb-btn { position: relative; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; }
+.nb-btn.has { color: var(--primary-d); border-color: var(--primary-ring); animation: nb-ring 1.2s ease 2; }
+.nb-n { position: absolute; top: -5px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #dc2626; color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.nb-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; width: min(380px, 92vw); max-height: min(70vh, 520px); overflow: auto; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-s); box-shadow: 0 12px 32px rgba(16, 24, 40, .2); color: var(--text); text-align: left; }
+.side-brand .nb-pop { left: 0; right: auto; }
+.nb-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--surface); }
+.nb-list { list-style: none; margin: 0; padding: 0; }
+.nb-list li { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); font-size: .9rem; }
+.nb-list li.new { background: var(--primary-soft); }
+.nb-list li.old { opacity: .7; }
+.nb-list small { color: var(--muted); font-size: .75rem; }
+.nb-empty { padding: 12px; margin: 0; }
+@media (max-width: 640px) { .nb-pop { position: fixed; left: 8px !important; right: 8px !important; top: 60px; width: auto; } }
+@keyframes nb-ring { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } }
+.nb-kinds { border: 0; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }

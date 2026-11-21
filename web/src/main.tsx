@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { initTheme } from './lib/theme';
 import { initPwa } from './lib/pwa';
+import './lib/push';   // gửi thông báo đẩy đang chờ sau mỗi thao tác bán vé, xếp chuyến…
 import '@flaticon/flaticon-uicons/css/regular/rounded.css';   // bộ biểu tượng Uicons (Flaticon) – kiểu Regular Rounded
 import './styles.css';
 initPwa();

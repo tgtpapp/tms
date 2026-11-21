@@ -7,7 +7,7 @@ import { LegacyMore } from './LegacyMore';
 import { today } from '../components/Documents';
 import { BUCKET, avatarUrls, signatureUrl, uploadAvatar, uploadFiles } from '../lib/documents';
 import {
-  day, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
+  day, fromDataUrl, isExternal, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -289,7 +289,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
         </>
       )}
       {legacy && legacy.trips.length > 0 && !busy && <LegacyTrips legacy={legacy} />}
-      {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0 || legacy.km.length > 0) && !busy && <LegacyOps legacy={legacy} />}
+      {legacy && (legacy.repairs.length > 0 || legacy.fuel.length > 0 || legacy.km.length > 0) && !busy && <LegacyOps legacy={legacy} tenantId={tenantId} />}
       {legacy && (legacy.schedules.length + legacy.fares.length + legacy.records.length + legacy.charters.length > 0) && !busy && <LegacyMore legacy={legacy} tenantId={tenantId} />}
       {result && (
         <ul className="queue-list small">
@@ -398,7 +398,7 @@ function LegacyTrips({ legacy }: { legacy: LegacyBackup }) {
 
 /* ------------------------------------------------------------------ Chuyển phiếu sửa chữa + nhiên liệu từ app cũ */
 
-function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
+function LegacyOps({ legacy, tenantId }: { legacy: LegacyBackup; tenantId: string }) {
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<string[] | null>(null);
@@ -414,15 +414,35 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
       const vehByKey = new Map(vehs.map((x) => [plateKey(x.plate), x.id]));
       const staff = (s.data ?? []) as { id: string; full_name: string }[];
       const drv = (name: string) => { const c = name ? staff.filter((x) => norm(x.full_name) === norm(name)) : []; return c.length === 1 ? c[0].id : null; };
-      let noVeh = 0;
-      const repairs = legacy.repairs.flatMap((r) => {
+      let noVeh = 0, hdUp = 0, hdDrive = 0;
+      // phiếu đã có tệp hóa đơn trong TMS thì không tải lại (chạy lại nhiều lần không sinh tệp thừa)
+      const ex = await supabase.from('repair_orders').select('code, files');
+      const hasFiles = new Set(((ex.data ?? []) as { code: string; files: string[] }[]).filter((x) => x.files.length).map((x) => x.code));
+      const repairs0 = legacy.repairs.flatMap((r) => {
         const vehicle_id = vehByKey.get(plateKey(str(r, 'xe'))) ?? null;
         const d = day(str(r, 'ngay'));
         if (!vehicle_id || !d) { noVeh++; return []; }
         const items = (Array.isArray(r.items) ? r.items : []).filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
           .map((x) => ({ content: str(x, 'nd') || str(x, 'noiDung'), unit: str(x, 'dvt'), qty: numOf(x, 'sl') ?? 1, unit_price: Math.round(numOf(x, 'gia') ?? 0) }));
-        return [{ code: str(r, 'so') || null, vehicle_id, repaired_on: d, odo_km: numOf(r, 'km'), workshop: str(r, 'donVi'), note: str(r, 'ghiChu'), items }];
+        const hd = (Array.isArray(r.hoaDon) ? r.hoaDon : []).filter((x): x is string => typeof x === 'string');
+        return [{ code: str(r, 'so') || null, vehicle_id, repaired_on: d, odo_km: numOf(r, 'km'), workshop: str(r, 'donVi'), note: str(r, 'ghiChu'), items, hd }];
       });
+      // Ảnh / PDF hóa đơn của phiếu (app cũ lưu dạng data:…; mã nxdrv: là ảnh còn trên Google Drive của app cũ, file sao lưu không có ảnh)
+      const repairs: Record<string, unknown>[] = [];
+      for (let i = 0; i < repairs0.length; i++) {
+        const { hd, ...r } = repairs0[i]!;
+        let files: string[] = [];
+        hdDrive += hd.filter(isExternal).length;
+        const prep = hd.map(fromDataUrl).filter((x): x is NonNullable<typeof x> => x !== null);
+        if (prep.length && !(r.code && hasFiles.has(r.code))) {
+          setBusy(`Đang tải hóa đơn sửa chữa ${i + 1}/${repairs0.length}…`);
+          try {
+            files = await uploadFiles(tenantId, 'xe', r.vehicle_id, vehs.find((x) => x.id === r.vehicle_id)?.plate ?? '', 'sua_chua', prep);
+            hdUp += files.length;
+          } catch (e) { log.push(`${r.code ?? ''}: ${errMsg(e)}`); }
+        }
+        repairs.push({ ...r, files });
+      }
       const fuel = legacy.fuel.flatMap((r) => {
         const kind = str(r, 'loai') === 'nhap' ? 'nhap' : str(r, 'nguon') === 'ngoai' ? 'ngoai' : 'bon';
         const vehicle_id = kind === 'nhap' ? null : vehByKey.get(plateKey(str(r, 'xe'))) ?? null;
@@ -434,12 +454,12 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
           unit_price: kind === 'bon' && r.giaAuto !== false ? null : gia == null ? (kind === 'nhap' ? 0 : null) : Math.round(gia),
           supplier: str(r, 'cayXang') || str(r, 'ncc') || str(r, 'nhaCC') || str(r, 'nhaCungCap'), invoice_no: str(r, 'soHD'), note: str(r, 'ghiChu') }];
       });
-      let rep = 0, fu = 0, same = 0;
+      let rep = 0, fu = 0, same = 0, filled = 0;
       for (let i = 0; i < Math.max(repairs.length, fuel.length); i += 400) {
         setBusy(`Đang chuyển phiếu ${Math.min(i + 400, Math.max(repairs.length, fuel.length))}…`);
-        const res = await rpc<{ repairs: number; fuel: number; same: number; errors: { code: string; error: string }[] }>('import_legacy_ops',
+        const res = await rpc<{ repairs: number; fuel: number; same: number; filled?: number; errors: { code: string; error: string }[] }>('import_legacy_ops',
           { p_repairs: repairs.slice(i, i + 400), p_fuel: fuel.slice(i, i + 400) });
-        rep += res.repairs; fu += res.fuel; same += res.same;
+        rep += res.repairs; fu += res.fuel; same += res.same; filled += res.filled ?? 0;
         for (const e of res.errors) log.push(`${e.code}: ${e.error}`);
       }
       // Km xe theo ngày (DB.kmxe)
@@ -474,7 +494,7 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
           if (id && n > 0 && n < 100 && !vehs.find((x) => x.id === id)?.fuel_norm) await supabase.from('vehicles').update({ fuel_norm: n }).eq('id', id);
         }
       }
-      const msg = `Đã chuyển ${rep} phiếu sửa chữa, ${fu} phiếu nhiên liệu, ${kmNew} dòng km xe${same ? `, ${same} phiếu đã có (bỏ qua)` : ''}${noVeh ? `, ${noVeh} phiếu không khớp xe / thiếu ngày` : ''}`;
+      const msg = `Đã chuyển ${rep} phiếu sửa chữa, ${fu} phiếu nhiên liệu, ${kmNew} dòng km xe${same ? `, ${same} phiếu đã có${filled ? ` (điền thêm hóa đơn / ĐVT cho ${filled} phiếu)` : ''}` : ''}${hdUp ? `, tải ${hdUp} ảnh / PDF hóa đơn` : ''}${hdDrive ? `, ${hdDrive} hóa đơn còn trên Google Drive app cũ (file sao lưu không có ảnh)` : ''}${noVeh ? `, ${noVeh} phiếu không khớp xe / thiếu ngày` : ''}`;
       toast(log.length ? 'error' : 'ok', msg);
       setOut([msg, ...log.slice(0, 50)]);
     } catch (e) {
@@ -487,7 +507,7 @@ function LegacyOps({ legacy }: { legacy: LegacyBackup }) {
   return (
     <div className="sub form">
       <h3 className="section-title">Sửa chữa, nhiên liệu, km xe trong file: {legacy.repairs.length} phiếu sửa chữa, {legacy.fuel.length} phiếu nhiên liệu, {legacy.km.length} dòng km</h3>
-      <p className="muted small">Giữ nguyên số phiếu của app cũ, nhập lại không trùng. Kèm thiết lập bồn dầu và định mức tiêu hao từng xe (nếu TMS chưa có). Nên nhập xe ở trên trước.</p>
+      <p className="muted small">Giữ nguyên số phiếu của app cũ, nhập lại không trùng; phiếu đã có thì điền thêm ảnh / PDF hóa đơn và ĐVT còn thiếu. Kèm thiết lập bồn dầu và định mức tiêu hao từng xe (nếu TMS chưa có). Nên nhập xe ở trên trước.</p>
       {busy && <p className="upload">{busy}</p>}
       <div className="actions"><button type="button" className="btn primary" disabled={!!busy} onClick={() => void run()}>Chuyển sửa chữa, nhiên liệu, km xe</button></div>
       {out && <ul className="queue-list small">{out.map((x, i) => <li key={i} className={i ? 'error-text' : ''}>{x}</li>)}</ul>}

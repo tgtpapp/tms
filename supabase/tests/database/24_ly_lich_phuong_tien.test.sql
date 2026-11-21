@@ -53,12 +53,19 @@ select throws_ok($$ select public.save_fuel((select id from public.fuel_entries 
 select is(public.import_legacy_ops(
   jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01', 'items', '[{"content":"Vá lốp","qty":1,"unit_price":50000}]'::jsonb)),
   jsonb_build_array(jsonb_build_object('code', 'XD00099', 'kind', 'bon', 'entry_date', '2026-09-01', 'vehicle_id', (select id from public.vehicles), 'liters', 30))) - 'errors',
-  '{"repairs":1,"fuel":1,"same":0}'::jsonb, 'Chuyển phiếu app cũ');
+  '{"repairs":1,"fuel":1,"same":0,"filled":0}'::jsonb, 'Chuyển phiếu app cũ');
 select is(public.import_legacy_ops(
   jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01')),
   jsonb_build_array(jsonb_build_object('code', 'XD00099', 'kind', 'bon', 'entry_date', '2026-09-01', 'vehicle_id', (select id from public.vehicles), 'liters', 30))) ->> 'same',
   '2', 'Nhập lại không trùng');
 select is((select code from public.fuel_entries where kind = 'bon' order by created_at desc, code desc limit 1), 'XD00099', 'Giữ số phiếu app cũ');
+-- Chạy lại: phiếu đã có thì chỉ điền thêm hóa đơn (khi chưa có tệp) và ĐVT còn trống, không đổi nội dung / tiền
+select is(public.import_legacy_ops(jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01',
+  'files', '["x/hd_1.jpg"]'::jsonb, 'items', '[{"content":"Vá lốp","unit":"CÁI","qty":5,"unit_price":1}]'::jsonb)), '[]'::jsonb) ->> 'filled', '1', 'Điền thêm hóa đơn, ĐVT');
+select is((select array_to_string(o.files, ',') || '|' || i.unit || '|' || i.qty::int || '|' || i.unit_price from public.repair_orders o join public.repair_items i on i.order_id = o.id where o.code = 'SC001'),
+  'x/hd_1.jpg|CÁI|1|50000', 'Có hóa đơn, ĐVT; nội dung, tiền giữ nguyên');
+select is(public.import_legacy_ops(jsonb_build_array(jsonb_build_object('code', 'SC001', 'vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-09-01',
+  'files', '["x/hd_2.jpg"]'::jsonb)), '[]'::jsonb) ->> 'filled', '0', 'Phiếu đã có hóa đơn thì không ghi đè');
 -- Km xe theo ngày (GPS): nhập, nhập lại ghi đè, km sai bị chặn
 select is(public.import_vehicle_km(jsonb_build_array(
   jsonb_build_object('vehicle_id', (select id from public.vehicles), 'run_date', '2026-10-01', 'km', 320.5),

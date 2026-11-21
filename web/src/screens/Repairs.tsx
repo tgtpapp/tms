@@ -46,6 +46,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
     setVehicles((v.data ?? []) as Veh[]);
     if (list.length) {
       const it = await supabase.from('repair_items').select('order_id, seq, content, unit, qty, unit_price').in('order_id', list.map((x) => x.id)).order('seq');
+      if (it.error) toast('error', `Không tải được nội dung phiếu: ${it.error.message}`);
       setItems((it.data ?? []) as Item[]);
     } else setItems([]);
   }, [month, veh, toast]);

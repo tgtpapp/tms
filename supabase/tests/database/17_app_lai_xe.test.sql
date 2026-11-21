@@ -254,7 +254,7 @@ values ('77777777-7777-7777-7777-777777777782', (select v from t.ids where k = '
         (select v from t.ids where k = 'T0'), 'B01', (select id from public.stops where code = 'HN'), (select id from public.stops where code = 'VT'), 0, 1, 100000, 'dat');
 select is((select body from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'khach' order by created_at desc limit 1),
   'Thêm 1 khách 0912345678', 'Lái xe được báo thêm khách');
-select like((select title from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'khach' limit 1), 'Chuyến 07:00 · %', 'Ghi giờ chuyến');
+select ok((select title from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'khach' limit 1) like 'Chuyến 07:00 · %', 'Ghi giờ chuyến');
 update public.seat_inventory set status = 'huy' where id = '77777777-7777-7777-7777-777777777782';
 select is((select count(*)::int from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and body like 'Khách 0912345678 hủy vé%'), 1, 'Lái xe được báo khách hủy vé');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';

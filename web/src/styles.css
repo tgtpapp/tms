@@ -1070,3 +1070,16 @@ button.dt-g { cursor: pointer; }
 .doc-frame iframe { flex: 1; width: 100%; min-height: 70vh; border: 0; background: #fff; border-radius: 6px; }
 .doc-frame p { color: #cbd5e1; text-align: center; margin: 0; }
 .me-today td { background: var(--primary-soft); }
+/* Hồ sơ từng người: đầu hồ sơ + thẻ (Thông tin / Giấy tờ / Hợp đồng / Lý lịch) */
+.prof-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 4px 0 10px; }
+.prof-head .avatar-field, .prof-head > div:first-child { flex: none; }
+.prof-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.prof-id > b { font-size: 1.15rem; }
+.prof-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.prof-chips .badge { margin-left: 0; }
+.prof-tabs { padding: 0; margin: 0 0 10px; position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.prof-tabs > button.warn { color: var(--warn-text); }
+.prof-tabs > button.warn.on { border-bottom-color: var(--warn-text); }
+.prof-pane { animation: pick-up 140ms ease; }
+.prof-pane .info { font-size: .95rem; }
+@media (max-width: 640px) { .prof-pane .info { grid-template-columns: 1fr; gap: 0 0; } .prof-pane .info dt { margin-top: 8px; font-size: .8rem; } }

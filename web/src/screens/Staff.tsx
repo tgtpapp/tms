@@ -362,6 +362,10 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
         )}
       </div>
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
+      {/* chỉ có hồ sơ của mình: hiện thẳng hồ sơ dạng thẻ, không cần bấm mở */}
+      {props.selfOnly && shown.length === 1 && shown[0]!.user_id === myUserId ? (
+        <StaffDetail {...props} s={shown[0]!} p={priv.find((x) => x.staff_id === shown[0]!.id)} mine />
+      ) : (
       <div className="staff-cards">
         {shown.filter((s) => !cur || jobKey(s) === cur).map((s) => {
           const mine = s.user_id === myUserId;
@@ -405,6 +409,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           );
         })}
       </div>
+      )}
     </section>
   );
 }
@@ -412,42 +417,84 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
 function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<'tt' | 'gt' | 'hd' | 'll'>('tt');
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
   const age = ageCheck(p, s.position);
   const required = REQUIRED[s.position];
 
   if (editing) return <div className="sub"><StaffForm {...props} editing={s} onDone={() => setEditing(false)} /></div>;
 
+  // Giấy tờ bắt buộc còn thiếu / hết hạn (tính cả giấy khám SK, tập huấn ghi trong Lý lịch hành nghề)
+  const td = today();
+  const warnDocs = required.filter((code) => {
+    const d = props.papers.find((x) => x.staff_id === s.id && x.doc_type === code && x.is_current);
+    return !d || (d.expires_on != null && d.expires_on < td);
+  }).length;
+  const nRec = props.records.filter((r) => r.staff_id === s.id).length;
+  const tabs: { key: typeof tab; label: string; warn?: boolean }[] = [
+    { key: 'tt', label: 'Thông tin' },
+    { key: 'gt', label: warnDocs ? `Giấy tờ (thiếu ${warnDocs})` : 'Giấy tờ', warn: warnDocs > 0 },
+    ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng lao động' }] : []),
+    { key: 'll', label: `Lý lịch hành nghề (${nRec})` },
+  ];
+
   return (
-    <div className="sub">
-      <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
-      <dl className="info small">
-        <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
-        <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
-        <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
-        <dt>Chỗ ở hiện nay</dt><dd>{p?.current_address ?? '—'}</dd>
-        <dt>Hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
-        {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
-      </dl>
-      {age && <p className={`small state-${age.state}`}>{age.text}</p>}
-      {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
-        <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
-      {props.labor.view && <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
-                                           canAdd={props.labor.add} canEdit={props.labor.edit} />}
-      {canEdit && <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />}
-      <h3>Giấy tờ</h3>
-      <ul className="list">
-        {STAFF_DOCS.map((def) => (
-          <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
-                  recordExp={recordExpiry(props.records, s.id, def.code)}
-                  extraFiles={RECORD_OF[def.code] ? props.records.filter((r) => r.staff_id === s.id && r.kind === RECORD_OF[def.code]).flatMap((r) => r.files) : undefined}
-                  owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
-                  required={required.includes(def.code)} reload={reload} />
+    <div className="sub prof">
+      <div className="prof-head">
+        <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
+        <div className="prof-id">
+          <b>{s.full_name}</b>
+          <span className="muted">{jobLabel(s)}{s.joined_on ? ` · vào ${fmtDate(s.joined_on)} (${seniority(s.joined_on, s.left_on)})` : ''}</span>
+          {s.phone && <a href={`tel:${s.phone}`}>📞 {s.phone}</a>}
+          <span className="prof-chips">
+            {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+            {warnDocs ? <span className="badge warn-badge">Giấy tờ thiếu / hết hạn: {warnDocs}</span> : <span className="badge">Giấy tờ đủ</span>}
+            {age && <span className={`badge ${age.state === 'het_han' ? 'locked' : 'warn-badge'}`}>{age.text}</span>}
+          </span>
+        </div>
+      </div>
+      <div className="vx-tabs prof-tabs" role="tablist" aria-label="Hồ sơ">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={[tab === t.key && 'on', t.warn && 'warn'].filter(Boolean).join(' ')} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
-      </ul>
-      <OldDocs docs={mine} />
-      {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
-      <Records {...props} s={s} />
+      </div>
+      {tab === 'tt' && (
+        <div className="prof-pane">
+          <dl className="info">
+            <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
+            <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
+            <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
+            <dt>Chỗ ở hiện nay</dt><dd>{p?.current_address ?? '—'}</dd>
+            <dt>Loại hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
+            {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
+          </dl>
+          {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
+            <DeleteButton kind="staff" id={s.id} name={s.full_name} note="Giấy tờ, lý lịch của người này cũng bị xóa." onDone={reload} /></div>}
+          {canEdit && <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />}
+        </div>
+      )}
+      {tab === 'gt' && (
+        <div className="prof-pane">
+          <ul className="list">
+            {STAFF_DOCS.map((def) => (
+              <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
+                      recordExp={recordExpiry(props.records, s.id, def.code)}
+                      extraFiles={RECORD_OF[def.code] ? props.records.filter((r) => r.staff_id === s.id && r.kind === RECORD_OF[def.code]).flatMap((r) => r.files) : undefined}
+                      owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
+                      required={required.includes(def.code)} reload={reload} />
+            ))}
+          </ul>
+          <OldDocs docs={mine} />
+          {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
+        </div>
+      )}
+      {tab === 'hd' && props.labor.view && (
+        <div className="prof-pane">
+          <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
+                          canAdd={props.labor.add} canEdit={props.labor.edit} />
+        </div>
+      )}
+      {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
   );
 }

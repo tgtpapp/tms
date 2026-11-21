@@ -267,10 +267,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('button', { name: 'Mở hồ sơ Nguyễn Văn Tài' })).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  // Hồ sơ chia thẻ: Thông tin / Giấy tờ / Hợp đồng lao động / Lý lịch hành nghề
+  await page.getByRole('tab', { name: /^Giấy tờ/ }).click();
   await expect(page.getByText('Số 079123456789')).toBeVisible();
   // 5j. Hạng bằng theo loại xe + ghi lý lịch hành nghề (vi phạm)
   await expect(page.getByRole('heading', { name: /^Loại xe được lái/ })).toBeVisible();
   await expect(page.getByText(/Giường nằm 6 chỗ.*Chưa có GPLX hoặc chưa nhập hạng/)).toBeVisible();
+  await page.getByRole('tab', { name: /^Lý lịch hành nghề/ }).click();
   await page.getByRole('button', { name: 'Thêm vào lý lịch' }).click();
   await page.getByLabel('Vi phạm: Ngày vi phạm').fill(ngay(-30));
   await page.getByLabel('Vi phạm: Hành vi vi phạm').fill('Dừng đỗ sai quy định');
@@ -286,6 +289,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await llhn.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(llhn).toHaveCount(0);
   // 5j2. Chữ ký lái xe trong hồ sơ (đang mở trong cửa sổ): chọn ảnh → khung cắt hiện trên cùng → lưu → ảnh chữ ký hiện trong hồ sơ
+  await page.getByRole('tab', { name: 'Thông tin', exact: true }).click();
   await page.getByLabel('Ảnh chữ ký', { exact: true }).setInputFiles({ name: 'chu-ky-lx.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
   await expect(page.getByRole('img', { name: 'Ảnh cần cắt' })).toBeVisible();
   await page.getByRole('button', { name: 'Dùng cả ảnh' }).click();
@@ -436,6 +440,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await page.getByRole('tab', { name: 'Hợp đồng lao động', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();
   await page.getByRole('button', { name: /^Xem HĐ 001\/\d{4}\/HĐLĐ/ }).click();
   await expect(page.locator('.paper-top').getByText('NGƯỜI LAO ĐỘNG (BÊN B):')).toBeVisible();

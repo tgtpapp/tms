@@ -4,6 +4,10 @@ on:
     - cron: '0 18 * * *'   # 01:00 giờ Việt Nam
   workflow_dispatch:
 concurrency: sao-luu-dem
+# Quyền tối thiểu cho mã GitHub của lần chạy (chỉ đọc kho code)
+permissions:
+  contents: read
+
 jobs:
   sao-luu:
     runs-on: ubuntu-latest

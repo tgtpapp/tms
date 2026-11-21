@@ -1,5 +1,6 @@
 // Tạo PDF không cần thư viện (như app cũ): mỗi trang HTML → ảnh (SVG foreignObject) → JPEG → ghép vào PDF A4.
 // HTML trang phải tự chứa kiểu (style inline), ảnh phải là data URL.
+import { sanitizeHtml } from './sanitize';
 
 export interface PdfPage { w: number; h: number; d: Uint8Array; land: boolean; idx?: boolean }
 
@@ -35,7 +36,7 @@ export const pageBox = (land: boolean) => ({ w: (land ? 1123 : 794) - PAD * 2, h
 function measure(html: string, w: number): number {
   const box = document.createElement('div');
   box.style.cssText = `position:fixed;left:-10000px;top:0;width:${w}px;visibility:hidden;font-family:'Times New Roman',serif`;
-  box.innerHTML = html;
+  box.innerHTML = sanitizeHtml(html);
   document.body.appendChild(box);
   const h = box.scrollHeight;
   box.remove();
@@ -51,7 +52,7 @@ export async function pageImg(html: string, land: boolean, scale = 1.4, compact 
   const wrap = document.createElement('div');
   wrap.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
   wrap.style.cssText = `width:${W}px;height:${H}px;box-sizing:border-box;padding:${PAD}px;background:#fff;overflow:hidden`;
-  wrap.innerHTML = inner;
+  wrap.innerHTML = sanitizeHtml(inner);
   const xml = new XMLSerializer().serializeToString(wrap);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject width="100%" height="100%">${xml}</foreignObject></svg>`;
   const img = new Image();

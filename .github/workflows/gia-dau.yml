@@ -5,6 +5,10 @@ on:
     - cron: "0 1,8 * * *"
     - cron: "20 8 * * 4"
   workflow_dispatch:
+# Quyền tối thiểu cho mã GitHub của lần chạy (chỉ đọc kho code)
+permissions:
+  contents: read
+
 jobs:
   gia:
     runs-on: ubuntu-latest

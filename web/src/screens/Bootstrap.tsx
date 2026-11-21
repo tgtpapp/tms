@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Centered } from '../components/Centered';
-import { MIN_PASSWORD } from '../lib/login';
+import { MIN_PASSWORD, weakPassword } from '../lib/login';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 
 /**
@@ -24,6 +24,7 @@ export function BootstrapScreen({ signedIn, onDone }: { signedIn: boolean; onDon
     e.preventDefault();
     setError('');
     if (password.length < MIN_PASSWORD) return setError(`Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    { const w = weakPassword(password); if (w) return setError(w); }
     if (password !== confirm) return setError('Mật khẩu nhập lại không khớp');
     setBusy(true);
     try {

@@ -1,4 +1,5 @@
 // Nút xem / in / lưu vào hồ sơ cho Lý lịch hành nghề người lái xe và Lý lịch phương tiện; lưu cả đội / cả đoàn xe một lượt.
+import { sanitizeHtml } from '../lib/sanitize';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from './Modal';
@@ -21,7 +22,7 @@ export function PaperView({ title, pages, onClose, onPrint }: { title: string; p
         <button className="btn small primary" onClick={() => { onPrint?.(); window.print(); }}>In</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
-      <div className="print-stack">{pages.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: p.html }} />)}</div>
+      <div className="print-stack">{pages.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />)}</div>
     </div>, document.body);
 }
 

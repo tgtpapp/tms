@@ -5,7 +5,7 @@
 // Quyền luôn kiểm tra bằng phiên đăng nhập của người gọi; khóa service_role chỉ dùng ở đây.
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
-import { loginEmail } from '../_shared/login.ts';
+import { loginEmail, weakPassword } from '../_shared/login.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -55,6 +55,7 @@ function validatePhone(phone: string): string {
 
 function validatePassword(pw: string): string {
   if (pw.length < MIN_PASSWORD) throw new HttpError(400, `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+  const w = weakPassword(pw); if (w) throw new HttpError(400, w);
   return pw;
 }
 

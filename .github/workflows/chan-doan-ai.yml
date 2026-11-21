@@ -1,6 +1,10 @@
 name: Chẩn đoán AI đọc giấy tờ
 on:
   workflow_dispatch:
+# Quyền tối thiểu cho mã GitHub của lần chạy (chỉ đọc kho code)
+permissions:
+  contents: read
+
 jobs:
   ai:
     runs-on: ubuntu-latest

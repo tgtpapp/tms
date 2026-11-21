@@ -1,4 +1,5 @@
 // Điều hành → Bảng phân công lịch tài & xe + Nghiệm thu an toàn (1 bản / lái xe / ngày): xem, in, lưu PDF vào Lưu trữ hồ sơ.
+import { sanitizeHtml } from '../lib/sanitize';
 import { useState } from 'react';
 import { Modal } from './Modal';
 import { fmtDate } from './Documents';
@@ -87,7 +88,7 @@ export function DispatchPapers({ day, tenantId, me, canSave, onClose }: { day: s
           <button className="btn small primary" onClick={() => window.print()}>In</button>
           <button className="btn small" onClick={() => setView(null)}>Đóng</button>
         </div>
-        <div className="print-stack">{view.html.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: p.h }} />)}</div>
+        <div className="print-stack">{view.html.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.h) }} />)}</div>
       </div>
     );
   }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { MIN_PASSWORD, PHONE_RE } from '../lib/login';
+import { MIN_PASSWORD, PHONE_RE, weakPassword } from '../lib/login';
 import type { Permissions } from '../lib/permissions';
 import { adminUsers, errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -106,6 +106,7 @@ function CreateUserForm({ data, onCreated }: { data: Data; onCreated: () => Prom
     e.preventDefault();
     if (!PHONE_RE.test(f.phone)) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
     if (f.password.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    { const w = weakPassword(f.password); if (w) return toast('error', w); }
     setBusy(true);
     try {
       const res = await adminUsers<{ user_id: string }>({
@@ -228,6 +229,7 @@ function UserItem(props: {
         <form className="inline-form" onSubmit={(e) => {
           e.preventDefault();
           if (newPassword.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+          { const w = weakPassword(newPassword); if (w) return toast('error', w); }
           void run(() => adminUsers({ action: 'reset_password', user_id: user.id, password: newPassword }), 'Đã đặt lại mật khẩu')
             .then(() => setNewPassword(''));
         }}>

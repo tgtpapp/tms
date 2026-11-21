@@ -21,10 +21,38 @@ function manifest(name: string): Plugin {
   };
 }
 
+/** Chính sách bảo mật nội dung (CSP) + header bảo mật: chỉ chạy mã của chính app, chỉ kết nối tới máy chủ Supabase của cấu hình,
+ *  không cho trang khác nhúng app (chống lừa bấm), không đoán kiểu tệp. Địa chỉ máy chủ lấy từ VITE_SUPABASE_URL (không viết cứng). */
+function security(supabaseUrl: string): Plugin {
+  let sb = '';
+  try { const u = new URL(supabaseUrl); sb = `${u.origin} ${u.origin.replace(/^http/, 'ws')}`; } catch { /* thiếu cấu hình: chỉ 'self' */ }
+  const csp = [
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${sb}`,
+    "font-src 'self' data:", `connect-src 'self' data: blob: ${sb}`, `frame-src 'self' blob: ${sb}`, "worker-src 'self'", `manifest-src 'self' ${sb}`,
+    `media-src 'self' blob: ${sb}`, "object-src 'none'", "base-uri 'self'", "form-action 'self'",
+  ].join('; ');
+  const headers = `/*
+  Content-Security-Policy: ${csp}; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Cross-Origin-Opener-Policy: same-origin
+/sw.js
+  Cache-Control: no-cache
+`;
+  return {
+    name: 'tms-security', apply: 'build',
+    transformIndexHtml: () => [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: csp }, injectTo: 'head-prepend' }],
+    generateBundle() { this.emitFile({ type: 'asset', fileName: '_headers', source: headers }); },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
-    plugins: [react(), manifest(env.VITE_INSTALL_NAME || env.VITE_APP_NAME || 'TMS')],
+    plugins: [react(), manifest(env.VITE_INSTALL_NAME || env.VITE_APP_NAME || 'TMS'), security(env.VITE_SUPABASE_URL ?? '')],
     build: {
       outDir: 'dist',
       sourcemap: true,

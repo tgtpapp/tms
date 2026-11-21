@@ -17,6 +17,11 @@ async function login(page: Page, phone: string, password: string) {
 }
 
 test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên → nhân viên đăng nhập đúng quyền', async ({ page }) => {
+  // Chính sách bảo mật nội dung (CSP) không được chặn nhầm chức năng nào của app
+  const cspBlocked: string[] = [];
+  page.on('console', (m) => { if (/Content Security Policy|Refused to (load|connect|execute|frame|apply)/i.test(m.text())) cspBlocked.push(m.text().slice(0, 200)); });
+  await page.goto('/');
+  expect(await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content')).toContain("script-src 'self'");
   await page.goto('/');
 
   // 1. Khởi tạo lần đầu: tạo Super Admin
@@ -904,4 +909,5 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('dialog', { name: /^Cài app/ })).toBeVisible();
   await expect(page.getByText('🤖 Android (Chrome)')).toBeVisible();
   await page.getByRole('dialog', { name: /^Cài app/ }).getByRole('button', { name: 'Đóng', exact: true }).click();
+  expect(cspBlocked, 'CSP chặn nhầm').toEqual([]);
 });

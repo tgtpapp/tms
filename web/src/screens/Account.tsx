@@ -2,7 +2,7 @@ import { InstallApp } from '../components/InstallApp';
 import { NotifySettings } from '../components/NotifySettings';
 import { Avatar, StaffAvatar } from '../components/StaffAvatar';
 import { useEffect, useState, type FormEvent } from 'react';
-import { MIN_PASSWORD } from '../lib/login';
+import { MIN_PASSWORD, weakPassword } from '../lib/login';
 import { supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { THEMES, useTheme, type Mode } from '../lib/theme';
@@ -29,6 +29,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (password.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    { const w = weakPassword(password); if (w) return toast('error', w); }
     if (password !== confirm) return toast('error', 'Mật khẩu nhập lại không khớp');
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });

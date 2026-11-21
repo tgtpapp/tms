@@ -1,5 +1,6 @@
 // Soạn văn bản tự do (mod Văn bản): mở file Word làm bản nháp, sửa trực tiếp, chèn ô điền tự động {…},
 // nhờ AI sửa theo yêu cầu (người soạn xem lại rồi mới lưu).
+import { sanitizeHtml } from '../lib/sanitize';
 import { useEffect, useRef, useState } from 'react';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { docxToHtml } from '../lib/docx';
@@ -14,8 +15,8 @@ export function WordEditor({ html, onChange }: { html: string; onChange: (html: 
   const [ask, setAsk] = useState('');
   const [busy, setBusy] = useState('');
   const [undo, setUndo] = useState<string | null>(null);
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html; }, [ver]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const replaceAll = (h: string) => { onChange(h); setVer((v) => v + 1); };
+  useEffect(() => { if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = sanitizeHtml(html); }, [ver]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const replaceAll = (h: string) => { onChange(sanitizeHtml(h)); setVer((v) => v + 1); };
   const cmd = (c: string, v?: string) => { ref.current?.focus(); document.execCommand(c, false, v); onChange(ref.current?.innerHTML ?? ''); };
 
   async function open(file: File) {

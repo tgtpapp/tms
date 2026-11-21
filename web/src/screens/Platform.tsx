@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { config } from '../config';
-import { MIN_PASSWORD, PHONE_RE } from '../lib/login';
+import { MIN_PASSWORD, PHONE_RE, weakPassword } from '../lib/login';
 import { adminUsers, errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -32,6 +32,7 @@ export function PlatformScreen() {
     e.preventDefault();
     if (!PHONE_RE.test(form.ownerPhone)) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
     if (form.ownerPassword.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    { const w = weakPassword(form.ownerPassword); if (w) return toast('error', w); }
     setBusy(true);
     try {
       const tenantId = await rpc<string>('create_tenant', { p_code: form.code, p_name: form.name });
@@ -101,6 +102,7 @@ function TenantItem({ tenant }: { tenant: TenantRow }) {
     e.preventDefault();
     if (!PHONE_RE.test(f.phone)) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
     if (f.password.length < MIN_PASSWORD) return toast('error', `Mật khẩu tối thiểu ${MIN_PASSWORD} ký tự`);
+    { const w = weakPassword(f.password); if (w) return toast('error', w); }
     setBusy(true);
     try {
       await adminUsers({ action: 'create_tenant_owner', tenant_id: tenant.id, phone: f.phone,

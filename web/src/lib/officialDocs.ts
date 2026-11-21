@@ -1,6 +1,7 @@
 // Văn bản (công văn, quyết định, thông báo): mẫu in + lưu PDF vào Lưu trữ hồ sơ (như các mẫu quyết định của app cũ).
 // Lưu: <năm ký> / Pháp lý công ty / <loại văn bản> (khớp cả thư mục "01. Pháp lý công ty"); lưu lại thì thay bản cũ.
 // Căn cứ pháp lý ghi trong mẫu: theo app cũ, cần xác minh.
+import { sanitizeHtml } from './sanitize';
 import { supabase } from './supabase';
 import { boss, bossCol, company, signCol, type Boss, type Company } from './profilePapers';
 import { loadSigns, type Sign } from './signatures';
@@ -158,7 +159,7 @@ export function docPages(t: Template, number: string, signed: string, title: str
   if (!isWord(t)) return [docHtml(t, number, signed, title, c, x)];
   const filled = fillFields(c.html || '', number, signed, title, c, x);
   const box = document.createElement('div');
-  box.innerHTML = filled;
+  box.innerHTML = sanitizeHtml(filled);
   const blocks = Array.from(box.childNodes).map((n) => (n instanceof Element ? n.outerHTML : (n.textContent ?? '').trim() ? `<p>${esc(n.textContent ?? '')}</p>` : '')).filter(Boolean);
   return paginate(blocks.map((b) => `<div style="font-size:14px;line-height:1.5">${b}</div>`));
 }

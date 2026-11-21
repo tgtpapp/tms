@@ -1,0 +1,27 @@
+name: Chẩn đoán (tạm) quyền xe
+on: workflow_dispatch
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+    steps:
+      - name: Đo (chỉ đọc, không dữ liệu cá nhân)
+        run: |
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGPASSWORD="$SUPABASE_DB_PASSWORD" PGDATABASE=postgres PGPORT=5432
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              PGHOST="$host" psql -v ON_ERROR_STOP=1 <<'SQL'
+          select r.code, r.name, r.is_system,
+                 string_agg(distinct rp.permission_code, ',' order by rp.permission_code) filter (where rp.permission_code ~ '^(vehicle|repair|fuel|km|trip)\.') perms,
+                 (select count(*) from public.user_roles ur where ur.role_id = r.id) users,
+                 (select string_agg(distinct m.position, ',') from public.user_roles ur join public.staff_members m on m.user_id = ur.user_id and m.tenant_id = ur.tenant_id where ur.role_id = r.id) positions
+          from public.roles r left join public.role_permissions rp on rp.role_id = r.id and rp.tenant_id = r.tenant_id
+          group by r.id order by r.code;
+          SQL
+              exit 0
+            fi
+          done
+          exit 1

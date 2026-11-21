@@ -1177,3 +1177,8 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
   .rep-table .c-gara { grid-area: gara; } .rep-table .c-gara:empty::before, .rep-table .c-km:empty::before { content: none; }
   .rep-table .c-act { grid-area: act; display: flex; justify-content: flex-end; align-items: end; gap: 6px; }
 }
+/* Phiếu sửa chữa A4 */
+.rp-print .rp-head { display: flex; gap: 12px; align-items: center; border-bottom: 1px solid #000; padding-bottom: 8px; }
+.rp-print .rp-head img { max-height: 60px; max-width: 90px; object-fit: contain; }
+.rp-print .rp-co { font-size: 13px; line-height: 1.4; }
+.rp-print .rp-co b { font-size: 15px; }

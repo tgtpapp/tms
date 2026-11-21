@@ -440,6 +440,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
     await page.screenshot({ path: `test-results/ds-sua-chua-${vp.width}.png` });
   }
   await page.setViewportSize({ width: 412, height: 915 });
+  // In phiếu sửa chữa A4: hạng mục có ĐVT, tổng, bằng chữ, chữ ký
+  await page.locator('.rep-table .c-act').first().getByRole('button', { name: 'In', exact: true }).click();
+  const rp = page.locator('.rp-print');
+  await expect(rp.getByText('PHIẾU SỬA CHỮA PHƯƠNG TIỆN')).toBeVisible();
+  await expect(rp.getByRole('cell', { name: 'THAY NHỚT' })).toBeVisible();
+  await expect(rp.getByRole('cell', { name: 'LÍT' })).toBeVisible();
+  await expect(rp.getByText(/Bảy trăm hai mươi nghìn đồng/i)).toBeVisible();
+  await expect(rp.getByText('Người lập phiếu')).toBeVisible();
+  await page.screenshot({ path: 'test-results/in-phieu-sua-chua.png' });
+  await page.locator('.lenh-bar').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByRole('button', { name: 'Sửa', exact: true }).first().click();
   await expect(page.getByLabel('ĐVT 1')).toHaveValue('LÍT');
   await page.getByRole('button', { name: 'Thôi' }).click();

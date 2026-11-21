@@ -1,6 +1,7 @@
 // Sửa chữa xe (như app cũ): phiếu PSX…, xe, ngày, km, gara, hạng mục (nội dung · SL · đơn giá), ảnh hóa đơn.
 import { useCallback, useEffect, useState } from 'react';
 import { MonthPicker } from '../components/MonthPicker';
+import { RepairPrint } from '../components/RepairPrint';
 import { Modal } from '../components/Modal';
 import { FilePreviews, FilesViewButton } from '../components/FilePreview';
 import { fmtDate, today } from '../components/Documents';
@@ -9,7 +10,7 @@ import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
-interface Order { id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; kind: string; note: string | null; files: string[] }
+interface Order { id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; kind: string; note: string | null; files: string[]; created_by: string | null }
 interface Item { order_id: string; seq: number; content: string; unit: string | null; qty: number; unit_price: number }
 interface Veh { id: string; plate: string; is_active: boolean }
 interface Line { content: string; unit: string; qty: string; unit_price: string }
@@ -30,9 +31,10 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
   const [veh, setVeh] = useState('');
   const [f, setF] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
+  const [prn, setPrn] = useState<Order | null>(null);
 
   const load = useCallback(async () => {
-    let q = supabase.from('repair_orders').select('id, code, vehicle_id, repaired_on, odo_km, workshop, kind, note, files').order('repaired_on', { ascending: false });
+    let q = supabase.from('repair_orders').select('id, code, vehicle_id, repaired_on, odo_km, workshop, kind, note, files, created_by').order('repaired_on', { ascending: false });
     if (month) {
       const [y, m] = month.split('-').map(Number);
       const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
@@ -126,7 +128,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
                       <FilesViewButton files={o.files} label={`Xem ${o.files.length} hóa đơn`} /></td>
                     <td className="small c-gara" data-l="Gara">{o.workshop}</td>
                     <td className="c-tien"><b>{money(total(its))}</b></td>
-                    <td className="hs-act c-act">{canEdit && <><button className="btn small" onClick={() => open(o)}>Sửa</button>
+                    <td className="hs-act c-act"><button className="btn small" onClick={() => setPrn(o)}>In</button>{canEdit && <><button className="btn small" onClick={() => open(o)}>Sửa</button>
                       <button className="btn small link danger-text" onClick={() => void del(o)}>Xóa</button></>}</td>
                   </tr>
                 );
@@ -135,6 +137,10 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
           </table>
         </div>
       </section>
+      {prn && ctx.tenant_id && (
+        <RepairPrint tenantId={ctx.tenant_id} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} onClose={() => setPrn(null)}
+          order={{ ...prn, plate: plate(prn.vehicle_id), items: itemsOf(prn.id).map((x) => ({ content: x.content, unit: x.unit, qty: Number(x.qty), unit_price: Number(x.unit_price) })) }} />
+      )}
       {f && (
         <Modal wide title={f.id ? 'Sửa phiếu sửa chữa' : 'Phiếu sửa chữa mới'} onClose={() => setF(null)}>
           <div className="form">
@@ -171,6 +177,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
             {(f.files.length > 0 || f.add.length > 0) && <p className="small muted">{f.files.length} tệp đã lưu{f.add.length ? ` · ${f.add.length} tệp sẽ tải lên` : ''}</p>}
             <div className="actions">
               <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : 'Lưu phiếu'}</button>
+              {f.id && <button type="button" className="btn" onClick={() => { const o = orders.find((x) => x.id === f.id); if (o) { setF(null); setPrn(o); } }}>In phiếu</button>}
               <button type="button" className="btn link" onClick={() => setF(null)}>Thôi</button>
             </div>
           </div>

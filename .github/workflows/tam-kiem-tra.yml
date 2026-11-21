@@ -1,0 +1,25 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - uses: supabase/setup-cli@v1
+      - run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'cot_unit: '||count(*) from information_schema.columns where table_schema='public' and table_name='repair_items' and column_name='unit'"
+          psql -Atc "select 'quyen_cot: '||coalesce(string_agg(grantee||':'||privilege_type,','),'-') from information_schema.column_privileges where table_schema='public' and table_name='repair_items' and column_name='unit' and grantee in ('authenticated','anon')"
+          psql -Atc "select 'phieu_co_tep: '||count(*) filter (where cardinality(files)>0)||'/'||count(*) from public.repair_orders"
+          K=$(supabase projects api-keys --project-ref vnqkmaauqygnckgtshus -o json | python3 -c 'import json,sys;print(next(k["api_key"] for k in json.load(sys.stdin) if k.get("type")=="publishable" or k.get("name")=="anon"))')
+          echo "::add-mask::$K"
+          for s in "order_id,content,qty" "order_id,content,unit,qty"; do
+            echo "rest $s: $(curl -s -o /tmp/r -w '%{http_code}' -H "apikey: $K" "https://vnqkmaauqygnckgtshus.supabase.co/rest/v1/repair_items?select=$s&limit=1") $(head -c 200 /tmp/r)"
+          done

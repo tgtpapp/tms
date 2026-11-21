@@ -1130,4 +1130,8 @@ button.dt-g { cursor: pointer; }
   background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn-text); }
 .nb-banner.urgent { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
 .nb-banner.calm { background: var(--surface-2); border-color: var(--line); color: var(--muted); display: block; }
-.trip-chip.past { opacity: .6; }
+/* app lái xe: chuyến sắp chạy / đang chạy nền xanh, chuyến đã kết thúc / qua giờ nền tro nhạt */
+.trip-chip.next { background: var(--ok-soft); border-color: #86efac; }
+.trip-chip.past { background: #eceff1; border-color: #cfd8dc; color: #546e7a; }
+html[data-mode='dark'] .trip-chip.next { border-color: #166534; }
+html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #37474f; color: #b0bec5; }

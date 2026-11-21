@@ -99,7 +99,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">
           {sorted.map((t) => (
-            <button key={t.trip_id} className={[open === t.trip_id ? 'trip-chip on' : 'trip-chip', !isUpcoming(t, now) && 'past'].filter(Boolean).join(' ')} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
+            <button key={t.trip_id} className={[open === t.trip_id ? 'trip-chip on' : 'trip-chip', isUpcoming(t, now) ? 'next' : 'past'].filter(Boolean).join(' ')} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
                     aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
               <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
               <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>

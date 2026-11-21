@@ -1,0 +1,11 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -sI https://thinhphat.pages.dev/ | grep -iE "^(http|content-security|x-frame|x-content|referrer|permissions|strict-transport|cross-origin)" | cut -c1-160 | sed 's/^/hdr /'
+          curl -s https://thinhphat.pages.dev/ | grep -o 'http-equiv="Content-Security-Policy"' | sed 's/^/meta /'

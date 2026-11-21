@@ -5,6 +5,14 @@
 --   không gắn vào tài khoản nào, chỉ ghi số điện thoại người gửi tự khai.
 -- - Người xem / trả lời: người gửi + người có quyền Người dùng: Sửa (user.edit) của chính nhà xe đó.
 -- =====================================================================
+-- loại thông báo mới: sự cố
+alter table public.notifications drop constraint notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check check (kind in ('khach', 'xep_chuyen', 'lai_xe_bao', 'su_co'));
+do $$ begin
+  execute replace(pg_get_functiondef('public.set_notify_prefs(text[])'::regprocedure),
+                  'x in (''khach'', ''xep_chuyen'', ''lai_xe_bao'')', 'x in (''khach'', ''xep_chuyen'', ''lai_xe_bao'', ''su_co'')');
+end $$;
+
 create table public.support_tickets (
   id              uuid primary key default gen_random_uuid(),
   tenant_id       uuid not null references public.tenants (id),

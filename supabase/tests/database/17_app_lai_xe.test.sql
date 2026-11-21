@@ -199,5 +199,42 @@ select throws_ok($$ select public.my_trip_layout((select v from t.ids where k = 
 select is((select count(*)::int from public.seat_inventory where crew_call is not null), 0, 'Nhà xe B không thấy trạng thái vé của A');
 reset role;
 
+-- ---------------------------------------------------------------- Lái xe chỉ xem xe mình từng chạy và phiếu sửa chữa của xe đó
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select v from t.ids where k = 'X1'), 'repaired_on', app.local_today()::text, 'kind', 'bao_duong'),
+  '[{"content":"Thay nhớt","qty":1,"unit_price":500000}]'::jsonb) $$, 'Phiếu sửa xe 1');
+select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select v from t.ids where k = 'X2'), 'repaired_on', app.local_today()::text, 'kind', 'sua_chua'),
+  '[{"content":"Thay lốp","qty":1,"unit_price":900000}]'::jsonb) $$, 'Phiếu sửa xe 2');
+select is((select count(*)::int from public.vehicles), 2, 'Chủ xe thấy mọi xe');
+reset role;
+-- Nhóm Lái xe được tích ô Xem xe (không Xem tất cả)
+insert into public.role_permissions (tenant_id, role_id, permission_code)
+select r.tenant_id, r.id, 'vehicle.view' from public.roles r where r.code = 'driver' and r.tenant_id = (select v from t.ids where k = 'A') on conflict do nothing;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is((select array_agg(plate order by plate) from public.vehicles), array['51B-111.11'], 'Lái xe chỉ thấy xe mình từng chạy');
+select is((select count(*)::int from public.documents where owner_kind = 'xe' and vehicle_id = (select v from t.ids where k = 'X1')), 3, 'Thấy giấy tờ xe mình chạy');
+select is((select count(*)::int from public.repair_orders), 1, 'Lái xe chỉ thấy phiếu sửa chữa của xe mình chạy');
+select is((select count(*)::int from public.repair_items), 1, 'Chỉ thấy hạng mục của phiếu đó');
+select throws_ok(format('select public.save_repair(null, %L, %L)', jsonb_build_object('vehicle_id', (select v from t.ids where k = 'X1'), 'repaired_on', app.local_today()::text),
+  '[{"content":"x","qty":1,"unit_price":1}]'), '42501', null, 'Lái xe không thêm phiếu sửa chữa');
+reset role;
+insert into public.role_permissions (tenant_id, role_id, permission_code)
+select r.tenant_id, r.id, 'vehicle.view_all' from public.roles r where r.code = 'driver' and r.tenant_id = (select v from t.ids where k = 'A') on conflict do nothing;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is((select count(*)::int from public.vehicles), 2, 'Tích Xem tất cả: thấy mọi xe');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((select count(*)::int from public.repair_orders), 2, 'Điều hành xem mọi phiếu sửa chữa');
+select is((select count(*)::int from public.vehicles), 2, 'Điều hành thấy mọi xe');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select is((select count(*)::int from public.repair_orders), 0, 'Nhà xe khác không thấy phiếu sửa chữa');
+reset role;
+
 select * from finish();
 rollback;

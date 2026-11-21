@@ -18,8 +18,5 @@ jobs:
           psql -Atc "select 'cot_unit: '||count(*) from information_schema.columns where table_schema='public' and table_name='repair_items' and column_name='unit'"
           psql -Atc "select 'quyen_cot: '||coalesce(string_agg(grantee||':'||privilege_type,','),'-') from information_schema.column_privileges where table_schema='public' and table_name='repair_items' and column_name='unit' and grantee in ('authenticated','anon')"
           psql -Atc "select 'phieu_co_tep: '||count(*) filter (where cardinality(files)>0)||'/'||count(*) from public.repair_orders"
-          K=$(supabase projects api-keys --project-ref vnqkmaauqygnckgtshus -o json | python3 -c 'import json,sys;print(next(k["api_key"] for k in json.load(sys.stdin) if k.get("type")=="publishable" or k.get("name")=="anon"))')
-          echo "::add-mask::$K"
-          for s in "order_id,content,qty" "order_id,content,unit,qty"; do
-            echo "rest $s: $(curl -s -o /tmp/r -w '%{http_code}' -H "apikey: $K" "https://vnqkmaauqygnckgtshus.supabase.co/rest/v1/repair_items?select=$s&limit=1") $(head -c 200 /tmp/r)"
-          done
+          psql -Atc "select 'event_trigger: '||coalesce(string_agg(evtname||'('||evtenabled||')',','),'-') from pg_event_trigger"
+          psql -Atc "select 'pgrst_listen: '||count(*) from pg_stat_activity where application_name ilike '%postgrest%'"

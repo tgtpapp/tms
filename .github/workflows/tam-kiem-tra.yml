@@ -1,0 +1,17 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'luc:'||to_char(now() at time zone 'Asia/Ho_Chi_Minh','HH24:MI')"
+          psql -Atc "select 'chuyen_06h: xuat_ben='||count(departed_at)||' den_ben='||count(arrived_at)||' gio_den='||coalesce(string_agg(distinct to_char(arrived_at at time zone 'Asia/Ho_Chi_Minh','HH24:MI'),','),'-') from public.trips where service_date = (now() at time zone 'Asia/Ho_Chi_Minh')::date and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh','HH24:MI')='06:00' and status='mo'"

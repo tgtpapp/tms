@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 
 /** Chọn ngày trên lịch tháng của màn hình Bán vé (sang tháng sau nếu cần) */
@@ -461,6 +462,41 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Sửa', exact: true }).first().click();
   await expect(page.getByLabel('ĐVT 1')).toHaveValue('LÍT');
   await page.getByRole('button', { name: 'Thôi' }).click();
+  // 5j5c3. Scan tài liệu: ảnh tờ giấy trắng chụp nghiêng trên nền tối → tự nhận khung, nắn phẳng, xoay, xuất PDF A4 1 trang, in, AI đọc chữ
+  await page.getByRole('button', { name: 'Scan tài liệu', exact: true }).click();
+  const giay = await page.evaluate(() => {
+    const c = document.createElement('canvas'); c.width = 1200; c.height = 900;
+    const g = c.getContext('2d')!; g.fillStyle = '#3b3027'; g.fillRect(0, 0, 1200, 900);
+    g.fillStyle = '#f7f7f2'; g.beginPath(); g.moveTo(360, 90); g.lineTo(860, 120); g.lineTo(840, 820); g.lineTo(330, 790); g.closePath(); g.fill();
+    g.fillStyle = '#1e3a8a'; g.font = '28px sans-serif'; for (let i = 0; i < 12; i++) g.fillText('LỆNH VẬN CHUYỂN SỐ 26112101', 390, 190 + i * 48);
+    return c.toDataURL('image/png').split(',')[1]!;
+  });
+  await page.getByLabel('Chọn ảnh tài liệu').setInputFiles({ name: 'giay.png', mimeType: 'image/png', buffer: Buffer.from(giay, 'base64') });
+  await expect(page.getByRole('button', { name: 'Trang 1', exact: true })).toBeVisible();
+  await expect(page.getByText(/Đang nhận khung/)).toHaveCount(0);
+  // khung tự nhận nằm trong tờ giấy (không phải toàn ảnh): góc trên trái cách mép trái ảnh ~ 360/1200
+  const st = page.locator('.scn-stage'), stBox = (await st.boundingBox())!, c0 = (await st.locator('circle').first().boundingBox())!;
+  expect((c0.x + c0.width / 2 - stBox.x) / stBox.width).toBeGreaterThan(0.22);
+  await expect(page.locator('.scn-res img')).toBeVisible();
+  await page.getByRole('button', { name: '⟳ Xoay phải' }).click();
+  await page.getByRole('button', { name: '⟲ Xoay trái' }).click();
+  await page.getByLabel('Tên tài liệu').fill('Thu scan');
+  const scDl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Tải về máy' }).click();
+  const scPdf = readFileSync((await (await scDl).path())!).toString('latin1');
+  const scBoxes = [...scPdf.matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)];
+  expect(scBoxes.length).toBe(1);
+  expect(Math.round(Number(scBoxes[0]![1]))).toBe(595);   // A4 dọc
+  await page.locator('.scn-ex').getByRole('button', { name: 'In', exact: true }).click();
+  await expect(page.locator('.scn-print img')).toHaveCount(1);
+  const scPrint = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect([...scPrint.matchAll(/\/MediaBox/g)].length).toBe(1);
+  await page.screenshot({ path: 'test-results/scan-in.png' });
+  await page.locator('.lenh-bar').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByRole('button', { name: '🤖 Đọc chữ (AI)' }).click();
+  await expect(page.getByText(/AI chưa đọc được/)).toBeVisible({ timeout: 30000 });   // CI không có khóa AI: báo rõ, không treo
+  await page.getByRole('dialog').getByRole('button', { name: /Đóng/ }).first().click();
+  await page.screenshot({ path: 'test-results/scan-dien-thoai.png', fullPage: true });
   // 5j5d. Nhiên liệu: giá Petrolimex, nhập bồn tự lưu + in phiếu 80mm, in sổ
   await page.getByRole('button', { name: 'Nhiên liệu', exact: true }).click();
   await expect(page.getByText('Giá bán lẻ Petrolimex vùng 1')).toBeVisible();

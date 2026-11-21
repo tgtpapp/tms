@@ -13,6 +13,7 @@ import { BranchesScreen } from './Branches';
 import { DriverScreen } from './Driver';
 import { ParcelsScreen } from './Parcels';
 import { ChartersScreen } from './Charters';
+import { ScanScreen } from './Scan';
 import { ArchiveScreen } from './Archive';
 import { DocsScreen } from './Docs';
 import { LaborScreen } from './Labor';
@@ -36,7 +37,7 @@ import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 
-type Tab = 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -126,6 +127,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: perms.hasAnywhere('branch.view') || perms.hasAnywhere('office.view') },
     { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.view') },
     { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') },
+    { key: 'scan', label: 'Scan tài liệu', icon: 'camera', group: 'Quản trị', show: perms.has('archive.view') || perms.has('archive.add') || isCrew },
     { key: 'users', label: 'Người dùng', icon: 'users', group: 'Quản trị', show: perms.hasAnywhere('user.view') },
     { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.view') },
     { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.view') },
@@ -179,6 +181,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
+          {tab === 'scan' && <ScanScreen canSave={perms.has('archive.add')} canAI={perms.has('archive.view') || perms.has('archive.add') || isCrew} />}
           {tab === 'docs' && <DocsScreen ctx={ctx} perms={perms} />}
           {tab === 'labor' && <LaborScreen ctx={ctx} perms={perms} />}
           {tab === 'timesheet' && <TimesheetScreen ctx={ctx} perms={perms} />}

@@ -723,6 +723,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Đã hủy 1 vé · hoàn [\d.]+ đ · phí [\d.]+ đ/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ghế A01 trống' })).toBeVisible();
 
+  // 5p2. Cấp lệnh ngay ở Bán vé: 4 lượt + chọn in chữ ký Giám đốc / con dấu
+  await page.getByRole('button', { name: '🧾 Cấp lệnh' }).click();
+  await expect(page.getByLabel('Chuyến Lượt về 2')).toBeVisible();
+  await expect(page.getByLabel('In chữ ký Giám đốc')).toBeChecked();
+  await expect(page.getByLabel('In con dấu')).toBeChecked();
+  await page.getByRole('button', { name: 'Thôi' }).click();
+
   // 5q. Nhập vé giấy: trùng ghế → chờ xếp ghế → xếp sang ghế trống; chặn nhập trùng số vé giấy
   await page.getByRole('button', { name: 'Nhập vé giấy' }).click();
   await page.getByLabel('Số vé giấy').fill('VG001');

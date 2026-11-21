@@ -126,11 +126,20 @@ reset role;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
-select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 0, 'Bán vé không xem được chữ ký');
+select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 1, 'Bán vé (có ô Cấp lệnh) xem được chữ ký in trên lệnh');
 select throws_ok(format($$ insert into storage.objects (bucket_id, name) values ('giay-to', '%s/chu_ky/00000000-0000-0000-0000-0000000000b2.png') $$,
   (select v from t.ids where k = 'A')), '42501', null, 'Không tải chữ ký thay người khác');
-select throws_ok($$ select public.issue_transport_order((select v from t.ids where k = 'T2')) $$, '42501', null, 'Bán vé không cấp lệnh');
-select throws_ok($$ select public.transport_order_draft((select v from t.ids where k = 'T2')) $$, '42501', null, 'Bán vé không xem bản nháp lệnh');
+select is(public.transport_order_draft((select v from t.ids where k = 'T2')) ->> 'order_no', '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345.2/LVC-TGTP', 'Phòng vé xem lệnh của chuyến');
+select is((public.issue_transport_order((select v from t.ids where k = 'T2'))).print_count, 2, 'Phòng vé in lại lệnh');
+select lives_ok($$ select public.set_order_print((select id from public.transport_orders where trip_id = (select v from t.ids where k = 'T2')), false, true) $$, 'Phòng vé chọn không in chữ ký Giám đốc');
+select is((public.transport_order_print((select id from public.transport_orders where trip_id = (select v from t.ids where k = 'T2'))) ->> 'sign'), 'false', 'Lệnh nhớ lựa chọn in chữ ký');
+select is(jsonb_array_length(public.transport_order_print((select id from public.transport_orders where trip_id = (select v from t.ids where k = 'T2'))) -> 'crew'), 1, 'Dữ liệu in có lái xe (không cần quyền xem nhân sự)');
+reset role;
+delete from public.role_permissions where permission_code = 'order.add' and role_id in (select id from public.roles where code = 'seller');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select throws_ok($$ select public.issue_transport_order((select v from t.ids where k = 'T2')) $$, '42501', null, 'Bỏ ô Cấp lệnh thì bán vé không cấp được');
+select throws_ok($$ select public.transport_order_print((select id from public.transport_orders limit 1)) $$, '42501', null, 'Bỏ ô Cấp lệnh thì không lấy dữ liệu in');
 reset role;
 
 set local role authenticated;
@@ -138,6 +147,7 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.transport_orders), 0, 'Chủ B không thấy lệnh nhà xe A');
 select is((select count(*)::int from public.transport_order_legs), 0, 'Chủ B không thấy lượt lệnh nhà xe A');
 select throws_ok($$ select public.save_transport_order((select v from t.ids where k = 'T2'), null) $$, 'P0002', null, 'Chủ B lưu lệnh chuyến nhà xe A: không tìm thấy');
+select throws_ok(format('select public.transport_order_print(%L)', (select id from public.transport_orders limit 1)), 'P0002', null, 'Chủ B lấy dữ liệu in lệnh nhà xe A: không tìm thấy');
 select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 0, 'Chủ B không thấy chữ ký nhà xe A');
 select throws_ok($$ select public.issue_transport_order((select v from t.ids where k = 'T2')) $$, 'P0002', null,
   'Chủ B cấp lệnh chuyến nhà xe A thì báo không tìm thấy');

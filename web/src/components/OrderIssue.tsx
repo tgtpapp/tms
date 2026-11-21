@@ -19,72 +19,44 @@ const TITLES = ['Lượt đi 1', 'Lượt về 1', 'Lượt đi 2', 'Lượt v�
 
 interface Leg { seq: number; trip_id: string | null; time: string; date: string }
 interface Cand { id: string; route_id: string; direction: Dir; depart_at: string; service_date: string }
-interface Order { id: string; trip_id: string; order_no: string; valid_from: string; valid_to: string; issued_at: string; issued_by: string | null }
+interface PrintRow {
+  order_no: string; issued_at: string; valid_from: string; valid_to: string; issued_by: string | null; sign: boolean; seal: boolean;
+  issuer: { staff_id: string; name: string } | null; issuer_name: string | null; company: string | null; signer_title: string | null; signer_name: string | null;
+  plate: string | null; seats: number | null; direction: Dir;
+  route: { name: string; name_ve: string | null; distance_km: number | null; registered_code: string | null; itinerary: string | null; itinerary_ve: string | null };
+  stop_a: string | null; stop_b: string | null;
+  crew: { role: string; staff_id: string; user_id: string | null; name: string; hang: string | null }[];
+  legs: { seq: number; time: string | null; date: string | null }[];
+}
 
-/** Dựng dữ liệu in của 1 lệnh (đã cấp) */
+/** Dựng dữ liệu in của 1 lệnh đã cấp (dữ liệu lấy qua hàm in lệnh: người bán vé không cần quyền xem hồ sơ nhân viên) */
 export async function loadOrderPrint(orderId: string, tenantId: string, me: { id: string | null; name: string }): Promise<OrderPrintData> {
-  const o = (await supabase.from('transport_orders').select('id, trip_id, order_no, valid_from, valid_to, issued_at, issued_by').eq('id', orderId).single()).data as Order | null;
-  if (!o) throw new Error('Không tìm thấy lệnh');
-  const [lg, tr] = await Promise.all([
-    supabase.from('transport_order_legs').select('seq, depart_time, depart_date').eq('order_id', o.id).order('seq'),
-    supabase.from('trips').select('id, route_id, direction, vehicle_id, service_date').eq('id', o.trip_id).single(),
-  ]);
-  const t = tr.data as { id: string; route_id: string; direction: Dir; vehicle_id: string | null; service_date: string };
-  const [rt, rs, vh, cr, tn, ss, lm] = await Promise.all([
-    supabase.from('routes').select('name, name_ve, distance_km, registered_code, itinerary, itinerary_ve').eq('id', t.route_id).single(),
-    supabase.from('route_stops').select('seq, stop_id').eq('route_id', t.route_id).order('seq'),
-    supabase.from('vehicles').select('plate, vehicle_type_id').eq('id', t.vehicle_id ?? '').maybeSingle(),
-    supabase.from('trip_crew').select('role, staff_id').eq('trip_id', t.id).eq('active', true),
-    supabase.from('tenants').select('name, legal_name').maybeSingle(),
-    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'in.chu_ky_giam_doc', 'in.con_dau']),
-    rpc<{ staff_id: string; vehicle_type_id: string; license_class: string | null }[]>('license_matrix', {}).catch(() => []),
-  ]);
-  const route = rt.data as { name: string; name_ve: string | null; distance_km: number | null; registered_code: string | null; itinerary: string | null; itinerary_ve: string | null } | null;
-  const stopRows = (rs.data ?? []) as { seq: number; stop_id: string }[];
-  const veh = vh.data as { plate: string; vehicle_type_id: string } | null;
-  const crew = (cr.data ?? []) as { role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe'; staff_id: string }[];
-  const ids = [...new Set([...crew.map((c) => c.staff_id)])];
-  const [sm, vt, stp, issuer] = await Promise.all([
-    ids.length ? supabase.from('staff_members').select('id, full_name, user_id').in('id', ids) : Promise.resolve({ data: [] }),
-    veh ? supabase.from('vehicle_types').select('reg_seats, reg_berths').eq('id', veh.vehicle_type_id).maybeSingle() : Promise.resolve({ data: null }),
-    stopRows.length ? supabase.from('stops').select('id, name').in('id', [stopRows[0]!.stop_id, stopRows[stopRows.length - 1]!.stop_id]) : Promise.resolve({ data: [] }),
-    o.issued_by ? supabase.from('staff_members').select('id, full_name').eq('user_id', o.issued_by).limit(1) : Promise.resolve({ data: [] }),
-  ]);
-  const staff = (sm.data ?? []) as { id: string; full_name: string; user_id: string | null }[];
-  const stops = (stp.data ?? []) as { id: string; name: string }[];
-  const sName = (id: string | undefined) => stops.find((x) => x.id === id)?.name ?? '';
-  const A = sName(stopRows[0]?.stop_id), B = sName(stopRows[stopRows.length - 1]?.stop_id);
-  const [from, to] = t.direction === 'di' ? [A, B] : [B, A];
-  const sid = (r: string) => crew.find((c) => c.role === r)?.staff_id ?? null;
-  const st = (r: string) => staff.find((s) => s.id === sid(r));
-  const who = (r: string) => { const s = st(r); return s ? { name: s.full_name, hang: ((lm as { staff_id: string; vehicle_type_id: string; license_class: string | null }[]).find((l) => l.staff_id === s.id && l.vehicle_type_id === veh?.vehicle_type_id)?.license_class) ?? null } : null; };
-  const iss = ((issuer.data ?? []) as { id: string; full_name: string }[])[0];
-  const raw = (k: string) => ((ss.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value;
-  const keys = ['giam_doc', o.issued_by, iss && `nv_${iss.id}`, st('lai_xe_1')?.user_id, st('lai_xe_2')?.user_id, sid('lai_xe_1') && `nv_${sid('lai_xe_1')}`, sid('lai_xe_2') && `nv_${sid('lai_xe_2')}`];
+  const p = await rpc<PrintRow>('transport_order_print', { p_order_id: orderId });
+  const c = (r: string) => p.crew.find((x) => x.role === r);
+  const nv = (r: string) => (c(r) ? `nv_${c(r)!.staff_id}` : null);
+  const keys = ['giam_doc', p.issued_by, p.issuer && `nv_${p.issuer.staff_id}`, c('lai_xe_1')?.user_id, c('lai_xe_2')?.user_id, nv('lai_xe_1'), nv('lai_xe_2')];
   const [sg, seal, qr] = await Promise.all([
     loadSigns(tenantId, keys),
-    raw('in.con_dau') === false ? Promise.resolve(null) : signatureUrl(tenantId, 'con_dau'),
-    QRCode.toDataURL(`LVC ${o.order_no} | ${veh?.plate ?? ''} | ${route?.name ?? ''} | ${fmtDate(o.valid_from)}`, { margin: 0, width: 240 }),
+    p.seal ? signatureUrl(tenantId, 'con_dau') : Promise.resolve(null),
+    QRCode.toDataURL(`LVC ${p.order_no} | ${p.plate ?? ''} | ${p.route.name} | ${fmtDate(p.valid_from)}`, { margin: 0, width: 240 }),
   ]);
   // chữ ký hồ sơ nhân viên trước, chưa có thì chữ ký theo tài khoản
   const pick = (a: string | null | undefined, b: string | null | undefined) => { const x = a ? sg.get(a) : undefined; return x?.img ? x : (b ? sg.get(b) : undefined); };
-  const gd = raw('in.chu_ky_giam_doc') === false ? undefined : sg.get('giam_doc');
-  const s1 = pick(sid('lai_xe_1') && `nv_${sid('lai_xe_1')}`, st('lai_xe_1')?.user_id), s2 = pick(sid('lai_xe_2') && `nv_${sid('lai_xe_2')}`, st('lai_xe_2')?.user_id);
-  const dh = pick(iss && `nv_${iss.id}`, o.issued_by);
-  const tnRow = (tn.data ?? {}) as { name?: string; legal_name?: string | null };
-  const legRows = (lg.data ?? []) as { seq: number; depart_time: string | null; depart_date: string | null }[];
+  const gd = p.sign ? sg.get('giam_doc') : undefined;
+  const s1 = pick(nv('lai_xe_1'), c('lai_xe_1')?.user_id), s2 = pick(nv('lai_xe_2'), c('lai_xe_2')?.user_id), dh = pick(p.issuer && `nv_${p.issuer.staff_id}`, p.issued_by);
+  const [a, b] = [p.stop_a ?? '', p.stop_b ?? ''], [from, to] = p.direction === 'di' ? [a, b] : [b, a];
+  const who = (r: string) => (c(r) ? { name: c(r)!.name, hang: c(r)!.hang } : null);
   return {
-    orderNo: o.order_no, issueDate: new Date(o.issued_at).toLocaleDateString('sv-SE', { timeZone: TZ }), validFrom: o.valid_from, validTo: o.valid_to,
-    company: tnRow.legal_name || tnRow.name || '', signerTitle: (raw('cong_ty.chuc_danh_ky') as string) || 'Giám đốc', signerName: (raw('cong_ty.giam_doc') as string) ?? '',
+    orderNo: p.order_no, issueDate: new Date(p.issued_at).toLocaleDateString('sv-SE', { timeZone: TZ }), validFrom: p.valid_from, validTo: p.valid_to,
+    company: p.company ?? '', signerTitle: p.signer_title || 'Giám đốc', signerName: p.signer_name ?? '',
     signerImg: gd?.img ?? null, sealImg: seal, signerShowName: showName(gd),
-    dispatcherName: iss?.full_name ?? (o.issued_by && o.issued_by === me.id ? me.name : null), dispatcherImg: dh?.img ?? null, dispatcherShowName: showName(dh),
+    dispatcherName: p.issuer?.name ?? p.issuer_name ?? (p.issued_by && p.issued_by === me.id ? me.name : null), dispatcherImg: dh?.img ?? null, dispatcherShowName: showName(dh),
     driver1Sign: s1?.img ?? null, driver1ShowName: showName(s1), driver2Sign: s2?.img ?? null, driver2ShowName: showName(s2),
-    driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: who('phu_xe')?.name ?? null,
-    plate: veh?.plate ?? '', seats: vt.data ? (vt.data as { reg_seats: number; reg_berths: number }).reg_seats + (vt.data as { reg_seats: number; reg_berths: number }).reg_berths : null,
-    routeName: dirName(route ?? undefined, t.direction), distanceKm: route?.distance_km ?? null, registeredCode: route?.registered_code ?? null,
-    itinerary: (t.direction === 've' ? route?.itinerary_ve || reverseItinerary(route?.itinerary ?? '') : route?.itinerary) || null,
+    driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: c('phu_xe')?.name ?? null,
+    plate: p.plate ?? '', seats: p.seats, routeName: dirName(p.route, p.direction), distanceKm: p.route.distance_km, registeredCode: p.route.registered_code,
+    itinerary: (p.direction === 've' ? p.route.itinerary_ve || reverseItinerary(p.route.itinerary ?? '') : p.route.itinerary) || null,
     fromStop: from, toStop: to,
-    legs: [1, 2, 3, 4].map((i) => { const l = legRows.find((x) => x.seq === i); return { time: l?.depart_time ?? null, date: l?.depart_date ?? null }; }),
+    legs: [1, 2, 3, 4].map((i) => { const l = p.legs.find((x) => x.seq === i); return { time: l?.time ?? null, date: l?.date ?? null }; }),
     qr,
   };
 }
@@ -98,12 +70,14 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
   const [routes, setRoutes] = useState<{ id: string; name: string; name_ve: string | null }[]>([]);
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState<OrderPrintData | null>(null);
+  const [sign, setSign] = useState(true);
+  const [seal, setSeal] = useState(true);
   useEffect(() => {
     let on = true;
     void (async () => {
       try {
         const [d, t] = await Promise.all([
-          rpc<{ order_no: string | null; legs: { seq: number; trip_id: string | null; time: string | null; date: string | null }[] }>('transport_order_draft', { p_trip_id: tripId }),
+          rpc<{ order_no: string | null; sign: boolean; seal: boolean; legs: { seq: number; trip_id: string | null; time: string | null; date: string | null }[] }>('transport_order_draft', { p_trip_id: tripId }),
           supabase.from('trips').select('vehicle_id, service_date').eq('id', tripId).single(),
         ]);
         const tr = t.data as { vehicle_id: string | null; service_date: string };
@@ -116,6 +90,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
         setCands((c.data ?? []) as Cand[]);
         setRoutes((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]);
         setOrderNo(d.order_no);
+        setSign(d.sign !== false); setSeal(d.seal !== false);
         setLegs([1, 2, 3, 4].map((i) => { const l = d.legs.find((x) => x.seq === i); return { seq: i, trip_id: l?.trip_id ?? null, time: l?.time ?? '', date: l?.date ?? '' }; }));
       } catch (e) { toast('error', errMsg(e)); onClose(); }
     })();
@@ -129,6 +104,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
     setBusy(true);
     try {
       const o = await rpc<{ id: string }>('save_transport_order', { p_trip_id: tripId, p_legs: legs.map((l) => ({ seq: l.seq, trip_id: l.trip_id, time: l.time || null, date: l.date || null })) });
+      await rpc('set_order_print', { p_order_id: o.id, p_sign: sign, p_seal: seal });
       setPrinting(await loadOrderPrint(o.id, tenantId, me));
       onDone?.();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
@@ -155,6 +131,10 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
               </div>
             </fieldset>
           ))}
+          <div className="ord-opt">
+            <label className="check"><input type="checkbox" checked={sign} onChange={(e) => setSign(e.target.checked)} /> In chữ ký Giám đốc</label>
+            <label className="check"><input type="checkbox" checked={seal} onChange={(e) => setSeal(e.target.checked)} /> In con dấu</label>
+          </div>
           <div className="actions">
             <button type="button" className="btn primary" disabled={busy} onClick={() => void issue()}>{busy ? 'Đang cấp…' : orderNo ? 'Lưu & in lại' : 'Cấp lệnh & in'}</button>
             <button type="button" className="btn link" onClick={onClose}>Thôi</button>

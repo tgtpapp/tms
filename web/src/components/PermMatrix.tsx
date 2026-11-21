@@ -2,7 +2,7 @@
 // Xem = mở mục (dữ liệu theo người: chỉ của chính mình); Xem tất cả = thấy dữ liệu của mọi người.
 // inherited: các ô có từ nhóm (đánh dấu; bỏ tích = chặn riêng người đó). allowed: ô người đang thao tác được cấp (không cấp vượt quyền mình; bỏ tích luôn được).
 export const SCREENS: [string, string][] = [
-  ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['safety', 'Giám sát ATGT'], ['route', 'Tuyến & giá vé'],
+  ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['order', 'Cấp lệnh vận chuyển'], ['safety', 'Giám sát ATGT'], ['route', 'Tuyến & giá vé'],
   ['repair', 'Sửa chữa'], ['fuel', 'Nhiên liệu'], ['report', 'Báo cáo'], ['km', 'Km xe'], ['vehicle', 'Xe'], ['staff', 'Lái xe & nhân viên'],
   ['labor', 'Hợp đồng lao động'], ['timesheet', 'Bảng chấm công'], ['salary', 'BHXH & lương chuyển khoản'], ['branch', 'Chi nhánh'], ['office', 'Phòng vé'], ['doc', 'Văn bản'],
   ['archive', 'Lưu trữ hồ sơ'], ['user', 'Người dùng'], ['role', 'Vai trò (phân quyền)'], ['settings', 'Cấu hình'], ['audit', 'Nhật ký'],

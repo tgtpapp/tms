@@ -1249,3 +1249,4 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 .lenh4 h1 { font-size: 20px; margin: 2px 0; }
 .ord-leg { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 10px; margin: 0 0 8px; }
 .ord-leg legend { font-weight: 700; padding: 0 4px; }
+.ord-opt { display: flex; gap: 16px; flex-wrap: wrap; margin: 4px 0 8px; }

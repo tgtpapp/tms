@@ -282,7 +282,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         <div className="vx-right" ref={rightRef}>
           {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p>{online && <CashToday userId={ctx.user_id} version={version} />}</section>}
           {trip && (
-            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOrder={perms.has('trip.edit')} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
+            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOrder={perms.has('order.add') || perms.has('trip.edit')} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
                       stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                       seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                       otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}

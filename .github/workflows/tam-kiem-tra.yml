@@ -1,0 +1,18 @@
+name: tam-kiem-tra
+on: workflow_dispatch
+jobs:
+  k:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'cron:'||count(*) from cron.job where jobname='tu-xuat-den-ben' and active"
+          psql -Atc "select 'chay:'||count(*)||' loi:'||count(*) filter (where status<>'succeeded') from cron.job_run_details d join cron.job j using (jobid) where j.jobname='tu-xuat-den-ben' and d.start_time>now()-interval '10 minutes'"
+          psql -Atc "select 'tu_xb:'||count(*) filter (where departed_auto)||' tu_db:'||count(*) filter (where arrived_auto) from public.trips"

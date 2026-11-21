@@ -113,7 +113,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       const drivers = c.filter((s) => s.position === 'lai_xe');
       return drivers.length === 1 ? drivers[0] : c.length === 1 ? c[0] : null;
     };
-    return P.items.map((it) => {
+    const out: Row[] = P.items.map((it): Row => {
       const ngay = it.ngay || day;
       const route = resolveRoute(it.tuyen);
       const v = findVeh(it.bks), e = findEmp(it.lai);
@@ -152,7 +152,20 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       }
       return r;
     });
-  }, [P, base, trips, crew, opt, day, gone, busyTrips]);
+    // Chuyến của ngày này (tuyến có trong lịch dán) mà lịch dán không có, chưa xếp xe và lái xe (vd chuyến tự tạo theo lịch chạy):
+    // xóa luôn để lịch trong app khớp đúng lịch Vexere. Chuyến đã xếp xe / lái, đã xuất bến, đã có vé / hàng thì giữ.
+    const used = new Set(out.map((r) => r.trip?.id).filter(Boolean));
+    const keys = new Set(out.filter((r) => r.ngay === day && r.route?.id).map((r) => `${r.route!.id}|${r.route!.dir}`));
+    for (const t of trips) {
+      if (t.service_date !== day || used.has(t.id) || !keys.has(`${t.route_id}|${t.direction}`)) continue;
+      if (t.vehicle_id || crew.some((c) => c.trip_id === t.id && c.active && (c.role === 'lai_xe_1' || c.role === 'lai_xe_2'))) continue;
+      if ((t.departed_at && !t.edit_unlocked_at) || busyTrips.has(t.id)) continue;
+      out.push({ ngay: day, tuyen: dirName(base.routes.find((x) => x.id === t.route_id), t.direction), gio: hhmm(t.depart_at), rb: '', rl: '', cho: 0,
+        route: { id: t.route_id, dir: t.direction }, trip: t, v: null, e: null, addV: null, addE: null, curV: '', curE: '', same: false,
+        ok: true, del: true, st: `Không có trong ${src || 'lịch dán'}, chưa xếp xe / lái: sẽ xóa chuyến này`, tone: 'warn' });
+    }
+    return out;
+  }, [P, base, trips, crew, opt, day, gone, busyTrips, src]);
 
   // mặc định chọn các dòng cần áp dụng (bỏ dòng đã khớp)
   useEffect(() => { setPick(new Set(rows.map((r, i) => (r.ok && !r.same ? i : -1)).filter((i) => i >= 0))); }, [rows]);

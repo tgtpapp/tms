@@ -36,8 +36,10 @@ import { StaffScreen } from './Staff';
 import { TripsScreen } from './Trips';
 import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
+import { SupportScreen } from './Support';
+import { ScreenGuard } from '../components/ScreenGuard';
 
-type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account';
+type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
@@ -53,6 +55,10 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
   const [share, setShare] = useState<{ to: 'fuel' | 'driver'; files: File[] } | null>(null);
   const [shareMsg, setShareMsg] = useState('');
+  // Báo sự cố: màn hình đang mở trước khi vào Báo sự cố + nội dung soạn sẵn khi một màn hình bị lỗi
+  const [lastScreen, setLastScreen] = useState('');
+  const [report, setReport] = useState('');
+  const clearReport = useCallback(() => setReport(''), []);
   // App cài vào máy: tên nhà xe dưới biểu tượng, biểu tượng là ảnh đại diện của người đăng nhập (chưa có ảnh: logo nhà xe)
   const myAva = myStaff ? avas[myStaff] : undefined;
   useEffect(() => {
@@ -133,6 +139,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.view') },
     { key: 'audit', label: 'Nhật ký', icon: 'time-past', group: 'Quản trị', show: perms.has('audit.view') },
     { key: 'account', label: 'Tài khoản của tôi', icon: 'user', group: 'Cá nhân', show: true },
+    { key: 'support', label: 'Báo sự cố', icon: 'headset', group: 'Cá nhân', show: true },
   ];
   const shown = tabs.filter((t) => t.show);
   const groups = [...new Set(shown.map((t) => t.group))];
@@ -162,7 +169,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
               <div className="side-group-title">{g}</div>
               {shown.filter((t) => t.group === g).map((t) => (
                 <button key={t.key} className={tab === t.key ? 'side-link on' : 'side-link'} aria-current={tab === t.key ? 'page' : undefined}
-                        onClick={() => { setTab(t.key); window.scrollTo({ top: 0 }); }}>
+                        onClick={() => { if (t.key === 'support' && tab !== 'support') setLastScreen(tabs.find((x) => x.key === tab)?.label ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
                   <i className={`fi fi-rr-${t.icon}`} aria-hidden="true" />
                   <span>{t.label}</span>
                 </button>
@@ -176,6 +183,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       </aside>
       <div className="main">
         <main className="content">
+          <ScreenGuard key={tab} name={tabs.find((x) => x.key === tab)?.label ?? ''}
+                       onReport={(text) => { setLastScreen(tabs.find((x) => x.key === tab)?.label ?? ''); setReport(text); setTab('support'); }}>
           {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
           {tab === 'driver' && <DriverScreen tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
@@ -203,6 +212,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} />}
           {tab === 'audit' && <AuditScreen />}
           {tab === 'account' && <AccountScreen ctx={ctx} canManage={perms.has('staff.edit')} />}
+          {tab === 'support' && <SupportScreen me={ctx.user_id} canHandle={perms.has('user.edit')} screen={lastScreen || undefined}
+                                               prefill={report || undefined} onPrefillUsed={clearReport} />}
+          </ScreenGuard>
         </main>
       </div>
     </div>

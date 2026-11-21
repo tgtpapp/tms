@@ -15,9 +15,12 @@ export function errMsg(e: unknown): string {
 let afterWrite: ((fn: string) => void) | null = null;
 /** Việc chạy sau mỗi lệnh RPC thành công (gửi thông báo đẩy đang chờ) */
 export const setAfterWrite = (f: (fn: string) => void) => { afterWrite = f; };
+/** Ghi lại lỗi RPC gần nhất (gửi kèm khi báo sự cố) */
+let onRpcError: ((fn: string, msg: string) => void) | null = null;
+export const setOnRpcError = (f: (fn: string, msg: string) => void) => { onRpcError = f; };
 export async function rpc<T>(fn: string, args?: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(fn, args);
-  if (error) throw new Error(error.message);
+  if (error) { onRpcError?.(fn, error.message); throw new Error(error.message); }
   afterWrite?.(fn);
   return data as T;
 }

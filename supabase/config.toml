@@ -27,3 +27,7 @@ verify_jwt = false
 # Thông báo đẩy: tự kiểm tra phiên bên trong (lấy khóa công khai không cần đăng nhập)
 [functions.push]
 verify_jwt = false
+
+# Báo sự cố từ màn hình đăng nhập (chưa có phiên): chỉ lưu qua hàm nội bộ, có giới hạn số lần
+[functions.support]
+verify_jwt = false

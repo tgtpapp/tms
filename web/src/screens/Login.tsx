@@ -4,6 +4,8 @@ import { Centered } from '../components/Centered';
 import { config } from '../config';
 import { loginEmail } from '../lib/login';
 import { supabase } from '../lib/supabase';
+import { Modal } from '../components/Modal';
+import { reportFromLogin } from '../lib/support';
 
 const REMEMBER_KEY = 'tms.maNhaXe';
 
@@ -37,6 +39,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [report, setReport] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -82,8 +85,59 @@ export function LoginScreen() {
           </button>
         )}
         <p className="muted small">Quên mật khẩu: liên hệ quản trị nhà xe để đặt lại.</p>
+        <button type="button" className="btn link" onClick={() => setReport(true)}>Báo sự cố</button>
         <InstallApp name={config.appName} />
       </form>
+      {report && <LoginReport code={otherTenant ? tenantCode.trim().toLowerCase() : config.tenantCode} askCode={otherTenant}
+                              phone={account.replace(/\s+/g, '')} onClose={() => setReport(false)} />}
     </Centered>
+  );
+}
+
+/** Báo sự cố khi chưa đăng nhập được: gửi tới người quản lý tài khoản của nhà xe (chưa xác minh người gửi) */
+function LoginReport({ code, askCode, phone, onClose }: { code: string; askCode: boolean; phone: string; onClose: () => void }) {
+  const [c, setC] = useState(code);
+  const [p, setP] = useState(phone);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState(false);
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    if (!c.trim()) return setErr('Nhập mã nhà xe');
+    setBusy(true); setErr('');
+    try { await reportFromLogin(c.trim().toLowerCase(), p.trim(), text.trim()); setDone(true); }
+    catch (x) { setErr(x instanceof Error ? x.message : String(x)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <Modal title="Báo sự cố" onClose={onClose}>
+      {done ? (
+        <div className="form">
+          <p>Đã gửi tới người quản lý tài khoản của nhà xe.</p>
+          <button type="button" className="btn primary" onClick={onClose}>Đóng</button>
+        </div>
+      ) : (
+        <form className="form" onSubmit={send}>
+          {askCode && (
+            <label>
+              Mã nhà xe
+              <input value={c} onChange={(e) => setC(e.target.value)} autoCapitalize="none" required />
+            </label>
+          )}
+          <label>
+            Số điện thoại của tôi
+            <input value={p} onChange={(e) => setP(e.target.value)} inputMode="tel" />
+          </label>
+          <label>
+            Gặp sự cố gì?
+            <textarea rows={4} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} required
+                      placeholder="vd: Đăng nhập báo sai mật khẩu dù nhập đúng" />
+          </label>
+          {err && <p className="error-text">{err}</p>}
+          <button className="btn primary" disabled={busy || text.trim().length < 3}>{busy ? 'Đang gửi…' : 'Gửi'}</button>
+        </form>
+      )}
+    </Modal>
   );
 }

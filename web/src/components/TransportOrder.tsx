@@ -1,5 +1,5 @@
 // Lệnh vận chuyển – in giấy A4 theo mẫu của nhà xe (không có tùy chọn in: bấm là in).
-import { useEffect, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 
 export interface OrderPrintData {
   orderNo: string;
@@ -26,9 +26,7 @@ export interface OrderPrintData {
   itinerary: string | null;
   fromStop: string;
   toStop: string;
-  departTime: string;           // HH:MM
-  departDate: string;           // YYYY-MM-DD
-  ret: { time: string; date: string } | null;   // chuyến lượt về của cùng xe (nếu có)
+  legs: { time: string | null; date: string | null }[];   // 4 lượt: đi, về, đi, về (lượt trống thì để chỗ viết tay)
   dispatcherName: string | null;
   dispatcherImg: string | null;
   qr: string;                   // ảnh QR (data URL)
@@ -58,22 +56,22 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
     return () => clearTimeout(t);
   }, []);
 
-  const leg = (title: string, from: string, to: string, time: string | null, date: string | null) => (
-    <>
-      <tr>
+  const leg = (key: number, title: string, from: string, to: string, time: string | null, date: string | null) => (
+    <Fragment key={key}>
+      <tr className="lenh-leg">
         <td rowSpan={2} className="c"><b>{title}</b></td>
         <td className="c">Bến xe đi:<br /><b>{from.toUpperCase()}</b></td>
         <td className="c"><b>Xuất bến:</b><br /><Blank w={40}>{time}</Blank> giờ ngày <Blank>{date ? d(date) : ''}</Blank></td>
         <td />
         <td />
       </tr>
-      <tr>
+      <tr className="lenh-leg">
         <td className="c">Bến xe đến:<br /><b>{to.toUpperCase()}</b></td>
         <td className="c"><b>đến bến:</b><br /><Blank w={40} /> giờ ngày <Blank /></td>
         <td />
         <td />
       </tr>
-    </>
+    </Fragment>
   );
 
   return (
@@ -83,7 +81,7 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
         <button className="btn small primary" onClick={() => window.print()}>In lại</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
-      <div className="lenh" ref={ref}>
+      <div className="lenh lenh4" ref={ref}>
         <div className="lenh-head">
           <div className="c">
             <b>{data.company.toUpperCase()}</b><br />
@@ -127,8 +125,10 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
             <tr className="c">
               <th>Lượt xe thực hiện</th><th>Bến xe đi, đến</th><th>Giờ xe chạy</th><th>Số khách</th><th>Bến xe<br /><i>(Ký tên và đóng dấu)</i></th>
             </tr>
-            {leg('Lượt đi', data.fromStop, data.toStop, data.departTime, data.departDate)}
-            {leg('Lượt về', data.toStop, data.fromStop, data.ret?.time ?? null, data.ret?.date ?? null)}
+            {[0, 1, 2, 3].map((i) => {
+              const l = data.legs[i], di = i % 2 === 0;
+              return leg(i, di ? 'Lượt đi' : 'Lượt về', di ? data.fromStop : data.toStop, di ? data.toStop : data.fromStop, l?.time ?? null, l?.date ?? null);
+            })}
           </tbody>
         </table>
         <table className="lenh-table lenh-foot">

@@ -588,12 +588,22 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();
   await page.evaluate(() => { window.print = () => {}; });
   await page.getByRole('button', { name: 'In lệnh 07:00 Hố Nai – Vũng Tàu' }).click();
+  // lệnh 4 lượt: lượt đi 1 là chuyến đang chọn (lấy theo lịch xếp), chỉnh tay giờ lượt về 1 rồi cấp
+  await expect(page.getByLabel('Chuyến Lượt đi 1')).not.toHaveValue('');
+  await page.getByLabel('Giờ Lượt về 1').fill('12:30');
+  await page.getByRole('button', { name: 'Cấp lệnh & in' }).click();
   await expect(page.getByRole('heading', { name: 'LỆNH VẬN CHUYỂN' })).toBeVisible();
-  await expect(page.getByText(/Số: 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
+  await expect(page.getByText(/Số: 0700-\d{8}-345\/LVC-TGTP/)).toBeVisible();
+  await expect(page.locator('.lenh').getByText('Lượt đi', { exact: true })).toHaveCount(2);
+  await expect(page.locator('.lenh').getByText('Lượt về', { exact: true })).toHaveCount(2);
+  await expect(page.locator('.lenh .lenh-blank', { hasText: '12:30' })).toHaveCount(1);
+  const lvcPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  expect([...lvcPdf.matchAll(/\/MediaBox/g)].length).toBe(1);   // 4 lượt vừa 1 tờ A4
+  await page.screenshot({ path: 'test-results/lenh-4-luot.png' });
   await expect(page.locator('.lenh').getByText('51B-123.45')).toBeVisible();
   await expect(page.locator('.lenh').getByText('CÔNG TY TNHH MTV TƯỜNG GIA THỊNH PHÁT')).toBeVisible();
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
-  await expect(page.getByText(/Lệnh số 0700-\d{6}\/LVC-TGTP/)).toBeVisible();
+  await expect(page.getByText(/Lệnh số 0700-\d{8}-345\/LVC-TGTP/).first()).toBeVisible();
 
   // 5m. Bán vé: gắn loại xe cho nốt → bán vé ngày mai ghế A01, thu tiền mặt, in vé, danh sách khách
   await page.getByRole('button', { name: 'Điều hành', exact: true }).click();

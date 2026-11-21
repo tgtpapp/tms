@@ -65,15 +65,34 @@ select throws_ok($$ insert into public.tenant_settings (key, value) values ('len
 select lives_ok($$ insert into public.tenant_settings (key, value) values ('lenh.hau_to', '"TGTP"'), ('cong_ty.giam_doc', '"Hà Văn Thịnh"') $$,
   'Cấu hình hậu tố TGTP + tên Giám đốc');
 select lives_ok($$ select public.assign_trip((select v from t.ids where k = 'T2'), null, null, null, null, null) $$, 'Chuyến 2 chưa xếp');
+-- cùng xe chạy tiếp 3 lượt trong ngày: về 12:00, đi 15:00, về 19:00 (lệnh 4 lượt lấy theo lịch xếp)
+select lives_ok($$ select public.add_extra_trip(id, 've', app.local_today() + 1, '12:00', null), public.add_extra_trip(id, 'di', app.local_today() + 1, '15:00', null),
+  public.add_extra_trip(id, 've', app.local_today() + 1, '19:00', null) from public.routes where code = 'BH-VT' $$, '3 chuyến tiếp theo');
+reset role;
+insert into t.ids select 'T3', id from public.trips where route_id = (select id from public.routes where code = 'BH-VT') and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh', 'HH24') = '12';
+insert into t.ids select 'T4', id from public.trips where route_id = (select id from public.routes where code = 'BH-VT') and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh', 'HH24') = '15';
+insert into t.ids select 'T5', id from public.trips where route_id = (select id from public.routes where code = 'BH-VT') and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh', 'HH24') = '19';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.assign_trip(v, (select v from t.ids where k = 'X1'), (select v from t.ids where k = 'D1'), null, null, 'x') from t.ids where k in ('T3', 'T4', 'T5') $$, 'Xếp cùng xe, cùng lái xe');
 reset role;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((select count(*)::int from jsonb_array_elements(public.transport_order_draft((select v from t.ids where k = 'T1')) -> 'legs')), 4, 'Chưa cấp: tự lấy 4 lượt theo lịch xếp xe');
 select is((public.issue_transport_order((select v from t.ids where k = 'T1'))).order_no,
-  '0700-' || to_char(app.local_today() + 1, 'DDMMYY') || '/LVC-TGTP', 'Số lệnh theo quy ước giờ chạy - ngày tháng năm / LVC-TGTP');
+  '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345/LVC-TGTP', 'Số lệnh: giờ phút - ngày tháng năm - 3 số cuối biển số / LVC-TGTP');
+select is((select string_agg(l.seq || '=' || l.depart_time, ',' order by l.seq) from public.transport_order_legs l), '1=07:00,2=12:00,3=15:00,4=19:00', '2 lượt đi + 2 lượt về đúng giờ');
 select is((public.issue_transport_order((select v from t.ids where k = 'T1'))).order_no,
-  '0700-' || to_char(app.local_today() + 1, 'DDMMYY') || '/LVC-TGTP', 'In lại giữ nguyên số lệnh');
-select is((select print_count from public.transport_orders), 2, 'Đếm số lần in');
+  '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345/LVC-TGTP', 'In lại giữ nguyên số lệnh');
+-- chỉnh tay: bỏ lượt về 2, sửa giờ lượt đi 2; số lệnh giữ nguyên; chuyến về cũng thấy cùng lệnh
+select is((public.save_transport_order((select v from t.ids where k = 'T3'), jsonb_build_array(
+  jsonb_build_object('seq', 1, 'trip_id', (select v from t.ids where k = 'T1')), jsonb_build_object('seq', 2, 'trip_id', (select v from t.ids where k = 'T3')),
+  jsonb_build_object('seq', 3, 'trip_id', (select v from t.ids where k = 'T4'), 'time', '15:30')))).order_no,
+  '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345/LVC-TGTP', 'Chỉnh tay lượt: giữ số lệnh');
+select is((select string_agg(l.seq || '=' || l.depart_time, ',' order by l.seq) from public.transport_order_legs l), '1=07:00,2=12:00,3=15:30', 'Đã sửa giờ, bỏ lượt về 2');
+select is(public.transport_order_draft((select v from t.ids where k = 'T3')) ->> 'order_no', '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345/LVC-TGTP', 'Chuyến về thấy lệnh đã cấp');
+select is((select print_count from public.transport_orders), 3, 'Đếm số lần in');
 select is((select valid_to - valid_from from public.transport_orders), 1, 'Lệnh có giá trị 2 ngày (ngày chạy và ngày hôm sau)');
 reset role;
 
@@ -84,8 +103,11 @@ select lives_ok($$ select public.cancel_trip((select v from t.ids where k = 'T1'
 select lives_ok($$ select public.assign_trip((select v from t.ids where k = 'T2'), (select v from t.ids where k = 'X1'),
   (select v from t.ids where k = 'D1'), null, null, 'x') $$, 'Xếp xe chuyến 2');
 select is((public.issue_transport_order((select v from t.ids where k = 'T2'))).order_no,
-  '0700-' || to_char(app.local_today() + 1, 'DDMMYY') || '.2/LVC-TGTP', 'Trùng giờ + ngày: số lệnh thêm .2');
-select is((public.issue_transport_order((select v from t.ids where k = 'T1'))).print_count, 3,
+  '0700-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '-345.2/LVC-TGTP', 'Trùng số: thêm .2');
+select throws_ok($$ select public.save_transport_order((select v from t.ids where k = 'T2'), jsonb_build_array(
+  jsonb_build_object('seq', 1, 'trip_id', (select v from t.ids where k = 'T2')), jsonb_build_object('seq', 2, 'trip_id', (select v from t.ids where k = 'T3')))) $$,
+  '22023', null, 'Chuyến đã nằm trên lệnh khác thì không đưa vào lệnh thứ hai');
+select is((public.issue_transport_order((select v from t.ids where k = 'T1'))).print_count, 4,
   'Chuyến đã hủy vẫn in lại được lệnh đã cấp (không cấp mới)');
 
 -- Chữ ký: Giám đốc do chủ tải; mỗi người tự tải của mình
@@ -108,11 +130,14 @@ select is((select count(*)::int from storage.objects where name like '%/chu_ky/%
 select throws_ok(format($$ insert into storage.objects (bucket_id, name) values ('giay-to', '%s/chu_ky/00000000-0000-0000-0000-0000000000b2.png') $$,
   (select v from t.ids where k = 'A')), '42501', null, 'Không tải chữ ký thay người khác');
 select throws_ok($$ select public.issue_transport_order((select v from t.ids where k = 'T2')) $$, '42501', null, 'Bán vé không cấp lệnh');
+select throws_ok($$ select public.transport_order_draft((select v from t.ids where k = 'T2')) $$, '42501', null, 'Bán vé không xem bản nháp lệnh');
 reset role;
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.transport_orders), 0, 'Chủ B không thấy lệnh nhà xe A');
+select is((select count(*)::int from public.transport_order_legs), 0, 'Chủ B không thấy lượt lệnh nhà xe A');
+select throws_ok($$ select public.save_transport_order((select v from t.ids where k = 'T2'), null) $$, 'P0002', null, 'Chủ B lưu lệnh chuyến nhà xe A: không tìm thấy');
 select is((select count(*)::int from storage.objects where name like '%/chu_ky/%'), 0, 'Chủ B không thấy chữ ký nhà xe A');
 select throws_ok($$ select public.issue_transport_order((select v from t.ids where k = 'T2')) $$, 'P0002', null,
   'Chủ B cấp lệnh chuyến nhà xe A thì báo không tìm thấy');

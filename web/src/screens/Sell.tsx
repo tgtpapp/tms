@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { OrderIssue } from '../components/OrderIssue';
 import { MiniCal } from '../components/MiniCal';
 import { Modal } from '../components/Modal';
 import { dirName } from '../lib/routes';
@@ -281,7 +282,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         <div className="vx-right" ref={rightRef}>
           {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p>{online && <CashToday userId={ctx.user_id} version={version} />}</section>}
           {trip && (
-            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
+            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOrder={perms.has('trip.edit')} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
                       stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                       seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                       otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
@@ -332,7 +333,7 @@ function CashToday({ userId, version }: { userId: string | null; version: number
 /* ------------------------------------------------------------------ Bán vé 1 chuyến */
 
 interface TripSellProps {
-  trip: Trip; ctx: AccountContext; canSell: boolean; canOverride: boolean; changeFee: number; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
+  trip: Trip; ctx: AccountContext; canSell: boolean; canOrder: boolean; canOverride: boolean; changeFee: number; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
   type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; logo: string | null; bank: BankAccount | null; onChanged: () => Promise<void>;
   online: boolean; queue: OfflineSale[]; sold: number; total: number; day: string; cash: ReactNode;
 }
@@ -353,6 +354,7 @@ function TripSell(props: TripSellProps) {
   const [fold, setFold] = useState(false);
   const [showStops, setShowStops] = useState(false);
   const [phoi, setPhoi] = useState(false);
+  const [order, setOrder] = useState(false);
   const [crew, setCrew] = useState<{ role: string; name: string; phone: string | null }[]>([]);
   const [fares, setFares] = useState<Fare[]>([]);
   const [offSel, setOffSel] = useState<string[]>([]);   // ghế chọn khi mất mạng
@@ -492,8 +494,10 @@ function TripSell(props: TripSellProps) {
   return (
     <>
       {printing && <TicketPrint data={printing} onClose={() => setPrinting(null)} />}
+      {order && <OrderIssue tripId={trip.id} tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} onClose={() => setOrder(false)} />}
       <div className="vx-tool">
         <button className="btn small" onClick={() => { setView('so_do'); setPhoi(true); }}><PrinterIcon /> In Phơi</button>
+        {props.canOrder && <button className="btn small" onClick={() => setOrder(true)}>🧾 Cấp lệnh</button>}
         {canSell && <button className={paper ? 'btn small primary' : 'btn small'} onClick={() => setPaper(!paper)}>Nhập vé giấy</button>}
         {trip.departed_at && props.canOverride && (
           <button className="btn small" onClick={() => void rpc('set_trip_edit_lock', { p_trip_id: trip.id, p_unlock: locked })

@@ -1110,3 +1110,23 @@ button.dt-g { cursor: pointer; }
 @media (max-width: 640px) { .nb-pop { position: fixed; left: 8px !important; right: 8px !important; top: 60px; width: auto; } }
 @keyframes nb-ring { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } }
 .nb-kinds { border: 0; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.nb-tools { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+.nb-chips { display: flex; gap: 6px; overflow-x: auto; }
+.nb-chips > button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: .8rem; white-space: nowrap; cursor: pointer; color: var(--text); }
+.nb-chips > button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.nb-tools input { min-height: 34px; padding: 6px 10px; border: 1px solid var(--input-line); border-radius: var(--radius-s); font: inherit; }
+.nb-list li { padding: 0; }
+.nb-list li > button { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; border: 0; background: none; font: inherit; color: inherit; padding: 9px 12px; cursor: pointer; }
+.nb-list li > button.new { background: var(--primary-soft); }
+.nb-list li > button.pri-khan_cap { border-left: 4px solid #dc2626; }
+.nb-list li > button.pri-quan_trong { border-left: 4px solid #f59e0b; }
+.nb-list li > button .badge { margin: 0 6px 0 0; }
+.nb-d-body { padding: 12px; }
+.nb-d-body h3 { margin: 6px 0; }
+.nb-d-body p { font-size: 1.05rem; margin: 0 0 10px; }
+.nb-d-body.pri-khan_cap { border-left: 5px solid #dc2626; }
+.nb-ack { width: 100%; min-height: 52px; font-size: 1.1rem; margin-top: 10px; }
+.nb-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0; padding: 8px 12px; border-radius: var(--radius-s);
+  background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn-text); }
+.nb-banner.urgent { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+.nb-banner.calm { background: var(--surface-2); border-color: var(--line); color: var(--muted); display: block; }

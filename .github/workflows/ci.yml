@@ -190,6 +190,8 @@ jobs:
           echo "Không kết nối được database qua Session pooler"; exit 1
       - name: Đưa migration mới lên (chỉ thêm, không xóa dữ liệu)
         run: supabase db push --remote="$SUPABASE_DB_URL" --yes
+      - name: Địa chỉ Edge Function gửi thông báo cho lịch chạy mỗi phút (theo project đang triển khai)
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -qc "select app.set_push_url('https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/push')"
       - name: Khóa AI đọc giấy tờ (nếu khai báo ở GitHub thì chép sang Supabase)
         env:
           AI_PROVIDERS: ${{ secrets.AI_PROVIDERS }}

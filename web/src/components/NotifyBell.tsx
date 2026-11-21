@@ -1,66 +1,157 @@
-// Chuông thông báo của từng người: số chưa đọc, bấm mở danh sách (mở là đánh dấu đã đọc); tự cập nhật mỗi 30 giây và khi quay lại app.
+// Thông báo của từng người: chuông (số chưa đọc) → danh sách có lọc, tìm; bấm 1 tin xem chi tiết (ghi giờ mở), nút "Đã nhận" khi tin yêu cầu xác nhận.
+// Trạng thái tách riêng: đã đọc (thấy trong danh sách) · đã mở (xem chi tiết) · đã xác nhận.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { rpc, supabase } from '../lib/supabase';
+import { errMsg, rpc, supabase } from '../lib/supabase';
+import { useToast } from '../lib/toast';
 
-interface Note { id: string; kind: string; title: string; body: string; created_at: string; read_at: string | null }
-const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
+export interface Note {
+  id: string; kind: string; title: string; body: string; priority: 'thuong' | 'quan_trong' | 'khan_cap'; ack_required: boolean;
+  created_at: string; read_at: string | null; opened_at: string | null; acked_at: string | null;
+}
+const COLS = 'id, kind, title, body, priority, ack_required, created_at, read_at, opened_at, acked_at';
+const KIND: Record<string, string> = { khach: 'Khách', xep_chuyen: 'Chuyến', lai_xe_bao: 'Lái xe báo' };
+const PRI: Record<string, string> = { quan_trong: 'Quan trọng', khan_cap: 'Khẩn cấp' };
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false }) : '—');
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
 
-export function NotifyBell({ inline = false }: { inline?: boolean }) {
+/** Danh sách thông báo 7 ngày gần nhất, tự cập nhật mỗi 30 giây và khi quay lại app */
+export function useNotes() {
   const [list, setList] = useState<Note[]>([]);
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
-    const since = new Date(Date.now() - 2 * 86400e3).toISOString();
-    const r = await supabase.from('notifications').select('id, kind, title, body, created_at, read_at').gte('created_at', since).order('created_at', { ascending: false }).limit(40);
+    const r = await supabase.from('notifications').select(COLS).gte('created_at', new Date(Date.now() - 7 * 86400e3).toISOString())
+      .order('created_at', { ascending: false }).limit(100);
     if (!r.error) setList((r.data ?? []) as Note[]);
   }, []);
   useEffect(() => {
     void load();
     const t = setInterval(() => { if (!document.hidden) void load(); }, 30_000);
     const vis = () => { if (!document.hidden) void load(); };
-    const msg = (e: MessageEvent) => { if ((e.data as { type?: string })?.type === 'mo-thong-bao') { void load(); setOpen(true); } };
     document.addEventListener('visibilitychange', vis);
+    window.addEventListener('tms-thong-bao', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); window.removeEventListener('tms-thong-bao', vis); };
+  }, [load]);
+  return { list, setList, load };
+}
+const reloadAll = () => window.dispatchEvent(new Event('tms-thong-bao'));
+
+export function NotifyBell({ inline = false, openKey = 0 }: { inline?: boolean; openKey?: number }) {
+  const toast = useToast();
+  const { list, setList } = useNotes();
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<'' | 'can_xn' | string>('');
+  const [q, setQ] = useState('');
+  const [cur, setCur] = useState<Note | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const msg = (e: MessageEvent) => { if ((e.data as { type?: string })?.type === 'mo-thong-bao') { reloadAll(); setOpen(true); } };
     navigator.serviceWorker?.addEventListener('message', msg);
     if (new URLSearchParams(location.search).get('thong-bao') === '1') setOpen(true);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); navigator.serviceWorker?.removeEventListener('message', msg); };
-  }, [load]);
+    return () => navigator.serviceWorker?.removeEventListener('message', msg);
+  }, []);
+  useEffect(() => { if (openKey) setOpen(true); }, [openKey]);
   useEffect(() => {
     if (!open) return;
-    const out = (e: PointerEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const out = (e: PointerEvent) => { if (box.current && !box.current.contains(e.target as Node)) { setOpen(false); setCur(null); } };
     document.addEventListener('pointerdown', out);
     return () => document.removeEventListener('pointerdown', out);
   }, [open]);
   const unread = list.filter((x) => !x.read_at).length;
-  async function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && unread) {
-      await rpc('mark_notifications_read', {}).catch(() => undefined);
-      setTimeout(() => setList((l) => l.map((x) => (x.read_at ? x : { ...x, read_at: new Date().toISOString() }))), 4000);   // đã báo thì tự mờ đi
+  // mở danh sách = đã đọc (đã thấy); chưa phải đã mở / đã xác nhận
+  useEffect(() => {
+    if (!open || !unread) return;
+    void rpc('mark_notifications_read', {}).then(() => setTimeout(() => setList((l) => l.map((x) => (x.read_at ? x : { ...x, read_at: new Date().toISOString() }))), 3000)).catch(() => undefined);
+  }, [open, unread, setList]);
+  async function show(n: Note) {
+    setCur(n);
+    if (!n.opened_at) {
+      await rpc('open_notification', { p_id: n.id }).catch(() => undefined);
+      const t = new Date().toISOString();
+      setList((l) => l.map((x) => (x.id === n.id ? { ...x, opened_at: t, read_at: x.read_at ?? t } : x)));
     }
   }
+  async function ack(n: Note) {
+    try {
+      await rpc('ack_notification', { p_id: n.id });
+      const t = new Date().toISOString();
+      setList((l) => l.map((x) => (x.id === n.id ? { ...x, acked_at: t, opened_at: x.opened_at ?? t, read_at: x.read_at ?? t } : x)));
+      setCur((c) => (c ? { ...c, acked_at: t } : c));
+      toast('ok', 'Đã xác nhận đã nhận');
+      reloadAll();
+    } catch (e) { toast('error', errMsg(e)); }
+  }
+  const needAck = list.filter((x) => x.ack_required && !x.acked_at).length;
+  const shown = list.filter((x) => (!f || (f === 'can_xn' ? x.ack_required && !x.acked_at : x.kind === f)) && (!q.trim() || norm(`${x.title} ${x.body}`).includes(norm(q.trim()))));
+  const kinds = [...new Set(list.map((x) => x.kind))];
   return (
     <div className={inline ? 'nb nb-inline' : 'nb'} ref={box}>
-      <button type="button" className={unread ? 'nb-btn has' : 'nb-btn'} aria-label={`Thông báo${unread ? `: ${unread} chưa đọc` : ''}`} aria-expanded={open} onClick={() => void toggle()}>
+      <button type="button" className={unread ? 'nb-btn has' : 'nb-btn'} aria-label={`Thông báo${unread ? `: ${unread} chưa đọc` : ''}`} aria-expanded={open}
+              onClick={() => { setOpen(!open); setCur(null); }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" />
         </svg>
         {unread > 0 && <span className="nb-n">{unread > 99 ? '99+' : unread}</span>}
       </button>
       {open && (
-        <div className="nb-pop" role="dialog" aria-label="Danh sách thông báo">
-          <div className="nb-head"><b>Thông báo</b><button type="button" className="btn small link" onClick={() => setOpen(false)}>Đóng</button></div>
-          {list.length === 0 ? <p className="muted small nb-empty">Chưa có thông báo trong 2 ngày qua.</p> : (
-            <ul className="nb-list">
-              {list.map((n) => (
-                <li key={n.id} className={n.read_at ? 'old' : 'new'}>
-                  <b>{n.title}</b><span>{n.body}</span><small>{when(n.created_at)}</small>
-                </li>
-              ))}
-            </ul>
+        <div className="nb-pop" role="dialog" aria-label="Thông báo">
+          {cur ? (
+            <div className="nb-detail">
+              <div className="nb-head"><button type="button" className="btn small link" onClick={() => setCur(null)}>‹ Danh sách</button>
+                <button type="button" className="btn small link" onClick={() => { setOpen(false); setCur(null); }}>Đóng</button></div>
+              <div className={`nb-d-body pri-${cur.priority}`}>
+                {cur.priority !== 'thuong' && <span className={cur.priority === 'khan_cap' ? 'badge locked' : 'badge warn-badge'}>{PRI[cur.priority]}</span>}
+                <h3>{cur.title}</h3>
+                <p>{cur.body}</p>
+                <dl className="info small">
+                  <dt>Gửi lúc</dt><dd>{when(cur.created_at)}</dd>
+                  <dt>Đã mở</dt><dd>{when(cur.opened_at)}</dd>
+                  {cur.ack_required && <><dt>Đã xác nhận</dt><dd>{when(cur.acked_at)}</dd></>}
+                </dl>
+                {cur.ack_required && !cur.acked_at && <button type="button" className="btn primary nb-ack" onClick={() => void ack(cur)}>✓ Đã nhận</button>}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="nb-head"><b>Thông báo</b><button type="button" className="btn small link" onClick={() => setOpen(false)}>Đóng</button></div>
+              <div className="nb-tools">
+                <div className="nb-chips" role="tablist" aria-label="Lọc thông báo">
+                  {[['', 'Tất cả'], ...(needAck ? [['can_xn', `Cần xác nhận (${needAck})`]] : []), ...kinds.map((k) => [k, KIND[k] ?? k])].map(([k, l]) => (
+                    <button key={k} type="button" role="tab" aria-selected={f === k} className={f === k ? 'on' : ''} onClick={() => setF(k!)}>{l}</button>
+                  ))}
+                </div>
+                <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm số điện thoại, giờ chuyến…" aria-label="Tìm thông báo" />
+              </div>
+              {shown.length === 0 ? <p className="muted small nb-empty">{list.length ? 'Không có thông báo phù hợp.' : 'Chưa có thông báo trong 7 ngày qua.'}</p> : (
+                <ul className="nb-list">
+                  {shown.map((n) => (
+                    <li key={n.id}>
+                      <button type="button" className={[!n.read_at && 'new', n.read_at && !n.opened_at && 'seen', `pri-${n.priority}`].filter(Boolean).join(' ')} onClick={() => void show(n)}>
+                        <b>{n.priority !== 'thuong' && <span className={n.priority === 'khan_cap' ? 'badge locked' : 'badge warn-badge'}>{PRI[n.priority]}</span>}{n.title}</b>
+                        <span>{n.body}</span>
+                        <small>{when(n.created_at)}{n.ack_required ? (n.acked_at ? ' · ✓ đã xác nhận' : ' · cần xác nhận') : ''}</small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Băng nhắc trong Việc của tôi: tin khẩn cấp / cần xác nhận. Đang chạy chuyến thì chỉ nhắc nhẹ, không bắt thao tác. */
+export function NotifyBanner({ running, onOpen }: { running: boolean; onOpen: () => void }) {
+  const { list } = useNotes();
+  const urgent = list.filter((x) => x.priority === 'khan_cap' && !x.acked_at && !x.opened_at);
+  const need = list.filter((x) => x.ack_required && !x.acked_at).length;
+  if (!urgent.length && !need) return null;
+  if (running) return <p className="nb-banner calm">Bạn có {urgent.length + need} thông báo. Đang chạy chuyến: dừng xe an toàn rồi hãy xem.</p>;
+  return (
+    <div className={urgent.length ? 'nb-banner urgent' : 'nb-banner'}>
+      {urgent.length ? <span><b>Khẩn cấp:</b> {urgent[0]!.title}{urgent.length > 1 ? ` (+${urgent.length - 1})` : ''}</span> : <span>Có <b>{need}</b> thông báo cần xác nhận đã nhận</span>}
+      <button type="button" className="btn small" onClick={onOpen}>Xem</button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // App lái xe (như app cũ): chuyến của tôi; mỗi chuyến có Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả & hàng; gọi khách ghi trạng thái báo về quầy; thu tiền mặt / chuyển khoản; xuất bến / đến bến.
 import { dirName } from '../lib/routes';
-import { NotifyBell } from '../components/NotifyBell';
+import { NotifyBanner, NotifyBell } from '../components/NotifyBell';
 import { MonthPicker } from '../components/MonthPicker';
 import { useCallback, useEffect, useState } from 'react';
 import { fmtDate, today } from '../components/Documents';
@@ -44,6 +44,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [stops, setStops] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
+  const [nbOpen, setNbOpen] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -74,11 +75,14 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   }, []);
 
 
+  // đang chạy chuyến (đã xuất bến, chưa đến bến): không bắt thao tác điện thoại
+  const running = day === today() && trips.some((t) => t.departed_at && !t.arrived_at && t.status !== 'huy');
   return (
     <>
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <section className="card">
-        <div className="item-head"><h2>Chuyến của tôi · {fmtDate(day)}</h2><NotifyBell inline /></div>
+        <div className="item-head"><h2>Chuyến của tôi · {fmtDate(day)}</h2><NotifyBell inline openKey={nbOpen} /></div>
+        <NotifyBanner running={running} onOpen={() => setNbOpen((k) => k + 1)} />
         <div className="inline-form">
           <button className="btn small" aria-label="Ngày trước" onClick={() => { setDay(addDays(day, -1)); setOpen(null); }}>‹</button>
           <label>Ngày<input type="date" value={day} onChange={(e) => { if (e.target.value) { setDay(e.target.value); setOpen(null); } }} /></label>

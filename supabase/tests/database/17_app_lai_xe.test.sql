@@ -285,5 +285,33 @@ select is((select count(*)::int from public.push_subscriptions), 0, 'Nhà xe kh�
 select throws_ok($$ select * from public.push_config $$, '42501', null, 'Người dùng không đọc được khóa thông báo đẩy');
 reset role;
 
+-- ---------------------------------------------------------------- Gửi đẩy: nhận việc, lỗi thì thử lại, quá lượt thì thất bại; mở / xác nhận
+select ok((select ack_required from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' and kind = 'xep_chuyen' limit 1), 'Giao nhiệm vụ chuyến cần xác nhận');
+update public.notifications set push_state = 'cho', attempts = 0, next_try_at = now() where tenant_id = (select v from t.ids where k = 'A');
+create temp table pj as select * from public.svc_push_claim((select v from t.ids where k = 'A'), 500);
+select ok((select count(*) from pj) >= 3, 'Máy chủ nhận việc gửi');
+select is((select count(*)::int from public.svc_push_claim((select v from t.ids where k = 'A'), 500)), 0, 'Đang gửi thì không nhận trùng');
+select lives_ok(format('select public.svc_push_result(%L, %L, %L)', (select id from pj limit 1), 'loi', '503 bận'), 'Ghi lỗi tạm');
+select is((select push_state || '|' || (next_try_at > now())::text from public.notifications where id = (select id from pj limit 1)), 'loi|true', 'Lỗi tạm: hẹn thử lại sau');
+update public.notifications set next_try_at = now() - interval '1 second', attempts = 4 where id = (select id from pj limit 1);
+select is((select count(*)::int from public.svc_push_claim((select v from t.ids where k = 'A'), 500)), 1, 'Đến hẹn thì gửi lại');
+select lives_ok(format('select public.svc_push_result(%L, %L, %L)', (select id from pj limit 1), 'loi', '503 bận'), 'Lỗi lần nữa');
+select is((select push_state from public.notifications where id = (select id from pj limit 1)), 'that_bai', 'Quá số lần thử thì thất bại (vẫn xem trong app)');
+select lives_ok(format('select public.svc_push_result(%L, %L, null)', (select id from pj offset 1 limit 1), 'ok'), 'Gửi được');
+select is((select push_state || '|' || (delivered_at is not null)::text from public.notifications where id = (select id from pj offset 1 limit 1)), 'da_gui|true', 'Đã gửi, có giờ gửi');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select throws_ok($$ select * from public.svc_push_claim(null, 10) $$, '42501', null, 'Người dùng không gọi được việc gửi của máy chủ');
+select throws_ok($$ select * from public.notification_delivery_logs $$, '42501', null, 'Người dùng không đọc nhật ký gửi');
+select lives_ok(format('select public.open_notification(%L)', (select id from public.notifications where kind = 'xep_chuyen' limit 1)), 'Mở xem chi tiết');
+select lives_ok(format('select public.ack_notification(%L)', (select id from public.notifications where kind = 'xep_chuyen' limit 1)), 'Bấm Đã nhận');
+select is((select (opened_at is not null)::text || (acked_at is not null)::text from public.notifications where kind = 'xep_chuyen' limit 1), 'truetrue', 'Ghi giờ mở, giờ xác nhận');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select throws_ok(format('select public.ack_notification(%L)', (select id from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b5' limit 1)),
+  'P0002', null, 'Không xác nhận hộ thông báo của người khác');
+reset role;
+
 select * from finish();
 rollback;

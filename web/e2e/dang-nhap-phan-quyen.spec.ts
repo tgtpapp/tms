@@ -568,6 +568,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   expect(pg?.[1]).toBe('80');
   expect(Number(pg?.[2])).toBeGreaterThan(60);
   expect(Number(pg?.[2])).toBeLessThan(260);
+  const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  const boxes = [...pdf.matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  console.log('Trang in phiếu gửi hàng (pt):', JSON.stringify(boxes));
+  expect(boxes.length).toBe(1);                                   // 1 phiếu = 1 trang, không trang trắng
+  expect(Math.round(boxes[0]![0]! / 72 * 25.4)).toBe(80);         // rộng 80mm
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByRole('button', { name: /^In phiếu / })).toHaveCount(1);
 

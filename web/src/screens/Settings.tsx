@@ -22,6 +22,7 @@ type SaleKey = (typeof SALE_SETTINGS)[number]['key'];
 const DOC_WARN = 'giay_to.canh_bao_truoc_ngay';
 const DEFAULT_TYPE = 'chuyen.loai_xe_mac_dinh';
 const AUTO_TRIPS = 'chuyen.tao_chuyen_trong';
+const AUTO_ARRIVE = 'chuyen.tu_den_ben_gio';
 /** Điều hành. Giới hạn giờ lái theo Luật TTATGT đường bộ 2024, đã sửa bởi Luật 118/2025 (cần xác minh) → để chỉnh được. */
 const DISPATCH_SETTINGS = [
   { key: 'lai_xe.gio_lien_tuc_toi_da', label: 'Giờ lái liên tục tối đa', min: 1, max: 12 },
@@ -157,7 +158,8 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
     }
     rows.push({ key: DEFAULT_TYPE, value: sale[DEFAULT_TYPE] ?? '' });
     // Tạo chuyến theo lịch: tự động cả năm (từ 01/12 tạo luôn năm sau) hoặc thủ công
-    rows.push({ key: AUTO_TRIPS, value: sale[AUTO_TRIPS] === '0' ? 0 : 1 }, { key: 'chuyen.tao_ca_nam', value: 1 });
+    rows.push({ key: AUTO_TRIPS, value: sale[AUTO_TRIPS] === '0' ? 0 : 1 }, { key: 'chuyen.tao_ca_nam', value: 1 },
+      { key: AUTO_ARRIVE, value: Number(sale[AUTO_ARRIVE] ?? 4) });
     setBusy(true);
     const { error } = await supabase.from('tenant_settings').upsert(rows, { onConflict: 'tenant_id,key' });
     setBusy(false);
@@ -282,6 +284,12 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
           <select value={sale[AUTO_TRIPS] === '0' ? '0' : '1'} onChange={(e) => setSale({ ...sale, [AUTO_TRIPS]: e.target.value })}>
             <option value="1">Tự động: tạo sẵn đến hết năm, từ 01/12 tạo luôn cả năm sau</option>
             <option value="0">Thủ công: bấm "Tạo chuyến theo lịch" ở Điều hành khi cần</option>
+          </select>
+        </label>
+        <label>Tự ghi xuất bến / đến bến khi lái xe chưa bấm
+          <select value={sale[AUTO_ARRIVE] ?? '4'} onChange={(e) => setSale({ ...sale, [AUTO_ARRIVE]: e.target.value })}>
+            <option value="0">Tắt: chỉ lái xe / điều hành bấm</option>
+            {[2, 3, 4, 5, 6, 8, 10, 12].map((h) => <option key={h} value={String(h)}>Xuất bến đúng giờ chạy, đến bến sau {h} tiếng</option>)}
           </select>
         </label>
         <label>Sơ đồ ghế mặc định khi chuyến chưa xếp xe

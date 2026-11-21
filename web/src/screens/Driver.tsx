@@ -15,6 +15,7 @@ import { Modal } from '../components/Modal';
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
   plate: string | null; my_role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe'; departed_at: string | null; arrived_at: string | null; order_no: string | null;
+  departed_auto?: boolean; arrived_auto?: boolean;
 }
 type Call = 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy';
 interface Ticket {
@@ -104,7 +105,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
               <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
               <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
               <span className={`badge ${t.status === 'huy' ? 'locked' : t.arrived_at ? '' : t.departed_at ? 'warn-badge' : 'idle'}`}>
-                {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}` : 'Chưa xuất bến'}
+                {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}${t.arrived_auto ? ' (tự ghi)' : ''}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}${t.departed_auto ? ' (tự ghi)' : ''}` : 'Chưa xuất bến'}
               </span>
             </button>
           ))}

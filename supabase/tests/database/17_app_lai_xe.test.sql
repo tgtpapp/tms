@@ -313,5 +313,27 @@ select throws_ok(format('select public.ack_notification(%L)', (select id from pu
   'P0002', null, 'Không xác nhận hộ thông báo của người khác');
 reset role;
 
+-- ---------------------------------------------------------------- Tự ghi xuất bến đúng giờ chạy, đến bến sau 4 tiếng
+insert into public.vehicles (tenant_id, id, plate, vehicle_type_id, manufacture_year)
+select tenant_id, '66666666-6666-6666-6666-666666666663', '51B-333.33', (select id from public.vehicle_types where code = 'G29'), 2020
+from public.trips where id = (select v from t.ids where k = 'T0');
+set local session_replication_role = replica;
+update public.trips set vehicle_id = '66666666-6666-6666-6666-666666666663', departed_at = null, arrived_at = null,
+  depart_at = now() - interval '30 minutes', arrive_at = now() + interval '4 hours' where id = (select v from t.ids where k = 'T0');
+set local session_replication_role = origin;
+select ok(exists (select 1 from public.trip_crew where trip_id = (select v from t.ids where k = 'T0') and role = 'lai_xe_1' and active), 'Chuyến thử có lái xe 1');
+select ok(app.svc_auto_trip_marks() >= 1, 'Chạy tự ghi');
+select is((select (departed_at = depart_at)::text || departed_auto::text || (arrived_at is null)::text from public.trips where id = (select v from t.ids where k = 'T0')),
+  'truetruetrue', 'Tới giờ chạy: tự ghi xuất bến đúng giờ chạy, chưa đến bến');
+update public.trips set departed_at = now() - interval '4 hours 1 minute' where id = (select v from t.ids where k = 'T0');
+select ok(app.svc_auto_trip_marks() >= 1, 'Chạy tự ghi lần 2');
+select is((select (arrived_at = departed_at + interval '4 hours')::text || arrived_auto::text from public.trips where id = (select v from t.ids where k = 'T0')),
+  'truetrue', 'Sau 4 tiếng: tự ghi đến bến = xuất bến + 4 tiếng');
+select is((select count(*)::int from public.trips where departed_auto and vehicle_id is null), 0, 'Chuyến chưa có xe không tự xuất bến');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select throws_ok($$ select app.svc_auto_trip_marks() $$, '42501', null, 'Người dùng không gọi được tự ghi của máy chủ');
+reset role;
+
 select * from finish();
 rollback;

@@ -18,5 +18,10 @@ jobs:
           psql -Atc "select 'cot_unit: '||count(*) from information_schema.columns where table_schema='public' and table_name='repair_items' and column_name='unit'"
           psql -Atc "select 'quyen_cot: '||coalesce(string_agg(grantee||':'||privilege_type,','),'-') from information_schema.column_privileges where table_schema='public' and table_name='repair_items' and column_name='unit' and grantee in ('authenticated','anon')"
           psql -Atc "select 'phieu_co_tep: '||count(*) filter (where cardinality(files)>0)||'/'||count(*) from public.repair_orders"
+          U=$(psql -Atc "select u.id from public.app_users u where u.status='active' and app_has_perm_dummy is null" 2>/dev/null || true)
+          for u in $(psql -Atc "select u.id from public.app_users u where u.status='active' order by u.created_at limit 40"); do
+            r=$(psql -Atc "begin; set local role authenticated; select set_config('request.jwt.claims', json_build_object('sub','$u','role','authenticated')::text, true); select 'n='||count(*)||' unit='||count(unit) from public.repair_items; rollback;" 2>&1 | grep -E 'n=|ERROR' | head -1)
+            echo "user_test: $r"
+          done | sort | uniq -c
           psql -Atc "select 'event_trigger: '||coalesce(string_agg(evtname||'('||evtenabled::text||')',','),'-') from pg_event_trigger"
           psql -Atc "select 'pgrst_listen: '||count(*) from pg_stat_activity where application_name ilike '%postgrest%'"

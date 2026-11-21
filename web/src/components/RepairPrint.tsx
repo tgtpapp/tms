@@ -11,7 +11,7 @@ export interface RepairPrintOrder {
   id: string; code: string; vehicle_id: string; plate: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null;
   items: { content: string; unit: string | null; qty: number; unit_price: number }[];
 }
-interface Info { co: { name: string; address: string; phone: string; tax: string }; logo: string | null; driver: string; maker: string; sign: Sign | null }
+interface Info { co: { name: string; address: string; phone: string; tax: string }; logo: string | null; driver: string; driverSign: Sign | null; maker: string; sign: Sign | null }
 
 const money = (n: number) => n.toLocaleString('vi-VN');
 const dmy = (d: string) => d.split('-').reverse().join('/');
@@ -27,12 +27,19 @@ async function loadInfo(o: RepairPrintOrder, tenantId: string, me: { id: string 
     o.created_by ? supabase.from('staff_members').select('id, full_name').eq('user_id', o.created_by).limit(1) : Promise.resolve({ data: [] }),
   ]);
   const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null; phone?: string | null; tax_code?: string | null };
-  let driver = '';
+  let driver = '', driverSign: Sign | null = null;
   const tid = ((tr.data ?? []) as { id: string }[])[0]?.id;
   if (tid) {
     const c = await supabase.from('trip_crew').select('staff_id').eq('trip_id', tid).eq('role', 'lai_xe_1').eq('active', true).limit(1);
     const sid = ((c.data ?? []) as { staff_id: string }[])[0]?.staff_id;
-    if (sid) driver = (((await supabase.from('staff_members').select('full_name').eq('id', sid).limit(1)).data ?? []) as { full_name: string }[])[0]?.full_name ?? '';
+    if (sid) {
+      const dr = (((await supabase.from('staff_members').select('full_name, user_id').eq('id', sid).limit(1)).data ?? []) as { full_name: string; user_id: string | null }[])[0];
+      driver = dr?.full_name ?? '';
+      // chữ ký lái xe: chữ ký lưu theo hồ sơ nhân viên, chưa có thì theo tài khoản đăng nhập
+      const keys = [`nv_${sid}`, dr?.user_id ?? null];
+      const m = await loadSigns(tenantId, keys).catch(() => new Map<string, Sign>());
+      driverSign = keys.map((k) => (k ? m.get(k) : undefined)).find((x) => x?.img) ?? null;
+    }
   }
   const st = ((mk.data ?? []) as { id: string; full_name: string }[])[0];
   const maker = st?.full_name ?? (o.created_by && o.created_by === me.id ? me.name : '');
@@ -42,7 +49,7 @@ async function loadInfo(o: RepairPrintOrder, tenantId: string, me: { id: string 
     const m = await loadSigns(tenantId, keys).catch(() => new Map<string, Sign>());
     sign = keys.map((k) => (k ? m.get(k) : undefined)).find((x) => x?.img) ?? null;
   }
-  return { co: { name: t.legal_name || t.name || '', address: t.address ?? '', phone: t.phone ?? '', tax: t.tax_code ?? '' }, logo, driver, maker, sign };
+  return { co: { name: t.legal_name || t.name || '', address: t.address ?? '', phone: t.phone ?? '', tax: t.tax_code ?? '' }, logo, driver, driverSign, maker, sign };
 }
 
 export function RepairPrint({ order, tenantId, me, onClose }: { order: RepairPrintOrder; tenantId: string; me: { id: string | null; name: string }; onClose: () => void }) {
@@ -92,7 +99,7 @@ export function RepairPrint({ order, tenantId, me, onClose }: { order: RepairPri
           <div style={{ marginTop: 8 }}>Bằng chữ: <b>{total > 0 ? moneyWords(total) : 'Không đồng'}</b>.{order.note ? ` Ghi chú: ${order.note}` : ''}</div>
           <div style={{ textAlign: 'right', marginTop: 16, fontStyle: 'italic' }}>Ngày {now.getDate()} tháng {now.getMonth() + 1} năm {now.getFullYear()}</div>
           <table style={{ width: '100%', marginTop: 6, borderCollapse: 'collapse' }}><tbody><tr>
-            {([['Người lập phiếu', info.maker, info.sign], ['Lái xe', info.driver, null], ['Giám đốc', '', null]] as [string, string, Sign | null][]).map(([t, n, sg]) => (
+            {([['Người lập phiếu', info.maker, info.sign], ['Lái xe', info.driver, info.driverSign], ['Giám đốc', '', null]] as [string, string, Sign | null][]).map(([t, n, sg]) => (
               <td key={t} style={{ width: '33%', textAlign: 'center', verticalAlign: 'top' }}>
                 <b>{t}</b><br /><i style={{ fontSize: 12 }}>(Ký, ghi rõ họ tên)</i>
                 <div style={{ height: 68, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{sg?.img && <img src={sg.img} alt="" style={{ maxHeight: 64, maxWidth: 170 }} />}</div>

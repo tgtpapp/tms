@@ -1,0 +1,10 @@
+name: Chẩn đoán (tạm) thông báo đẩy
+on: workflow_dispatch
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gọi lấy khóa công khai + gửi thử khi chưa đăng nhập (phải bị từ chối)
+        run: |
+          curl -sS -X POST https://vnqkmaauqygnckgtshus.supabase.co/functions/v1/push -H 'Content-Type: application/json' -d '{"action":"key"}' | python3 -c 'import json,sys; d=json.load(sys.stdin); print("Khóa công khai:", "có, dài", len(d.get("key","")) if d.get("key") else d)'
+          curl -sS -o /dev/null -w 'flush khi chưa đăng nhập: HTTP %{http_code}\n' -X POST https://vnqkmaauqygnckgtshus.supabase.co/functions/v1/push -H 'Content-Type: application/json' -d '{"action":"flush"}'

@@ -416,7 +416,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
 function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   const [editing, setEditing] = useState(false);
-  const [tab, setTab] = useState<'tt' | 'gt' | 'hd' | 'll'>('tt');
+  const [tab, setTab] = useState<'tt' | 'gt' | 'll'>('tt');
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
   const age = ageCheck(p, s.position);
   const required = REQUIRED[s.position];
@@ -433,8 +433,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   const tabs: { key: typeof tab; label: string; warn?: boolean }[] = [
     { key: 'tt', label: 'Thông tin' },
     { key: 'gt', label: warnDocs ? `Giấy tờ (thiếu ${warnDocs})` : 'Giấy tờ', warn: warnDocs > 0 },
-    ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng lao động' }] : []),
-    { key: 'll', label: `Lý lịch hành nghề (${nRec})` },
+    ...(canEdit || s.position === 'lai_xe' ? [{ key: 'll' as const, label: canEdit ? `Lý lịch hành nghề (${nRec})` : 'Lý lịch hành nghề' }] : []),
   ];
 
   return (
@@ -475,22 +474,23 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       {tab === 'gt' && (
         <div className="prof-pane">
           <ul className="list">
-            {STAFF_DOCS.map((def) => (
+            {STAFF_DOCS.filter((def) => !(props.labor.view && def.code === 'hop_dong_ld')).map((def) => (
               <DocRow key={def.code} def={def} doc={mine.find((d) => d.doc_type === def.code && d.is_current)} tenantId={tenantId}
                       recordExp={recordExpiry(props.records, s.id, def.code)}
                       extraFiles={RECORD_OF[def.code] ? props.records.filter((r) => r.staff_id === s.id && r.kind === RECORD_OF[def.code]).flatMap((r) => r.files) : undefined}
                       owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
                       required={required.includes(def.code)} reload={reload} />
             ))}
+            {/* Hợp đồng lao động (bản PDF) ngay dưới giấy tờ */}
+            {props.labor.view && (
+              <li className="item">
+                <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
+                                canAdd={props.labor.add} canEdit={props.labor.edit} />
+              </li>
+            )}
           </ul>
           <OldDocs docs={mine} />
           {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
-        </div>
-      )}
-      {tab === 'hd' && props.labor.view && (
-        <div className="prof-pane">
-          <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
-                          canAdd={props.labor.add} canEdit={props.labor.edit} />
         </div>
       )}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
@@ -591,6 +591,9 @@ function Records(props: Common & { s: Staff }) {
   }
 
   const def = form ? docTypeOf(form.code)! : null;
+  if (!canEdit) {
+    return s.position === 'lai_xe' ? <PaperActions kind="driver" id={s.id} label={s.full_name} tenantId={tenantId} me={props.me} canSave={false} /> : null;
+  }
   return (
     <>
       <div className="item-head">

@@ -440,7 +440,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
-  await page.getByRole('tab', { name: 'Hợp đồng lao động', exact: true }).click();
+  await page.getByRole('tab', { name: /^Giấy tờ/ }).click();
   await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();
   await page.getByRole('button', { name: /^Xem HĐ 001\/\d{4}\/HĐLĐ/ }).click();
   await expect(page.locator('.paper-top').getByText('NGƯỜI LAO ĐỘNG (BÊN B):')).toBeVisible();

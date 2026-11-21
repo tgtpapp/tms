@@ -4,11 +4,16 @@ jobs:
   k:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
     steps:
       - run: sudo apt-get install -y -qq postgresql-client >/dev/null
       - run: |
-          psql "$SUPABASE_DB_URL" -Atc "select 'cron:'||count(*) from cron.job where jobname='gui-thong-bao' and active"
-          psql "$SUPABASE_DB_URL" -Atc "select 'url:'||(fn_url like 'https://%/functions/v1/push')::text||' secret:'||(cron_secret is not null)::text||' vapid:'||(public_key is not null)::text from public.push_config where id=1"
-          psql "$SUPABASE_DB_URL" -Atc "select 'chay_5p:'||count(*)||' loi:'||count(*) filter (where status<>'succeeded') from cron.job_run_details d join cron.job j using (jobid) where j.jobname='gui-thong-bao' and d.start_time>now()-interval '5 minutes'"
-          psql "$SUPABASE_DB_URL" -Atc "select 'trang_thai:'||coalesce(string_agg(push_state||'='||n,' '),'-') from (select push_state,count(*) n from public.notifications group by 1) x"
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1 && { echo "PGHOST=$h" >> $GITHUB_ENV; break; }; done
+      - run: |
+          psql -Atc "select 'cron:'||count(*) from cron.job where jobname='gui-thong-bao' and active"
+          psql -Atc "select 'url:'||(fn_url like 'https://%/functions/v1/push')::text||' secret:'||(cron_secret is not null)::text||' vapid:'||(public_key is not null)::text from public.push_config where id=1"
+          psql -Atc "select 'chay_5p:'||count(*)||' loi:'||count(*) filter (where status<>'succeeded') from cron.job_run_details d join cron.job j using (jobid) where j.jobname='gui-thong-bao' and d.start_time>now()-interval '5 minutes'"
+          psql -Atc "select 'trang_thai:'||coalesce(string_agg(push_state||'='||n,' '),'-') from (select push_state,count(*) n from public.notifications group by 1) x"

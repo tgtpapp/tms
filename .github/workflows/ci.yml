@@ -63,7 +63,12 @@ jobs:
           cache-dependency-path: web/package.json
       - name: Cài thư viện
         working-directory: web
-        run: npm install --no-audit --no-fund
+        # Cài đúng phiên bản đã khóa trong package-lock.json (kiểm mã băm từng gói): không tự kéo bản mới vừa phát hành
+        # (chống thư viện bị cài mã độc / bản phát hành lỗi). Nâng thư viện: sửa package.json rồi tạo lại package-lock.json.
+        run: npm ci --no-audit --no-fund
+      - name: Kiểm tra lỗ hổng bảo mật đã biết của thư viện (mức nghiêm trọng)
+        working-directory: web
+        run: npm audit --omit=dev --audit-level=critical
       - name: Typecheck + build
         working-directory: web
         run: npm run check
@@ -276,7 +281,7 @@ jobs:
       - name: Dựng giao diện
         if: steps.cf.outputs.ok == 'true'
         working-directory: web
-        run: npm install --no-audit --no-fund && npm run build
+        run: npm ci --no-audit --no-fund && npm run build
       - name: Đưa lên Cloudflare Pages
         if: steps.cf.outputs.ok == 'true'
         working-directory: web

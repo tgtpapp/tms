@@ -231,6 +231,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       # Tên project Cloudflare Pages (công khai). Đổi tên miền / project: sửa dòng này.
       CF_PAGES_PROJECT: thinhphat
+      # Mã tài khoản Cloudflare (công khai, thấy trên thanh địa chỉ dash.cloudflare.com/<mã>)
+      CLOUDFLARE_ACCOUNT_ID: 3651ecbe15f9368534fdb005f612d46a
     steps:
       - name: Kiểm tra khóa Cloudflare
         id: cf
@@ -249,9 +251,7 @@ jobs:
         if: steps.cf.outputs.ok == 'true'
         run: |
           api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" "$@"; }
-          acc=$(api "https://api.cloudflare.com/client/v4/accounts?per_page=50" | python3 -c 'import json,sys;d=json.load(sys.stdin);r=d.get("result") or [];print(r[0]["id"] if len(r)==1 else "")')
-          [ -n "$acc" ] || { echo "Khóa Cloudflare không thấy đúng 1 tài khoản (cần quyền Account › Cloudflare Pages › Edit)"; exit 1; }
-          echo "CLOUDFLARE_ACCOUNT_ID=$acc" >> "$GITHUB_ENV"
+          acc="$CLOUDFLARE_ACCOUNT_ID"
           api "https://api.cloudflare.com/client/v4/accounts/$acc/pages/projects/$CF_PAGES_PROJECT" > /tmp/p.json
           python3 - <<'PY'
           import json, os

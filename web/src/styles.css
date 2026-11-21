@@ -1130,3 +1130,4 @@ button.dt-g { cursor: pointer; }
   background: var(--warn-soft); border: 1px solid var(--warn-line); color: var(--warn-text); }
 .nb-banner.urgent { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
 .nb-banner.calm { background: var(--surface-2); border-color: var(--line); color: var(--muted); display: block; }
+.trip-chip.past { opacity: .6; }

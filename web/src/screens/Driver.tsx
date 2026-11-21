@@ -31,6 +31,8 @@ const TZ = 'Asia/Ho_Chi_Minh';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const ROLE = { lai_xe_1: 'Lái xe 1', lai_xe_2: 'Lái xe 2', phu_xe: 'Phụ xe' } as const;
+/** Chuyến còn phải chạy: chưa hủy, chưa đến bến, và đang chạy hoặc chưa tới giờ xuất bến */
+const isUpcoming = (t: MyTrip, now: number) => t.status !== 'huy' && !t.arrived_at && (!!t.departed_at || new Date(t.depart_at).getTime() >= now);
 const addDays = (d: string, n: number) => {
   const x = new Date(`${d}T00:00:00Z`);
   x.setUTCDate(x.getUTCDate() + n);
@@ -56,7 +58,9 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       setTrips(t);
       setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
       setStops(Object.fromEntries(((st.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
-      if (t.length === 1) setOpen((o) => o ?? t[0].trip_id);
+      // mở sẵn chuyến sắp chạy / đang chạy gần nhất
+      const now = Date.now(), next = t.filter((x) => isUpcoming(x, now)).sort((a, b) => a.depart_at.localeCompare(b.depart_at))[0] ?? (t.length === 1 ? t[0] : undefined);
+      if (next) setOpen((o) => o ?? next.trip_id);
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -75,11 +79,15 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   }, []);
 
 
+  // chuyến sắp chạy / đang chạy lên đầu (theo giờ), chuyến đã qua giờ / đã đến bến / đã hủy xuống dưới; tự xếp lại mỗi phút
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, now)) - Number(isUpcoming(a, now)) || a.depart_at.localeCompare(b.depart_at));
+  const cur = open ? trips.find((t) => t.trip_id === open) : undefined;
   // đang chạy chuyến (đã xuất bến, chưa đến bến): không bắt thao tác điện thoại
   const running = day === today() && trips.some((t) => t.departed_at && !t.arrived_at && t.status !== 'huy');
   return (
     <>
-      {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <section className="card">
         <div className="item-head"><h2>Chuyến của tôi · {fmtDate(day)}</h2><NotifyBell inline openKey={nbOpen} /></div>
         <NotifyBanner running={running} onOpen={() => setNbOpen((k) => k + 1)} />
@@ -90,8 +98,8 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         </div>
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">
-          {trips.map((t) => (
-            <button key={t.trip_id} className={open === t.trip_id ? 'trip-chip on' : 'trip-chip'} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
+          {sorted.map((t) => (
+            <button key={t.trip_id} className={[open === t.trip_id ? 'trip-chip on' : 'trip-chip', !isUpcoming(t, now) && 'past'].filter(Boolean).join(' ')} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
                     aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
               <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
               <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
@@ -102,12 +110,11 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
           ))}
         </div>
       </section>
-      <MyMonthTrips routes={routes} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+      {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} />}
+      {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <MyTransfers day={day} />
       <MyCharters />
-      {open && trips.find((t) => t.trip_id === open) && (
-        <TripRun trip={trips.find((t) => t.trip_id === open)!} stopName={(id) => stops[id] ?? '?'} reload={load} />
-      )}
+      <MyMonthTrips routes={routes} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
     </>
   );
 }

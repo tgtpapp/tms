@@ -20,3 +20,9 @@ jobs:
           psql -Atc "select 'phieu_co_tep: '||count(*) filter (where cardinality(files)>0)||'/'||count(*) from public.repair_orders"
           psql -Atc "select 'event_trigger: '||coalesce(string_agg(evtname||'('||evtenabled::text||')',','),'-') from pg_event_trigger"
           psql -Atc "select 'pgrst_listen: '||count(*) from pg_stat_activity where application_name ilike '%postgrest%'"
+          K=$(supabase projects api-keys --project-ref vnqkmaauqygnckgtshus -o json | python3 -c 'import json,sys;print(next(k["api_key"] for k in json.load(sys.stdin) if k.get("name")=="service_role" or k.get("type")=="secret"))')
+          echo "::add-mask::$K"
+          for s in "order_id,content,qty" "order_id,content,unit,qty"; do
+            c=$(curl -s -o /tmp/r -w '%{http_code}' -H "apikey: $K" -H "Authorization: Bearer $K" "https://vnqkmaauqygnckgtshus.supabase.co/rest/v1/repair_items?select=$s&limit=500")
+            echo "rest $s: $c $(python3 -c 'import json;d=json.load(open("/tmp/r"));print(("rows=%d" % len(d)) if isinstance(d,list) else d.get("message"))')"
+          done

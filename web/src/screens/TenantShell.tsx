@@ -181,7 +181,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}
-          {tab === 'scan' && <ScanScreen canSave={perms.has('archive.add')} canAI={perms.has('archive.view') || perms.has('archive.add') || isCrew} />}
+          {tab === 'scan' && <ScanScreen canSave={perms.has('archive.add')} canAI={perms.has('archive.view') || perms.has('archive.add') || isCrew} canLenh={isCrew} />}
           {tab === 'docs' && <DocsScreen ctx={ctx} perms={perms} />}
           {tab === 'labor' && <LaborScreen ctx={ctx} perms={perms} />}
           {tab === 'timesheet' && <TimesheetScreen ctx={ctx} perms={perms} />}

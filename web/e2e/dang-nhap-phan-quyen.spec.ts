@@ -822,6 +822,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   if (await page.getByRole('tab', { name: 'Sơ đồ ghế' }).count() === 0) await page.getByRole('button', { name: /^Chuyến 07:00/ }).click();
   await expect(page.getByRole('tab', { name: 'Đón khách' })).toBeVisible();
   await expect(page.getByText('Chưa có khách đặt vé.')).toBeVisible();
+  // lái xe scan lệnh của chuyến: mở máy quét riêng cho chuyến, có nút Lưu lệnh vận chuyển
+  await page.getByRole('button', { name: '📷 Scan lệnh' }).click();
+  await expect(page.getByRole('heading', { name: 'Scan lệnh vận chuyển' })).toBeVisible();
+  await page.getByLabel('Chọn ảnh tài liệu').setInputFiles({ name: 'lenh.png', mimeType: 'image/png', buffer: Buffer.from(giay, 'base64') });
+  await expect(page.getByRole('button', { name: 'Lưu lệnh vận chuyển' })).toBeVisible();
+  await page.getByRole('button', { name: 'Lưu lệnh vận chuyển' }).click();
+  await expect(page.getByText(/Chưa lưu được lệnh/)).toBeVisible({ timeout: 30000 });   // CI không có Google Drive / AI: báo rõ, không lưu nhầm
+  await page.getByRole('button', { name: '‹ Quay lại Chuyến của tôi' }).click();
   await page.getByRole('tab', { name: 'Sơ đồ ghế' }).click();
   await expect(page.getByLabel('Ghế A01 trống')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

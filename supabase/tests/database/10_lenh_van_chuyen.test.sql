@@ -155,5 +155,32 @@ reset role;
 
 select ok(not has_function_privilege('anon', 'public.issue_transport_order(uuid)', 'EXECUTE'), 'Khách (anon) không cấp lệnh');
 
+-- ---------------------------------------------------------------- Lái xe scan lệnh lưu vào hệ thống (máy chủ đặt tên + thư mục)
+update public.staff_members set user_id = '00000000-0000-0000-0000-0000000000b4' where id = (select v from t.ids where k = 'D1');
+select ok(public.svc_order_scan_check((select v from t.ids where k = 'A'), '00000000-0000-0000-0000-0000000000b4', (select v from t.ids where k = 'T3')), 'Lái xe trong tổ lái được lưu lệnh');
+select ok(not public.svc_order_scan_check((select v from t.ids where k = 'A'), '00000000-0000-0000-0000-0000000000b2', (select v from t.ids where k = 'T3')), 'Người không có hồ sơ nhân viên / không trong tổ lái: không');
+insert into public.archive_folders (tenant_id, name) values ((select v from t.ids where k = 'A'), '2026');
+insert into public.archive_folders (tenant_id, parent_id, name) select tenant_id, id, 'Điều hành xe' from public.archive_folders where name = '2026';
+select lives_ok($$ select public.svc_save_order_scan((select v from t.ids where k = 'A'), '00000000-0000-0000-0000-0000000000b4',
+  array['2026', '08. Điều hành xe', 'Lệnh vận chuyển', 'HỐ NAI - VŨNG TÀU', 'Tháng 11-2026'], '26112101/LVC-TGTP', '26112101-LVC-TGTP.pdf', 'application/pdf',
+  'drive-1', 'https://drive.test/1', 1000, (select v from t.ids where k = 'T3'), '26112101/LVC-TGTP', 'HỐ NAI - VŨNG TÀU') $$, 'Lưu lệnh đã scan');
+select is((select count(*)::int from public.archive_folders where name ilike '%điều hành xe%'), 1, 'Dùng lại thư mục "Điều hành xe" có sẵn (không tạo "08. Điều hành xe" trùng)');
+select is((select count(*)::int from public.order_scans), 3, 'Ghi nhận đã scan cho chuyến + các lượt cùng lệnh');
+select lives_ok($$ select public.svc_save_order_scan((select v from t.ids where k = 'A'), '00000000-0000-0000-0000-0000000000b4',
+  array['2026', '08. Điều hành xe', 'Lệnh vận chuyển', 'HỐ NAI - VŨNG TÀU', 'Tháng 11-2026'], '26112101/LVC-TGTP', '26112101-LVC-TGTP.pdf', 'application/pdf',
+  'drive-2', 'https://drive.test/2', 1000, null, '26112101/LVC-TGTP', null) $$, 'Scan lại cùng lệnh');
+select is((select string_agg(drive_id || ':' || is_old, ',' order by drive_id) from public.archive_items where name = '26112101/LVC-TGTP'), 'drive-1:true,drive-2:false', 'Bản mới thay bản cũ cùng tên');
+select ok((select count(*) from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b2' and title like 'Đã lưu lệnh vận chuyển 26112101%') >= 1, 'Báo người điều hành');
+select is((select count(*)::int from public.notifications where user_id = '00000000-0000-0000-0000-0000000000b4' and title like 'Đã lưu lệnh%'), 0, 'Không báo lại cho chính người scan');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select is((select count(*)::int from public.order_scans where trip_id = (select v from t.ids where k = 'T1')), 1, 'Lái xe thấy chuyến của mình đã scan lệnh');
+select throws_ok($$ select public.svc_save_order_scan(null, null, null, null, null, null, null, null, null, null, null, null) $$, '42501', null, 'Người dùng không gọi được hàm lưu của máy chủ');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select is((select count(*)::int from public.order_scans), 0, 'Chủ B không thấy lệnh đã scan của nhà xe A');
+reset role;
+
 select * from finish();
 rollback;

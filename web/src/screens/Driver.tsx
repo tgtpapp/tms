@@ -11,6 +11,7 @@ import { ParcelRow, SHIP_COLS, type Shipment } from './Parcels';
 import { MyCharters } from './Charters';
 import { FuelReportCard } from '../components/FuelReport';
 import { Modal } from '../components/Modal';
+import { ScanScreen } from './Scan';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -52,6 +53,9 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   // chuyến người dùng tự bấm mở ('' = đã đóng); chưa bấm thì tự mở chuyến chuẩn bị chạy
   const [picked, setOpen] = useState<string | null>(null);
   const [nbOpen, setNbOpen] = useState(0);
+  // lệnh đã scan lưu vào hệ thống theo chuyến (cả các lượt cùng lệnh)
+  const [scanned, setScanned] = useState<Set<string>>(new Set());
+  const [scanTrip, setScanTrip] = useState<MyTrip | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +65,8 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         supabase.from('stops').select('id, name'),
       ]);
       setTrips(t);
+      const sc = t.length ? await supabase.from('order_scans').select('trip_id').in('trip_id', t.map((x) => x.trip_id)) : { data: [] };
+      setScanned(new Set(((sc.data ?? []) as { trip_id: string }[]).map((x) => x.trip_id)));
       setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
       setStops(Object.fromEntries(((st.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
     } catch (e) {
@@ -105,6 +111,15 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   );
   // đang chạy chuyến (đã xuất bến, chưa đến bến): không bắt thao tác điện thoại
   const running = day === today() && trips.some((t) => t.departed_at && !t.arrived_at && t.status !== 'huy');
+  if (scanTrip) {
+    return (
+      <>
+        <button type="button" className="btn small" onClick={() => setScanTrip(null)}>‹ Quay lại Chuyến của tôi</button>
+        <ScanScreen canSave={false} canAI canLenh forTrip={{ id: scanTrip.trip_id, label: `${hhmm(scanTrip.depart_at)} ${fmtDate(scanTrip.service_date)} · ${dirName(routes[scanTrip.route_id], scanTrip.direction)}` }}
+          onDone={() => { setScanTrip(null); void load(); }} />
+      </>
+    );
+  }
   return (
     <>
       <section className="card">
@@ -118,7 +133,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">{sorted.slice(0, cut).map(chip)}</div>
       </section>
-      {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} />}
+      {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
       {sorted.length > cut && <section className="card"><div className="drv-trips">{sorted.slice(cut).map(chip)}</div></section>}
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <MyTransfers day={day} />
@@ -184,7 +199,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
 }
 
 /** Một chuyến (như app cũ): Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả khách & hàng. Gọi khách ghi trạng thái báo về quầy bán vé. */
-function TripRun({ trip, stopName, reload }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void> }) {
+function TripRun({ trip, stopName, reload, scanned, onScan }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void }) {
   const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [codes, setCodes] = useState<Record<string, string>>({});
@@ -324,6 +339,7 @@ function TripRun({ trip, stopName, reload }: { trip: MyTrip; stopName: (id: stri
         </div>
         {trip.status === 'mo' && (
           <div className="actions">
+            <button className={scanned ? 'btn small scan-ok' : 'btn small'} onClick={onScan}>{scanned ? '✅ Đã scan lệnh' : '📷 Scan lệnh'}</button>
             {!trip.departed_at && <button className="btn primary" disabled={busy} onClick={() => void mark('xuat_ben')}>Xuất bến</button>}
             {trip.departed_at && !trip.arrived_at && <button className="btn primary" disabled={busy} onClick={() => void mark('den_ben')}>Đến bến</button>}
           </div>

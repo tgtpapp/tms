@@ -1,8 +1,13 @@
 // Edge Function: Lưu trữ hồ sơ trên Google Drive của nhà xe qua Apps Script (giống app cũ).
 // - Địa chỉ Web app + mã kết nối của nhà xe đọc ở bảng tenant_drive bằng service_role (trình duyệt không thấy mã).
+// - put_lenh: lái xe / nhân viên lưu lệnh vận chuyển đã scan (không cần quyền Lưu trữ hồ sơ): AI đọc trang đầu, đúng là Lệnh thì máy chủ
+//   tự đặt tên + thư mục theo quy tắc, ghi nhận theo chuyến và báo quản lý.
 // - Quyền: ping (settings.view / archive.add / archive.edit), get (archive.view), put (archive.add; thay bản mới: archive.edit hoặc .add), del / del_folder (archive.delete).
 // - Dữ liệu hồ sơ ghi bằng phiên đăng nhập của người dùng (RLS nhà xe + quyền áp dụng như thường).
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.45.4';
+import { parseProviders, readDocument, ReaderError } from '../_shared/doc_reader.ts';
+import { SCAN_DOC } from '../_shared/scan_defs.ts';
+import { docName, docPath, safeName, type DocRead, type RouteRow } from '../_shared/scan_rules.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -106,6 +111,37 @@ Deno.serve(async (req) => {
       if (!it.data?.drive_id) throw new HttpError(404, 'Không tìm thấy bản sao lưu');
       const r = await gas(cfg, { action: 'hs_get', id: it.data.drive_id }, 180000);
       return json(200, { name: it.data.file_name, mime: r.mime, data: r.data });
+    }
+
+    if (b.action === 'put_lenh') {
+      const uid = (await user.auth.getUser()).data.user?.id;
+      if (!uid) throw new HttpError(401, 'Chưa đăng nhập');
+      const trip = typeof b.trip_id === 'string' && b.trip_id ? b.trip_id : null;
+      const chk = await admin.rpc('svc_order_scan_check', { p_tenant: t.data, p_user: uid, p_trip: trip });
+      if (!chk.data && !P.has('archive.add')) throw new HttpError(403, trip ? 'Bạn không có trong tổ lái của chuyến này' : 'Chỉ nhân viên của nhà xe mới lưu được lệnh');
+      const data = typeof b.data === 'string' ? b.data : '', page = typeof b.page === 'string' ? b.page : '';
+      if (!data || data.length > MAX_B64) throw new HttpError(413, 'Tệp trống hoặc lớn hơn 10 MB');
+      if (!page || page.length > 4_000_000) throw new HttpError(400, 'Thiếu ảnh trang đầu của lệnh');
+      // AI đọc trang đầu: chỉ lưu khi đúng là Lệnh vận chuyển và đọc được số lệnh
+      let v: DocRead;
+      try {
+        v = (await readDocument({ docType: 'scan_doc', def: SCAN_DOC, files: [{ mime: 'image/jpeg', data: page }], providers: parseProviders(Deno.env.get('AI_PROVIDERS')),
+          timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 25000) || 25000 })).fields as unknown as DocRead;
+      } catch (e) { throw new HttpError(e instanceof ReaderError ? e.status : 502, `AI chưa đọc được lệnh: ${e instanceof Error ? e.message : e}`); }
+      if (!/lệnh/i.test(v.loai ?? '') || !v.lenh_so) throw new HttpError(422, 'Trang đầu không phải Lệnh vận chuyển hoặc không đọc được số lệnh. Hãy chụp rõ trang đầu của lệnh');
+      const [st, rt] = await Promise.all([
+        admin.from('tenant_settings').select('value').eq('tenant_id', t.data).eq('key', 'lenh.hau_to').maybeSingle(),
+        admin.from('routes').select('name, registered_code').eq('tenant_id', t.data),
+      ]);
+      const suffix = typeof st.data?.value === 'string' ? st.data.value : '';
+      const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+      const name = docName(v, suffix), path = docPath(v, (rt.data ?? []) as RouteRow[], today)!;
+      const ext = String(b.mime ?? '') === 'application/pdf' ? 'pdf' : 'jpg', fileName = `${safeName(name)}.${ext}`;
+      const r = await gas(cfg, { action: 'hs_put', path, name: fileName, mime: String(b.mime ?? 'application/pdf'), data }, 180000);
+      const sv = await admin.rpc('svc_save_order_scan', { p_tenant: t.data, p_user: uid, p_path: path, p_name: name, p_file_name: fileName, p_mime: String(b.mime ?? 'application/pdf'),
+        p_drive_id: String(r.id), p_drive_url: String(r.url ?? ''), p_size: Number(r.size ?? 0) || null, p_trip: trip, p_order_no: name, p_route: path[3] ?? null });
+      if (sv.error) { await gas(cfg, { action: 'hs_del', id: r.id }).catch(() => undefined); throw new HttpError(400, sv.error.message); }
+      return json(200, { name, path: path.join(' / ') });
     }
 
     if (b.action === 'put') {

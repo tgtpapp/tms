@@ -24,7 +24,9 @@ const setPref = (k: string, v: string) => { try { localStorage.setItem(`scan.${k
 const defaultName = () => { const n = new Date(), p = (x: number) => String(x).padStart(2, '0'); return `Scan ${fmtDate(today()).replace(/\//g, '-')} ${p(n.getHours())}h${p(n.getMinutes())}`; };
 const b64 = async (c: HTMLCanvasElement, q = 0.85) => bytesToBase64(new Uint8Array(await (await toBlob(c, 'image/jpeg', q)).arrayBuffer()));
 
-export function ScanScreen({ canSave, canAI }: { canSave: boolean; canAI: boolean }) {
+export function ScanScreen({ canSave, canAI, canLenh = false, forTrip, onDone }: {
+  canSave: boolean; canAI: boolean; canLenh?: boolean; forTrip?: { id: string; label: string }; onDone?: () => void;
+}) {
   const toast = useToast();
   const P = useRef<Page[]>([]);
   const [, setTick] = useState(0);
@@ -183,11 +185,27 @@ export function ScanScreen({ canSave, canAI }: { canSave: boolean; canAI: boolea
     } catch (e) { toast('error', `Chưa lưu được: ${errMsg(e)}`); } finally { setBusy(null); }
   }
 
+  /** Lái xe / nhân viên lưu lệnh vận chuyển: máy chủ cho AI đọc trang đầu, đúng là lệnh thì tự đặt tên + thư mục rồi lưu */
+  async function saveLenh() {
+    if (!n || busy) return;
+    setBusy('Đang tạo PDF lệnh…');
+    try {
+      const pdf = (await buildFiles(P.current, 'lenh', 'pdf', quality))[0]!;
+      setBusy('AI đang đọc lệnh và lưu vào hệ thống…');
+      const r = await drive<{ name: string; path: string }>({ action: 'put_lenh', data: bytesToBase64(new Uint8Array(await pdf.blob.arrayBuffer())), mime: 'application/pdf',
+        page: await b64(render(P.current[0]!, 1800), 0.9), trip_id: forTrip?.id ?? null });
+      toast('ok', `Đã lưu lệnh ${r.name} vào ${r.path}`);
+      P.current = []; setCur(-1); setReview(-1); setName(''); save(); redraw();
+      onDone?.();
+    } catch (e) { toast('error', `Chưa lưu được lệnh: ${errMsg(e)}`); } finally { setBusy(null); }
+  }
+
   const pending = P.current.filter((p) => p.pending).length;
   return (
     <div className="scn">
       <section className="card">
-        <div className="item-head"><h2>Scan tài liệu</h2></div>
+        <div className="item-head"><h2>{forTrip ? 'Scan lệnh vận chuyển' : 'Scan tài liệu'}</h2></div>
+        {forTrip && <p className="small">Chuyến <b>{forTrip.label}</b></p>}
         <div className="scn-add">
           <button type="button" className="btn primary" onClick={() => setCamOn(true)}>📷 Mở máy quét</button>
           <label className="btn scn-in">Chụp bằng camera máy<input type="file" accept="image/*" capture="environment" multiple onChange={(e) => { void addFiles(e.target.files); e.target.value = ''; }} /></label>
@@ -270,7 +288,8 @@ export function ScanScreen({ canSave, canAI }: { canSave: boolean; canAI: boolea
             <button type="button" className="btn primary" disabled={!!busy} onClick={() => void download()}>Tải về máy</button>
             <button type="button" className="btn" disabled={!!busy} onClick={() => void share()}>Chia sẻ</button>
             <button type="button" className="btn" disabled={!!busy} onClick={() => void print()}>In</button>
-            {canSave && <button type="button" className="btn" disabled={!!busy} onClick={() => void saveArchive()}>Lưu vào Lưu trữ hồ sơ</button>}
+            {canSave && !forTrip && <button type="button" className="btn" disabled={!!busy} onClick={() => void saveArchive()}>Lưu vào Lưu trữ hồ sơ</button>}
+            {canLenh && (forTrip || !canSave) && <button type="button" className="btn primary" disabled={!!busy} onClick={() => void saveLenh()}>Lưu lệnh vận chuyển</button>}
           </div>
           <div className="actions"><button type="button" className="btn small link danger-text" onClick={clearAll}>Xóa hết, scan tài liệu mới</button></div>
         </section>

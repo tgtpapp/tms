@@ -1,15 +1,21 @@
 name: tam-kiem-tra
 on: workflow_dispatch
 permissions:
-  contents: read
+  contents: write
 jobs:
   k:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: |
-          npm view rollup time --json | python3 -c 'import json,sys;d=json.load(sys.stdin);ks=[k for k in d if k[0].isdigit()];ks.sort(key=lambda k:d[k]);print("ban", ks[-8:]);print("tg", [d[k] for k in ks[-8:]])'
-          npm view rollup dist-tags --json
-          for v in 4.68.8 4.68.7 4.68.6 4.67.0; do echo "tarball $v: $(curl -s -o /dev/null -w '%{http_code}' https://registry.npmjs.org/rollup/-/rollup-$v.tgz)"; done
+      - name: Tạo package-lock.json (khóa đúng phiên bản thư viện)
+        working-directory: web
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          test -s package-lock.json
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Khóa phiên bản thư viện giao diện (package-lock.json)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -m "Claude-Session: https://claude.ai/code/session_01HmHLoMkiu41nYiQknCYEpA"
+          git push

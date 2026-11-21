@@ -46,7 +46,8 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   const [trips, setTrips] = useState<MyTrip[]>([]);
   const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [stops, setStops] = useState<Record<string, string>>({});
-  const [open, setOpen] = useState<string | null>(null);
+  // chuyến người dùng tự bấm mở ('' = đã đóng); chưa bấm thì tự mở chuyến chuẩn bị chạy
+  const [picked, setOpen] = useState<string | null>(null);
   const [nbOpen, setNbOpen] = useState(0);
 
   const load = useCallback(async () => {
@@ -59,9 +60,6 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       setTrips(t);
       setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
       setStops(Object.fromEntries(((st.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
-      // mở sẵn chuyến sắp chạy / đang chạy gần nhất
-      const now = Date.now(), next = t.filter((x) => isUpcoming(x, now)).sort((a, b) => a.depart_at.localeCompare(b.depart_at))[0] ?? (t.length === 1 ? t[0] : undefined);
-      if (next) setOpen((o) => o ?? next.trip_id);
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -80,11 +78,28 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   }, []);
 
 
-  // chuyến sắp chạy / đang chạy lên đầu (theo giờ), chuyến đã qua giờ / đã đến bến / đã hủy xuống dưới; tự xếp lại mỗi phút
+  // Thứ tự: chuyến chuẩn bị chạy (xanh) + chi tiết chuyến lên đầu → các chuyến tiếp theo (vàng nhạt) → chuyến đã kết thúc / qua giờ (xám).
+  // Mỗi phút xếp lại và tải lại trạng thái: chuyến chạy xong thì chuyến tiếp theo được đẩy lên.
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    const t = setInterval(() => { setNow(Date.now()); if (!document.hidden && day === today()) void load(); }, 60_000);
+    return () => clearInterval(t);
+  }, [day, load]);
   const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, now)) - Number(isUpcoming(a, now)) || a.depart_at.localeCompare(b.depart_at));
+  const first = sorted.find((t) => isUpcoming(t, now));
+  const open = picked === '' ? null : picked ?? first?.trip_id ?? (trips.length === 1 ? trips[0]!.trip_id : null);
   const cur = open ? trips.find((t) => t.trip_id === open) : undefined;
+  const cut = cur ? sorted.indexOf(cur) + 1 : first ? 1 : 0;   // chi tiết chuyến nằm ngay dưới thẻ chuyến đang mở
+  const chip = (t: MyTrip) => (
+    <button key={t.trip_id} className={['trip-chip', open === t.trip_id && 'on', !isUpcoming(t, now) ? 'past' : t === first ? 'next' : 'later'].filter(Boolean).join(' ')}
+            onClick={() => setOpen(open === t.trip_id ? '' : t.trip_id)} aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
+      <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
+      <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
+      <span className={`badge ${t.status === 'huy' ? 'locked' : t.arrived_at ? '' : t.departed_at ? 'warn-badge' : 'idle'}`}>
+        {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}` : 'Chưa xuất bến'}
+      </span>
+    </button>
+  );
   // đang chạy chuyến (đã xuất bến, chưa đến bến): không bắt thao tác điện thoại
   const running = day === today() && trips.some((t) => t.departed_at && !t.arrived_at && t.status !== 'huy');
   return (
@@ -98,20 +113,10 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
           <button className="btn small" aria-label="Ngày sau" onClick={() => { setDay(addDays(day, 1)); setOpen(null); }}>›</button>
         </div>
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
-        <div className="drv-trips">
-          {sorted.map((t) => (
-            <button key={t.trip_id} className={[open === t.trip_id ? 'trip-chip on' : 'trip-chip', isUpcoming(t, now) ? 'next' : 'past'].filter(Boolean).join(' ')} onClick={() => setOpen(open === t.trip_id ? null : t.trip_id)}
-                    aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
-              <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
-              <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
-              <span className={`badge ${t.status === 'huy' ? 'locked' : t.arrived_at ? '' : t.departed_at ? 'warn-badge' : 'idle'}`}>
-                {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}${t.arrived_auto ? ' (tự ghi)' : ''}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}${t.departed_auto ? ' (tự ghi)' : ''}` : 'Chưa xuất bến'}
-              </span>
-            </button>
-          ))}
-        </div>
+        <div className="drv-trips">{sorted.slice(0, cut).map(chip)}</div>
       </section>
       {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} />}
+      {sorted.length > cut && <section className="card"><div className="drv-trips">{sorted.slice(cut).map(chip)}</div></section>}
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <MyTransfers day={day} />
       <MyCharters />

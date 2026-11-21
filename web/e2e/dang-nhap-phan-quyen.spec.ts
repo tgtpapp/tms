@@ -449,6 +449,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(rp.getByText(/Bảy trăm hai mươi nghìn đồng/i)).toBeVisible();
   await expect(rp.getByText('Người lập phiếu')).toBeVisible();
   await page.screenshot({ path: 'test-results/in-phieu-sua-chua.png' });
+  // in ra đúng 1 tờ A4 (phần màn hình phía sau không đẩy thêm trang trắng)
+  // giả lập danh sách dài phía sau (như nhà xe có hàng chục phiếu) để chắc không sinh trang trắng
+  await page.evaluate(() => { const d = document.createElement('div'); d.id = 'gia-danh-sach-dai'; d.style.height = '6000px'; document.querySelector('main, .content, #root')!.appendChild(d); });
+  const rpPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  await page.evaluate(() => document.getElementById('gia-danh-sach-dai')?.remove());
+  const rpPages = [...rpPdf.matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)];
+  expect(rpPages.length).toBe(1);
+  expect(Math.round(Number(rpPages[0]![1]))).toBe(595);
   await page.locator('.lenh-bar').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByRole('button', { name: 'Sửa', exact: true }).first().click();
   await expect(page.getByLabel('ĐVT 1')).toHaveValue('LÍT');

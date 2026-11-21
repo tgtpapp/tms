@@ -163,10 +163,14 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 .lenh-foot td { width: 33%; text-align: center; vertical-align: top; }
 @page { size: A4; margin: 8mm; }
 @page ve { margin: 0; }   /* khổ giấy theo máy in nhiệt (80 / 58mm) */
+/* In giấy A4 / vé: chỉ in phần cần in. Phần còn lại của màn hình phải BỎ HẲN (display: none), không chỉ ẩn (visibility):
+   ẩn thì vẫn chiếm chỗ → máy in đẩy ra thêm trang trắng (danh sách dài phía sau = nhiều tờ). */
 @media print {
-  body * { visibility: hidden; }
-  .lenh, .lenh *, .ve-list, .ve-list *, .print-area, .print-area * { visibility: visible; }
-  .lenh, .ve-list, .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 0; }
+  body *:not(:has(.lenh, .ve-list, .print-area)):not(.lenh, .lenh *, .ve-list, .ve-list *, .print-area, .print-area *) { display: none !important; }
+  body, body *:has(.lenh, .ve-list, .print-area) { display: block !important; position: static !important; inset: auto !important; margin: 0 !important; padding: 0 !important;
+    border: 0 !important; width: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important;
+    background: #fff !important; box-shadow: none !important; transform: none !important; }
+  .lenh, .ve-list, .print-area { position: static; width: 100%; padding: 0; }
   .ve-list { page: ve; }
   .ve { page-break-after: always; break-after: page; border: 0 !important; margin: 0 !important; }
   .lenh-overlay { position: static; background: none; padding: 0; }

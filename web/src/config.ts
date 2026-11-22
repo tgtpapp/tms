@@ -58,7 +58,8 @@ export function loadConfig(): ConfigResult {
     appName: read('VITE_APP_NAME', missing) || 'TMS',
     credit: read('VITE_CREDIT', null),
     appEnv,
-    supabaseUrl: read('VITE_SUPABASE_URL', missing),
+    // 'same-origin': máy chủ dự phòng trên máy tính (giao diện + hệ thống cùng 1 địa chỉ, địa chỉ đổi theo tên miền / đường hầm)
+    supabaseUrl: read('VITE_SUPABASE_URL', missing) === 'same-origin' ? window.location.origin : read('VITE_SUPABASE_URL', missing),
     supabasePublishableKey: read('VITE_SUPABASE_PUBLISHABLE_KEY', missing),
     tenantCode: read('VITE_TENANT_CODE', null).toLowerCase(),
     loginEmailDomain: read('VITE_LOGIN_EMAIL_DOMAIN', null) || 'login.tms.invalid',

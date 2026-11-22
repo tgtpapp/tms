@@ -31,6 +31,8 @@ jobs:
           grep -vE '^(VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY|VITE_APP_ENV)=' .env.production > .env.maycanhan
           printf 'VITE_APP_ENV=local\nVITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$LOCAL_ANON" >> .env.maycanhan
           npx vite build --mode maycanhan --outDir ../out/web
+          sed -i 's#^VITE_SUPABASE_URL=.*#VITE_SUPABASE_URL=same-origin#' .env.maycanhan
+          npx vite build --mode maycanhan --outDir ../out/web-may-chu
       - name: Gói
         run: |
           D=out
@@ -38,7 +40,7 @@ jobs:
           cp -r supabase/config.toml supabase/migrations supabase/functions $D/he-thong/ 2>/dev/null
           mkdir -p $D/he-thong/supabase && mv $D/he-thong/config.toml $D/he-thong/migrations $D/he-thong/functions $D/he-thong/supabase/
           [ -d supabase/seed.sql ] || cp supabase/seed.sql $D/he-thong/supabase/ 2>/dev/null || true
-          cp .github/scripts/khoi_phuc.sh tools/may-ca-nhan/chay.ps1 "tools/may-ca-nhan/TMS tren may.bat" "tools/may-ca-nhan/Tat TMS tren may.bat" $D/
+          cp .github/scripts/khoi_phuc.sh tools/may-ca-nhan/chay.ps1 "tools/may-ca-nhan/TMS tren may.bat" "tools/may-ca-nhan/Tat TMS tren may.bat" tools/may-ca-nhan/may-chu.ps1 tools/may-ca-nhan/nginx-may-chu.conf "tools/may-ca-nhan/Bat may chu khan cap.bat" "tools/may-ca-nhan/Nhap ma duong ham.bat" $D/
           curl -sSL "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/supabase_windows_amd64.tar.gz" | tar -xz -C $D supabase.exe
           ls $D
           (cd $D && zip -qr ../TMS-tren-may.zip .)

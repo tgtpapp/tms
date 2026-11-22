@@ -7,6 +7,8 @@ $here = $PSScriptRoot
 Set-Location $here
 function Fail($m) { Write-Host ''; Write-Host "LỖI: $m" -ForegroundColor Red; exit 1 }
 
+if (Test-Path (Join-Path $here 'dang-la-may-chu.txt')) { Fail 'Máy này đang là MÁY CHỦ DỰ PHÒNG (có dữ liệu chỉ nằm trên máy). Không lấy lại dữ liệu Neon để khỏi ghi đè. Dùng "Bat may chu khan cap.bat".' }
+
 # 1. Docker Desktop
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Fail 'Chưa cài Docker Desktop (tải tại docker.com/products/docker-desktop, cài xong khởi động lại máy).' }
 docker info > $null 2> $null

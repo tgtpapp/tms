@@ -32,6 +32,7 @@ import { VehicleKmScreen } from './VehicleKm';
 import { ReportsScreen } from './Reports';
 import { RolesScreen } from './Roles';
 import { RoutesScreen } from './Routes';
+import { FaresScreen } from './Fares';
 import { SettingsScreen } from './Settings';
 import { SellScreen } from './Sell';
 import { StaffScreen } from './Staff';
@@ -41,7 +42,7 @@ import { VehiclesScreen } from './Vehicles';
 import { SupportScreen } from './Support';
 import { ScreenGuard } from '../components/ScreenGuard';
 
-type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support';
+type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'fares' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 /** Màu ô biểu tượng menu (như app cũ): mỗi mục 1 màu cố định theo mã mục */
@@ -142,6 +143,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') },
     { key: 'safety', label: 'Giám sát ATGT', icon: 'shield-exclamation', group: 'Bán vé & điều hành', show: perms.has('safety.view') },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: perms.has('route.view') },
+    { key: 'fares', label: 'Bảng giá vé', icon: 'tags', group: 'Danh mục', show: perms.has('fare.view') },
     { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('repair.view') },
     { key: 'fuel', label: 'Nhiên liệu', icon: 'gas-pump', group: 'Danh mục', show: perms.has('fuel.view') },
     { key: 'reports', label: 'Báo cáo', icon: 'chart-histogram', group: 'Danh mục', show: perms.has('report.view') },
@@ -222,6 +224,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'reports' && <ReportsScreen />}
           {tab === 'users' && <UsersScreen ctx={ctx} perms={perms} />}
           {tab === 'routes' && <RoutesScreen perms={perms} />}
+          {tab === 'fares' && <FaresScreen perms={perms} />}
           {tab === 'sell' && <SellScreen ctx={ctx} perms={perms} />}
           {tab === 'trips' && <TripsScreen ctx={ctx} perms={perms} />}
           {tab === 'staff' && <StaffScreen ctx={ctx} perms={perms} />}

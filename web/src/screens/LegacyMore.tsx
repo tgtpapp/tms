@@ -35,7 +35,6 @@ export function routeFinder(routes: Route[], log: string[]) {
   };
 }
 
-const stopKey = (s: string) => norm(s).replace(/^(ben xe|bx|van phong|vp|tram)\s+/, '').trim();
 const objs = (v: unknown): Raw[] => (Array.isArray(v) ? v.filter((x): x is Raw => !!x && typeof x === 'object') : []);
 const hhmm = (s: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(s.trim()); return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null; };
 const DAYS: Record<string, { day_rule: string; days?: number[] }> = {
@@ -112,44 +111,24 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
         sum.push(`${saved} giờ chạy${same ? ` (${same} giờ đã có)` : ''}`);
       }
 
-      // ---------------------------------------------------------------- Bảng giá vé (bảng đang áp dụng của từng tuyến)
+      // ---------------------------------------------------------------- Bảng giá vé (giữ nguyên từng bảng: khoảng ngày, ghi chú, các chặng)
       if (pick.gia) {
         setBusy('Đang chuyển bảng giá vé…');
-        const cur = new Map<string, Raw>();
-        for (const b of legacy.fares) {
-          const t = str(b, 'tuyen'), tu = day(str(b, 'tuNgay')) ?? '', den = day(str(b, 'denNgay'));
-          if (!t || tu > now || (den && den < now)) continue;
-          const o = cur.get(t);
-          if (!o || tu > (day(str(o, 'tuNgay')) ?? '')) cur.set(t, b);
-        }
         let n = 0;
-        const done = new Set<string>();
-        for (const [tuyen, b] of cur) {
+        for (const b of legacy.fares) {
+          const tuyen = str(b, 'tuyen'), tu = day(str(b, 'tuNgay')), den = day(str(b, 'denNgay'));
+          if (!tuyen || !tu) continue;
           const rt = await findRoute(tuyen);
           if (!rt) { log.push(`Giá tuyến "${tuyen}": không xác định được tuyến`); continue; }
-          const rs = await supabase.from('route_stops').select('seq, stop_id, stops(name)').eq('route_id', rt.id).order('seq');
-          const stops = ((rs.data ?? []) as unknown as { seq: number; stop_id: string; stops: { name: string } | null }[]).map((x) => ({ id: x.stop_id, k: stopKey(x.stops?.name ?? '') }));
-          const find = (name: string) => { const k = stopKey(name); return k ? stops.find((x) => x.k === k || x.k.includes(k) || k.includes(x.k)) ?? null : null; };
-          const chang = objs(b.chang);
-          for (const c of chang) {
-            const gia = Math.round(Number(String(c.gia ?? '').replace(/[^\d]/g, '')));
-            if (!gia) continue;
-            const a = find(str(c, 'don')), z = find(str(c, 'tra'));
-            const ends = stops.length >= 2 && a && z && new Set([a.id, z.id]).size === 2 && [a.id, z.id].includes(stops[0].id) && [a.id, z.id].includes(stops[stops.length - 1].id);
-            const whole = ends || chang.length === 1;
-            const key = whole ? `${rt.id}|all` : a && z ? `${rt.id}|${[a.id, z.id].sort().join('|')}` : '';
-            if (!key || done.has(key) || (!whole && a?.id === z?.id)) {
-              if (!key) log.push(`Giá ${str(c, 'don')} – ${str(c, 'tra')} (${tuyen}): chưa có điểm này trên tuyến`);
-              continue;
-            }
-            try {
-              await rpc('set_fare', { p_route_id: rt.id, p_from_stop: whole ? null : a!.id, p_to_stop: whole ? null : z!.id, p_price: gia, p_effective_from: now });
-              done.add(key);
-              n++;
-            } catch (e) { log.push(`Giá ${str(c, 'don')} – ${str(c, 'tra')} (${tuyen}): ${errMsg(e)}`); }
-          }
+          const items = objs(b.chang).map((c) => ({ from: str(c, 'don'), to: str(c, 'tra'), price: Math.round(Number(String(c.gia ?? '').replace(/[^\d]/g, ''))) }))
+            .filter((c) => c.price > 0);
+          if (!items.length) continue;
+          try {
+            await rpc('save_fare_table', { p_id: null, p_route_id: rt.id, p_valid_from: tu, p_valid_to: den, p_note: str(b, 'ghiChu'), p_items: items, p_order: null });
+            n++;
+          } catch (e) { log.push(`Bảng giá ${tuyen} từ ${tu}: ${errMsg(e)}`); }
         }
-        sum.push(`${n} giá vé`);
+        sum.push(`${n} bảng giá vé`);
       }
 
       // ---------------------------------------------------------------- Lý lịch hành nghề lái xe

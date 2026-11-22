@@ -134,14 +134,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu điểm dừng của tuyến')).toBeVisible();
   // Chiều về: điểm dừng đảo ngược, giờ tính lại
   await expect(page.getByText("BX Vũng Tàu → Bà Rịa (+30') → BX Hố Nai (+90')")).toBeVisible();
-  await page.getByLabel('Giá toàn tuyến').fill('150000');
-  await page.getByRole('button', { name: 'Lưu giá toàn tuyến' }).click();
-  await expect(page.getByText('Đã lưu giá toàn tuyến')).toBeVisible();
-  await page.getByLabel('Chặng từ').selectOption({ label: 'BX Hố Nai' });
-  await page.getByLabel('Chặng đến').selectOption({ label: 'Bà Rịa' });
-  await page.getByLabel('Giá chặng').fill('120000');
-  await page.getByRole('button', { name: 'Lưu giá chặng' }).click();
-  await expect(page.getByText('BX Hố Nai ⇄ Bà Rịa: 120.000 đ')).toBeVisible();
+  // Bảng giá vé (như app cũ): giá toàn tuyến + giá chặng
+  await page.getByRole('button', { name: 'Bảng giá vé', exact: true }).click();
+  await page.getByRole('button', { name: '+ Thêm bảng giá' }).click();
+  await page.getByRole('dialog').getByLabel('Tuyến *').selectOption({ label: 'Hố Nai – Vũng Tàu' });
+  await page.getByLabel('Giá, chặng 1').fill('150000');
+  await page.getByRole('button', { name: '+ Thêm chặng' }).click();
+  await page.getByLabel('Điểm đi, chặng 2').fill('BX Hố Nai');
+  await page.getByLabel('Điểm đến, chặng 2').fill('Bà Rịa');
+  await page.getByLabel('Giá, chặng 2').fill('120000');
+  await page.getByRole('button', { name: 'Lưu', exact: true }).click();
+  await expect(page.getByText('Đã lưu bảng giá')).toBeVisible();
+  await expect(page.getByRole('row', { name: 'Giá toàn tuyến 150.000' })).toBeVisible();
+  await expect(page.getByRole('row', { name: 'BX Hố Nai Bà Rịa 120.000' })).toBeVisible();
 
   // 5f. Loại xe giường nằm + vẽ sơ đồ ghế bằng "Tạo nhanh", đánh dấu chỗ ưu tiên
   await page.getByRole('button', { name: 'Xe', exact: true }).click();

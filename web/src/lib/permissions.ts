@@ -14,7 +14,7 @@ export interface PermissionGrant {
 const LEGACY: Record<string, string[]> = {
   'ticket.sell': ['sell.add', 'sell.edit', 'sell.delete'], 'parcel.manage': ['parcel.add', 'parcel.edit', 'parcel.delete'],
   'trip.manage': ['trip.add', 'trip.edit', 'trip.delete', 'charter.add', 'charter.edit'], 'route.manage': ['route.add', 'route.edit', 'route.delete'],
-  'fare.manage': ['route.edit'], 'vehicle.manage': ['vehicle.add', 'vehicle.edit', 'vehicle.delete'], 'staff.manage': ['staff.add', 'staff.edit', 'staff.delete'],
+  'fare.manage': ['fare.edit'], 'vehicle.manage': ['vehicle.add', 'vehicle.edit', 'vehicle.delete'], 'staff.manage': ['staff.add', 'staff.edit', 'staff.delete'],
   'salary.manage': ['salary.view', 'labor.view'], 'doc.manage': ['doc.view'], 'archive.manage': ['archive.add', 'archive.edit', 'archive.delete'],
   'branch.manage': ['branch.add'], 'office.manage': ['office.add', 'office.edit'], 'user.read': ['user.view'], 'user.manage': ['user.add', 'user.edit'],
   'role.manage': ['role.view'], 'settings.manage': ['settings.view'], 'audit.read': ['audit.view'],

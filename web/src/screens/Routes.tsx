@@ -10,40 +10,38 @@ type StopKind = 'ben_xe' | 'van_phong' | 'diem_don_tra' | 'tram_dung';
 interface Stop { id: string; code: string; name: string; kind: StopKind; province: string | null; address: string | null; is_active: boolean }
 interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; name_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number; allow_pickup: boolean; allow_dropoff: boolean }
-interface Fare { id: string; route_id: string; from_stop_id: string | null; to_stop_id: string | null; price: number | null; effective_from: string }
+interface Fare { route_id: string; price: number; valid_from: string; valid_to: string | null }
 
 const KIND: Record<StopKind, string> = { ben_xe: 'Bến xe', van_phong: 'Văn phòng', diem_don_tra: 'Điểm đón trả', tram_dung: 'Trạm dừng nghỉ' };
 const money = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('vi-VN')} đ`);
 // Ngày theo giờ Việt Nam (khớp app.local_today() của database)
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
-const fmtDate = (d: string) => d.split('-').reverse().join('/');
 
 interface Data { stops: Stop[]; routes: Route[]; routeStops: RouteStop[]; fares: Fare[] }
 
-/** Giá đang áp dụng hôm nay cho 1 khóa (toàn tuyến hoặc cặp điểm). */
-function currentFare(fares: Fare[], routeId: string, a: string | null, b: string | null): Fare | undefined {
+/** Giá toàn tuyến hôm nay (theo Bảng giá vé đang áp dụng). */
+function currentFare(fares: Fare[], routeId: string): number | null {
   const t = today();
-  return fares
-    .filter((f) => f.route_id === routeId && f.from_stop_id === a && f.to_stop_id === b && f.effective_from <= t)
-    .sort((x, y) => y.effective_from.localeCompare(x.effective_from))[0];
+  return fares.filter((f) => f.route_id === routeId && f.valid_from <= t && (!f.valid_to || f.valid_to >= t))
+    .sort((x, y) => y.valid_from.localeCompare(x.valid_from))[0]?.price ?? null;
 }
 
 export function RoutesScreen({ perms }: { perms: Permissions }) {
   const toast = useToast();
   const [data, setData] = useState<Data>({ stops: [], routes: [], routeStops: [], fares: [] });
   const canRoute = perms.has('route.manage');
-  const canFare = perms.has('fare.manage');
 
   const load = useCallback(async () => {
     const [s, r, rs, f] = await Promise.all([
       supabase.from('stops').select('id, code, name, kind, province, address, is_active').order('code'),
       supabase.from('routes').select('id, code, name, name_ve, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start, allow_pickup, allow_dropoff').order('seq'),
-      supabase.from('route_fares').select('id, route_id, from_stop_id, to_stop_id, price, effective_from').order('effective_from', { ascending: false }),
+      supabase.from('fare_table_items').select('price, fare_tables!inner(route_id, valid_from, valid_to)').is('from_stop_id', null),
     ]);
     const err = s.error ?? r.error ?? rs.error ?? f.error;
     if (err) return toast('error', err.message);
-    setData({ stops: (s.data ?? []) as Stop[], routes: (r.data ?? []) as Route[], routeStops: (rs.data ?? []) as RouteStop[], fares: (f.data ?? []) as Fare[] });
+    setData({ stops: (s.data ?? []) as Stop[], routes: (r.data ?? []) as Route[], routeStops: (rs.data ?? []) as RouteStop[], fares: ((f.data ?? []) as unknown as { price: number; fare_tables: { route_id: string; valid_from: string; valid_to: string | null } }[])
+      .map((x) => ({ price: x.price, ...x.fare_tables })) });
   }, [toast]);
 
   useEffect(() => {
@@ -52,7 +50,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
 
   return (
     <>
-      <RoutesSection data={data} canRoute={canRoute} canFare={canFare} reload={load} />
+      <RoutesSection data={data} canRoute={canRoute} reload={load} />
       <StopsSection stops={data.stops} canEdit={canRoute} reload={load} />
     </>
   );
@@ -166,7 +164,7 @@ function directionPath(data: Data, routeId: string, dir: 'di' | 've'): string {
   return seq.map((x) => `${x.n}${x.m ? ` (+${x.m}')` : ''}`).join(' → ');
 }
 
-function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean; reload: () => Promise<void> }) {
+function RoutesSection(props: { data: Data; canRoute: boolean; reload: () => Promise<void> }) {
   const { data, canRoute, reload } = props;
   const toast = useToast();
   const [f, setF] = useState(EMPTY_ROUTE);
@@ -230,7 +228,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; canFare: boolean;
                 <div>
                   <b>{r.name}</b> <span className="muted">/ {dirName(r, 've')}</span> {!r.is_active && <span className="badge locked">Ngừng dùng</span>} <span className="muted small">· {r.code}{r.registered_code ? ` · Mã số ${r.registered_code}` : ''}{r.distance_km ? ` · ${r.distance_km} km` : ''}</span>
                   <div className="muted small">
-                    Giá toàn tuyến: {money(currentFare(data.fares, r.id, null, null)?.price ?? null)}
+                    Giá toàn tuyến: {money(currentFare(data.fares, r.id))}
                   </div>
                   {(['di', 've'] as const).map((d) => {
                     const p = directionPath(data, r.id, d);
@@ -303,8 +301,8 @@ function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Pro
   );
 }
 
-function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFare: boolean; reload: () => Promise<void> }) {
-  const { route, data, canRoute, canFare, reload } = props;
+function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; reload: () => Promise<void> }) {
+  const { route, data, canRoute, reload } = props;
   const toast = useToast();
   const saved = useMemo(() => data.routeStops.filter((s) => s.route_id === route.id).sort((a, b) => a.seq - b.seq), [data.routeStops, route.id]);
   const stopName = (id: string | null) => data.stops.find((s) => s.id === id)?.name ?? '?';
@@ -438,114 +436,6 @@ function RouteDetail(props: { route: Route; data: Data; canRoute: boolean; canFa
           </div>
         </div>
       )}
-      <FareSection route={route} data={data} canFare={canFare} saved={saved} stopName={stopName} reload={reload} />
     </div>
-  );
-}
-
-function FareSection(props: { route: Route; data: Data; canFare: boolean; saved: RouteStop[]; stopName: (id: string | null) => string; reload: () => Promise<void> }) {
-  const { route, data, canFare, saved, stopName, reload } = props;
-  const toast = useToast();
-  const [full, setFull] = useState({ price: '', date: today() });
-  const [pair, setPair] = useState({ from: '', to: '', price: '', date: today() });
-  const [showHistory, setShowHistory] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const fares = data.fares.filter((f) => f.route_id === route.id);
-  const fullNow = currentFare(fares, route.id, null, null);
-  const pairKeys = Array.from(new Set(fares.filter((f) => f.from_stop_id).map((f) => `${f.from_stop_id}|${f.to_stop_id}`)));
-  const pairsNow = pairKeys
-    .map((k) => { const [a, b] = k.split('|'); return currentFare(fares, route.id, a, b); })
-    .filter((f): f is Fare => !!f && f.price != null);
-  const upcoming = fares.filter((f) => f.effective_from > today());
-  // Hiện cặp điểm theo thứ tự chiều đi của tuyến (database lưu cặp theo mã, không theo chiều)
-  const seqOf = (id: string | null) => saved.find((s) => s.stop_id === id)?.seq ?? 0;
-  const pairName = (f: Fare) => {
-    const [a, b] = seqOf(f.from_stop_id) <= seqOf(f.to_stop_id) ? [f.from_stop_id, f.to_stop_id] : [f.to_stop_id, f.from_stop_id];
-    return `${stopName(a)} ⇄ ${stopName(b)}`;
-  };
-
-  async function setFare(from: string | null, to: string | null, price: number | null, date: string, ok: string) {
-    setBusy(true);
-    try {
-      await rpc('set_fare', { p_route_id: route.id, p_from_stop: from, p_to_stop: to, p_price: price, p_effective_from: date });
-      toast('ok', ok);
-      await reload();
-      return true;
-    } catch (e) {
-      toast('error', errMsg(e));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <>
-      <h3>Giá vé</h3>
-      <p className="small">Giá toàn tuyến hôm nay: <b>{money(fullNow?.price ?? null)}</b>
-        {fullNow && <span className="muted"> (từ {fmtDate(fullNow.effective_from)})</span>}</p>
-      {pairsNow.length > 0 && (
-        <ul className="list">
-          {pairsNow.map((f) => (
-            <li key={f.id} className="price-row">
-              <span>{pairName(f)}: <b>{money(f.price)}</b></span>
-              {canFare && (
-                <button className="btn small" disabled={busy}
-                        onClick={() => void setFare(f.from_stop_id, f.to_stop_id, null, today(), 'Đã bỏ giá riêng, chặng này dùng giá toàn tuyến')}>Bỏ giá riêng</button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {upcoming.length > 0 && (
-        <p className="muted small">Sắp áp dụng: {upcoming.map((f) => `${f.from_stop_id ? pairName(f) : 'Toàn tuyến'} ${money(f.price)} từ ${fmtDate(f.effective_from)}`).join('; ')}</p>
-      )}
-      {canFare && (
-        <>
-          <form className="inline-form" onSubmit={(e) => {
-            e.preventDefault();
-            void setFare(null, null, Number(full.price), full.date, 'Đã lưu giá toàn tuyến').then((ok) => ok && setFull({ price: '', date: today() }));
-          }}>
-            <input type="number" min={1000} step={1000} inputMode="numeric" placeholder="Giá toàn tuyến (đ)" aria-label="Giá toàn tuyến"
-                   value={full.price} onChange={(e) => setFull({ ...full, price: e.target.value })} required />
-            <input type="date" aria-label="Áp dụng từ ngày (toàn tuyến)" value={full.date} min={today()} onChange={(e) => setFull({ ...full, date: e.target.value })} required />
-            <button className="btn small primary" disabled={busy}>Lưu giá toàn tuyến</button>
-          </form>
-          {saved.length >= 2 && (
-            <form className="inline-form" onSubmit={(e) => {
-              e.preventDefault();
-              void setFare(pair.from, pair.to, Number(pair.price), pair.date, 'Đã lưu giá chặng')
-                .then((ok) => ok && setPair({ from: '', to: '', price: '', date: today() }));
-            }}>
-              <select aria-label="Chặng từ" value={pair.from} onChange={(e) => setPair({ ...pair, from: e.target.value })} required>
-                <option value="">Từ điểm</option>
-                {saved.map((s) => <option key={s.stop_id} value={s.stop_id}>{stopName(s.stop_id)}</option>)}
-              </select>
-              <select aria-label="Chặng đến" value={pair.to} onChange={(e) => setPair({ ...pair, to: e.target.value })} required>
-                <option value="">Đến điểm</option>
-                {saved.map((s) => <option key={s.stop_id} value={s.stop_id}>{stopName(s.stop_id)}</option>)}
-              </select>
-              <input type="number" min={1000} step={1000} inputMode="numeric" placeholder="Giá chặng (đ)" aria-label="Giá chặng"
-                     value={pair.price} onChange={(e) => setPair({ ...pair, price: e.target.value })} required />
-              <input type="date" aria-label="Áp dụng từ ngày (chặng)" value={pair.date} min={today()} onChange={(e) => setPair({ ...pair, date: e.target.value })} required />
-              <button className="btn small primary" disabled={busy}>Lưu giá chặng</button>
-            </form>
-          )}
-        </>
-      )}
-      {fares.length > 0 && (
-        <button className="btn small link" onClick={() => setShowHistory(!showHistory)}>{showHistory ? 'Ẩn lịch sử giá' : 'Hiện lịch sử giá'}</button>
-      )}
-      {showHistory && (
-        <ul className="list small">
-          {fares.map((f) => (
-            <li key={f.id} className="muted">
-              {fmtDate(f.effective_from)} · {f.from_stop_id ? pairName(f) : 'Toàn tuyến'} · {f.price == null ? 'bỏ giá riêng' : money(f.price)}
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
   );
 }

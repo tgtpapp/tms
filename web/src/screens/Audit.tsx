@@ -25,6 +25,7 @@ const ENTITY: Record<string, string> = {
   routes: 'Tuyến',
   route_stops: 'Điểm dừng của tuyến',
   route_fares: 'Giá vé',
+  fare_tables: 'Bảng giá vé',
   vehicle_types: 'Loại xe',
   vehicle_type_seats: 'Sơ đồ ghế',
   archive_folders: 'Thư mục hồ sơ',

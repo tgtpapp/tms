@@ -37,9 +37,10 @@ select lives_ok($$ select public.set_route_stops((select id from public.routes),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'HN'), 'minutes_from_start', 0),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'BR'), 'minutes_from_start', 60),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'VT'), 'minutes_from_start', 90))) $$, 'Điểm dừng');
-select lives_ok($$ select public.set_fare((select id from public.routes), null, null, 150000) $$, 'Giá toàn tuyến');
-select lives_ok($$ select public.set_fare((select id from public.routes), (select id from public.stops where code = 'HN'),
-  (select id from public.stops where code = 'BR'), 120000) $$, 'Giá chặng Hố Nai – Bà Rịa');
+select lives_ok($$ select public.save_fare_table(null, (select id from public.routes), app.local_today(), null, null, jsonb_build_array(
+  jsonb_build_object('from', '', 'to', '', 'price', 150000),
+  jsonb_build_object('from', (select name from public.stops where code = 'HN'), 'to', (select name from public.stops where code = 'BR'), 'price', 120000))) $$,
+  'Bảng giá: toàn tuyến 150.000, chặng Hố Nai – Bà Rịa 120.000');
 select lives_ok($$ insert into public.vehicle_types (code, name, reg_seats) values ('G2', 'Xe 2 ghế', 3) $$, 'Loại xe');
 select lives_ok($$ select public.set_seat_layout((select id from public.vehicle_types), 1, 2, jsonb_build_array(
   jsonb_build_object('label', 'A01', 'deck', 1, 'row', 1, 'col', 1, 'kind', 'ghe'),

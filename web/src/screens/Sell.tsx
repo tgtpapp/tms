@@ -64,7 +64,7 @@ const active = (t: Ticket) => (t.status === 'giu' || t.status === 'dat' || t.sta
 const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra, printed_at, print_count, crew_call, no_show, dropped, deposit';
 /** Đã thu tiền (kể cả vé chờ xếp ghế). */
 const paid = (t: Ticket) => t.status === 'da_tt' || t.status === 'cho_xep';
-interface Fare { from_stop_id: string; to_stop_id: string; price: number }
+interface Fare { from_stop_id: string; to_stop_id: string; price: number; listed?: boolean }
 interface BaseData { trips: Trip[]; routes: Route[]; rstops: RouteStop[]; stops: Stop[]; types: VType[]; seats: Seat[]; plates: Record<string, string>; counts: Record<string, number> }
 /** Vé đã bán trên máy, chưa gửi: hiện trên sơ đồ như vé đã thu tiền. */
 const queuedTickets = (q: OfflineSale[], tripId: string, stopIds: string[]): Ticket[] => q.filter((x) => x.trip_id === tripId).flatMap((x) => x.seats.map((seat) => ({
@@ -589,14 +589,20 @@ function TripSell(props: TripSellProps) {
               {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}
               {view === 'so_do' && (
                 <span className="vx-leg">
-                  {fares.length > 1 && (
-                    <select aria-label="Chặng" value={fares.some((x) => x.from_stop_id === from && x.to_stop_id === to) ? `${from}|${to}` : ''}
-                            onChange={(e) => { const [a, b] = e.target.value.split('|'); if (a && b) { setFrom(a); setTo(b); } }} disabled={myHolds.length + offSel.length > 0}>
-                      <option value="">Chặng…</option>
-                      {[...fares].sort((x, y) => stopIds.indexOf(x.from_stop_id) - stopIds.indexOf(y.from_stop_id) || stopIds.indexOf(x.to_stop_id) - stopIds.indexOf(y.to_stop_id))
-                        .map((x) => <option key={`${x.from_stop_id}|${x.to_stop_id}`} value={`${x.from_stop_id}|${x.to_stop_id}`}>{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}</option>)}
-                    </select>
-                  )}
+                  {fares.length > 0 && (() => {
+                    // Mặc định toàn tuyến; chọn chặng khác (trong bảng giá) thì đón / trả và giá vé tự theo chặng đó
+                    const ord = (x: Fare) => stopIds.indexOf(x.from_stop_id) < stopIds.indexOf(x.to_stop_id);
+                    const list = fares.filter((x) => x.listed !== false && ord(x))
+                      .sort((x, y) => stopIds.indexOf(x.from_stop_id) - stopIds.indexOf(y.from_stop_id) || stopIds.indexOf(y.to_stop_id) - stopIds.indexOf(x.to_stop_id));
+                    const cur = list.some((x) => x.from_stop_id === from && x.to_stop_id === to) ? `${from}|${to}` : '';
+                    return (
+                      <select aria-label="Chặng" value={cur}
+                              onChange={(e) => { const [a, b] = e.target.value.split('|'); if (a && b) { setFrom(a); setTo(b); } }} disabled={myHolds.length + offSel.length > 0}>
+                        {!cur && <option value="">{stopName(from)} → {stopName(to)}{fareOf(from, to) !== null ? ` · ${money(fareOf(from, to) ?? 0)}` : ''}</option>}
+                        {list.map((x) => <option key={`${x.from_stop_id}|${x.to_stop_id}`} value={`${x.from_stop_id}|${x.to_stop_id}`}>{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}</option>)}
+                      </select>
+                    );
+                  })()}
                   <select aria-label="Đón tại" value={from} onChange={(e) => setFrom(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
                     {stopIds.slice(0, -1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
                   </select>→

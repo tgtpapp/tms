@@ -7,6 +7,7 @@ import { fmtDate, Scanner, today, type Scanned } from './Documents';
 import { Cropper } from './Cropper';
 import { docTypeOf } from '../lib/docTypes';
 import { signatureUrl, uploadFiles, uploadSignature } from '../lib/documents';
+import { getBlob, putFile } from '../lib/fileStore';
 import { LEASE_COLS, leasePages, leaseSignKey, loadLeaseCtx, saveLeasePdf, type Lease, type Person } from '../lib/vehicleLease';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -15,7 +16,8 @@ interface V { id: string; plate: string; ownership: string; is_active: boolean; 
 type P = Required<Pick<Person, 'name' | 'birth_year' | 'cccd' | 'cccd_on' | 'cccd_by' | 'address' | 'phone'>>;
 interface Form {
   id: string | null; req: string; signed_on: string; start_on: string; end_on: string; pay_day: string; late_days: string; tax_party: '' | 'A' | 'B';
-  a: P; joint: boolean; s: P; bank: { holder: string; account: string; bank: string }; dir: { cccd_on: string; cccd_by: string; phone: string };
+  a: P; joint: boolean; s: P; bank: { holder: string; account: string; bank: string }; dir: { cccd_on: string; cccd_by: string; phone: string; bank_holder: string; bank_account: string; bank_name: string };
+  copyFrom: string | null;   // sao chép từ hợp đồng này (chữ ký chủ xe chép theo)
   items: Record<string, string>;   // vehicle_id → giá thuê
   filesA: string[]; filesB: string[];   // ảnh CCCD đã lưu
 }
@@ -51,7 +53,13 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     setPend(noPend());
     void rpc<Record<string, string | null> | null>('lease_company_info', {}).then(setBInfo).catch(() => setBInfo(null));
     setF({ id: null, req: crypto.randomUUID(), signed_on: s, start_on: s, end_on: addYear(s), pay_day: '5', late_days: '15', tax_party: '', a: emptyP(v.owner_name ?? ''), joint: false, s: emptyP(),
-      bank: { holder: '', account: '', bank: '' }, dir: { cccd_on: last?.director?.cccd_on ?? '', cccd_by: last?.director?.cccd_by ?? '', phone: last?.director?.phone ?? '' }, items: { [v.id]: '' }, filesA: [], filesB: [] });
+      bank: { holder: '', account: '', bank: '' }, dir: { cccd_on: last?.director?.cccd_on ?? '', cccd_by: last?.director?.cccd_by ?? '', phone: last?.director?.phone ?? '', bank_holder: last?.director?.bank_holder ?? '',
+        bank_account: last?.director?.bank_account ?? '', bank_name: last?.director?.bank_name ?? '' }, items: { [v.id]: '' }, filesA: [], filesB: [], copyFrom: null });
+  }
+  /** Sao chép sang xe khác: giữ bên cho thuê, CCCD, chữ ký, tài khoản, điều khoản; chọn xe mới, lưu ra hợp đồng mới (số mới) */
+  async function openCopy(k: Lease) {
+    await openEdit(k);
+    setF((c) => (c ? { ...c, id: null, req: crypto.randomUUID(), items: {}, copyFrom: k.id } : c));
   }
   async function openEdit(k: Lease) {
     const [a, b] = await Promise.all([signatureUrl(tenantId, leaseSignKey(k.id, 'a')), signatureUrl(tenantId, leaseSignKey(k.id, 'b'))]);
@@ -60,8 +68,9 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     const p = (x?: Person | null): P => ({ ...emptyP(), ...Object.fromEntries(Object.entries(x ?? {}).map(([a, b]) => [a, String(b ?? '')])) }) as P;
     setF({ id: k.id, req: crypto.randomUUID(), signed_on: k.signed_on, start_on: k.start_on, end_on: k.end_on, pay_day: k.pay_day?.toString() ?? '', late_days: k.late_days?.toString() ?? '',
       tax_party: k.tax_party ?? '', a: p(k.lessor), joint: !!k.lessor.spouse?.name, s: p(k.lessor.spouse), bank: { holder: k.bank.holder ?? '', account: k.bank.account ?? '', bank: k.bank.bank ?? '' },
-      dir: { cccd_on: k.director.cccd_on ?? '', cccd_by: k.director.cccd_by ?? '', phone: k.director.phone ?? '' },
-      items: Object.fromEntries(k.items.map((i) => [i.vehicle_id, i.price ? String(i.price) : ''])), filesA: k.lessor.files ?? [], filesB: k.lessor.spouse?.files ?? [] });
+      dir: { cccd_on: k.director.cccd_on ?? '', cccd_by: k.director.cccd_by ?? '', phone: k.director.phone ?? '', bank_holder: k.director.bank_holder ?? '',
+        bank_account: k.director.bank_account ?? '', bank_name: k.director.bank_name ?? '' },
+      items: Object.fromEntries(k.items.map((i) => [i.vehicle_id, i.price ? String(i.price) : ''])), filesA: k.lessor.files ?? [], filesB: k.lessor.spouse?.files ?? [], copyFrom: null });
   }
   async function show(k: Lease) {
     setBusy('Đang dựng hợp đồng…');
@@ -83,7 +92,13 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
         lessor: { ...clean(f.a, fa), ...(f.joint && f.s.name.trim() ? { spouse: clean(f.s, fb) } : {}) }, bank: f.bank, director: f.dir,
         items: Object.entries(f.items).map(([vehicle_id, price]) => ({ vehicle_id, price: Number(digits(price)) || 0 })) };
       const r = await rpc<{ id: string; number: string }>('save_vehicle_lease', { p_id: f.id, p, p_request_id: f.id ? null : f.req });
-      for (const who of ['a', 'b'] as const) if (pend.sign[who]) await uploadSignature(tenantId, leaseSignKey(r.id, who), pend.sign[who]!);
+      for (const who of ['a', 'b'] as const) {
+        if (pend.sign[who]) await uploadSignature(tenantId, leaseSignKey(r.id, who), pend.sign[who]!);
+        else if (f.copyFrom && (who === 'a' || f.joint)) {   // bản sao: chép chữ ký đã tách nền của hợp đồng gốc
+          const old = await getBlob(`${tenantId}/chu_ky/${leaseSignKey(f.copyFrom, who)}.png`);
+          if (old) await putFile(`${tenantId}/chu_ky/${leaseSignKey(r.id, who)}.png`, old, 'image/png');
+        }
+      }
       setBusy('Đang lưu PDF vào hồ sơ xe…');
       const k = ((await supabase.from('vehicle_leases').select(LEASE_COLS).eq('id', r.id).single()).data as unknown as Lease);
       k.items = k.items.map((i) => ({ ...i, price: Number(i.price) }));
@@ -146,12 +161,13 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
             <div className="actions">
               <button type="button" className="btn small" aria-label={`Xem hợp đồng ${k.number}`} onClick={() => void show(k)}>Xem / in</button>
               {k.status === 'hieu_luc' && <button type="button" className="btn small" onClick={() => void openEdit(k)}>Sửa</button>}
+              <button type="button" className="btn small" aria-label={`Sao chép hợp đồng ${k.number} sang xe khác`} onClick={() => void openCopy(k)}>Sao chép sang xe khác</button>
               {k.status === 'hieu_luc' && <button type="button" className="btn small link danger-text" onClick={() => void stop(k)}>Chấm dứt</button>}
             </div></div></li>
         ))}
       </ul>
       {f && (
-        <Modal wide title={f.id ? 'Sửa hợp đồng thuê xe' : 'Lập hợp đồng thuê xe'} onClose={() => { if (!busy) setF(null); }}>
+        <Modal wide title={f.id ? 'Sửa hợp đồng thuê xe' : f.copyFrom ? 'Sao chép hợp đồng sang xe khác' : 'Lập hợp đồng thuê xe'} onClose={() => { if (!busy) setF(null); }}>
           <div className="form">
             <h3>Bên cho thuê (Bên A)</h3>
             {person(f.a, (a) => setF((c) => (c ? { ...c, a } : c)), 'chủ xe', 'a')}
@@ -182,6 +198,11 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
             <h3>Bên thuê (Bên B)</h3>
             <p className="small muted">Tự lấy từ Cấu hình › Thông tin công ty: tên, mã số doanh nghiệp, địa chỉ, giám đốc, CCCD giám đốc
               {bInfo ? ` (số ${bInfo.cccd ?? 'chưa có'}${bInfo.cccd_on ? `, cấp ${fmtDate(bInfo.cccd_on)}` : ', chưa có ngày cấp'}${bInfo.cccd_by ? `, ${bInfo.cccd_by}` : ''})` : ''}, số điện thoại.</p>
+            <div className="grid2">
+              <label>Chủ tài khoản (Bên B)<input value={f.dir.bank_holder} onChange={(e) => setF({ ...f, dir: { ...f.dir, bank_holder: e.target.value } })} /></label>
+              <label>Số tài khoản (Bên B)<input inputMode="numeric" value={f.dir.bank_account} onChange={(e) => setF({ ...f, dir: { ...f.dir, bank_account: e.target.value } })} /></label>
+              <label>Ngân hàng (Bên B)<input value={f.dir.bank_name} onChange={(e) => setF({ ...f, dir: { ...f.dir, bank_name: e.target.value } })} /></label>
+            </div>
             <div className="actions">
               <button type="button" className="btn primary" disabled={!!busy} onClick={() => void save()}>{busy || (f.id ? 'Lưu hợp đồng' : 'Lập & cấp số')}</button>
               <button type="button" className="btn link" disabled={!!busy} onClick={() => setF(null)}>Thôi</button>

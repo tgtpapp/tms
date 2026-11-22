@@ -14,7 +14,7 @@ export interface Person { name?: string; birth_year?: string; cccd?: string; ccc
 export interface Lease {
   id: string; number: string; year: number; signed_on: string; start_on: string; end_on: string; pay_day: number | null; late_days: number | null;
   tax_party: 'A' | 'B' | null; lessor: Person & { spouse?: Person | null }; bank: { holder?: string; account?: string; bank?: string };
-  director: { cccd_on?: string; cccd_by?: string; phone?: string }; status: 'hieu_luc' | 'cham_dut'; note: string | null;
+  director: { cccd_on?: string; cccd_by?: string; phone?: string; bank_holder?: string; bank_account?: string; bank_name?: string }; status: 'hieu_luc' | 'cham_dut'; note: string | null;
   items: { vehicle_id: string; price: number }[];
 }
 export const LEASE_COLS = 'id, number, year, signed_on, start_on, end_on, pay_day, late_days, tax_party, lessor, bank, director, status, note, items:vehicle_lease_items(vehicle_id, price)';
@@ -93,7 +93,8 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
     H('BÊN THUÊ (Sau đây gọi tắt là Bên B):') + P(`Tên doanh nghiệp: <b>${esc(co.name.toUpperCase())}</b>`) + P(`Mã số doanh nghiệp: ${hv(co.tax)}`)
       + P(`Địa chỉ trụ sở chính: ${hv(co.address)}`) + P(`Đại diện theo pháp luật: Ông <b>${hv(x.director.toUpperCase())}</b> — Chức vụ: Giám đốc`)
       + P(`Số CCCD: ${hv(x.dir.cccd)} — Cấp ngày: ${x.dir.cccd_on || k.director.cccd_on ? dmy(x.dir.cccd_on || k.director.cccd_on) : '……………'} — Nơi cấp: ${hv(x.dir.cccd_by || k.director.cccd_by)}`)
-      + P(`Số điện thoại: ${hv(x.dir.phone || k.director.phone)}`),
+      + P(`Số điện thoại: ${hv(x.dir.phone || k.director.phone)}`)
+      + P(`Số tài khoản: ${hv(k.director.bank_account)} &nbsp; Tại Ngân hàng: ${hv(k.director.bank_name)} &nbsp; Chủ tài khoản: ${hv(k.director.bank_holder)}`),
     P('Sau khi bàn bạc, thỏa thuận, hai bên thống nhất ký kết Hợp đồng thuê xe ô tô với các điều khoản cụ thể như sau:'),
     H('Điều 1. Đặc điểm tài sản cho thuê') + P(`Bên A đồng ý cho Bên B thuê và Bên B đồng ý thuê ${String(V.length).padStart(2, '0')} xe ô tô thuộc quyền sở hữu hợp pháp của Bên A với các thông số kỹ thuật sau:`) + dieu1
       + P(`${one ? '7' : ''}${one ? '. ' : ''}Tình trạng xe khi bàn giao: Xe hoạt động bình thường, đầy đủ giấy tờ pháp lý bản chính/bản sao theo quy định (Giấy đăng ký xe, Giấy chứng nhận kiểm định ATKT &amp; BVMT, Bảo hiểm TNDS bắt buộc còn hiệu lực).`),

@@ -1,12 +1,10 @@
 // Bảng giá vé như app cũ: theo tuyến, theo khoảng ngày áp dụng và theo từng chặng đi.
 // Gõ điểm chưa có thì database tự tạo điểm và thêm vào lộ trình tuyến (bán vé chặng cần thứ tự điểm).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal } from '../components/Modal';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
-interface Route { id: string; name: string; is_active: boolean }
 interface Stop { id: string; name: string }
 interface Table { id: string; route_id: string; valid_from: string; valid_to: string | null; note: string | null }
 interface Item { table_id: string; seq: number; from_stop_id: string | null; to_stop_id: string | null; price: number }
@@ -22,42 +20,38 @@ function status(t: Table): [string, string] {
   return d < t.valid_from ? ['sap', 'Sắp áp dụng'] : t.valid_to && d > t.valid_to ? ['het', 'Hết hạn'] : ['dang', 'Đang áp dụng'];
 }
 
-export function FaresScreen({ perms }: { perms: Permissions }) {
+/** Bảng giá vé của 1 tuyến (đặt trong cửa sổ Sửa tuyến, dưới hành trình): thêm / sao chép / sửa / xóa ngay tại chỗ. */
+export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; routeId: string; onChanged?: () => void | Promise<void> }) {
   const toast = useToast();
-  const [routes, setRoutes] = useState<Route[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
   const [routeStops, setRouteStops] = useState<{ route_id: string; stop_id: string; seq: number }[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [items, setItems] = useState<Item[]>([]);
-  const [sel, setSel] = useState('');
+  const sel = routeId;
   const [form, setForm] = useState<{ id: string | null; src: Table | null; rows: Row[] } | null>(null);
   const [del, setDel] = useState<string | null>(null);
   const canAdd = perms.has('fare.add'), canEdit = perms.has('fare.edit'), canDel = perms.has('fare.delete');
 
   const load = useCallback(async () => {
-    const [r, s, rs, t, i] = await Promise.all([
-      supabase.from('routes').select('id, name, is_active').order('name'),
+    const [s, rs, t, i] = await Promise.all([
       supabase.from('stops').select('id, name').order('name'),
       supabase.from('route_stops').select('route_id, stop_id, seq').order('seq'),
       supabase.from('fare_tables').select('id, route_id, valid_from, valid_to, note').order('valid_from', { ascending: false }),
       supabase.from('fare_table_items').select('table_id, seq, from_stop_id, to_stop_id, price').order('seq'),
     ]);
-    const err = r.error ?? s.error ?? rs.error ?? t.error ?? i.error;
+    const err = s.error ?? rs.error ?? t.error ?? i.error;
     if (err) return toast('error', err.message);
-    setRoutes((r.data ?? []) as Route[]);
     setStops((s.data ?? []) as Stop[]);
     setRouteStops((rs.data ?? []) as { route_id: string; stop_id: string; seq: number }[]);
     setTables((t.data ?? []) as Table[]);
     setItems((i.data ?? []) as Item[]);
   }, [toast]);
+  const saved = async () => { setForm(null); await load(); await onChanged?.(); };
   useEffect(() => { void load(); }, [load]);
 
   const stopName = (id: string | null) => stops.find((x) => x.id === id)?.name ?? '';
-  const routeName = (id: string) => routes.find((x) => x.id === id)?.name ?? '?';
   const list = useMemo(() => tables.filter((t) => !sel || t.route_id === sel)
-    .sort((a, b) => routeName(a.route_id).localeCompare(routeName(b.route_id), 'vi') || b.valid_from.localeCompare(a.valid_from)),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [tables, sel, routes]);
+    .sort((a, b) => b.valid_from.localeCompare(a.valid_from)), [tables, sel]);
   const rowsOf = (t: Table | null): Row[] => {
     const l = t ? items.filter((x) => x.table_id === t.id) : [];
     return l.length ? l.map((x) => ({ from: stopName(x.from_stop_id), to: stopName(x.to_stop_id), price: String(x.price) })) : [{ from: '', to: '', price: '' }];
@@ -69,28 +63,26 @@ export function FaresScreen({ perms }: { perms: Permissions }) {
       toast('ok', 'Đã xóa bảng giá');
       setDel(null);
       await load();
+      await onChanged?.();
     } catch (e) { toast('error', errMsg(e)); }
   }
 
   return (
-    <section className="card">
+    <div className="bg-route">
       <div className="bg-top">
-        <select aria-label="Chọn tuyến" value={sel} onChange={(e) => setSel(e.target.value)}>
-          <option value="">Tất cả các tuyến</option>
-          {routes.filter((r) => r.is_active || tables.some((t) => t.route_id === r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
+        <b>Giá vé</b>
         <span className="muted small">{list.length} bảng giá</span>
         <span className="grow" />
-        {canAdd && <button type="button" className="btn primary" onClick={() => setForm({ id: null, src: null, rows: [{ from: '', to: '', price: '' }] })}>+ Thêm bảng giá</button>}
+        {canAdd && !form && <button type="button" className="btn small primary" onClick={() => setForm({ id: null, src: null, rows: [{ from: '', to: '', price: '' }] })}>+ Thêm bảng giá</button>}
       </div>
-      {list.length === 0 && <p className="muted bg-empty">Chưa có bảng giá. Bấm <b>Thêm bảng giá</b> để nhập giá theo tuyến, khoảng ngày và từng chặng. Khi bán vé, giá sẽ tự điền theo điểm đón, điểm trả.</p>}
-      {list.map((t) => {
+      {list.length === 0 && !form && <p className="muted bg-empty">Chưa có bảng giá. Bấm <b>Thêm bảng giá</b> để nhập giá theo khoảng ngày và từng chặng. Khi bán vé, giá sẽ tự điền theo điểm đón, điểm trả.</p>}
+      {!form && list.map((t) => {
         const [cl, tx] = status(t);
         const l = items.filter((x) => x.table_id === t.id);
         return (
           <div key={t.id} className="bgc">
             <div className="bgc-h">
-              <b>{routeName(t.route_id)}</b><span className={`bg-st ${cl}`}>{tx}</span>
+              <span className={`bg-st ${cl}`}>{tx}</span>
               <span className="rg">{range(t)}{t.note ? ` · ${t.note}` : ''}</span>
               <span className="grow" />
               {canAdd && <button type="button" className="btn small" title="Sao chép bảng giá" onClick={() => setForm({ id: null, src: { ...t, valid_from: today(), valid_to: null }, rows: rowsOf(t) })}>Sao chép</button>}
@@ -113,22 +105,22 @@ export function FaresScreen({ perms }: { perms: Permissions }) {
         );
       })}
       {form && (
-        <FareForm id={form.id} src={form.src} rows0={form.rows} routes={routes} defRoute={sel}
+        <FareForm id={form.id} src={form.src} rows0={form.rows} route={routeId}
                   points={(rid) => {
                     const on = routeStops.filter((x) => x.route_id === rid).map((x) => stopName(x.stop_id));
                     return [...new Set([...on, ...stops.map((s) => s.name)])].filter(Boolean);
                   }}
-                  onClose={() => setForm(null)} onSaved={async () => { setForm(null); await load(); }} />
+                  onClose={() => setForm(null)} onSaved={saved} />
       )}
-    </section>
+    </div>
   );
 }
 
-function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; routes: Route[]; defRoute: string; points: (routeId: string) => string[];
+function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; route: string; points: (routeId: string) => string[];
   onClose: () => void; onSaved: () => Promise<void> }) {
   const { id, src } = props;
   const toast = useToast();
-  const [route, setRoute] = useState(src?.route_id ?? props.defRoute);
+  const route = props.route;
   const [note, setNote] = useState(src?.note ?? '');
   const [from, setFrom] = useState(src?.valid_from ?? today());
   const [to, setTo] = useState(src?.valid_to ?? '');
@@ -158,7 +150,6 @@ function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; r
   }
 
   async function save() {
-    if (!route) return toast('error', 'Vui lòng chọn tuyến');
     if (!from) return toast('error', 'Vui lòng nhập ngày bắt đầu áp dụng');
     if (to && to < from) return toast('error', 'Ngày kết thúc phải sau ngày bắt đầu');
     const list = rows.filter((r) => r.from.trim() || r.to.trim() || r.price.trim());
@@ -184,15 +175,9 @@ function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; r
   }
 
   return (
-    <Modal title={id ? 'Sửa bảng giá' : src ? 'Sao chép bảng giá' : 'Thêm bảng giá'} onClose={props.onClose} wide>
-      <div className="form">
+    <div className="form bg-form">
+        <b>{id ? 'Sửa bảng giá' : src ? 'Sao chép bảng giá' : 'Thêm bảng giá'}</b>
         <div className="grid2">
-          <label>Tuyến *
-            <select value={route} onChange={(e) => setRoute(e.target.value)}>
-              <option value="">(Chọn tuyến)</option>
-              {props.routes.filter((r) => r.is_active || r.id === route).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-          </label>
           <label>Ghi chú<input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: Giá dịp Tết" /></label>
           <label>Áp dụng từ ngày *<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
           <label>Đến ngày<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /><small className="muted">Để trống nếu không giới hạn</small></label>
@@ -231,7 +216,6 @@ function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; r
           <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>Lưu</button>
           <button type="button" className="btn link" onClick={props.onClose}>Hủy</button>
         </div>
-      </div>
-    </Modal>
+    </div>
   );
 }

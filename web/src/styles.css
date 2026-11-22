@@ -1420,3 +1420,5 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
   .bgc-h { padding: 8px 10px; } .bgc td, .bgc th { padding: 7px 10px; }
 }
 .seg-line select { display: inline-block; width: auto; max-width: 100%; margin: 0; padding: 4px 8px; font-weight: 600; }
+.bg-route { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bg-form { border: 1px solid var(--line); border-radius: 12px; padding: 12px; }

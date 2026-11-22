@@ -1,6 +1,7 @@
 import { Modal } from '../components/Modal';
 import { dirName, reverseItinerary, reverseName } from '../lib/routes';
 import { DeleteButton } from '../components/DeleteButton';
+import { FareTables } from './Fares';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -10,7 +11,7 @@ type StopKind = 'ben_xe' | 'van_phong' | 'diem_don_tra' | 'tram_dung';
 interface Stop { id: string; code: string; name: string; kind: StopKind; province: string | null; address: string | null; is_active: boolean }
 interface Route { id: string; code: string; name: string; registered_code: string | null; distance_km: number | null; itinerary: string | null; itinerary_ve: string | null; name_ve: string | null; is_active: boolean }
 interface RouteStop { route_id: string; seq: number; stop_id: string; minutes_from_start: number; allow_pickup: boolean; allow_dropoff: boolean }
-interface Fare { route_id: string; price: number; valid_from: string; valid_to: string | null }
+interface Fare { route_id: string; price: number; valid_from: string; valid_to: string | null; table_id: string; from_stop_id: string | null; to_stop_id: string | null }
 
 const KIND: Record<StopKind, string> = { ben_xe: 'Bến xe', van_phong: 'Văn phòng', diem_don_tra: 'Điểm đón trả', tram_dung: 'Trạm dừng nghỉ' };
 const money = (n: number | null) => (n == null ? '—' : `${n.toLocaleString('vi-VN')} đ`);
@@ -19,11 +20,18 @@ const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_
 
 interface Data { stops: Stop[]; routes: Route[]; routeStops: RouteStop[]; fares: Fare[] }
 
-/** Giá toàn tuyến hôm nay (theo Bảng giá vé đang áp dụng). */
-function currentFare(fares: Fare[], routeId: string): number | null {
+/** Giá toàn tuyến hôm nay theo bảng giá đang áp dụng (như tra giá khi bán vé): dòng toàn tuyến, không có thì chặng 2 đầu tuyến, không nữa thì giá cao nhất. */
+function currentFare(fares: Fare[], routeStops: RouteStop[], routeId: string): number | null {
   const t = today();
-  return fares.filter((f) => f.route_id === routeId && f.valid_from <= t && (!f.valid_to || f.valid_to >= t))
-    .sort((x, y) => y.valid_from.localeCompare(x.valid_from))[0]?.price ?? null;
+  const tab = fares.filter((f) => f.route_id === routeId && f.valid_from <= t && (!f.valid_to || f.valid_to >= t))
+    .sort((x, y) => y.valid_from.localeCompare(x.valid_from))[0]?.table_id;
+  if (!tab) return null;
+  const l = fares.filter((f) => f.table_id === tab);
+  const st = routeStops.filter((x) => x.route_id === routeId).sort((a, b) => a.seq - b.seq);
+  const a = st[0]?.stop_id, b = st[st.length - 1]?.stop_id;
+  return l.find((f) => !f.from_stop_id)?.price
+    ?? l.find((f) => (f.from_stop_id === a && f.to_stop_id === b) || (f.from_stop_id === b && f.to_stop_id === a))?.price
+    ?? Math.max(...l.map((f) => f.price));
 }
 
 export function RoutesScreen({ perms }: { perms: Permissions }) {
@@ -36,12 +44,12 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
       supabase.from('stops').select('id, code, name, kind, province, address, is_active').order('code'),
       supabase.from('routes').select('id, code, name, name_ve, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start, allow_pickup, allow_dropoff').order('seq'),
-      supabase.from('fare_table_items').select('price, fare_tables!inner(route_id, valid_from, valid_to)').is('from_stop_id', null),
+      supabase.from('fare_table_items').select('table_id, from_stop_id, to_stop_id, price, fare_tables!inner(route_id, valid_from, valid_to)'),
     ]);
     const err = s.error ?? r.error ?? rs.error ?? f.error;
     if (err) return toast('error', err.message);
-    setData({ stops: (s.data ?? []) as Stop[], routes: (r.data ?? []) as Route[], routeStops: (rs.data ?? []) as RouteStop[], fares: ((f.data ?? []) as unknown as { price: number; fare_tables: { route_id: string; valid_from: string; valid_to: string | null } }[])
-      .map((x) => ({ price: x.price, ...x.fare_tables })) });
+    setData({ stops: (s.data ?? []) as Stop[], routes: (r.data ?? []) as Route[], routeStops: (rs.data ?? []) as RouteStop[], fares: ((f.data ?? []) as unknown as (Omit<Fare, 'route_id' | 'valid_from' | 'valid_to'> & { fare_tables: { route_id: string; valid_from: string; valid_to: string | null } })[])
+      .map(({ fare_tables, ...x }) => ({ ...x, ...fare_tables })) });
   }, [toast]);
 
   useEffect(() => {
@@ -50,7 +58,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
 
   return (
     <>
-      <RoutesSection data={data} canRoute={canRoute} reload={load} />
+      <RoutesSection data={data} canRoute={canRoute} perms={perms} reload={load} />
       <StopsSection stops={data.stops} canEdit={canRoute} reload={load} />
     </>
   );
@@ -164,8 +172,8 @@ function directionPath(data: Data, routeId: string, dir: 'di' | 've'): string {
   return seq.map((x) => `${x.n}${x.m ? ` (+${x.m}')` : ''}`).join(' → ');
 }
 
-function RoutesSection(props: { data: Data; canRoute: boolean; reload: () => Promise<void> }) {
-  const { data, canRoute, reload } = props;
+function RoutesSection(props: { data: Data; canRoute: boolean; perms: Permissions; reload: () => Promise<void> }) {
+  const { data, canRoute, reload, perms } = props;
   const toast = useToast();
   const [f, setF] = useState(EMPTY_ROUTE);
   const [open, setOpen] = useState<string | null>(null);
@@ -228,7 +236,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; reload: () => Pro
                 <div>
                   <b>{r.name}</b> <span className="muted">/ {dirName(r, 've')}</span> {!r.is_active && <span className="badge locked">Ngừng dùng</span>} <span className="muted small">· {r.code}{r.registered_code ? ` · Mã số ${r.registered_code}` : ''}{r.distance_km ? ` · ${r.distance_km} km` : ''}</span>
                   <div className="muted small">
-                    Giá toàn tuyến: {money(currentFare(data.fares, r.id))}
+                    Giá toàn tuyến: {money(currentFare(data.fares, data.routeStops, r.id))}
                   </div>
                   {(['di', 've'] as const).map((d) => {
                     const p = directionPath(data, r.id, d);
@@ -242,8 +250,8 @@ function RoutesSection(props: { data: Data; canRoute: boolean; reload: () => Pro
                   {canRoute && <DeleteButton kind="route" id={r.id} name={`tuyến ${r.name}`} note="Giờ chạy và các chuyến chưa có vé / hàng của tuyến cũng bị xóa." onDone={reload} />}
                 </div>
               </div>
-              {editing === r.id && <Modal title={`Sửa tuyến ${r.name}`} onClose={() => setEditing(null)}><RouteEdit route={r} reload={reload} onClose={() => setEditing(null)} /></Modal>}
-              {open === r.id && <RouteDetail route={r} {...props} />}
+              {editing === r.id && <Modal wide title={`Sửa tuyến ${r.name}`} onClose={() => setEditing(null)}><RouteEdit route={r} perms={perms} reload={reload} onClose={() => setEditing(null)} /></Modal>}
+              {open === r.id && <RouteDetail route={r} data={data} canRoute={canRoute} reload={reload} />}
             </li>
           ))}
         </ul>
@@ -264,13 +272,13 @@ function autoCode(name: string, used: string[]): string {
 }
 
 /** Sửa tuyến: mã, tên, mã số tuyến, cự ly, hành trình chạy xe (in trên lệnh vận chuyển) */
-function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Promise<void>; onClose: () => void }) {
+function RouteEdit({ route, perms, reload, onClose }: { route: Route; perms: Permissions; reload: () => Promise<void>; onClose: () => void }) {
   const toast = useToast();
   const [f, setF] = useState({ code: route.code, name: route.name, name_ve: route.name_ve ?? '', registered_code: route.registered_code ?? '',
     distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '', itinerary_ve: route.itinerary_ve ?? '' });
   const [busy, setBusy] = useState(false);
-  async function save(e: FormEvent) {
-    e.preventDefault();
+  async function save() {
+    if (!f.code.trim() || !f.name.trim()) return toast('error', 'Nhập mã tuyến và tên tuyến chiều đi');
     setBusy(true);
     const { error } = await supabase.from('routes').update({
       code: f.code.trim(), name: f.name.trim(), name_ve: f.name_ve.trim() || null, registered_code: f.registered_code.trim() || null,
@@ -283,7 +291,7 @@ function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Pro
     await reload();
   }
   return (
-    <form className="form" onSubmit={(e) => void save(e)}>
+    <div className="form">
       <div className="grid2">
         <label>Mã tuyến<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
         <label>Tên tuyến chiều đi<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
@@ -293,11 +301,12 @@ function RouteEdit({ route, reload, onClose }: { route: Route; reload: () => Pro
       </div>
       <label>Hành trình chiều đi<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
       <label>Hành trình chiều về (để trống = đi ngược chiều đi)<textarea rows={2} value={f.itinerary_ve} placeholder={reverseItinerary(f.itinerary)} onChange={(e) => setF({ ...f, itinerary_ve: e.target.value })} /></label>
+      {perms.has('fare.view') && <FareTables perms={perms} routeId={route.id} onChanged={reload} />}
       <div className="actions">
-        <button className="btn small primary" disabled={busy}>Lưu tuyến</button>
+        <button type="button" className="btn small primary" disabled={busy} onClick={() => void save()}>Lưu tuyến</button>
         <button type="button" className="btn small link" onClick={onClose}>Hủy</button>
       </div>
-    </form>
+    </div>
   );
 }
 

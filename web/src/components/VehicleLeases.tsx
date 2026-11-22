@@ -8,6 +8,7 @@ import { Cropper } from './Cropper';
 import { docTypeOf } from '../lib/docTypes';
 import { signatureUrl, uploadFiles, uploadSignature } from '../lib/documents';
 import { getBlob, putFile } from '../lib/fileStore';
+import { getHasName, setHasName } from '../lib/signatures';
 import { LEASE_COLS, leasePages, leaseSignKey, loadLeaseCtx, saveLeasePdf, type Lease, type Person } from '../lib/vehicleLease';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -17,7 +18,8 @@ type P = Required<Pick<Person, 'name' | 'birth_year' | 'cccd' | 'cccd_on' | 'ccc
 interface Form {
   id: string | null; req: string; signed_on: string; start_on: string; end_on: string; pay_day: string; late_days: string; tax_party: '' | 'A' | 'B';
   a: P; joint: boolean; s: P; bank: { holder: string; account: string; bank: string }; dir: { cccd_on: string; cccd_by: string; phone: string; bank_holder: string; bank_account: string; bank_name: string };
-  copyFrom: string | null;   // sao chép từ hợp đồng này (chữ ký chủ xe chép theo)
+  copyFrom: string | null;                // sao chép từ hợp đồng này (chữ ký chủ xe chép theo)
+  hasName: Record<'a' | 'b', boolean>;    // chữ ký đã có họ tên: không in thêm họ tên
   items: Record<string, string>;   // vehicle_id → giá thuê
   filesA: string[]; filesB: string[];   // ảnh CCCD đã lưu
 }
@@ -54,7 +56,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     void rpc<Record<string, string | null> | null>('lease_company_info', {}).then(setBInfo).catch(() => setBInfo(null));
     setF({ id: null, req: crypto.randomUUID(), signed_on: s, start_on: s, end_on: addYear(s), pay_day: '5', late_days: '15', tax_party: '', a: emptyP(v.owner_name ?? ''), joint: false, s: emptyP(),
       bank: { holder: '', account: '', bank: '' }, dir: { cccd_on: last?.director?.cccd_on ?? '', cccd_by: last?.director?.cccd_by ?? '', phone: last?.director?.phone ?? '', bank_holder: last?.director?.bank_holder ?? '',
-        bank_account: last?.director?.bank_account ?? '', bank_name: last?.director?.bank_name ?? '' }, items: { [v.id]: '' }, filesA: [], filesB: [], copyFrom: null });
+        bank_account: last?.director?.bank_account ?? '', bank_name: last?.director?.bank_name ?? '' }, items: { [v.id]: '' }, filesA: [], filesB: [], copyFrom: null, hasName: { a: false, b: false } });
   }
   /** Sao chép sang xe khác: giữ bên cho thuê, CCCD, chữ ký, tài khoản, điều khoản; chọn xe mới, lưu ra hợp đồng mới (số mới) */
   async function openCopy(k: Lease) {
@@ -62,7 +64,8 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     setF((c) => (c ? { ...c, id: null, req: crypto.randomUUID(), items: {}, copyFrom: k.id } : c));
   }
   async function openEdit(k: Lease) {
-    const [a, b] = await Promise.all([signatureUrl(tenantId, leaseSignKey(k.id, 'a')), signatureUrl(tenantId, leaseSignKey(k.id, 'b'))]);
+    const [a, b, ha, hb] = await Promise.all([signatureUrl(tenantId, leaseSignKey(k.id, 'a')), signatureUrl(tenantId, leaseSignKey(k.id, 'b')),
+      getHasName(leaseSignKey(k.id, 'a')), getHasName(leaseSignKey(k.id, 'b'))]);
     setPend({ ...noPend(), old: { a, b } });
     void rpc<Record<string, string | null> | null>('lease_company_info', {}).then(setBInfo).catch(() => setBInfo(null));
     const p = (x?: Person | null): P => ({ ...emptyP(), ...Object.fromEntries(Object.entries(x ?? {}).map(([a, b]) => [a, String(b ?? '')])) }) as P;
@@ -70,7 +73,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
       tax_party: k.tax_party ?? '', a: p(k.lessor), joint: !!k.lessor.spouse?.name, s: p(k.lessor.spouse), bank: { holder: k.bank.holder ?? '', account: k.bank.account ?? '', bank: k.bank.bank ?? '' },
       dir: { cccd_on: k.director.cccd_on ?? '', cccd_by: k.director.cccd_by ?? '', phone: k.director.phone ?? '', bank_holder: k.director.bank_holder ?? '',
         bank_account: k.director.bank_account ?? '', bank_name: k.director.bank_name ?? '' },
-      items: Object.fromEntries(k.items.map((i) => [i.vehicle_id, i.price ? String(i.price) : ''])), filesA: k.lessor.files ?? [], filesB: k.lessor.spouse?.files ?? [], copyFrom: null });
+      items: Object.fromEntries(k.items.map((i) => [i.vehicle_id, i.price ? String(i.price) : ''])), filesA: k.lessor.files ?? [], filesB: k.lessor.spouse?.files ?? [], copyFrom: null, hasName: { a: ha, b: hb } });
   }
   async function show(k: Lease) {
     setBusy('Đang dựng hợp đồng…');
@@ -98,6 +101,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
           const old = await getBlob(`${tenantId}/chu_ky/${leaseSignKey(f.copyFrom, who)}.png`);
           if (old) await putFile(`${tenantId}/chu_ky/${leaseSignKey(r.id, who)}.png`, old, 'image/png');
         }
+        if (who === 'a' || f.joint) await setHasName(leaseSignKey(r.id, who), f.hasName[who]);
       }
       setBusy('Đang lưu PDF vào hồ sơ xe…');
       const k = ((await supabase.from('vehicle_leases').select(LEASE_COLS).eq('id', r.id).single()).data as unknown as Lease);
@@ -126,6 +130,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
         <label className="upload"><span>{url ? `Đổi chữ ký ${label}` : `Tải chữ ký ${label}`}</span>
           <input type="file" accept="image/*" aria-label={`Ảnh chữ ký ${label}`} onChange={(e) => { const x = e.target.files?.[0]; e.target.value = ''; if (x) setPend({ ...pend, crop: { who: w, file: x } }); }} /></label>
         {url && <img src={url} alt={`Chữ ký ${label}`} className="sign-preview clear-bg" />}
+        {url && f && <label className="check"><input type="checkbox" checked={f.hasName[w]} onChange={(e) => setF({ ...f, hasName: { ...f.hasName, [w]: e.target.checked } })} /> Chữ ký này đã có sẵn họ tên (bản in không ghi thêm họ tên bên dưới)</label>}
       </div>
     );
   };

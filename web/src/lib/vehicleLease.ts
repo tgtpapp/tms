@@ -8,7 +8,7 @@ import { makePdf, pageImg, paginate } from './pdfMaker';
 import { savePdf } from './dispatchPapers';
 import { safeName } from './documents';
 import { putFile } from './fileStore';
-import { loadSigns, type Sign } from './signatures';
+import { loadSigns, showName, type Sign } from './signatures';
 
 export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string; files?: string[] }
 export interface Lease {
@@ -126,8 +126,8 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
       ${S?.name
         ? `<td style="width:50%;text-align:center;vertical-align:top"><b>ĐẠI DIỆN BÊN A</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên)</i>
             <table style="width:100%;border-collapse:collapse"><tr>${[[A.name, x.signA], [S.name, x.signB]].map(([n, sg]) => `<td style="width:50%;text-align:center;vertical-align:top">
-            <div style="height:90px;display:flex;align-items:center;justify-content:center">${(sg as Sign | null)?.img ? `<img src="${(sg as Sign).img}" alt="" style="max-height:66px;max-width:140px">` : ''}</div><b>${esc(String(n ?? '').toUpperCase())}</b></td>`).join('')}</tr></table></td>`
-        : signCol('ĐẠI DIỆN BÊN A', '(Ký, ghi rõ họ tên)', x.signA?.img ? `<img src="${x.signA.img}" alt="" style="max-height:66px;max-width:190px">` : '', (A.name ?? '').toUpperCase(), null, 50)}
+            <div style="height:90px;display:flex;align-items:center;justify-content:center">${(sg as Sign | null)?.img ? `<img src="${(sg as Sign).img}" alt="" style="max-height:66px;max-width:140px">` : ''}</div><b>${showName(sg as Sign | null) ? esc(String(n ?? '').toUpperCase()) : ''}</b></td>`).join('')}</tr></table></td>`
+        : signCol('ĐẠI DIỆN BÊN A', '(Ký, ghi rõ họ tên)', x.signA?.img ? `<img src="${x.signA.img}" alt="" style="max-height:66px;max-width:190px">` : '', (A.name ?? '').toUpperCase(), x.signA, 50)}
       ${bossCol(x.boss, 'ĐẠI DIỆN BÊN B', 50)}</tr></table>`,
   ];
   return paginate(blocks.map((b) => `<div style="font-size:12.5px;line-height:1.42;text-align:justify">${b}</div>`));

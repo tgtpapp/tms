@@ -88,7 +88,7 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 .info dd { margin: 0; }
 
 /* Thông báo tự ẩn */
-.toasts { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 50; width: min(92vw, 420px); }
+.toasts { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 1300;  /* trên mọi cửa sổ (modal 900, ảnh / camera 1100–1200): lỗi bấm trong cửa sổ phải nhìn thấy */ width: min(92vw, 420px); }
 .toast { padding: 12px 14px; border-radius: 8px; color: #fff; background: var(--ok); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
 .toast.error { background: var(--danger); }
 

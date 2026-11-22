@@ -72,6 +72,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
   const [printing, setPrinting] = useState<OrderPrintData | null>(null);
   const [sign, setSign] = useState(true);
   const [seal, setSeal] = useState(true);
+  const [err, setErr] = useState('');
   useEffect(() => {
     let on = true;
     void (async () => {
@@ -100,14 +101,14 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
   const set = (i: number, p: Partial<Leg>) => setLegs((L) => L && L.map((x, k) => (k === i ? { ...x, ...p } : x)));
   async function issue() {
     if (!legs) return;
-    if (!legs[0]?.trip_id) return toast('error', 'Lượt đi 1 phải chọn chuyến');
-    setBusy(true);
+    if (!legs[0]?.trip_id) return setErr('Lượt đi 1 phải chọn chuyến');
+    setBusy(true); setErr('');
     try {
       const o = await rpc<{ id: string }>('save_transport_order', { p_trip_id: tripId, p_legs: legs.map((l) => ({ seq: l.seq, trip_id: l.trip_id, time: l.time || null, date: l.date || null })) });
       await rpc('set_order_print', { p_order_id: o.id, p_sign: sign, p_seal: seal });
       setPrinting(await loadOrderPrint(o.id, tenantId, me));
       onDone?.();
-    } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   }
   if (printing) return <TransportOrderPrint data={printing} onClose={onClose} />;
   return (
@@ -135,6 +136,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
             <label className="check"><input type="checkbox" checked={sign} onChange={(e) => setSign(e.target.checked)} /> In chữ ký Giám đốc</label>
             <label className="check"><input type="checkbox" checked={seal} onChange={(e) => setSeal(e.target.checked)} /> In con dấu</label>
           </div>
+          {err && <p className="error-text" role="alert">{err}</p>}
           <div className="actions">
             <button type="button" className="btn primary" disabled={busy} onClick={() => void issue()}>{busy ? 'Đang cấp…' : orderNo ? 'Lưu & in lại' : 'Cấp lệnh & in'}</button>
             <button type="button" className="btn link" onClick={onClose}>Thôi</button>

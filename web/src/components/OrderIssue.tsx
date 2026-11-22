@@ -27,7 +27,10 @@ interface PrintRow {
   stop_a: string | null; stop_b: string | null;
   crew: { role: string; staff_id: string; user_id: string | null; name: string; hang: string | null }[];
   legs: { seq: number; time: string | null; date: string | null }[];
+  info?: Info;
 }
+/** 4 mục in trên lệnh: tự điền theo xếp xe, sửa được (chưa xếp xe vẫn cấp lệnh như app cũ) */
+interface Info { plate?: string; seats?: number; driver?: string; hang?: string }
 
 /** Dựng dữ liệu in của 1 lệnh đã cấp (dữ liệu lấy qua hàm in lệnh: người bán vé không cần quyền xem hồ sơ nhân viên) */
 export async function loadOrderPrint(orderId: string, tenantId: string, me: { id: string | null; name: string }): Promise<OrderPrintData> {
@@ -46,14 +49,16 @@ export async function loadOrderPrint(orderId: string, tenantId: string, me: { id
   const s1 = pick(nv('lai_xe_1'), c('lai_xe_1')?.user_id), s2 = pick(nv('lai_xe_2'), c('lai_xe_2')?.user_id), dh = pick(p.issuer && `nv_${p.issuer.staff_id}`, p.issued_by);
   const [a, b] = [p.stop_a ?? '', p.stop_b ?? ''], [from, to] = p.direction === 'di' ? [a, b] : [b, a];
   const who = (r: string) => (c(r) ? { name: c(r)!.name, hang: c(r)!.hang } : null);
+  const inf = p.info ?? {};
+  const d1 = inf.driver ? { name: inf.driver, hang: inf.hang ?? null } : who('lai_xe_1');
   return {
     orderNo: p.order_no, issueDate: new Date(p.issued_at).toLocaleDateString('sv-SE', { timeZone: TZ }), validFrom: p.valid_from, validTo: p.valid_to,
     company: p.company ?? '', signerTitle: p.signer_title || 'Giám đốc', signerName: p.signer_name ?? '',
     signerImg: gd?.img ?? null, sealImg: seal, signerShowName: showName(gd),
     dispatcherName: p.issuer?.name ?? p.issuer_name ?? (p.issued_by && p.issued_by === me.id ? me.name : null), dispatcherImg: dh?.img ?? null, dispatcherShowName: showName(dh),
     driver1Sign: s1?.img ?? null, driver1ShowName: showName(s1), driver2Sign: s2?.img ?? null, driver2ShowName: showName(s2),
-    driver1: who('lai_xe_1'), driver2: who('lai_xe_2'), assistant: c('phu_xe')?.name ?? null,
-    plate: p.plate ?? '', seats: p.seats, routeName: dirName(p.route, p.direction), distanceKm: p.route.distance_km, registeredCode: p.route.registered_code,
+    driver1: d1, driver2: who('lai_xe_2'), assistant: c('phu_xe')?.name ?? null,
+    plate: inf.plate ?? p.plate ?? '', seats: inf.seats ?? p.seats, routeName: dirName(p.route, p.direction), distanceKm: p.route.distance_km, registeredCode: p.route.registered_code,
     itinerary: (p.direction === 've' ? p.route.itinerary_ve || reverseItinerary(p.route.itinerary ?? '') : p.route.itinerary) || null,
     fromStop: from, toStop: to,
     legs: [1, 2, 3, 4].map((i) => { const l = p.legs.find((x) => x.seq === i); return { time: l?.time ?? null, date: l?.date ?? null }; }),
@@ -73,24 +78,31 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
   const [sign, setSign] = useState(true);
   const [seal, setSeal] = useState(true);
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState<Info>({});
+  const [lists, setLists] = useState<{ vehicles: { plate: string; seats: number | null }[]; drivers: { name: string; hang: string | null }[] }>({ vehicles: [], drivers: [] });
+  const [editLegs, setEditLegs] = useState(false);
   useEffect(() => {
     let on = true;
     void (async () => {
       try {
         const [d, t] = await Promise.all([
-          rpc<{ order_no: string | null; sign: boolean; seal: boolean; legs: { seq: number; trip_id: string | null; time: string | null; date: string | null }[] }>('transport_order_draft', { p_trip_id: tripId }),
-          supabase.from('trips').select('vehicle_id, service_date').eq('id', tripId).single(),
+          rpc<{ order_no: string | null; sign: boolean; seal: boolean; info?: Info; legs: { seq: number; trip_id: string | null; time: string | null; date: string | null }[] }>('transport_order_draft', { p_trip_id: tripId }),
+          supabase.from('trips').select('id, route_id, direction, depart_at, service_date, vehicle_id').eq('id', tripId).single(),
         ]);
-        const tr = t.data as { vehicle_id: string | null; service_date: string };
+        const tr = t.data as Cand & { vehicle_id: string | null };
         const [c, r] = await Promise.all([
           tr.vehicle_id ? supabase.from('trips').select('id, route_id, direction, depart_at, service_date').eq('vehicle_id', tr.vehicle_id).eq('status', 'mo')
             .gte('service_date', addDays(tr.service_date, -1)).lte('service_date', addDays(tr.service_date, 1)).order('depart_at') : Promise.resolve({ data: [] }),
           supabase.from('routes').select('id, name, name_ve'),
         ]);
+        const pl = await rpc<typeof lists>('order_pick_lists').catch(() => ({ vehicles: [], drivers: [] }));
         if (!on) return;
-        setCands((c.data ?? []) as Cand[]);
+        const cs = (c.data ?? []) as Cand[];
+        setCands(cs.some((x) => x.id === tr.id) ? cs : [tr, ...cs]);   // chưa xếp xe: vẫn có chính chuyến này
         setRoutes((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]);
         setOrderNo(d.order_no);
+        setInfo(d.info ?? {});
+        setLists(pl);
         setSign(d.sign !== false); setSeal(d.seal !== false);
         setLegs([1, 2, 3, 4].map((i) => { const l = d.legs.find((x) => x.seq === i); return { seq: i, trip_id: l?.trip_id ?? null, time: l?.time ?? '', date: l?.date ?? '' }; }));
       } catch (e) { toast('error', errMsg(e)); onClose(); }
@@ -104,7 +116,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
     if (!legs[0]?.trip_id) return setErr('Lượt đi 1 phải chọn chuyến');
     setBusy(true); setErr('');
     try {
-      const o = await rpc<{ id: string }>('save_transport_order', { p_trip_id: tripId, p_legs: legs.map((l) => ({ seq: l.seq, trip_id: l.trip_id, time: l.time || null, date: l.date || null })) });
+      const o = await rpc<{ id: string }>('save_transport_order', { p_trip_id: tripId, p_legs: legs.map((l) => ({ seq: l.seq, trip_id: l.trip_id, time: l.time || null, date: l.date || null })), p_info: info });
       await rpc('set_order_print', { p_order_id: o.id, p_sign: sign, p_seal: seal });
       setPrinting(await loadOrderPrint(o.id, tenantId, me));
       onDone?.();
@@ -115,8 +127,33 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
     <Modal title={orderNo ? `Lệnh vận chuyển ${orderNo}` : 'Cấp lệnh vận chuyển'} onClose={onClose}>
       {!legs ? <p className="muted">Đang lấy lịch xếp xe…</p> : (
         <div className="form">
-          <p className="small muted">{orderNo ? 'Lệnh đã cấp: sửa lượt rồi bấm Lưu & in lại (giữ số lệnh).' : 'Các lượt lấy theo lịch xếp xe của xe này; chọn chuyến khác hoặc sửa giờ / ngày nếu cần.'}</p>
-          {legs.map((l, i) => (
+          <div className="grid2">
+            <label>Biển số
+              <input list="ord-plates" value={info.plate ?? ''} onChange={(e) => {
+                const v = lists.vehicles.find((x) => x.plate === e.target.value);
+                setInfo({ ...info, plate: e.target.value, ...(v?.seats ? { seats: v.seats } : {}) });
+              }} />
+              <datalist id="ord-plates">{lists.vehicles.map((v) => <option key={v.plate} value={v.plate} />)}</datalist>
+            </label>
+            <label>Loại xe
+              <select value={info.seats ?? ''} onChange={(e) => setInfo({ ...info, seats: e.target.value ? Number(e.target.value) : undefined })}>
+                <option value="" />
+                {[...new Set([16, 29, ...(info.seats ? [info.seats] : [])])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} ghế</option>)}
+              </select>
+            </label>
+            <label>Lái xe
+              <input list="ord-drivers" value={info.driver ?? ''} onChange={(e) => {
+                const d = lists.drivers.find((x) => x.name === e.target.value);
+                setInfo({ ...info, driver: e.target.value, ...(d?.hang ? { hang: d.hang } : {}) });
+              }} />
+              <datalist id="ord-drivers">{lists.drivers.map((d) => <option key={d.name} value={d.name} />)}</datalist>
+            </label>
+            <label>Hạng GPLX
+              <input value={info.hang ?? ''} maxLength={10} onChange={(e) => setInfo({ ...info, hang: e.target.value })} />
+            </label>
+          </div>
+          <button type="button" className="btn small" onClick={() => setEditLegs(!editLegs)}>{editLegs ? 'Ẩn lượt' : 'Chỉnh lượt'}</button>
+          {editLegs && legs.map((l, i) => (
             <fieldset key={l.seq} className="ord-leg">
               <legend>{TITLES[i]}</legend>
               <label>Chuyến<select aria-label={`Chuyến ${TITLES[i]}`} value={l.trip_id ?? ''} onChange={(e) => {

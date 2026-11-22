@@ -17,6 +17,7 @@ export interface AppConfig {
   /** Giới hạn dung lượng của gói Supabase đang dùng (MB), để cảnh báo khi gần đầy */
   dbLimitMb: number;
   fileLimitMb: number;
+  neonLimitMb: number;
 }
 
 export interface ConfigResult {
@@ -36,6 +37,7 @@ const RAW = {
   VITE_LOGIN_EMAIL_DOMAIN: import.meta.env.VITE_LOGIN_EMAIL_DOMAIN as string | undefined,
   VITE_DB_LIMIT_MB: import.meta.env.VITE_DB_LIMIT_MB as string | undefined,
   VITE_FILE_LIMIT_MB: import.meta.env.VITE_FILE_LIMIT_MB as string | undefined,
+  VITE_NEON_LIMIT_MB: import.meta.env.VITE_NEON_LIMIT_MB as string | undefined,
   VITE_CREDIT: import.meta.env.VITE_CREDIT as string | undefined,
 };
 
@@ -62,6 +64,7 @@ export function loadConfig(): ConfigResult {
     loginEmailDomain: read('VITE_LOGIN_EMAIL_DOMAIN', null) || 'login.tms.invalid',
     dbLimitMb: Number(read('VITE_DB_LIMIT_MB', null)) || 500,      // Supabase Free: 500 MB database
     fileLimitMb: Number(read('VITE_FILE_LIMIT_MB', null)) || 1024,  // Supabase Free: 1 GB file
+    neonLimitMb: Number(read('VITE_NEON_LIMIT_MB', null)) || 1024,  // Neon Free: 1 GB / project (bản dự phòng)
   };
 
   return { config, missing };

@@ -77,4 +77,8 @@ jobs:
             echo "$t: Supabase $a · Neon $b"; [ "$a" = "$b" ] || bad=1
           done
           rm -f db.dump users.csv
+          # Ghi dung lượng bản dự phòng Neon + kết quả đối chiếu (Cấu hình → Dung lượng hiện thanh sức khỏe)
+          n=$(psql "$NEON_DATABASE_URL" -tAc "select pg_database_size(current_database())" 2>/dev/null || echo 0)
+          psql -q -c "insert into app.platform_stats (key, value, updated_at) values ('neon', jsonb_build_object('bytes', ${n:-0}::bigint, 'ok', $([ $bad = 0 ] && echo true || echo false)), now())
+                      on conflict (key) do update set value = excluded.value, updated_at = now()" || true
           [ $bad = 0 ] || { echo "::error::Bản sao Neon lệch số dòng"; grep 'error:' restore.log | sed -E 's/(DETAIL|LINE).*//' | head -20; exit 1; }

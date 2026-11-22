@@ -54,6 +54,8 @@ interface Booking { id: string; code: string; customer_name: string | null; cust
 interface Customer { phone: string; name: string | null; last_from_stop: string | null; last_to_stop: string | null; last_pickup_note: string | null; trips_count: number }
 
 const TZ = 'Asia/Ho_Chi_Minh';
+/** Tên mặc định khi không điền tên khách */
+const KHACH_LE = 'Khách Lẻ';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const active = (t: Ticket) => (t.status === 'giu' || t.status === 'dat' || t.status === 'da_tt')
@@ -847,7 +849,7 @@ function Checkout(props: {
   const [pvOpen, setPvOpen] = useState(true);
   // Xem trước vé K80 ngay khi nhập (như phiếu gửi hàng)
   const draft = props.ticketBase(holds.map((h) => ({
-    ...h, passenger_name: f.name || null, passenger_phone: f.phone || null, pickup_note: f.pickup || null, dropoff_note: f.dropoff || null,
+    ...h, passenger_name: f.name.trim() || KHACH_LE, passenger_phone: f.phone || null, pickup_note: f.pickup || null, dropoff_note: f.dropoff || null,
     status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus, deposit: f.mode === 'coc' && h.id === holds[0]?.id ? Number(f.coc || 0) : 0,
   })), '(cấp khi lưu)');
   const until = Math.min(...holds.map((t) => Date.parse(t.hold_until ?? '') || Infinity));
@@ -865,7 +867,7 @@ function Checkout(props: {
     const { data } = await supabase.from('customers').select('phone, name, last_from_stop, last_to_stop, last_pickup_note, trips_count').eq('phone', p).maybeSingle();
     const c = data as Customer | null;
     setKnown(c);
-    if (c) setF((cur) => ({ ...cur, name: cur.name || c.name || '', pickup: cur.pickup || (c.last_pickup_note ?? '').toUpperCase() }));
+    if (c) setF((cur) => ({ ...cur, name: cur.name || (c.name && c.name !== KHACH_LE ? c.name : ''), pickup: cur.pickup || (c.last_pickup_note ?? '').toUpperCase() }));
   }
 
   async function confirm(print: boolean) {
@@ -874,7 +876,7 @@ function Checkout(props: {
       const coc = Number(f.coc || 0);
       if (f.mode === 'coc' && !(coc > 0 && coc < total)) { toast('error', `Tiền cọc phải lớn hơn 0 và nhỏ hơn ${money(total)}`); return; }
       const r = await rpc<{ code: string }>('confirm_booking', {
-        p_booking_id: bookingId, p_phone: f.phone || null, p_name: f.name || null, p_mode: f.mode === 'coc' ? 'dat_cho' : f.mode, p_keep: f.mode === 'dat_cho' && f.keep,
+        p_booking_id: bookingId, p_phone: f.phone || null, p_name: f.name.trim() || KHACH_LE, p_mode: f.mode === 'coc' ? 'dat_cho' : f.mode, p_keep: f.mode === 'dat_cho' && f.keep,
         p_keep_reason: f.reason || null, p_pickup_note: f.pickup || null, p_dropoff_note: f.dropoff || null, p_note: f.note || null, p_passengers: null,
       });
       if (f.mode === 'coc') await rpc('deposit_booking', { p_booking_id: bookingId, p_amount: coc, p_method: f.cocMethod });
@@ -938,7 +940,7 @@ function Checkout(props: {
           <input inputMode="tel" value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); void lookup(e.target.value); }} />
           {known && <span className="small state-con_han">Khách cũ · đã đi {known.trips_count} lần{known.last_from_stop ? ` · lần trước ${stopName(known.last_from_stop)} → ${stopName(known.last_to_stop)}` : ''}</span>}
         </label>
-        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={KHACH_LE} /></label>
         <label>Ghi chú điểm đón<input value={f.pickup} onChange={(e) => setF({ ...f, pickup: e.target.value.toUpperCase() })} placeholder="VD: ĐÓN TRƯỚC CÂY XĂNG" /></label>
         <label>Ghi chú điểm trả<input value={f.dropoff} onChange={(e) => setF({ ...f, dropoff: e.target.value.toUpperCase() })} /></label>
         <label>Ghi chú đơn<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
@@ -1112,7 +1114,7 @@ function TicketDetail(props: {
       </div>
       <div className="actions">
         <button className="btn small" onClick={() => void run(async () => {
-          await rpc('update_ticket_info', { p_ticket_id: t.id, p_name: info.name, p_phone: info.phone, p_pickup_note: info.pickup, p_dropoff_note: info.dropoff });
+          await rpc('update_ticket_info', { p_ticket_id: t.id, p_name: info.name.trim() || KHACH_LE, p_phone: info.phone, p_pickup_note: info.pickup, p_dropoff_note: info.dropoff });
           if (note.trim() !== (booking?.note ?? '').trim()) await rpc('set_booking_note', { p_booking_id: t.booking_id, p_note: note });
         }, 'Đã sửa thông tin khách')}>Lưu thông tin</button>
         <button className="btn small" onClick={() => onPrint(siblings, booking?.code ?? '')}>In vé</button>
@@ -1320,7 +1322,7 @@ function OfflineCheckout(props: {
     const sale: OfflineSale = {
       key: crypto.randomUUID(), tenant_id: props.tenantId, user_id: props.userId, local_code: localCode(), paper_no: null,
       trip_id: trip.id, trip_label: props.tripLabel, seats, from_stop: from, to_stop: to, price,
-      phone: phone || null, name: f.name.trim() || null, method: f.method, sold_at: new Date().toISOString(),
+      phone: phone || null, name: f.name.trim() || KHACH_LE, method: f.method, sold_at: new Date().toISOString(),
     };
     try {
       enqueue(sale);
@@ -1339,7 +1341,7 @@ function OfflineCheckout(props: {
       <div className="grid2">
         <label>Giá mỗi ghế (đồng)<input type="number" inputMode="numeric" min={0} value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} /></label>
         <label>Số điện thoại khách<input inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></label>
-        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={KHACH_LE} /></label>
         <label>Thu bằng
           <select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as 'tien_mat' | 'chuyen_khoan' })}>
             <option value="tien_mat">Tiền mặt</option>
@@ -1385,7 +1387,7 @@ function PaperForm(props: {
     const key = crypto.randomUUID();
     enqueue({
       key, tenant_id: props.tenantId, user_id: props.userId, local_code: no, paper_no: no, trip_id: props.trip.id, trip_label: props.tripLabel,
-      seats: [f.seat], from_stop: f.from, to_stop: f.to, price, phone: phone || null, name: f.name.trim() || null, method: f.method,
+      seats: [f.seat], from_stop: f.from, to_stop: f.to, price, phone: phone || null, name: f.name.trim() || KHACH_LE, method: f.method,
       sold_at: at.toISOString(),
     });
     if (!props.online) {
@@ -1441,7 +1443,7 @@ function PaperForm(props: {
                  onChange={(e) => setF({ ...f, price: e.target.value })} />
         </label>
         <label>Giờ bán<input type="datetime-local" value={f.at} onChange={(e) => setF({ ...f, at: e.target.value })} required /></label>
-        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label>Tên khách<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={KHACH_LE} /></label>
         <label>Số điện thoại khách<input inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></label>
         <label>Đã thu bằng
           <select value={f.method} onChange={(e) => setF({ ...f, method: e.target.value as 'tien_mat' | 'chuyen_khoan' })}>

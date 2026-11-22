@@ -149,7 +149,7 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","r
 select lives_ok($$ select public.update_ticket_info((select id from public.seat_inventory where status = 'huy' order by created_at limit 1), 'Anh Hùng', '0911222333', null, null) $$,
   'Quản trị sửa thông tin khách trên vé đã hủy');
 select is((select passenger_name from public.seat_inventory where status = 'huy' order by created_at limit 1), 'Anh Hùng', 'Đã sửa tên khách');
-select throws_ok($$ select public.delete_cancelled_ticket((select id from public.seat_inventory where status in ('dat', 'da_tt') limit 1)) $$, '22023', null,
+select throws_ok($$ select public.delete_cancelled_ticket((select id from public.seat_inventory where status not in ('huy', 'het_han') limit 1)) $$, '22023', null,
   'Vé còn hiệu lực không xóa được');
 select set_config('t.del', (select id::text from public.seat_inventory where status = 'huy' order by created_at limit 1), true);
 select lives_ok($$ select public.delete_cancelled_ticket(current_setting('t.del')::uuid) $$, 'Quản trị xóa vé đã hủy');

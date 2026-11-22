@@ -281,7 +281,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                         setDay(x.service_date); setRf(`${x.route_id}|${x.direction}`); setTripId(x.trip_id); setFocus(x.id);
                       }} />
       )}
-      {dead && <CancelledTicket t={dead} admin={perms.has('sell.cancelled')} stopName={stopName} routeName={dirName(routes.find((r) => r.id === dead.route_id), dead.direction)}
+      {dead && <CancelledTicket t={dead} admin={perms.has('sell_admin.cancelled')} stopName={stopName} routeName={dirName(routes.find((r) => r.id === dead.route_id), dead.direction)}
                                 onClose={() => setDead(null)} />}
       <div className="vx">
         <aside className="vx-left">

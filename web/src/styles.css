@@ -1348,3 +1348,34 @@ html[data-out='1'] body { font-weight: 500; }
 .ux-cust input { width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; background: none; }
 .ux-sw { display: flex; gap: 8px; align-items: flex-start; font-size: .9rem; cursor: pointer; }
 .ux-sw input { width: 18px; height: 18px; min-height: 0; margin-top: 2px; }
+
+/* ===== Thanh menu như app cũ: nền sáng theo màu nhấn, biểu tượng trong ô màu, hiệu ứng khi bấm ===== */
+html:not([data-mode='dark']) .sidebar {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 20%, #fff), color-mix(in srgb, var(--primary) 6%, #fff));
+  color: color-mix(in srgb, var(--primary) 35%, #0f172a); border-right: 1px solid color-mix(in srgb, var(--primary) 28%, #fff);
+}
+html:not([data-mode='dark']) .side-brand { border-bottom-color: color-mix(in srgb, var(--primary) 28%, #fff); }
+html:not([data-mode='dark']) .side-brand b { color: color-mix(in srgb, var(--primary) 40%, #0b1220); }
+html:not([data-mode='dark']) .side-brand small { color: color-mix(in srgb, var(--primary) 70%, #0f172a); }
+html:not([data-mode='dark']) .side-group-title { color: var(--primary-d); opacity: .8; }
+html:not([data-mode='dark']) .side-link { color: color-mix(in srgb, var(--primary) 30%, #0f172a); }
+html:not([data-mode='dark']) .side-link:hover { background: color-mix(in srgb, var(--primary) 26%, #fff); color: #0b1220; }
+html:not([data-mode='dark']) .side-link.on { color: #fff; }
+html:not([data-mode='dark']) .side-foot { border-top-color: color-mix(in srgb, var(--primary) 28%, #fff); }
+html:not([data-mode='dark']) .side-foot, html:not([data-mode='dark']) .side-foot a { color: color-mix(in srgb, var(--primary) 60%, #0f172a); }
+html:not([data-mode='dark']) .side-pin { border-color: color-mix(in srgb, var(--primary) 35%, #fff); background: #fff; color: var(--primary-d); }
+.side-link.on { box-shadow: 0 6px 14px color-mix(in srgb, var(--primary) 35%, transparent); }
+.side-link { position: relative; overflow: hidden; }
+.side-link .fi { flex: none; width: 32px; height: 32px; justify-content: center; align-items: center; font-size: 15px; border-radius: 10px; background: var(--ic, #0ea5e9); color: #fff; opacity: 1;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .18), inset 0 1px 0 rgba(255, 255, 255, .35); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), box-shadow .2s; }
+.side-link:hover .fi { transform: translateY(-1px) scale(1.08) rotate(-4deg); }
+.side-link:active { transform: scale(.98); }
+.side-link:active .fi { transform: scale(.82); }
+.side-link.on .fi { box-shadow: 0 0 0 2px rgba(255, 255, 255, .95), 0 4px 12px rgba(0, 0, 0, .25); animation: navPop .45s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes navPop { 0% { transform: scale(.7) rotate(-12deg); } 60% { transform: scale(1.18) rotate(6deg); } 100% { transform: scale(1) rotate(0); } }
+.nav-rip { position: absolute; border-radius: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--ic, #0ea5e9); pointer-events: none; animation: navRip .6s ease-out forwards; }
+@keyframes navRip { from { opacity: .4; transform: scale(1); } to { opacity: 0; transform: scale(26); } }
+@media (max-width: 899px) { .side-link .fi { width: 28px; height: 28px; font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .side-link .fi, .side-link.on .fi { animation: none; transition: none; } .nav-rip { display: none; } }
+.form .ux-sw { flex-direction: row; }
+html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7fb); }

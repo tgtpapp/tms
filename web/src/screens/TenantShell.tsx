@@ -43,6 +43,19 @@ import { ScreenGuard } from '../components/ScreenGuard';
 type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
+/** Màu ô biểu tượng menu (như app cũ): mỗi mục 1 màu cố định theo mã mục */
+const NAV_PAL = ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#14b8a6', '#0ea5e9', '#6366f1', '#a855f7', '#ec4899', '#84cc16'];
+const navColor = (id: string) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return NAV_PAL[h % NAV_PAL.length]; };
+/** Gợn sóng màu khi bấm mục menu */
+function ripple(e: { clientX: number; clientY: number; currentTarget: HTMLElement }) {
+  const a = e.currentTarget, b = a.getBoundingClientRect(), r = document.createElement('span');
+  r.className = 'nav-rip';
+  r.style.left = `${e.clientX - b.left}px`;
+  r.style.top = `${e.clientY - b.top}px`;
+  a.appendChild(r);
+  setTimeout(() => r.remove(), 650);
+}
+
 export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [perms, setPerms] = useState<Permissions | null>(null);
   const [error, setError] = useState('');
@@ -174,7 +187,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
               <div className="side-group-title">{g}</div>
               {shown.filter((t) => t.group === g).map((t) => (
                 <button key={t.key} className={tab === t.key ? 'side-link on' : 'side-link'} aria-current={tab === t.key ? 'page' : undefined}
-                        onClick={() => { if (t.key === 'support' && tab !== 'support') setLastScreen(tab ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
+                        style={{ ['--ic' as string]: navColor(t.key) }}
+                        onClick={(e) => { ripple(e); if (t.key === 'support' && tab !== 'support') setLastScreen(tab ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
                   <i className={`fi fi-rr-${t.icon}`} aria-hidden="true" />
                   <span>{t.label}</span>
                 </button>

@@ -4,6 +4,7 @@ import type { Permissions } from '../lib/permissions';
 import { adminUsers, errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { PermMatrix } from '../components/PermMatrix';
+import { Avatar, useAvatars } from '../components/StaffAvatar';
 import { isPersonal } from './Roles';
 
 interface UserRow { id: string; phone: string; full_name: string; status: 'active' | 'locked' }
@@ -65,6 +66,22 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     void load();
   }, [load]);
 
+  // Ảnh đại diện lấy từ hồ sơ nhân viên / lái xe gắn với tài khoản (hoặc trùng số điện thoại); không có ảnh thì hiện chữ viết tắt.
+  const avatars = useAvatars(ctx.tenant_id);
+  const [staffOf, setStaffOf] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!data.users.length) return;
+    void supabase.from('staff_members').select('id, user_id, phone').then(({ data: rows }) => {
+      const list = (rows ?? []) as { id: string; user_id: string | null; phone: string | null }[];
+      const m: Record<string, string> = {};
+      for (const u of data.users) {
+        const s = list.find((x) => x.user_id === u.id) ?? list.find((x) => !x.user_id && x.phone === u.phone);
+        if (s) m[u.id] = s.id;
+      }
+      setStaffOf(m);
+    });
+  }, [data.users]);
+
   const scopeLabel = useCallback((type: string, id: string | null) => {
     if (type === 'branch') return `CN ${data.branches.find((b) => b.id === id)?.name ?? '?'}`;
     if (type === 'ticket_office') return `PV ${data.offices.find((o) => o.id === id)?.name ?? '?'}`;
@@ -78,7 +95,7 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         <h2>Người dùng ({data.users.length})</h2>
         <ul className="list">
           {data.users.map((u) => (
-            <UserItem key={u.id} user={u} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+            <UserItem key={u.id} user={u} avatar={avatars[staffOf[u.id] ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
                       allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
           ))}
         </ul>
@@ -159,7 +176,7 @@ function CreateUserForm({ data, onCreated }: { data: Data; onCreated: () => Prom
 }
 
 function UserItem(props: {
-  user: UserRow; data: Data; isSelf: boolean; canManage: boolean; canPerm: boolean; allowed: (c: string) => boolean;
+  user: UserRow; avatar?: string; data: Data; isSelf: boolean; canManage: boolean; canPerm: boolean; allowed: (c: string) => boolean;
   scopeLabel: (type: string, id: string | null) => string; onChanged: () => Promise<void>;
 }) {
   const { user, data, isSelf, canManage, scopeLabel, onChanged } = props;
@@ -190,9 +207,12 @@ function UserItem(props: {
   return (
     <li className="item">
       <div className="item-head">
-        <div>
+        <div className="user-head">
+          <Avatar name={user.full_name} url={props.avatar} />
+          <div>
           <b>{user.full_name}</b> {isSelf && <span className="muted">(bạn)</span>}
           <div className="muted small">{user.phone}</div>
+          </div>
         </div>
         <span className={`badge ${user.status}`}>{user.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>
       </div>

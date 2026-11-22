@@ -429,6 +429,8 @@ function TripSell(props: TripSellProps) {
     return () => clearInterval(t);
   }, [load]);
 
+  /** Tiền cọc của cả đơn (cọc tính theo đơn, không theo từng ghế) */
+  const bookingDep = (bid: string) => tickets.reduce((a, x) => a + (x.booking_id === bid && x.status === 'dat' ? x.deposit ?? 0 : 0), 0);
   const all = useMemo(() => [...tickets.filter((t) => !t.id.startsWith('q:')), ...queuedTickets(queue, trip.id, stopIds)], [tickets, queue, trip.id, stopIds]);
   const waiting = tickets.filter((t) => t.status === 'cho_xep');
   const fareOf = (a: string, b: string) => fares.find((x) => x.from_stop_id === a && x.to_stop_id === b)?.price ?? null;
@@ -487,8 +489,12 @@ function TripSell(props: TripSellProps) {
     tickets: list.map((t) => ({
       seat: t.seat_label, from: stopName(t.from_stop_id), to: stopName(t.to_stop_id), price: t.price,
       name: t.passenger_name, phone: t.passenger_phone, pickup: t.pickup_note, dropoff: t.dropoff_note,
-      paid: t.status === 'da_tt', holdUntil: t.status === 'dat' ? t.hold_until : null, deposit: t.status === 'dat' ? t.deposit ?? 0 : 0,
+      paid: t.status === 'da_tt', holdUntil: t.status === 'dat' ? t.hold_until : null,
     })),
+    deposit: (() => {
+      const dat = list.filter((t) => t.status === 'dat'), paidDep = dat.reduce((a, t) => a + (t.deposit ?? 0), 0);
+      return paidDep > 0 ? { paid: paidDep, due: dat.reduce((a, t) => a + t.price, 0) - paidDep, n: dat.length } : null;
+    })(),
   });
 
   if (!type) {
@@ -585,7 +591,7 @@ function TripSell(props: TripSellProps) {
               if (!hit) return { cls: 'free' };
               if (hit.id.startsWith('q:')) return { cls: 'cho_gui', t: hit };
               const mine = isMine(hit);
-              return { cls: mine ? 'mine' : hit.status === 'giu' ? 'held' : hit.boarded ? 'boarded' : hit.status === 'dat' && (hit.deposit ?? 0) > 0 ? 'coc' : hit.status, t: hit };
+              return { cls: mine ? 'mine' : hit.status === 'giu' ? 'held' : hit.boarded ? 'boarded' : hit.status === 'dat' && bookingDep(hit.booking_id) > 0 ? 'coc' : hit.status, t: hit };
             }} onClick={(l) => void clickSeat(l)} />
             <p className="muted small legend">
               <span className="seat-dot free" /> trống <span className="seat-dot mine" /> đang chọn <span className="seat-dot held" /> quầy khác giữ
@@ -831,7 +837,7 @@ function Checkout(props: {
   // Xem trước vé K80 ngay khi nhập (như phiếu gửi hàng)
   const draft = props.ticketBase(holds.map((h) => ({
     ...h, passenger_name: f.name || null, passenger_phone: f.phone || null, pickup_note: f.pickup || null, dropoff_note: f.dropoff || null,
-    status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus, deposit: f.mode === 'coc' ? Number(f.coc || 0) : 0,
+    status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus, deposit: f.mode === 'coc' && h.id === holds[0]?.id ? Number(f.coc || 0) : 0,
   })), '(cấp khi lưu)');
   const until = Math.min(...holds.map((t) => Date.parse(t.hold_until ?? '') || Infinity));
 
@@ -1040,6 +1046,8 @@ function TicketDetail(props: {
   const [move, setMove] = useState<{ trip: string; seat: string } | null>(null);
   const [ext, setExt] = useState<{ keep: boolean; reason: string } | null>(null);
   const unpaid = siblings.filter((x) => x.status === 'dat');
+  const depAll = unpaid.reduce((a, x) => a + (x.deposit ?? 0), 0);
+  const [note, setNote] = useState(booking?.note ?? '');
 
   async function run(fn: () => Promise<unknown>, ok: string) {
     try {
@@ -1061,7 +1069,7 @@ function TicketDetail(props: {
       <p className="small">{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)} · {money(t.price)} ·{' '}
         {t.status === 'cho_xep' ? 'Đã thu tiền · CHỜ XẾP GHẾ (trùng ghế khi mất mạng): chọn "Chuyển ghế / chuyến"'
           : t.status === 'da_tt' ? `Đã thanh toán${t.pay_method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}`
-          : (t.deposit ?? 0) > 0 ? `Đã cọc ${money(t.deposit ?? 0)}, còn ${money(t.price - (t.deposit ?? 0))}` : `${t.pay_method === 'chuyen_khoan' ? 'Chờ chuyển khoản' : 'Đặt chỗ chưa trả'}${t.hold_until ? `, giữ đến ${hhmm(t.hold_until)}` : ', giữ đến giờ chạy'}`}
+          : depAll > 0 ? `Đơn ${unpaid.length} ghế đã cọc ${money(depAll)}, còn ${money(unpaid.reduce((a, x) => a + x.price, 0) - depAll)}` : `${t.pay_method === 'chuyen_khoan' ? 'Chờ chuyển khoản' : 'Đặt chỗ chưa trả'}${t.hold_until ? `, giữ đến ${hhmm(t.hold_until)}` : ', giữ đến giờ chạy'}`}
         {t.keep_reason ? ` (${t.keep_reason})` : ''}</p>
       {unpaid.length > 0 && qr && bank && (
         <TransferQR bank={bank} amount={unpaid.reduce((a, x) => a + x.price - (x.deposit ?? 0), 0)} code={booking?.code ?? ''} holdUntil={t.hold_until} busy={false}
@@ -1089,10 +1097,13 @@ function TicketDetail(props: {
         <label>SĐT<input inputMode="tel" value={info.phone} onChange={(e) => setInfo({ ...info, phone: e.target.value })} /></label>
         <label>Ghi chú điểm đón<input value={info.pickup} onChange={(e) => setInfo({ ...info, pickup: e.target.value })} /></label>
         <label>Ghi chú điểm trả<input value={info.dropoff} onChange={(e) => setInfo({ ...info, dropoff: e.target.value })} /></label>
+        <label>Ghi chú đơn<input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} /></label>
       </div>
       <div className="actions">
-        <button className="btn small" onClick={() => void run(() => rpc('update_ticket_info', { p_ticket_id: t.id, p_name: info.name, p_phone: info.phone,
-          p_pickup_note: info.pickup, p_dropoff_note: info.dropoff }), 'Đã sửa thông tin khách')}>Lưu thông tin</button>
+        <button className="btn small" onClick={() => void run(async () => {
+          await rpc('update_ticket_info', { p_ticket_id: t.id, p_name: info.name, p_phone: info.phone, p_pickup_note: info.pickup, p_dropoff_note: info.dropoff });
+          if (note.trim() !== (booking?.note ?? '').trim()) await rpc('set_booking_note', { p_booking_id: t.booking_id, p_note: note });
+        }, 'Đã sửa thông tin khách')}>Lưu thông tin</button>
         <button className="btn small" onClick={() => onPrint(siblings, booking?.code ?? '')}>In vé</button>
         {t.status !== 'cho_xep' && (['don', 'tra'] as const).map((k) => {
           const on = k === 'don' ? !!t.tc_don : !!t.tc_tra;

@@ -10,13 +10,13 @@ export interface TicketPrintData {
   departAt: string;
   plate: string | null;
   seller: string;
+  /** tiền cọc của cả đơn (vé chưa trả đủ): đã cọc, còn phải thu, số vé */
+  deposit?: { paid: number; due: number; n: number } | null;
   footer: string | null;   // ghi chú quy định in cuối vé (Cấu hình → Bán vé)
   logo: string | null;
   tickets: {
     seat: string; from: string; to: string; price: number; name: string | null; phone: string | null;
     pickup: string | null; dropoff: string | null; paid: boolean; holdUntil: string | null;
-    /** đã cọc (vé đặt chỗ trả trước một phần) */
-    deposit?: number;
   }[];
 }
 
@@ -54,8 +54,8 @@ export function TicketSlip({ data, i, qr }: { data: TicketPrintData; i: number; 
       <div className="vx8-pay">
         <div>
           <div className="t8r gh8-sum"><span>GIÁ VÉ</span><b>{t.price.toLocaleString('vi-VN')} đ</b></div>
-          <div className={`gh8-pay${t.paid ? ' ok' : ''}`}>{t.paid ? 'ĐÃ THANH TOÁN' : (t.deposit ?? 0) > 0
-            ? <>ĐÃ CỌC {(t.deposit ?? 0).toLocaleString('vi-VN')} đ<br />CÒN {(t.price - (t.deposit ?? 0)).toLocaleString('vi-VN')} đ</>
+          <div className={`gh8-pay${t.paid ? ' ok' : ''}`}>{t.paid ? 'ĐÃ THANH TOÁN' : data.deposit
+            ? <>ĐÃ CỌC {data.deposit.paid.toLocaleString('vi-VN')} đ<br />CÒN {data.deposit.due.toLocaleString('vi-VN')} đ{data.deposit.n > 1 ? ` (${data.deposit.n} vé)` : ''}</>
             : `CHƯA THANH TOÁN${t.holdUntil ? ` · giữ chỗ đến ${hm(t.holdUntil)}` : ''}`}</div>
         </div>
         {qr && <img src={qr} alt={`Mã vé ${data.code}`} className="vx8-qr" />}

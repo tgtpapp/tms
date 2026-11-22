@@ -77,6 +77,7 @@ select is(public.deposit_booking((select v from t.ids where k = 'B1'), 50000, 't
 select is((select deposit from public.seat_inventory where booking_id = (select v from t.ids where k = 'B1')), 50000::bigint, 'Vé ghi đã cọc 50.000');
 select ok((select hold_until from public.seat_inventory where booking_id = (select v from t.ids where k = 'B1')) is null, 'Đã cọc: giữ ghế tới giờ chạy');
 select is(public.pay_booking((select v from t.ids where k = 'B1'), null, 'tien_mat'), 100000::bigint, 'Thu nốt 100.000');
+select lives_ok($$ select public.set_booking_note((select v from t.ids where k = 'B1'), 'Khách đi cùng em bé') $$, 'Sửa ghi chú đơn');
 reset role;
 select is((select sum(credit - debit) from public.ledger_lines where account = 'doanh_thu_ve')::int, 150000, 'Doanh thu đúng 150.000 (không thu trùng)');
 set local role authenticated;
@@ -115,6 +116,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select throws_ok(format('select public.deposit_booking(%L, 1000, %L)', (select v from t.ids where k = 'B1'), 'tien_mat'), 'P0002', null, 'Nhà xe B nhận cọc đơn nhà xe A: không tìm thấy');
+select throws_ok(format('select public.set_booking_note(%L, %L)', (select v from t.ids where k = 'B1'), 'x'), 'P0002', null, 'Nhà xe B sửa ghi chú đơn nhà xe A: không tìm thấy');
 select is((select count(*)::int from public.seat_inventory where deposit > 0), 0, 'Nhà xe B không thấy vé cọc nhà xe A');
 reset role;
 select * from finish();

@@ -1429,3 +1429,24 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
 .dir-panel .bg-r > input:first-child { grid-column: auto; }
 .dir-panel .bg-ar { display: none; }
 @media (max-width: 900px) { .dir-panels { grid-template-columns: 1fr; } .dir-panel .bg-r { grid-template-columns: minmax(0, 1fr) 100px 34px; } .dir-panel .bg-r > input:first-child { grid-column: 1 / -1; } }
+
+/* Tìm vé / tìm hàng theo số điện thoại (như app cũ) */
+.dv-sbar { display: flex; align-items: center; gap: 8px; width: 100%; height: 42px; margin: 0 0 10px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--muted); font: inherit; font-size: 14.5px; cursor: text; text-align: left; box-shadow: 0 1px 3px rgba(8, 47, 73, .06); }
+.dv-sbar i { color: var(--primary); display: inline-flex; }
+.dv-sbar:hover { border-color: var(--primary); }
+.qs-in { width: 100%; font-size: 18px; height: 46px; }
+.qsort { display: flex; gap: 6px; margin-top: 8px; }
+.qsort button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer; color: var(--muted); }
+.qsort button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.qs-sum { margin: 8px 0 4px; }
+.qs-list { max-height: 52vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.qh { display: block; width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; background: var(--surface); font: inherit; cursor: pointer; color: inherit; }
+.qh:hover { border-color: var(--primary); background: var(--primary-soft); }
+.qh.x { opacity: .6; }
+.qh-t { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.qh-t span { color: var(--muted); font-size: 13px; }
+.qh-m { font-size: 13.5px; margin-top: 2px; }
+.qh-b { font-style: normal; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.qh-b.g { background: var(--ok-soft); color: var(--ok); } .qh-b.r { background: #fee2e2; color: #b91c1c; }
+.qs-hl { outline: 2px solid var(--primary); outline-offset: 2px; }

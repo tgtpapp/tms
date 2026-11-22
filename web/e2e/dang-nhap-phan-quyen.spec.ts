@@ -652,6 +652,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole('tab', { name: /^Hành khách/ }).click();
   await expect(page.getByText('Chị Lan')).toBeVisible();
+  // Tìm vé theo số điện thoại (như app cũ): bấm kết quả mở đúng vé
+  await page.getByRole('button', { name: /Tìm vé theo số điện thoại/ }).click();
+  await page.getByPlaceholder(/Số điện thoại, tên khách hoặc mã vé/).fill('345678');
+  await expect(page.getByText(/Tìm thấy \d+ vé/)).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: /Ghế A01 · Chị Lan · 0912345678/ }).click();
+  await expect(page.getByRole('dialog')).toContainText('Chị Lan');
+  await page.getByRole('dialog').getByRole('button', { name: 'Đóng cửa sổ' }).click();
   // Gửi hàng: chọn tuyến / chuyến như Bán vé, điểm gửi – nhận theo thứ tự tuyến, xem trước và in phiếu K80
   await page.getByRole('button', { name: 'Gửi hàng', exact: true }).click();
   // ô Tuyến luôn có đủ tuyến (kể cả ngày chưa có chuyến)

@@ -228,6 +228,8 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   };
   const [calOpen, setCalOpen] = useState(true);
   const [extra, setExtra] = useState<{ key: string; time: string; note: string } | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [focus, setFocus] = useState<string | null>(null);
   async function addExtra() {
     if (!extra) return;
     const [rid, d] = extra.key.split('|');
@@ -269,6 +271,11 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           Vé bán sẽ tự gửi lên khi có mạng.</p>
       )}
       {mine.length > 0 && <QueuePanel list={mine} online={online} onSync={() => void sync()} />}
+      <button type="button" className="dv-sbar" onClick={() => setFinding(true)}><i className="fi fi-rr-search" aria-hidden="true" /><span>Tìm vé theo số điện thoại, tên khách, mã vé…</span></button>
+      {finding && (
+        <TicketSearch routes={routes} stopName={stopName} onClose={() => setFinding(false)}
+                      onPick={(x) => { setFinding(false); setDay(x.service_date); setRf(`${x.route_id}|${x.direction}`); setTripId(x.trip_id); setFocus(x.status === 'huy' || x.status === 'het_han' ? null : x.id); }} />
+      )}
       <div className="vx">
         <aside className="vx-left">
           <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
@@ -293,7 +300,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
                       otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
                       footer={footer} logo={logo} bank={bank} online={online && !cachedAt} queue={mine} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }}
                       sold={counts[trip.id] ?? 0} total={sellable(trip.vehicle_type_id)} day={day}
-                      cash={online ? <CashToday userId={ctx.user_id} version={version} /> : null} />
+                      cash={online ? <CashToday userId={ctx.user_id} version={version} /> : null} focus={focus} onFocused={() => setFocus(null)} />
           )}
         </div>
       </div>
@@ -310,6 +317,84 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         </Modal>
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ Tìm vé theo số điện thoại (như app cũ) */
+
+interface Hit {
+  id: string; trip_id: string; seat_label: string; status: SeatStatus; price: number; passenger_name: string | null; passenger_phone: string | null;
+  from_stop_id: string; to_stop_id: string; created_at: string; service_date: string; route_id: string; direction: Dir; depart_at: string; code: string | null;
+}
+
+function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; stopName: (id: string | null) => string; onClose: () => void; onPick: (x: Hit) => void }) {
+  const toast = useToast();
+  const [q, setQ] = useState('');
+  const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
+  const [lim, setLim] = useState(100);
+  const [hits, setHits] = useState<Hit[] | null>(null);
+  const raw = q.trim();
+  const dg = raw.replace(/\D/g, '').replace(/^84/, '0');
+  const isNum = /^[\d\s+.\-()]+$/.test(raw);
+  const short = !!raw && (isNum ? dg.length < 3 : raw.length < 2);
+
+  useEffect(() => {
+    if (short) { setHits(null); return; }
+    let on = true;
+    const t = setTimeout(() => void (async () => {
+      const cols = 'id, trip_id, seat_label, status, price, passenger_name, passenger_phone, from_stop_id, to_stop_id, created_at, trips!inner(service_date, route_id, direction, depart_at), bookings(code)';
+      let qb = supabase.from('seat_inventory').select(cols).neq('status', 'giu');
+      const code = raw.toUpperCase().replace(/\s/g, '');
+      if (raw && isNum) qb = qb.ilike('passenger_phone', `%${dg}%`);
+      else if (raw) {
+        const b = await supabase.from('bookings').select('id').eq('code', code).limit(20);
+        const ids = ((b.data ?? []) as { id: string }[]).map((x) => x.id);
+        const nm = raw.replace(/[%,()]/g, ' ');
+        qb = qb.or([`passenger_name.ilike.%${nm}%`, ...(ids.length ? [`booking_id.in.(${ids.join(',')})`] : [])].join(','));
+      }
+      qb = sortBy === 'dat' ? qb.order('created_at', { ascending: false }) : qb.order('trips(depart_at)', { ascending: false });
+      const { data, error } = await qb.limit(lim + 1);
+      if (!on) return;
+      if (error) { toast('error', error.message); return; }
+      type Row = Omit<Hit, 'service_date' | 'route_id' | 'direction' | 'depart_at' | 'code'> & { trips: { service_date: string; route_id: string; direction: Dir; depart_at: string }; bookings: { code: string } | null };
+      const l = ((data ?? []) as unknown as Row[]).map(({ trips, bookings, ...x }) => ({ ...x, ...trips, code: bookings?.code ?? null }));
+      if (sortBy === 'chay') l.sort((a, b) => b.depart_at.localeCompare(a.depart_at));
+      setHits(l);
+    })(), 250);
+    return () => { on = false; clearTimeout(t); };
+  }, [raw, dg, isNum, short, sortBy, lim, toast]);
+
+  const shown = (hits ?? []).slice(0, lim);
+  const act = shown.filter((x) => x.status !== 'huy' && x.status !== 'het_han');
+  const rName = (x: Hit) => dirName(routes.find((r) => r.id === x.route_id), x.direction);
+  const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
+  return (
+    <Modal title="Tìm vé theo số điện thoại" onClose={onClose}>
+      <input className="qs-in" type="search" inputMode="tel" autoFocus autoComplete="off" value={q} onChange={(e) => { setQ(e.target.value); setLim(100); }}
+             placeholder="Số điện thoại, tên khách hoặc mã vé (để trống = tất cả vé)" />
+      <div className="qsort">
+        <button type="button" className={sortBy === 'dat' ? 'on' : ''} onClick={() => setSortBy('dat')}>Theo giờ đặt</button>
+        <button type="button" className={sortBy === 'chay' ? 'on' : ''} onClick={() => setSortBy('chay')}>Theo giờ chạy</button>
+      </div>
+      <p className="muted small qs-sum">
+        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên (hoặc để trống để xem tất cả).'
+          : hits === null ? 'Đang tìm…'
+          : shown.length ? <>Tìm thấy <b>{shown.length}{hits.length > lim ? '+' : ''}</b> vé · {new Set(shown.map((x) => x.trip_id)).size} chuyến · tổng {money(act.reduce((a, x) => a + x.price, 0))} (không tính vé hủy)</>
+          : 'Không tìm thấy vé nào.'}
+      </p>
+      <div className="qs-list">
+        {shown.map((x) => (
+          <button type="button" key={x.id} className={`qh${x.status === 'huy' || x.status === 'het_han' ? ' x' : ''}`} onClick={() => onPick(x)}>
+            <div className="qh-t"><b>{fmtDate(x.service_date)} · {hhmm(x.depart_at)}</b><span>{rName(x)}</span></div>
+            <div className="qh-m">{x.code ? <>Mã <b>{x.code}</b> · </> : null}Ghế <b>{x.seat_label}</b> · {x.passenger_name || KHACH_LE} · {x.passenger_phone ?? ''}</div>
+            <div className="qh-m muted">Đặt lúc: {when(x.created_at)}</div>
+            <div className="qh-m">{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}{' '}
+              {x.status === 'huy' || x.status === 'het_han' ? <em className="qh-b r">Đã hủy</em> : x.status === 'da_tt' ? <em className="qh-b g">Đã thu</em> : <em className="qh-b">Chưa thu</em>}</div>
+          </button>
+        ))}
+        {hits && hits.length > lim && <button type="button" className="btn small" onClick={() => setLim(lim + 100)}>Xem thêm</button>}
+      </div>
+    </Modal>
   );
 }
 
@@ -341,6 +426,7 @@ interface TripSellProps {
   trip: Trip; ctx: AccountContext; canSell: boolean; canOrder: boolean; canOverride: boolean; changeFee: number; routeName: string; stopIds: string[]; stopName: (id: string | null) => string;
   type: VType | null; seats: Seat[]; plate: string | null; otherTrips: Trip[]; footer: string | null; logo: string | null; bank: BankAccount | null; onChanged: () => Promise<void>;
   online: boolean; queue: OfflineSale[]; sold: number; total: number; day: string; cash: ReactNode;
+  focus: string | null; onFocused: () => void;
 }
 
 function TripSell(props: TripSellProps) {
@@ -390,6 +476,12 @@ function TripSell(props: TripSellProps) {
   }, [tickets, trip.depart_at]);
 
   const cacheKey = `ban_ve:${ctx.tenant_id}:chuyen:${trip.id}`;
+  // Mở vé vừa tìm được (Tìm vé theo số điện thoại)
+  useEffect(() => {
+    if (!props.focus) return;
+    const t = tickets.find((x) => x.id === props.focus);
+    if (t) { setSelected(t); props.onFocused(); }
+  }, [tickets, props]);
   const load = useCallback(async () => {
     await rpc('refresh_trip_seats', { p_trip_id: trip.id }).catch(() => undefined);
     const t = await supabase.from('seat_inventory').select(TICKET_COLS).eq('trip_id', trip.id).in('status', ['giu', 'dat', 'da_tt', 'cho_xep']);

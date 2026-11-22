@@ -2,6 +2,7 @@
 import { dirName, type Dir } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { MiniCal } from '../components/MiniCal';
+import { Modal } from '../components/Modal';
 import { ParcelPrint, ParcelSlip, type SlipData } from '../components/ParcelSlip';
 import { companyFileUrl } from '../lib/documents';
 import { fmtDate, today } from '../components/Documents';
@@ -61,7 +62,8 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const [rstops, setRstops] = useState<RouteStop[]>([]);
   const [f, setF] = useState(EMPTY);
   const [req, setReq] = useState(() => crypto.randomUUID());
-  const [q, setQ] = useState('');
+  const [finding, setFinding] = useState(false);
+  const [focus, setFocus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rf, setRf] = useState(() => { try { return localStorage.getItem(ROUTE_KEY) ?? ''; } catch { return ''; } });
   useEffect(() => { try { localStorage.setItem(ROUTE_KEY, rf); } catch { /* bỏ qua */ } }, [rf]);
@@ -74,9 +76,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
 
   const load = useCallback(async () => {
     const [s, t, st, r, rs] = await Promise.all([
-      q.replace(/\D/g, '').length >= 6
-        ? supabase.from('shipments').select(SHIP_COLS).or(`receiver_phone.ilike.%${q.replace(/\D/g, '')}%,sender_phone.ilike.%${q.replace(/\D/g, '')}%`).order('created_at', { ascending: false }).limit(50)
-        : supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
+      supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
       supabase.from('trips').select('id, depart_at, route_id, direction, vehicle_id').eq('service_date', day).eq('status', 'mo').order('depart_at'),
       supabase.from('stops').select('id, name').eq('is_active', true).order('name'),
       supabase.from('routes').select('id, name, name_ve, is_active'),
@@ -89,8 +89,14 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     setStops((st.data ?? []) as Stop[]);
     setRoutes((r.data ?? []) as Route[]);
     setRstops((rs.data ?? []) as RouteStop[]);
-  }, [day, q, toast]);
+  }, [day, toast]);
   useEffect(() => { void load(); }, [load]);
+  // Phiếu vừa tìm được: cuộn tới và tô sáng
+  useEffect(() => {
+    if (!focus || !list.some((x) => x.id === focus)) return;
+    const t = setTimeout(() => document.querySelector(`[data-ship="${focus}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+    return () => clearTimeout(t);
+  }, [focus, list]);
   useEffect(() => {
     void (async () => {
       const [t, logo] = await Promise.all([
@@ -205,6 +211,11 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   return (
     <>
       {printing && <ParcelPrint slips={printing} onClose={() => setPrinting(null)} />}
+      <button type="button" className="dv-sbar" onClick={() => setFinding(true)}><i className="fi fi-rr-search" aria-hidden="true" /><span>Tìm hàng theo số điện thoại người gửi / nhận, tên, mã phiếu…</span></button>
+      {finding && (
+        <ParcelSearch stopName={stopName} onClose={() => setFinding(false)}
+                      onPick={(x) => { setFinding(false); setDay(x.service_date); setFocus(x.id); }} />
+      )}
       <div className="vx">
         <aside className="vx-left">
           <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
@@ -279,13 +290,10 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
           </form>
 
           <section className="card">
-            <h2>Phiếu gửi hàng {q ? '(tìm theo SĐT)' : `ngày ${fmtDate(day)}`} ({list.length})</h2>
-            <div className="inline-form">
-              <label>Tìm SĐT người gửi / nhận<input inputMode="tel" value={q} onChange={(e) => setQ(e.target.value)} placeholder="ít nhất 6 số" /></label>
-            </div>
+            <h2>Phiếu gửi hàng ngày {fmtDate(day)} ({list.length})</h2>
             {list.length === 0 && <p className="muted">Chưa có phiếu.</p>}
             <ul className="list">
-              {list.map((s) => <ParcelRow key={s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
+              {list.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
             </ul>
           </section>
         </div>
@@ -294,10 +302,73 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   );
 }
 
+/** Tìm phiếu gửi hàng theo số điện thoại người gửi / nhận, tên hoặc mã phiếu (như Tìm vé) */
+function ParcelSearch({ stopName, onClose, onPick }: { stopName: (id: string) => string; onClose: () => void; onPick: (x: Shipment) => void }) {
+  const toast = useToast();
+  const [q, setQ] = useState('');
+  const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
+  const [lim, setLim] = useState(100);
+  const [hits, setHits] = useState<(Shipment & { created_at: string })[] | null>(null);
+  const raw = q.trim();
+  const dg = raw.replace(/\D/g, '').replace(/^84/, '0');
+  const isNum = /^[\d\s+.\-()]+$/.test(raw);
+  const short = !!raw && (isNum ? dg.length < 3 : raw.length < 2);
+
+  useEffect(() => {
+    if (short) { setHits(null); return; }
+    let on = true;
+    const t = setTimeout(() => void (async () => {
+      let qb = supabase.from('shipments').select(`${SHIP_COLS}, created_at`);
+      if (raw && isNum) qb = qb.or(`sender_phone.ilike.%${dg}%,receiver_phone.ilike.%${dg}%`);
+      else if (raw) {
+        const nm = raw.replace(/[%,()]/g, ' ');
+        qb = qb.or(`sender_name.ilike.%${nm}%,receiver_name.ilike.%${nm}%,code.eq.${raw.toUpperCase().replace(/[\s,()]/g, '')}`);
+      }
+      qb = sortBy === 'dat' ? qb.order('created_at', { ascending: false }) : qb.order('service_date', { ascending: false }).order('created_at', { ascending: false });
+      const { data, error } = await qb.limit(lim + 1);
+      if (!on) return;
+      if (error) { toast('error', error.message); return; }
+      setHits((data ?? []) as unknown as (Shipment & { created_at: string })[]);
+    })(), 250);
+    return () => { on = false; clearTimeout(t); };
+  }, [raw, dg, isNum, short, sortBy, lim, toast]);
+
+  const shown = (hits ?? []).slice(0, lim);
+  const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
+  return (
+    <Modal title="Tìm hàng theo số điện thoại" onClose={onClose}>
+      <input className="qs-in" type="search" inputMode="tel" autoFocus autoComplete="off" value={q} onChange={(e) => { setQ(e.target.value); setLim(100); }}
+             placeholder="Số điện thoại, tên người gửi / nhận hoặc mã phiếu (để trống = tất cả)" />
+      <div className="qsort">
+        <button type="button" className={sortBy === 'dat' ? 'on' : ''} onClick={() => setSortBy('dat')}>Theo giờ nhận</button>
+        <button type="button" className={sortBy === 'chay' ? 'on' : ''} onClick={() => setSortBy('chay')}>Theo ngày gửi</button>
+      </div>
+      <p className="muted small qs-sum">
+        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên (hoặc để trống để xem tất cả).'
+          : hits === null ? 'Đang tìm…'
+          : shown.length ? <>Tìm thấy <b>{shown.length}{hits.length > lim ? '+' : ''}</b> phiếu · tổng cước {money(shown.filter((x) => x.status !== 'huy').reduce((a, x) => a + x.fee, 0))} (không tính phiếu hủy)</>
+          : 'Không tìm thấy phiếu nào.'}
+      </p>
+      <div className="qs-list">
+        {shown.map((x) => (
+          <button type="button" key={x.id} className={`qh${x.status === 'huy' ? ' x' : ''}`} onClick={() => onPick(x)}>
+            <div className="qh-t"><b>{fmtDate(x.service_date)} · Mã {x.code}</b><span>{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)}</span></div>
+            <div className="qh-m">Gửi: <b>{x.sender_name || '—'}</b> · {x.sender_phone} → Nhận: <b>{x.receiver_name || '—'}</b> · {x.receiver_phone}</div>
+            <div className="qh-m muted">Nhận lúc: {when(x.created_at)} · {x.description}</div>
+            <div className="qh-m">Cước {money(x.fee)}{x.cod_amount ? ` · Thu hộ ${money(x.cod_amount)}` : ''} <em className={`qh-b${x.status === 'huy' ? ' r' : x.status === 'giao' ? ' g' : ''}`}>{STATUS[x.status][0]}</em></div>
+          </button>
+        ))}
+        {hits && hits.length > lim && <button type="button" className="btn small" onClick={() => setLim(lim + 100)}>Xem thêm</button>}
+      </div>
+    </Modal>
+  );
+}
+
 /** Một phiếu: dùng ở màn Gửi hàng và màn lái xe (manage = false: chỉ báo đến, giao hàng) */
-export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint }: {
+export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint, hl }: {
   s: Shipment; stopName: (id: string) => string; tripName: (id: string | null) => string; trips: Trip[] | null;
   reload: () => Promise<void>; manage: boolean; onPrint?: () => void;
+  hl?: boolean;
 }) {
   const toast = useToast();
   const [act, setAct] = useState<'' | 'xe' | 'giao' | 'huy'>('');
@@ -315,7 +386,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
   }
   const [lb, cls] = STATUS[s.status];
   return (
-    <li className="item">
+    <li className={hl ? 'item qs-hl' : 'item'} data-ship={s.id}>
       <div className="item-head">
         <div>
           <b>{s.code}</b> <span className={`badge ${cls}`}>{lb}</span>

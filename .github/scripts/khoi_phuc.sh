@@ -4,6 +4,7 @@
 # Tùy chọn: OWNER_PHONE + OWNER_PASSWORD (đặt mật khẩu tạm cho Chủ nhà xe để đăng nhập, rồi đặt lại mật khẩu cho người khác trong app).
 # Kho mã công khai: chỉ in số đếm, không in dữ liệu / khóa.
 set -euo pipefail
+{ command -v curl && command -v openssl; } >/dev/null || { apt-get update -qq >/dev/null && apt-get install -y -qq curl openssl >/dev/null; }
 W=$(mktemp -d)
 echo "1. Lấy dữ liệu từ bản dự phòng Neon"
 psql "$NEON_DATABASE_URL" -tAc "select count(*) from public.tenants" | sed 's/^/   Số nhà xe trên Neon: /'
@@ -17,7 +18,9 @@ while IFS=, read -r id email phone; do
   [ -n "$email" ] || continue
   pw=$(openssl rand -base64 24)
   if [ -n "${OWNER_PHONE:-}" ] && [ "$phone" = "$OWNER_PHONE" ] && [ -n "${OWNER_PASSWORD:-}" ]; then pw="$OWNER_PASSWORD"; owner=1; fi
-  body=$(python3 -c 'import json,sys; print(json.dumps({"id":sys.argv[1],"email":sys.argv[2],"password":sys.argv[3],"email_confirm":True,"user_metadata":{"phone":sys.argv[4]}}))' "$id" "$email" "$pw" "$phone")
+  # mã, email, SĐT chỉ có chữ số / chữ / @ . - ; mật khẩu tạm của Chủ nhà xe: thoát dấu " và \
+  pj=$(printf '%s' "$pw" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+  body=$(printf '{"id":"%s","email":"%s","password":"%s","email_confirm":true,"user_metadata":{"phone":"%s"}}' "$id" "$email" "$pj" "$phone")
   code=$(curl -s -o "$W/r.json" -w '%{http_code}' -X POST "$TARGET_API_URL/auth/v1/admin/users" \
     -H "apikey: $TARGET_SERVICE_KEY" -H "Authorization: Bearer $TARGET_SERVICE_KEY" -H 'Content-Type: application/json' -d "$body")
   if [ "$code" = "200" ] || [ "$code" = "201" ]; then made=$((made+1));

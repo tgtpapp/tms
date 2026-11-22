@@ -163,3 +163,6 @@ supabase/.temp
 supabase/.branches
 playwright-report/
 test-results/
+
+# Bản chạy trên máy cá nhân (tools/may-ca-nhan)
+web/.env.local

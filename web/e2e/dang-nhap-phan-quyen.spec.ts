@@ -594,6 +594,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.evaluate(() => { window.print = () => {}; });
   await page.getByRole('button', { name: 'In lệnh 07:00 Hố Nai – Vũng Tàu' }).click();
   // lệnh 4 lượt: lượt đi 1 là chuyến đang chọn (lấy theo lịch xếp), chỉnh tay giờ lượt về 1 rồi cấp
+  await page.getByRole('button', { name: 'Chỉnh lượt' }).click();
   await expect(page.getByLabel('Chuyến Lượt đi 1')).not.toHaveValue('');
   await page.getByLabel('Giờ Lượt về 1').fill('12:30');
   await page.getByRole('button', { name: 'Cấp lệnh & in' }).click();
@@ -730,6 +731,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5p2. Cấp lệnh ngay ở Bán vé: 4 lượt + chọn in chữ ký Giám đốc / con dấu
   await page.getByRole('button', { name: '🧾 Cấp lệnh' }).click();
+  await expect(page.getByLabel('Biển số')).toBeVisible();
+  await page.getByRole('button', { name: 'Chỉnh lượt' }).click();
   await expect(page.getByLabel('Chuyến Lượt về 2')).toBeVisible();
   await expect(page.getByLabel('In chữ ký Giám đốc')).toBeChecked();
   await expect(page.getByLabel('In con dấu')).toBeChecked();

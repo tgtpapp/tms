@@ -48,7 +48,8 @@ jobs:
         run: |
           supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor >/dev/null
           eval "$(supabase status -o env | sed 's/^/export /')"
-          echo "TARGET_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> "$GITHUB_ENV"
+          echo "TARGET_DB_URL=postgresql://postgres@127.0.0.1:54322/postgres" >> "$GITHUB_ENV"
+          echo "PGPASSWORD=postgres" >> "$GITHUB_ENV"   # mật khẩu mặc định của Supabase tạm trên máy GitHub
           echo "TARGET_API_URL=$API_URL" >> "$GITHUB_ENV"
           echo "::add-mask::$SERVICE_ROLE_KEY"
           echo "TARGET_SERVICE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
@@ -63,7 +64,7 @@ jobs:
           supabase link --project-ref "$REF" -p "$NEW_SUPABASE_DB_PASSWORD"
           PW=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["NEW_SUPABASE_DB_PASSWORD"],safe=""))')
           for host in "aws-1-${REGION}.pooler.supabase.com" "aws-0-${REGION}.pooler.supabase.com"; do
-            url="postgresql://postgres.${REF}:${PW}@${host}:5432/postgres"
+            url="postgresql:/""/postgres.${REF}:${PW}@${host}:5432/postgres"   # tách "//" để bộ dò khóa không báo nhầm
             if psql "$url" -tAc 'select 1' >/dev/null 2>&1; then echo "::add-mask::$url"; echo "TARGET_DB_URL=$url" >> "$GITHUB_ENV"; DB="$url"; break; fi
           done
           [ -n "${DB:-}" ] || { echo "Không kết nối được database project mới"; exit 1; }

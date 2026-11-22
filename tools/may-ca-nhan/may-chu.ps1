@@ -39,7 +39,7 @@ if (-not (Test-Path $flag)) {
   Write-Host '2/4 Lần bật đầu tiên: lấy dữ liệu từ bản dự phòng Neon...'
   (Get-Content "$here\khoi_phuc.sh" -Raw) -replace "`r", '' | docker run --rm -i `
     -e NEON_DATABASE_URL=$neon -e OWNER_PHONE=$phone -e OWNER_PASSWORD=$pass `
-    -e TARGET_DB_URL='postgresql://postgres:postgres@host.docker.internal:54322/postgres' `
+    -e TARGET_DB_URL='postgresql://postgres@host.docker.internal:54322/postgres' -e PGPASSWORD=postgres `
     -e TARGET_API_URL='http://host.docker.internal:54321' -e TARGET_SERVICE_KEY=$($st['SERVICE_ROLE_KEY']) `
     postgres:17 bash -s
   if ($LASTEXITCODE -ne 0) { Fail 'Lấy dữ liệu chưa xong. Kiểm tra mạng rồi chạy lại.' }

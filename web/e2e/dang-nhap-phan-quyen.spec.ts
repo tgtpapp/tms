@@ -231,6 +231,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   const hdx = page.getByRole('dialog', { name: 'Lập hợp đồng thuê xe' });
   await hdx.getByLabel('Họ tên chủ xe').fill('Nguyễn Văn Chủ');
   await hdx.getByLabel('Giá thuê xe 51B-123.45').fill('8000000');
+  await hdx.getByLabel('Nghĩa vụ thuế cho thuê tài sản').selectOption('B');
   await hdx.getByRole('button', { name: 'Lập & cấp số' }).click();
   await expect(page.getByText(/Đã lưu hợp đồng \d{3}\/\d{4}\/HĐTX/)).toBeVisible({ timeout: 30_000 });
   await expect(dlx.getByText('Hợp đồng thuê xe / hợp tác kinh doanh')).toBeVisible();

@@ -10,3 +10,7 @@ begin
   execute v;
 end;
 $$;
+
+alter table public.signature_settings drop constraint signature_settings_who_check;
+alter table public.signature_settings add constraint signature_settings_who_check
+  check (who = 'giam_doc' or who ~ '^(nv_)?[0-9a-f-]{36}$' or who ~ '^hdtx_[0-9a-f-]{36}_[ab]$');

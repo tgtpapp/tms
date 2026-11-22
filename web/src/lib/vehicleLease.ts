@@ -9,6 +9,7 @@ import { savePdf } from './dispatchPapers';
 import { safeName } from './documents';
 import { putFile } from './fileStore';
 import { loadSigns, showName, type Sign } from './signatures';
+import { bankName } from './vietqr';
 
 export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string; files?: string[] }
 export interface Lease {
@@ -24,7 +25,8 @@ export interface LeaseVehicle {
   seats: string; reg_no: string | null; reg_by: string | null; reg_on: string | null; reg_owner: string | null;
 }
 export interface LeaseCtx { company: Company & { tax: string }; boss: Boss; director: string; dir: { cccd: string; cccd_on: string; cccd_by: string; phone: string };
-  vehicles: Map<string, LeaseVehicle>; signA: Sign | null; signB: Sign | null }
+  vehicles: Map<string, LeaseVehicle>; signA: Sign | null; signB: Sign | null;
+  bankB: { holder: string; account: string; bank: string } }   // tài khoản doanh nghiệp trong Cấu hình (khi hợp đồng chưa ghi)
 /** Mã chữ ký chủ xe / vợ chồng theo hợp đồng (thư mục chu_ky) */
 export const leaseSignKey = (leaseId: string, who: 'a' | 'b') => `hdtx_${leaseId}_${who}`;
 
@@ -38,7 +40,7 @@ export async function loadLeaseCtx(tenantId: string, me: { id: string | null; na
   const ka = leaseId ? leaseSignKey(leaseId, 'a') : '', kb = leaseId ? leaseSignKey(leaseId, 'b') : '';
   const [c, t, p, ss, v, docs, { b }, sg] = await Promise.all([
     company(), supabase.from('tenants').select('tax_code').maybeSingle(), rpc<Record<string, string | null> | null>('lease_company_info', {}).catch(() => null),
-    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc']),
+    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'tt.so_tai_khoan', 'tt.ngan_hang_bin', 'tt.ten_tai_khoan']),
     supabase.from('vehicles').select('id, plate, color, engine_no, chassis_no, owner_name, vehicle_types(name, brand, model_code, body_style, reg_seats, reg_berths)').in('id', vehicleIds),
     supabase.from('documents').select('vehicle_id, doc_no, issuer, issued_on, data').eq('doc_type', 'dang_ky').eq('is_current', true).in('vehicle_id', vehicleIds),
     boss(tenantId, me), leaseId ? loadSigns(tenantId, [ka, kb], true) : Promise.resolve(new Map<string, Sign>()),
@@ -57,6 +59,7 @@ export async function loadLeaseCtx(tenantId: string, me: { id: string | null; na
   const d = (k: string) => String(p?.[k] ?? '');
   return { company: { ...c, tax: (t.data as { tax_code?: string } | null)?.tax_code ?? '' }, boss: b, director: set('cong_ty.giam_doc'),
     dir: { cccd: d('cccd'), cccd_on: d('cccd_on'), cccd_by: d('cccd_by'), phone: d('phone') }, vehicles,
+    bankB: { holder: set('tt.ten_tai_khoan'), account: set('tt.so_tai_khoan'), bank: set('tt.ngan_hang_bin') ? bankName(set('tt.ngan_hang_bin')) : '' },
     signA: sg.get(ka)?.img ? sg.get(ka)! : null, signB: sg.get(kb)?.img ? sg.get(kb)! : null };
 }
 
@@ -94,7 +97,7 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
       + P(`Địa chỉ trụ sở chính: ${hv(co.address)}`) + P(`Đại diện theo pháp luật: Ông <b>${hv(x.director.toUpperCase())}</b> — Chức vụ: Giám đốc`)
       + P(`Số CCCD: ${hv(x.dir.cccd)} — Cấp ngày: ${x.dir.cccd_on || k.director.cccd_on ? dmy(x.dir.cccd_on || k.director.cccd_on) : '……………'} — Nơi cấp: ${hv(x.dir.cccd_by || k.director.cccd_by)}`)
       + P(`Số điện thoại: ${hv(x.dir.phone || k.director.phone)}`)
-      + P(`Số tài khoản: ${hv(k.director.bank_account)} &nbsp; Tại Ngân hàng: ${hv(k.director.bank_name)} &nbsp; Chủ tài khoản: ${hv(k.director.bank_holder)}`),
+      + P(`Số tài khoản: ${hv(k.director.bank_account || x.bankB.account)} &nbsp; Tại Ngân hàng: ${hv(k.director.bank_name || x.bankB.bank)} &nbsp; Chủ tài khoản: ${hv(k.director.bank_holder || x.bankB.holder)}`),
     P('Sau khi bàn bạc, thỏa thuận, hai bên thống nhất ký kết Hợp đồng thuê xe ô tô với các điều khoản cụ thể như sau:'),
     H('Điều 1. Đặc điểm tài sản cho thuê') + P(`Bên A đồng ý cho Bên B thuê và Bên B đồng ý thuê ${String(V.length).padStart(2, '0')} xe ô tô thuộc quyền sở hữu hợp pháp của Bên A với các thông số kỹ thuật sau:`) + dieu1
       + P(`${one ? '7' : ''}${one ? '. ' : ''}Tình trạng xe khi bàn giao: Xe hoạt động bình thường, đầy đủ giấy tờ pháp lý bản chính/bản sao theo quy định (Giấy đăng ký xe, Giấy chứng nhận kiểm định ATKT &amp; BVMT, Bảo hiểm TNDS bắt buộc còn hiệu lực).`),

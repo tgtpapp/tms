@@ -9,6 +9,7 @@ import { docTypeOf } from '../lib/docTypes';
 import { signatureUrl, uploadFiles, uploadSignature } from '../lib/documents';
 import { getBlob, putFile } from '../lib/fileStore';
 import { getHasName, setHasName } from '../lib/signatures';
+import { bankName } from '../lib/vietqr';
 import { LEASE_COLS, leasePages, leaseSignKey, loadLeaseCtx, saveLeasePdf, type Lease, type Person } from '../lib/vehicleLease';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -53,10 +54,14 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     const last = ((await supabase.from('vehicle_leases').select('director').order('created_at', { ascending: false }).limit(1)).data ?? [])[0] as { director?: Form['dir'] } | undefined;
     const s = today();
     setPend(noPend());
+    // Tài khoản Bên B: theo hợp đồng trước; chưa có thì lấy tài khoản doanh nghiệp trong Cấu hình (thanh toán chuyển khoản)
+    const tt = ((await supabase.from('tenant_settings').select('key, value').in('key', ['tt.so_tai_khoan', 'tt.ngan_hang_bin', 'tt.ten_tai_khoan'])).data ?? []) as { key: string; value: unknown }[];
+    const ts = (k: string) => String(tt.find((x) => x.key === k)?.value ?? '');
+    const co = { bank_holder: ts('tt.ten_tai_khoan'), bank_account: ts('tt.so_tai_khoan'), bank_name: ts('tt.ngan_hang_bin') ? bankName(ts('tt.ngan_hang_bin')) : '' };
     void rpc<Record<string, string | null> | null>('lease_company_info', {}).then(setBInfo).catch(() => setBInfo(null));
     setF({ id: null, req: crypto.randomUUID(), signed_on: s, start_on: s, end_on: addYear(s), pay_day: '5', late_days: '15', tax_party: '', a: emptyP(v.owner_name ?? ''), joint: false, s: emptyP(),
-      bank: { holder: '', account: '', bank: '' }, dir: { cccd_on: last?.director?.cccd_on ?? '', cccd_by: last?.director?.cccd_by ?? '', phone: last?.director?.phone ?? '', bank_holder: last?.director?.bank_holder ?? '',
-        bank_account: last?.director?.bank_account ?? '', bank_name: last?.director?.bank_name ?? '' }, items: { [v.id]: '' }, filesA: [], filesB: [], copyFrom: null, hasName: { a: false, b: false } });
+      bank: { holder: '', account: '', bank: '' }, dir: { cccd_on: last?.director?.cccd_on ?? '', cccd_by: last?.director?.cccd_by ?? '', phone: last?.director?.phone ?? '', bank_holder: last?.director?.bank_holder || co.bank_holder,
+        bank_account: last?.director?.bank_account || co.bank_account, bank_name: last?.director?.bank_name || co.bank_name }, items: { [v.id]: '' }, filesA: [], filesB: [], copyFrom: null, hasName: { a: false, b: false } });
   }
   /** Sao chép sang xe khác: giữ bên cho thuê, CCCD, chữ ký, tài khoản, điều khoản; chọn xe mới, lưu ra hợp đồng mới (số mới) */
   async function openCopy(k: Lease) {
@@ -84,6 +89,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
     if (!f) return;
     if (!f.a.name.trim()) return toast('error', 'Nhập họ tên bên cho thuê');
     if (!Object.keys(f.items).length) return toast('error', 'Chọn ít nhất 1 xe');
+    if (!f.tax_party) return toast('error', 'Chọn bên nộp thuế cho thuê tài sản (Bên A hoặc Bên B)');
     setBusy('Đang lưu hợp đồng…');
     try {
       // Ảnh CCCD vừa quét: lưu vào hồ sơ xe đầu tiên của hợp đồng (giấy tờ của chủ xe đi kèm hợp đồng)
@@ -194,8 +200,8 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
               <label>Đến hết ngày<input type="date" value={f.end_on} onChange={(e) => setF({ ...f, end_on: e.target.value })} /></label>
               <label>Trả tiền vào ngày (hằng tháng)<input inputMode="numeric" value={f.pay_day} onChange={(e) => setF({ ...f, pay_day: digits(e.target.value).slice(0, 2) })} /></label>
               <label>Chậm trả quá (ngày) thì Bên A được chấm dứt<input inputMode="numeric" value={f.late_days} onChange={(e) => setF({ ...f, late_days: digits(e.target.value).slice(0, 3) })} /></label>
-              <label>Thuế cho thuê tài sản<select value={f.tax_party} onChange={(e) => setF({ ...f, tax_party: e.target.value as Form['tax_party'] })}>
-                <option value="">Để trống (ghi tay)</option><option value="A">Bên A tự kê khai, nộp</option><option value="B">Bên B khấu trừ, nộp thay</option></select></label>
+              <label>Nghĩa vụ thuế cho thuê tài sản<select value={f.tax_party} onChange={(e) => setF({ ...f, tax_party: e.target.value as Form['tax_party'] })}>
+                <option value="" disabled>Chọn bên nộp thuế</option><option value="A">Bên A tự kê khai, nộp</option><option value="B">Bên B khấu trừ, nộp thay</option></select></label>
               <label>Chủ tài khoản<input value={f.bank.holder} onChange={(e) => setF({ ...f, bank: { ...f.bank, holder: e.target.value } })} /></label>
               <label>Số tài khoản<input inputMode="numeric" value={f.bank.account} onChange={(e) => setF({ ...f, bank: { ...f.bank, account: e.target.value } })} /></label>
               <label>Ngân hàng<input value={f.bank.bank} onChange={(e) => setF({ ...f, bank: { ...f.bank, bank: e.target.value } })} /></label>

@@ -26,8 +26,6 @@ const AUTO_ARRIVE = 'chuyen.tu_den_ben_gio';
 /** Điều hành. Giới hạn giờ lái theo Luật TTATGT đường bộ 2024, đã sửa bởi Luật 118/2025 (cần xác minh) → để chỉnh được. */
 const DISPATCH_SETTINGS = [
   { key: 'lai_xe.gio_lien_tuc_toi_da', label: 'Giờ lái liên tục tối đa', min: 1, max: 12 },
-  { key: 'lai_xe.gio_ngay_toi_da', label: 'Giờ lái tối đa trong ngày', min: 1, max: 24 },
-  { key: 'lai_xe.gio_tuan_toi_da', label: 'Giờ lái tối đa trong tuần', min: 1, max: 168 },
 ] as const;
 
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */

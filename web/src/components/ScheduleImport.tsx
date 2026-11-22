@@ -269,7 +269,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
         let tripId = r.trip?.id ?? null;
         if (!tripId && r.reopen) { await rpc('reopen_trip', { p_trip_id: r.reopen.id }); tripId = r.reopen.id; back++; }
         else if (!tripId) {
-          tripId = await rpc<string>('add_extra_trip', { p_route_id: routeId, p_direction: r.route.dir, p_date: r.ngay, p_time: r.gio, p_note: `Nhập từ ${src}` });
+          tripId = await rpc<string>('add_extra_trip', { p_route_id: routeId, p_direction: r.route.dir, p_date: r.ngay, p_time: r.gio, p_note: null });
           nw++;
         } else up++;
         const keep = (role: Crew['role']) => crew.find((c) => c.trip_id === tripId && c.role === role)?.staff_id ?? null;

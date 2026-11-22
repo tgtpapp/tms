@@ -100,7 +100,7 @@ export async function checklistDay(b: Base, day: string): Promise<{ pages: strin
     const mark = (pass: boolean, note?: string) => { if (!pass && note) notes.push(note); return pass ? '<b>Đ</b>' : '<b style="color:#b91c1c">K</b>'; };
     const staffItem = (type: string) => (sid ? mark(ok(doc('staff_id', sid, type)), why(doc('staff_id', sid, type), type)) : mark(false, type === 'gplx' ? 'chưa xếp lái xe' : undefined));
     const vehDocs = ['dang_ky', 'kiem_dinh', 'bh_tnds', 'phu_hieu'].filter((x) => !t.vehicle_id || !ok(doc('vehicle_id', t.vehicle_id, x)));
-    const timeWarn = b.events.some((e) => e.trip_id === t.id && e.auto && e.kind === 'thoi_gian_lai');
+    const timeWarn = b.events.some((e) => e.trip_id === t.id && e.auto && e.kind === 'thoi_gian_lai' && (e.status === 'mo' || e.conclusion === 'vi_pham'));
     const open = b.events.filter((e) => e.status === 'mo' && e.trip_id !== t.id && e.occurred_at < t.depart_at && ((sid && e.staff_id === sid) || (t.vehicle_id && e.vehicle_id === t.vehicle_id)));
     const cells = [
       staffItem('gplx'), staffItem('tap_huan'), staffItem('kham_suc_khoe'),

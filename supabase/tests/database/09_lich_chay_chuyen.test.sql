@@ -122,7 +122,7 @@ select ok((select (r ->> 'saved') = 'false' and (r -> 'warnings')::text like '%c
   'Xe thiếu giấy tờ trong hồ sơ: chỉ cảnh báo');
 reset role;
 
--- Chủ A: giấy kiểm định xe 2 hết hạn → chặn; giảm giờ lái/ngày → cảnh báo
+-- Chủ A: giấy kiểm định xe 2 hết hạn → cảnh báo; giờ lái/ngày không còn giới hạn (Luật 118/2025)
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok(format($$ select public.add_vehicle_document('%1$s', 'kiem_dinh', 'KD', null, null, null, app.local_today(), '{}',
@@ -131,8 +131,8 @@ select ok((public.assign_trip((select id from public.trips where schedule_id is 
   (select v from t.ids where k = 'D2'), null, null, null) -> 'warnings')::text like '%hết hạn ngày%', 'Cảnh báo (vẫn cho lưu): giấy kiểm định hết hạn trước ngày chạy');
 select lives_ok($$ update public.tenant_settings set value = '8' where key = 'lai_xe.gio_ngay_toi_da' $$, 'Giờ lái tối đa/ngày = 8');
 select ok((public.assign_trip((select v from t.ids where k = 'T2'), (select v from t.ids where k = 'X1'),
-           (select v from t.ids where k = 'D1'), null, null, null) -> 'warnings')::text like '%trong ngày%',
-  'Lái xe 1 chạy 2 chuyến 5 giờ trong ngày: cảnh báo vượt giờ/ngày');
+           (select v from t.ids where k = 'D1'), null, null, null) -> 'warnings')::text not like '%trong ngày%',
+  'Luật 118/2025 bỏ giới hạn giờ lái/ngày: 2 chuyến 5 giờ trong ngày không còn cảnh báo vượt giờ/ngày');
 reset role;
 
 -- ---------------------------------------------------------------- Hủy, mở lại, ngừng nốt

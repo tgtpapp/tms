@@ -43,7 +43,7 @@ export async function loadOrderPrint(orderId: string, tenantId: string, me: { id
     loadSigns(tenantId, keys),
     p.seal ? signatureUrl(tenantId, 'con_dau') : Promise.resolve(null),
     // mã QR = đường dẫn lưu lệnh đã đóng dấu (quét bằng Zalo / camera điện thoại)
-    QRCode.toDataURL(`${window.location.origin}/?l=${p.scan_token}`, { margin: 0, width: 240 }),
+    QRCode.toDataURL(`${window.location.origin}/?l=${p.scan_token}`, { margin: 2, width: 360, errorCorrectionLevel: 'M' }),   // có viền trắng: Zalo / camera mới nhận
   ]);
   // chữ ký hồ sơ nhân viên trước, chưa có thì chữ ký theo tài khoản
   const pick = (a: string | null | undefined, b: string | null | undefined) => { const x = a ? sg.get(a) : undefined; return x?.img ? x : (b ? sg.get(b) : undefined); };

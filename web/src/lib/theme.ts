@@ -125,3 +125,8 @@ export function initTheme() {
   applyUi(loadUi());
   darkQuery()?.addEventListener?.('change', () => applyUi(loadUi()));
 }
+
+/** Tên nhà xe ngắn in trên thân xe trong hoạt cảnh đón khách (bỏ chữ "Nhà xe" đầu tên) */
+let BUS = '';
+export const setBusName = (tenantName: string) => { BUS = tenantName.replace(/^\s*nhà\s*xe\s+/i, '').trim(); };
+export const busName = () => BUS || 'Nhà xe';

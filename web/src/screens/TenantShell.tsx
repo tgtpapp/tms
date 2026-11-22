@@ -6,6 +6,7 @@ import { config } from '../config';
 import { companyFileUrl } from '../lib/documents';
 import { loadPermissions, type Permissions } from '../lib/permissions';
 import { moveOldFiles } from '../lib/fileStore';
+import { setBusName } from '../lib/theme';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { archiveMissingContracts } from '../lib/laborAutoArchive';
 import { AccountScreen } from './Account';
@@ -76,6 +77,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [report, setReport] = useState('');
   const clearReport = useCallback(() => setReport(''), []);
   // App cài vào máy: tên nhà xe dưới biểu tượng, biểu tượng là ảnh đại diện của người đăng nhập (chưa có ảnh: logo nhà xe)
+  setBusName(ctx.tenant_name ?? '');
   const myAva = myStaff ? avas[myStaff] : undefined;
   useEffect(() => {
     if (!ctx.tenant_id) return;

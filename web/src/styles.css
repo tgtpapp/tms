@@ -1279,3 +1279,8 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 .support-checks li.ok { background: var(--ok-soft); color: var(--ok); }
 .support-checks li.bad { background: var(--danger-soft); color: var(--danger); }
 .support-checks li span:nth-child(2) { flex: 1; min-width: 150px; color: var(--text); }
+
+/* Lệnh vận chuyển in đúng 1 tờ A4: bề rộng in cố định, thu nhỏ theo --fit (tính trong TransportOrderPrint) */
+@media print {
+  .lenh.lenh4 { width: 194mm !important; zoom: var(--fit, 1); break-inside: avoid; }
+}

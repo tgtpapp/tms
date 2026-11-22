@@ -37,6 +37,17 @@ const Blank = ({ w = 90, children }: { w?: number; children?: ReactNode }) => (
   <span className="lenh-blank" style={{ minWidth: w }}>{children}</span>
 );
 
+/** Lệnh luôn vừa 1 tờ A4: đo bản sao ở đúng bề rộng in (A4 trừ lề 8 mm = 194 mm), cao hơn 281 mm thì thu nhỏ khi in */
+function fitA4(el: HTMLElement | null) {
+  if (!el) return;
+  const c = el.cloneNode(true) as HTMLElement;
+  c.style.cssText = 'position:absolute;left:-10000px;top:0;width:194mm;max-width:none;visibility:hidden';
+  document.body.appendChild(c);
+  const mm = c.offsetWidth / 194, h = c.offsetHeight / mm;
+  c.remove();
+  el.style.setProperty('--fit', String(h > 279 ? Math.max(0.6, 279 / h) : 1));
+}
+
 export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [y, m, dd] = data.issueDate.split('-');
@@ -48,12 +59,15 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
     const go = () => {
       if (done) return;
       done = true;
+      fitA4(ref.current);
       window.print();
     };
+    const before = () => fitA4(ref.current);
+    window.addEventListener('beforeprint', before);
     Promise.all(imgs.map((i) => (i.complete ? Promise.resolve() : new Promise((r) => { i.onload = r; i.onerror = r; }))))
       .then(() => setTimeout(go, 100));
     const t = setTimeout(go, 4000);
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); window.removeEventListener('beforeprint', before); };
   }, []);
 
   const leg = (key: number, title: string, from: string, to: string, time: string | null, date: string | null) => (
@@ -111,7 +125,7 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
                 <div>Nhân viên phục vụ trên xe: <Blank w={300}>{data.assistant}</Blank></div>
                 <div>Biển số đăng ký: <Blank w={160}>{data.plate}</Blank> Số ghế: <Blank w={50}>{data.seats ?? ''}</Blank> Loại xe: khách</div>
                 <div><b>Tuyến: {data.routeName}{data.distanceKm ? ` - Cự ly: ${data.distanceKm}km` : ''}</b>{data.registeredCode ? `   Mã số tuyến: ${data.registeredCode}` : ''}</div>
-                {data.itinerary && <div>Hành trình chạy xe: {data.itinerary}</div>}
+                {data.itinerary && <div>Hành trình chạy xe: {data.itinerary} và Ngược Lại</div>}
               </td>
               <td className="c lenh-sign">
                 <i><b>{data.signerTitle}</b><br />(Ký tên và đóng dấu)</i>

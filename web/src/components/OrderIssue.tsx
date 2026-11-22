@@ -133,11 +133,14 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
         <div className="form">
           <div className="grid2">
             <label>Biển số
-              <input list="ord-plates" value={info.plate ?? ''} onChange={(e) => {
+              <select value={info.plate ?? ''} onChange={(e) => {
                 const v = lists.vehicles.find((x) => x.plate === e.target.value);
-                setInfo({ ...info, plate: e.target.value, ...(v?.seats ? { seats: v.seats } : {}) });
-              }} />
-              <datalist id="ord-plates">{lists.vehicles.map((v) => <option key={v.plate} value={v.plate} />)}</datalist>
+                setInfo({ ...info, plate: e.target.value || undefined, ...(v?.seats ? { seats: v.seats } : {}) });
+              }}>
+                <option value="" />
+                {info.plate && !lists.vehicles.some((v) => v.plate === info.plate) && <option value={info.plate}>{info.plate}</option>}
+                {lists.vehicles.map((v) => <option key={v.plate} value={v.plate}>{v.plate}</option>)}
+              </select>
             </label>
             <label>Loại xe
               <select value={info.seats ?? ''} onChange={(e) => setInfo({ ...info, seats: e.target.value ? Number(e.target.value) : undefined })}>
@@ -146,11 +149,14 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
               </select>
             </label>
             <label>Lái xe
-              <input list="ord-drivers" value={info.driver ?? ''} onChange={(e) => {
+              <select value={info.driver ?? ''} onChange={(e) => {
                 const d = lists.drivers.find((x) => x.name === e.target.value);
-                setInfo({ ...info, driver: e.target.value, ...(d?.hang ? { hang: d.hang } : {}) });
-              }} />
-              <datalist id="ord-drivers">{lists.drivers.map((d) => <option key={d.name} value={d.name} />)}</datalist>
+                setInfo({ ...info, driver: e.target.value || undefined, hang: d?.hang ?? undefined });
+              }}>
+                <option value="" />
+                {info.driver && !lists.drivers.some((d) => d.name === info.driver) && <option value={info.driver}>{info.driver}</option>}
+                {lists.drivers.map((d) => <option key={d.name} value={d.name}>{d.name}</option>)}
+              </select>
             </label>
             <label>Hạng GPLX
               <input value={info.hang ?? ''} maxLength={10} onChange={(e) => setInfo({ ...info, hang: e.target.value })} />

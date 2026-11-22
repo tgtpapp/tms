@@ -7,6 +7,7 @@ import { numberToWords } from './vnWords';
 import { makePdf, pageImg, paginate } from './pdfMaker';
 import { savePdf } from './dispatchPapers';
 import { safeName } from './documents';
+import { putFile } from './fileStore';
 import { loadSigns, type Sign } from './signatures';
 
 export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string; files?: string[] }
@@ -143,8 +144,8 @@ export async function saveLeasePdf(tenantId: string, k: Lease, x: LeaseCtx): Pro
     if (!v) continue;
     // Tên tệp trong kho chỉ được chữ không dấu (số HĐ có chữ "Đ"): 001/2026/HĐTX-TGTP → 0012026HDTXTGTP
     const path = `${tenantId}/xe/${v.id}/${safeName(v.plate)}_hop_dong_thue_${safeName(k.number)}_${crypto.randomUUID().slice(0, 4)}.pdf`;
-    const up = await supabase.storage.from('giay-to').upload(path, blob, { contentType: 'application/pdf', upsert: false });
-    if (up.error) throw new Error(`Không tải được PDF lên hồ sơ xe ${v.plate}: ${up.error.message}`);
+    try { await putFile(path, blob, 'application/pdf'); }
+    catch (e) { throw new Error(`Không tải được PDF lên hồ sơ xe ${v.plate}: ${e instanceof Error ? e.message : String(e)}`); }
     await rpc('add_vehicle_document', { p_vehicle_id: v.id, p_doc_type: 'hop_dong_thue', p_doc_no: k.number, p_issuer: who || null, p_issued_on: k.signed_on,
       p_valid_from: k.start_on, p_expires_on: k.end_on, p_data: { 'xe.bien_so': v.plate, gia_thue: it.price || null }, p_files: [path],
       p_note: k.status === 'cham_dut' ? 'Đã chấm dứt' : null, p_request_id: crypto.randomUUID() });

@@ -35,3 +35,6 @@ verify_jwt = false
 # Lưu lệnh đã đóng dấu bằng mã QR trên lệnh (quét bằng Zalo, không cần đăng nhập; mã bí mật riêng từng lệnh)
 [functions.lenh]
 verify_jwt = false
+
+[functions.tep]
+verify_jwt = false

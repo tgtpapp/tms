@@ -7,6 +7,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { Image } from 'https://deno.land/x/imagescript@1.3.0/mod.ts';
 import { manifestOf, safeOrigin } from '../_shared/app_install.ts';
+import { driveCfg, readFile, unb64 } from '../_shared/file_store.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -30,9 +31,13 @@ Deno.serve(async (req) => {
   if (!UUID.test(t) || (s && !UUID.test(s))) return new Response('Tham số không hợp lệ', { status: 400, headers: CORS });
   const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   let bytes: Uint8Array | null = null;
-  for (const path of [s ? `${t}/anh_dai_dien/${s}.jpg` : '', `${t}/cong_ty/logo.png`].filter(Boolean)) {
-    const { data } = await db.storage.from('giay-to').download(path);
-    if (data) { bytes = new Uint8Array(await data.arrayBuffer()); break; }
+  // Ảnh nằm trên Google Drive của nhà xe (bảng file_store) hoặc kho cũ khi chưa chuyển
+  const rows = ((await db.from('file_store').select('name, drive_id, mime').eq('tenant_id', t)
+    .in('name', [s ? `${t}/anh_dai_dien/${s}.jpg` : '', `${t}/cong_ty/logo.png`].filter(Boolean))).data ?? []) as { name: string; drive_id: string | null; mime: string | null }[];
+  rows.sort((a, b) => Number(a.name.includes('/cong_ty/')) - Number(b.name.includes('/cong_ty/')));
+  const cfg = rows.some((r) => r.drive_id) ? await driveCfg(db, t) : null;
+  for (const row of rows) {
+    try { bytes = unb64((await readFile(db, cfg, row)).data); break; } catch { /* thử ảnh sau */ }
   }
   if (!bytes) return new Response('Chưa có ảnh', { status: 404, headers: CORS });
   try {

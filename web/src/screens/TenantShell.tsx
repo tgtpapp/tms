@@ -5,6 +5,7 @@ import { Centered } from '../components/Centered';
 import { config } from '../config';
 import { companyFileUrl } from '../lib/documents';
 import { loadPermissions, type Permissions } from '../lib/permissions';
+import { moveOldFiles } from '../lib/fileStore';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
 import { archiveMissingContracts } from '../lib/laborAutoArchive';
 import { AccountScreen } from './Account';
@@ -63,7 +64,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const myAva = myStaff ? avas[myStaff] : undefined;
   useEffect(() => {
     if (!ctx.tenant_id) return;
-    brandApp(ctx.tenant_name ?? config.appName, ctx.tenant_id, myStaff, myAva ? new URL(myAva).searchParams.get('v') ?? '' : '');
+    brandApp(ctx.tenant_name ?? config.appName, ctx.tenant_id, myStaff, myAva ? decodeURIComponent(/#v=([^#]*)$/.exec(myAva)?.[1] ?? '') : '');
   }, [ctx.tenant_id, ctx.tenant_name, myStaff, myAva]);
   useEffect(() => { if (!shareMsg) return; const t = window.setTimeout(() => setShareMsg(''), 12_000); return () => window.clearTimeout(t); }, [shareMsg]);
 
@@ -77,6 +78,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       setIsCrew(crew);
       setMyStaff((me.data as { id: string } | null)?.id ?? null);
       setPerms(p);
+      // Chủ nhà xe: tệp còn ở kho cũ tự chuyển dần lên Google Drive (chạy nền)
+      if (p.has('settings.manage')) void moveOldFiles();
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
       setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
       if (hasShare()) {

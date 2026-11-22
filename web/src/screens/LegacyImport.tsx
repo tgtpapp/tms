@@ -5,7 +5,8 @@ import { norm, routeKey, titleCase } from '../lib/scheduleImport';
 import { useState } from 'react';
 import { LegacyMore } from './LegacyMore';
 import { today } from '../components/Documents';
-import { BUCKET, avatarUrls, signatureUrl, uploadAvatar, uploadFiles } from '../lib/documents';
+import { avatarUrls, signatureUrl, uploadAvatar, uploadFiles } from '../lib/documents';
+import { putFile } from '../lib/fileStore';
 import {
   day, fromDataUrl, isExternal, mapEmployee, mapVehicle, normName, parseBackup, str, type LegacyBackup, PLATE_OK, plateKey, stableId, type LegacyDoc, type StaffRow, type VehicleRow,
 } from '../lib/legacyImport';
@@ -147,8 +148,7 @@ export function LegacyImport({ tenantId }: { tenantId: string }) {
             if (/^(data:image\/|https?:)/.test(ck) && !(await signatureUrl(tenantId, `nv_${s.id}`))) {
               try {
                 const blob = await (await fetch(ck)).blob();
-                const up = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/nv_${s.id}.png`, blob, { contentType: blob.type || 'image/png', upsert: true });
-                if (up.error) throw new Error(up.error.message);
+                await putFile(`${tenantId}/chu_ky/nv_${s.id}.png`, blob, blob.type || 'image/png');
                 signs++;
               } catch (e) {
                 log.push(`${s.name}: không chuyển được chữ ký (${errMsg(e)})`);

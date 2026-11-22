@@ -1,8 +1,8 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { docTypeOf, type OwnerKind } from './docTypes';
 import { supabase } from './supabase';
+import { blobUrl, delFile, fileUrl, getBlobs, listFiles, putFile } from './fileStore';
 
-export const BUCKET = 'giay-to';
 const MAX_SIDE = 1600;        // cạnh dài tối đa sau khi nén
 const JPEG_QUALITY = 0.8;
 const MAX_PDF = 8 * 1024 * 1024;
@@ -62,8 +62,8 @@ export async function uploadFiles(tenantId: string, ownerKind: OwnerKind, ownerI
   const paths: string[] = [];
   for (let i = 0; i < files.length; i++) {
     const path = `${tenantId}/${ownerKind}/${ownerId}/${base}_${i + 1}.${files[i].ext}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, files[i].blob, { contentType: files[i].mime, upsert: false });
-    if (error) throw new Error(`Tải ảnh lên không được: ${error.message}`);
+    try { await putFile(path, files[i].blob, files[i].mime); }
+    catch (e) { throw new Error(`Tải ảnh lên không được: ${e instanceof Error ? e.message : String(e)}`); }
     paths.push(path);
   }
   return paths;
@@ -90,9 +90,10 @@ export async function readByAI(docType: string, files: PreparedFile[]): Promise<
 /** Tải lại tệp giấy tờ đã lưu (ảnh / PDF) để AI đọc lại. */
 export async function loadStoredFiles(paths: string[]): Promise<PreparedFile[]> {
   const out: PreparedFile[] = [];
+  const got = await getBlobs(paths);
   for (const p of paths) {
-    const { data, error } = await supabase.storage.from(BUCKET).download(p);
-    if (error || !data) throw new Error(`Không tải được tệp đã lưu: ${error?.message ?? p}`);
+    const data = got.get(p);
+    if (!data) throw new Error(`Không tải được tệp đã lưu: ${p.split('/').pop()}`);
     const ext = (p.split('.').pop() ?? 'jpg').toLowerCase();
     const mime = data.type.startsWith('image/') || data.type === 'application/pdf' ? data.type
       : ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -101,11 +102,11 @@ export async function loadStoredFiles(paths: string[]): Promise<PreparedFile[]> 
   return out;
 }
 
-/** Link xem tệp trong 10 phút (bucket riêng tư). */
+/** Địa chỉ xem tệp (tệp lấy từ Google Drive 1 lần rồi nhớ trên máy). */
 export async function signedUrl(path: string): Promise<string> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 600);
-  if (error || !data) throw new Error(error?.message ?? 'Không mở được tệp');
-  return data.signedUrl;
+  const u = await fileUrl(path);
+  if (!u) throw new Error('Không mở được tệp');
+  return u;
 }
 
 /* ------------------------------------------------------------------ Chữ ký (in lệnh vận chuyển) */
@@ -250,11 +251,14 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 /** who: 'giam_doc' (chữ ký giám đốc), 'con_dau' (con dấu công ty) hoặc user_id (chữ ký của chính mình). Tự tách nền trắng. */
 export async function uploadSignature(tenantId: string, who: string, file: File): Promise<void> {
   const blob = await preparePng(file, who === 'con_dau' ? 'con_dau' : 'chu_ky');
-  const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/chu_ky/${who}.png`, blob, { contentType: 'image/png', upsert: true });
-  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
+  await putImage(`${tenantId}/chu_ky/${who}.png`, blob, 'image/png');
+}
+async function putImage(name: string, blob: Blob, mime: string): Promise<void> {
+  try { await putFile(name, blob, mime); }
+  catch (e) { throw new Error(`Không tải được ảnh: ${e instanceof Error ? e.message : String(e)}`); }
 }
 
-/** Link ảnh chữ ký / con dấu (10 phút), null nếu chưa có hoặc không có quyền xem. */
+/** Ảnh chữ ký / con dấu, null nếu chưa có hoặc không có quyền xem. */
 export async function signatureUrl(tenantId: string, who: string): Promise<string | null> {
   return fileUrl(`${tenantId}/chu_ky/${who}.png`);
 }
@@ -263,23 +267,17 @@ export async function signatureUrl(tenantId: string, who: string): Promise<strin
 
 /** path trong thư mục công ty, vd 'logo.png', 'ho_so/giay_phep.jpg' */
 export async function uploadCompanyFile(tenantId: string, path: string, blob: Blob, contentType: string): Promise<void> {
-  const { error } = await supabase.storage.from(BUCKET).upload(`${tenantId}/cong_ty/${path}`, blob, { contentType, upsert: true });
-  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
+  await putImage(`${tenantId}/cong_ty/${path}`, blob, contentType);
 }
 export async function uploadLogo(tenantId: string, file: File): Promise<void> {
   await uploadCompanyFile(tenantId, 'logo.png', await preparePng(file, false), 'image/png');
 }
 export const companyFileUrl = (tenantId: string, path: string) => fileUrl(`${tenantId}/cong_ty/${path}`);
 
-/** Xóa ảnh ("Bỏ ảnh"). full: đường dẫn đầy đủ trong bucket. */
+/** Xóa ảnh ("Bỏ ảnh"). full: tên tệp đầy đủ. */
 export async function removeFile(full: string): Promise<void> {
-  const { error } = await supabase.storage.from(BUCKET).remove([full]);
-  if (error) throw new Error(`Không bỏ được ảnh: ${error.message}`);
-}
-
-async function fileUrl(full: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(full, 600);
-  return error || !data ? null : `${data.signedUrl}&t=${Date.now()}`;
+  try { await delFile(full); }
+  catch (e) { throw new Error(`Không bỏ được ảnh: ${e instanceof Error ? e.message : String(e)}`); }
 }
 
 /* ------------------------------------------------------------------ Ảnh đại diện nhân viên / lái xe */
@@ -306,8 +304,7 @@ async function prepareAvatar(file: Blob): Promise<Blob> {
 
 export async function uploadAvatar(tenantId: string, staffId: string, file: Blob, dir: AvaDir = 'anh_dai_dien'): Promise<void> {
   const blob = await prepareAvatar(file);
-  const { error } = await supabase.storage.from(BUCKET).upload(avatarPath(tenantId, staffId, dir), blob, { contentType: 'image/jpeg', upsert: true });
-  if (error) throw new Error(`Không tải được ảnh: ${error.message}`);
+  await putImage(avatarPath(tenantId, staffId, dir), blob, 'image/jpeg');
   window.dispatchEvent(new Event('tms-avatar'));
 }
 
@@ -316,18 +313,16 @@ export async function removeAvatar(tenantId: string, staffId: string, dir: AvaDi
   window.dispatchEvent(new Event('tms-avatar'));
 }
 
-/** Link ảnh đại diện của mọi nhân viên trong nhà xe (1 lần liệt kê + 1 lần ký link), theo staff_id. */
+/** Ảnh đại diện của mọi nhân viên trong nhà xe theo staff_id (1 lần liệt kê; ảnh đã có trên máy thì không tải lại). */
 export async function avatarUrls(tenantId: string, kind: AvaDir = 'anh_dai_dien'): Promise<Record<string, string>> {
-  const dir = `${tenantId}/${kind}`;
-  const { data: files, error } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
-  if (error || !files?.length) return {};
-  const jpg = files.filter((f) => /^[0-9a-f-]{36}\.jpg$/.test(f.name));
-  if (!jpg.length) return {};
-  const { data } = await supabase.storage.from(BUCKET).createSignedUrls(jpg.map((f) => `${dir}/${f.name}`), 3600);
+  const dir = `${tenantId}/${kind}/`;
+  const files = (await listFiles(dir)).filter((f) => /^[0-9a-f-]{36}\.jpg$/.test(f.name.slice(dir.length)));
+  if (!files.length) return {};
+  const got = await getBlobs(files.map((f) => f.name), new Map(files.map((f) => [f.name, f.updated_at])));
   const out: Record<string, string> = {};
-  (data ?? []).forEach((d, i) => {
-    const f = jpg[i];
-    if (d.signedUrl && f) out[f.name.slice(0, 36)] = `${d.signedUrl}&v=${encodeURIComponent(f.updated_at ?? '')}`;
-  });
+  for (const f of files) {
+    const b = got.get(f.name);
+    if (b) out[f.name.slice(dir.length, dir.length + 36)] = `${blobUrl(f.name, b)}#v=${encodeURIComponent(f.updated_at)}`;   // #v: phiên bản ảnh (biểu tượng app)
+  }
   return out;
 }

@@ -1,7 +1,7 @@
 // Đọc ảnh đổ dầu (trụ bơm, hóa đơn, biển số, đồng hồ km) bằng AI → số liệu phiếu. Dùng chung cho
 // "Tạo phiếu từ ảnh" ở Nhiên liệu, lái xe "Báo đổ dầu" và ảnh chia sẻ từ Zalo vào app (như app cũ).
 import { readByAI, safeName, type PreparedFile } from './documents';
-import { supabase } from './supabase';
+import { putFile } from './fileStore';
 import { today } from '../components/Documents';
 
 export interface FuelRead { plate: string; liters: number; price: number; amount: number; date: string; time: string; km: string; supplier: string; invoice: string; warnings: string[] }
@@ -42,8 +42,8 @@ export async function uploadReportPhotos(tenantId: string, staffId: string, plat
     const path = `${tenantId}/bao_dau/${staffId}/${base}_${i + 1}.${files[i]!.ext}`;
     let err: Error | null = null;
     for (let t = 0; t < 3; t++) {   // sóng yếu ở cây xăng: thử lại
-      const { error } = await supabase.storage.from('giay-to').upload(path, files[i]!.blob, { contentType: files[i]!.mime, upsert: false });
-      if (!error || /exists|duplicate/i.test(error.message)) { err = null; break; }
+      const error = await putFile(path, files[i]!.blob, files[i]!.mime).then(() => null, (e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+      if (!error) { err = null; break; }
       err = new Error(`Chưa tải được ảnh lên (mạng yếu?): ${error.message}`);
       await new Promise((r) => setTimeout(r, 1500 * (t + 1)));
     }

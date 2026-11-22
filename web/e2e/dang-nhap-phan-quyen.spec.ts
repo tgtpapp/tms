@@ -657,7 +657,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByPlaceholder(/Số điện thoại, tên khách hoặc mã vé/).fill('345678');
   await expect(page.getByText(/Tìm thấy \d+ vé/)).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: /Ghế A01 · Chị Lan · 0912345678/ }).click();
-  await expect(page.getByRole('dialog')).toContainText('Chị Lan');
+  await expect(page.getByRole('dialog').getByLabel('Tên khách')).toHaveValue('Chị Lan');
   await page.getByRole('dialog').getByRole('button', { name: 'Đóng cửa sổ' }).click();
   // Gửi hàng: chọn tuyến / chuyến như Bán vé, điểm gửi – nhận theo thứ tự tuyến, xem trước và in phiếu K80
   await page.getByRole('button', { name: 'Gửi hàng', exact: true }).click();

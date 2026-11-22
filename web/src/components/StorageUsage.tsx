@@ -6,7 +6,7 @@ import { drive } from '../lib/drive';
 import { errMsg, rpc } from '../lib/supabase';
 
 interface Usage { db_bytes: number; files_bytes: number; tenant_files_bytes: number; tenant_files_count: number; drive_items: number; drive_bytes: number;
-  drive_files?: number; drive_files_bytes?: number; neon?: { bytes: number; ok: boolean; at: string } | null }
+  drive_files?: number; drive_files_bytes?: number; neon?: { bytes?: number; ok?: boolean; configured?: boolean; at: string } | null }
 const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
 const mb = (b: number) => `${(b / 1048576).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} MB`;
 
@@ -41,8 +41,10 @@ export function StorageUsage() {
             note="Dùng chung cho cả hệ thống. Vượt giới hạn thì không ghi thêm được dữ liệu (chỉ đọc), cần nâng gói hoặc dọn bớt." />
           <Bar label="File (ảnh giấy tờ, hóa đơn, chữ ký…)" used={Number(u.files_bytes)} limitMb={config.fileLimitMb}
             note={`Trong đó nhà xe này: ${mb(Number(u.tenant_files_bytes))} (${Number(u.tenant_files_count).toLocaleString('vi-VN')} tệp).`} />
-          {u.neon
-            ? <Bar label="Bản dự phòng (Neon)" used={Number(u.neon.bytes)} limitMb={config.neonLimitMb}
+          {u.neon?.configured === false
+            ? <p className="small danger-text">Bản dự phòng (Neon): CHƯA BẬT — chưa có kết nối Neon nên chưa sao chép dự phòng toàn hệ thống.</p>
+            : u.neon
+            ? <Bar label="Bản dự phòng (Neon)" used={Number(u.neon.bytes ?? 0)} limitMb={config.neonLimitMb}
                 note={`Sao chép toàn hệ thống mỗi đêm. Lần cuối ${when(u.neon.at)}: ${u.neon.ok ? 'khớp đủ dữ liệu' : 'LỆCH dữ liệu, cần kiểm tra'}.`} />
             : <p className="small muted">Bản dự phòng (Neon): chưa có số liệu, có sau lần sao chép đêm nay.</p>}
           {gd && gd.limit > 0 && (

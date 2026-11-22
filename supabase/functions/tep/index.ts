@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       let moved = 0;
       const t0 = Date.now();
       for (const r of rows) {
-        if (Date.now() - t0 > 90_000) break;
+        if (Date.now() - t0 > 30_000) break;   // hàm chỉ chạy được ~150 giây: tệp lớn để lượt sau
         if (await moveOne(admin, c, tid, r).catch(() => false)) moved++;
         else await admin.from('file_store').update({ move_fail: (r.move_fail ?? 0) + 1 }).eq('tenant_id', tid).eq('name', r.name);
       }

@@ -43,7 +43,10 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           if [ -z "$NEON_DATABASE_URL" ]; then
-            echo "::warning::Chưa có secret NEON_DATABASE_URL: bỏ qua bản sao toàn hệ thống sang Neon"; exit 0
+            echo "::warning::Chưa có secret NEON_DATABASE_URL: bỏ qua bản sao toàn hệ thống sang Neon"
+            psql -q -c "insert into app.platform_stats (key, value, updated_at) values ('neon', '{\"configured\": false}', now())
+                        on conflict (key) do update set value = excluded.value, updated_at = now()" || true
+            exit 0
           fi
           echo "::add-mask::$NEON_DATABASE_URL"
           sudo apt-get install -y -qq postgresql-client >/dev/null 2>&1 || true

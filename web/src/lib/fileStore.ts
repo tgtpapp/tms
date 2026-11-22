@@ -159,10 +159,19 @@ let moving = false;
 export async function moveOldFiles(): Promise<void> {
   if (moving) return;
   moving = true;
+  let errs = 0, zero = 0;
   try {
-    for (let i = 0; i < 100; i++) {
-      const r = await tep<{ moved: number; left: number; tried?: number }>({ action: 'chuyen' });
-      if (r.left <= 0 || !r.moved) return;   // hết tệp, hoặc lô này chưa chuyển được tệp nào (lần mở app sau thử lại)
+    for (let i = 0; i < 300 && errs < 5; i++) {
+      try {
+        const r = await tep<{ moved: number; left: number; tried?: number }>({ action: 'chuyen' });
+        errs = 0;
+        if (r.left <= 0 || !r.tried) return;   // hết tệp (hoặc nhà xe chưa kết nối Drive)
+        zero = r.moved ? 0 : zero + 1;
+        if (zero >= 3) return;                 // còn lại toàn tệp chưa chuyển được: để lần mở app sau
+      } catch {
+        errs++;   // mạng chập chờn / Drive bận: nghỉ rồi thử tiếp; lỗi liền 5 lần thì để lần mở app sau
+        await new Promise((r) => setTimeout(r, 5000 * errs));
+      }
     }
-  } catch { /* lần sau làm tiếp */ } finally { moving = false; }
+  } finally { moving = false; }
 }

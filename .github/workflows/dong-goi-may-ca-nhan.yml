@@ -1,0 +1,51 @@
+name: Đóng gói TMS trên máy tính
+# Tạo tệp TMS-tren-may.zip (trang Releases): giải nén, cài Docker Desktop 1 lần, bấm "TMS tren may.bat" là chạy.
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+env:
+  SUPABASE_CLI_VERSION: 3.2.0
+jobs:
+  dong-goi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Khóa công khai của hệ thống trên máy (mặc định, giống mọi máy)
+        run: |
+          supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor,edge-runtime >/dev/null
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          echo "LOCAL_ANON=$ANON_KEY" >> "$GITHUB_ENV"
+          supabase stop >/dev/null
+      - name: Dựng giao diện trỏ về máy
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          grep -vE '^(VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY|VITE_APP_ENV)=' .env.production > .env.local
+          printf 'VITE_APP_ENV=local\nVITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$LOCAL_ANON" >> .env.local
+          npx vite build --mode local --outDir ../out/web
+      - name: Gói
+        run: |
+          D=out
+          mkdir -p $D/he-thong
+          cp -r supabase/config.toml supabase/migrations supabase/functions $D/he-thong/ 2>/dev/null
+          mkdir -p $D/he-thong/supabase && mv $D/he-thong/config.toml $D/he-thong/migrations $D/he-thong/functions $D/he-thong/supabase/
+          [ -d supabase/seed.sql ] || cp supabase/seed.sql $D/he-thong/supabase/ 2>/dev/null || true
+          cp .github/scripts/khoi_phuc.sh tools/may-ca-nhan/chay.ps1 "tools/may-ca-nhan/TMS tren may.bat" "tools/may-ca-nhan/Tat TMS tren may.bat" $D/
+          curl -sSL "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/supabase_windows_amd64.tar.gz" | tar -xz -C $D supabase.exe
+          ls $D
+          (cd $D && zip -qr ../TMS-tren-may.zip .)
+          ls -la TMS-tren-may.zip
+      - name: Đưa lên trang Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete tms-tren-may --yes --cleanup-tag 2>/dev/null || true
+          gh release create tms-tren-may TMS-tren-may.zip --title "TMS trên máy tính" --notes "Giải nén, cài Docker Desktop 1 lần, bấm 'TMS tren may.bat'. Tắt: 'Tat TMS tren may.bat'."

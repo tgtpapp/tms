@@ -1,0 +1,91 @@
+name: Khôi phục từ bản dự phòng Neon
+# Khi Supabase gặp sự cố: dựng lại toàn bộ hệ thống vào 1 project Supabase MỚI từ bản Neon đêm gần nhất.
+#   - Diễn tập (mặc định): dựng Supabase tạm trên máy GitHub, đổ dữ liệu Neon vào, đối chiếu. Không đụng bản thật.
+#   - Thật: nhập mã project mới (Supabase → Project Settings → General → Reference ID). Trước đó thêm secret:
+#       NEW_SUPABASE_DB_PASSWORD  mật khẩu database của project mới
+#       RECOVERY_OWNER_PHONE      SĐT đăng nhập của Chủ nhà xe
+#       RECOVERY_OWNER_PASSWORD   mật khẩu tạm của Chủ nhà xe (đăng nhập xong vào Người dùng đặt lại mật khẩu cho mọi người)
+#     Chạy xong: đổi VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (web/.env.production) và SUPABASE_PROJECT_REF trong ci.yml sang project mới.
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: 'Mã project Supabase mới (để trống = diễn tập, không đụng bản thật)'
+        required: false
+        default: ''
+      region:
+        description: 'Vùng của project mới'
+        required: false
+        default: 'ap-southeast-1'
+permissions:
+  contents: read
+concurrency: khoi-phuc
+env:
+  SUPABASE_CLI_VERSION: 3.2.0
+jobs:
+  khoi-phuc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      REF: ${{ inputs.project_ref }}
+      REGION: ${{ inputs.region }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Công cụ PostgreSQL
+        run: |
+          sudo apt-get install -y -qq postgresql-client >/dev/null 2>&1 || true
+          [ -n "$NEON_DATABASE_URL" ] || { echo "Thiếu secret NEON_DATABASE_URL"; exit 1; }
+          echo "::add-mask::$NEON_DATABASE_URL"
+          if [ -n "$REF" ] && [ "$REF" = "vnqkmaauqygnckgtshus" ]; then echo "::error::Không khôi phục đè lên project đang chạy"; exit 1; fi
+
+      - name: Diễn tập - dựng Supabase tạm trên máy GitHub
+        if: inputs.project_ref == ''
+        run: |
+          supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor >/dev/null
+          eval "$(supabase status -o env | sed 's/^/export /')"
+          echo "TARGET_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> "$GITHUB_ENV"
+          echo "TARGET_API_URL=$API_URL" >> "$GITHUB_ENV"
+          echo "::add-mask::$SERVICE_ROLE_KEY"
+          echo "TARGET_SERVICE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
+
+      - name: Thật - dựng cấu trúc trên project mới
+        if: inputs.project_ref != ''
+        env:
+          NEW_SUPABASE_DB_PASSWORD: ${{ secrets.NEW_SUPABASE_DB_PASSWORD }}
+          AI_PROVIDERS: ${{ secrets.AI_PROVIDERS }}
+        run: |
+          [ -n "$NEW_SUPABASE_DB_PASSWORD" ] || { echo "Thiếu secret NEW_SUPABASE_DB_PASSWORD"; exit 1; }
+          supabase link --project-ref "$REF" -p "$NEW_SUPABASE_DB_PASSWORD"
+          PW=$(python3 -c 'import os,urllib.parse;print(urllib.parse.quote(os.environ["NEW_SUPABASE_DB_PASSWORD"],safe=""))')
+          for host in "aws-1-${REGION}.pooler.supabase.com" "aws-0-${REGION}.pooler.supabase.com"; do
+            url="postgresql://postgres.${REF}:${PW}@${host}:5432/postgres"
+            if psql "$url" -tAc 'select 1' >/dev/null 2>&1; then echo "::add-mask::$url"; echo "TARGET_DB_URL=$url" >> "$GITHUB_ENV"; DB="$url"; break; fi
+          done
+          [ -n "${DB:-}" ] || { echo "Không kết nối được database project mới"; exit 1; }
+          supabase db push --db-url "$DB" --yes
+          psql "$DB" -v ON_ERROR_STOP=1 -qc "select app.set_push_url('https://${REF}.supabase.co/functions/v1/push')"
+          [ -z "$AI_PROVIDERS" ] || supabase secrets set "AI_PROVIDERS=$AI_PROVIDERS" --project-ref "$REF" >/dev/null
+          for f in admin-users doc-reader zalo drive doc-writer app-install push support lenh tep; do
+            supabase functions deploy "$f" --project-ref "$REF" --no-verify-jwt >/dev/null && echo "Đã đưa hàm $f"
+          done
+          KEY=$(supabase projects api-keys --project-ref "$REF" -o json | python3 -c 'import json,sys; print([k["api_key"] for k in json.load(sys.stdin) if k["name"]=="service_role"][0])')
+          echo "::add-mask::$KEY"
+          echo "TARGET_SERVICE_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "TARGET_API_URL=https://${REF}.supabase.co" >> "$GITHUB_ENV"
+
+      - name: Khôi phục dữ liệu + tài khoản, đối chiếu
+        env:
+          OWNER_PHONE: ${{ secrets.RECOVERY_OWNER_PHONE }}
+          OWNER_PASSWORD: ${{ secrets.RECOVERY_OWNER_PASSWORD }}
+        run: bash .github/scripts/khoi_phuc.sh
+
+      - name: Việc còn lại (bản thật)
+        if: inputs.project_ref != ''
+        run: |
+          echo "Đổi sang project mới: web/.env.production (VITE_SUPABASE_URL=https://${REF}.supabase.co, VITE_SUPABASE_ANON_KEY = khóa anon của project mới)"
+          echo "và SUPABASE_PROJECT_REF trong .github/workflows/ci.yml + sao-luu-dem.yml; khai lại Zalo (nếu dùng) ở Supabase → Edge Functions → Secrets."

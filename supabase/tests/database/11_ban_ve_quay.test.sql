@@ -74,6 +74,20 @@ select lives_ok($$ select public.hold_seat((select id from public.trips where id
 select isnt(public.merge_my_holds((select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1)), null, 'Gom ghế đang giữ');
 select is((select count(distinct booking_id)::int from public.seat_inventory where status = 'giu'
            and trip_id = (select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1)), 1, 'Hai ghế về chung 1 đơn');
+select lives_ok($$ select public.set_hold_segment((select booking_id from public.seat_inventory where status = 'giu' limit 1),
+  (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'BR')) $$, 'Đổi chặng ngay trong cửa sổ bán vé');
+select is((select array_agg(price order by seat_label) from public.seat_inventory where status = 'giu'), array[120000, 120000],
+  'Đổi sang chặng Hố Nai – Bà Rịa: giá tự tính lại 120.000');
+select throws_ok($$ select public.set_hold_segment((select booking_id from public.seat_inventory where status = 'giu' limit 1),
+  (select v from t.ids where k = 'VT'), (select v from t.ids where k = 'HN')) $$, '22023', null, 'Đổi chặng ngược chiều bị chặn');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.set_hold_segment((select booking_id from public.seat_inventory limit 1), (select v from t.ids where k = 'HN'),
+  (select v from t.ids where k = 'VT')) $$, 'P0002', null, 'Nhà xe khác không đổi được chặng ghế đang giữ');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select lives_ok($$ select public.unhold_seat(id) from public.seat_inventory where status = 'giu'
   and trip_id = (select id from public.trips where id <> (select v from t.ids where k = 'T') limit 1) $$, 'Bỏ chọn được cả hai ghế');
 reset role;

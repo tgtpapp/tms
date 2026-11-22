@@ -456,6 +456,9 @@ function TripSell(props: TripSellProps) {
   const all = useMemo(() => [...tickets.filter((t) => !t.id.startsWith('q:')), ...queuedTickets(queue, trip.id, stopIds)], [tickets, queue, trip.id, stopIds]);
   const waiting = tickets.filter((t) => t.status === 'cho_xep');
   const fareOf = (a: string, b: string) => fares.find((x) => x.from_stop_id === a && x.to_stop_id === b)?.price ?? null;
+  // Chặng hiện trong ô chọn: toàn tuyến + chặng có trong Bảng giá vé, theo chiều chạy của chuyến (toàn tuyến đứng đầu)
+  const segs = fares.filter((x) => x.listed !== false && stopIds.indexOf(x.from_stop_id) < stopIds.indexOf(x.to_stop_id))
+    .sort((x, y) => stopIds.indexOf(x.from_stop_id) - stopIds.indexOf(y.from_stop_id) || stopIds.indexOf(y.to_stop_id) - stopIds.indexOf(x.to_stop_id));
   const me = ctx.user_id;
   const isMine = (t: Ticket) => t.status === 'giu' && t.created_by === me;
   const myHolds = tickets.filter((t) => isMine(t) && t.booking_id === bookingId && active(t));
@@ -589,20 +592,10 @@ function TripSell(props: TripSellProps) {
               {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}
               {view === 'so_do' && (
                 <span className="vx-leg">
-                  {fares.length > 0 && (() => {
-                    // Mặc định toàn tuyến; chọn chặng khác (trong bảng giá) thì đón / trả và giá vé tự theo chặng đó
-                    const ord = (x: Fare) => stopIds.indexOf(x.from_stop_id) < stopIds.indexOf(x.to_stop_id);
-                    const list = fares.filter((x) => x.listed !== false && ord(x))
-                      .sort((x, y) => stopIds.indexOf(x.from_stop_id) - stopIds.indexOf(y.from_stop_id) || stopIds.indexOf(y.to_stop_id) - stopIds.indexOf(x.to_stop_id));
-                    const cur = list.some((x) => x.from_stop_id === from && x.to_stop_id === to) ? `${from}|${to}` : '';
-                    return (
-                      <select aria-label="Chặng" value={cur}
-                              onChange={(e) => { const [a, b] = e.target.value.split('|'); if (a && b) { setFrom(a); setTo(b); } }} disabled={myHolds.length + offSel.length > 0}>
-                        {!cur && <option value="">{stopName(from)} → {stopName(to)}{fareOf(from, to) !== null ? ` · ${money(fareOf(from, to) ?? 0)}` : ''}</option>}
-                        {list.map((x) => <option key={`${x.from_stop_id}|${x.to_stop_id}`} value={`${x.from_stop_id}|${x.to_stop_id}`}>{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}</option>)}
-                      </select>
-                    );
-                  })()}
+                  {fares.length > 0 && (
+                    <SegSelect segs={segs} from={from} to={to} stopName={stopName} fareOf={fareOf} disabled={myHolds.length + offSel.length > 0}
+                               onPick={(a, b) => { setFrom(a); setTo(b); }} />
+                  )}
                   <select aria-label="Đón tại" value={from} onChange={(e) => setFrom(e.target.value)} disabled={myHolds.length + offSel.length > 0}>
                     {stopIds.slice(0, -1).map((id) => <option key={id} value={id}>{stopName(id)}</option>)}
                   </select>→
@@ -681,6 +674,7 @@ function TripSell(props: TripSellProps) {
         <Modal wide title={`${hhmm(trip.depart_at)} · ${fmtDate(props.day)} · ${props.routeName}`} onClose={() => setCkOpen(false)}>
         <Tabs tabs={['Thông tin chung']} />
         <Checkout trip={trip} holds={myHolds} bookingId={bookingId} stopName={stopName} from={from} to={to} bank={props.bank} ticketBase={ticketData}
+                  segs={segs} fareOf={fareOf} onSegment={async (a, b) => { setFrom(a); setTo(b); await load(); }}
                   onDone={async (code, printed) => {
                     setBookingId(null);
                     await load();
@@ -857,9 +851,25 @@ function TripStats({ tickets, stopName }: { tickets: Ticket[]; stopName: (id: st
 
 /* ------------------------------------------------------------------ Xác nhận đơn */
 
+/** Ô chọn chặng: mặc định toàn tuyến; chọn chặng khác (trong Bảng giá vé) thì đón / trả và giá theo chặng đó */
+function SegSelect(props: { segs: Fare[]; from: string; to: string; stopName: (id: string | null) => string; fareOf: (a: string, b: string) => number | null;
+  disabled: boolean; onPick: (from: string, to: string) => void }) {
+  const { segs, from, to, stopName, fareOf } = props;
+  const cur = segs.some((x) => x.from_stop_id === from && x.to_stop_id === to) ? `${from}|${to}` : '';
+  const p = fareOf(from, to);
+  return (
+    <select aria-label="Chặng" value={cur} disabled={props.disabled}
+            onChange={(e) => { const [a, b] = e.target.value.split('|'); if (a && b) props.onPick(a, b); }}>
+      {!cur && <option value="">{stopName(from)} → {stopName(to)}{p !== null ? ` · ${money(p)}` : ''}</option>}
+      {segs.map((x) => <option key={`${x.from_stop_id}|${x.to_stop_id}`} value={`${x.from_stop_id}|${x.to_stop_id}`}>{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}</option>)}
+    </select>
+  );
+}
+
 function Checkout(props: {
   trip: Trip; holds: Ticket[]; bookingId: string; stopName: (id: string | null) => string; from: string; to: string;
   bank: BankAccount | null; ticketBase: (list: Ticket[], code: string) => TicketPrintData;
+  segs: Fare[]; fareOf: (a: string, b: string) => number | null; onSegment: (from: string, to: string) => Promise<void>;
   onDone: (code: string, printList: Ticket[] | null) => Promise<void>; onCancelAll: () => Promise<void>; onMore: () => void;
 }) {
   const { holds, bookingId, stopName, onDone, onCancelAll, bank, onMore } = props;
@@ -959,7 +969,16 @@ function Checkout(props: {
       </div>
       <div className="gh-wrap">
       <div className="form">
-      <p className="small">Ghế {holds.map((h) => h.seat_label).join(', ')} · {stopName(props.from)} → {stopName(props.to)}</p>
+      <p className="small seg-line">Ghế {holds.map((h) => h.seat_label).join(', ')} ·{' '}
+        <SegSelect segs={props.segs} from={props.from} to={props.to} stopName={stopName} fareOf={props.fareOf} disabled={busy}
+                   onPick={(a, b) => void (async () => {
+                     setBusy(true);
+                     try {
+                       await rpc('set_hold_segment', { p_booking_id: bookingId, p_from_stop: a, p_to_stop: b });
+                       await props.onSegment(a, b);
+                     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+                   })()} />
+      </p>
       <div className="grid2">
         <label>Số điện thoại khách
           <input inputMode="tel" value={f.phone} onChange={(e) => { setF({ ...f, phone: e.target.value }); void lookup(e.target.value); }} />

@@ -90,15 +90,17 @@ select is((select fee_pct from public.cancel_quote(array[(select id from public.
   t.pct(
     extract(epoch from ((select depart_at from public.trips where id = (select v from t.ids where k = 'T')) - now())) / 3600),
   'Xem trước phí hủy theo mốc giờ');
-select throws_ok($$ select public.cancel_tickets(array[(select id from public.seat_inventory where seat_label = 'A01')], '', 'tien_mat', null, null) $$,
-  '22023', null, 'Hủy phải có lý do');
 select throws_ok($$ select public.cancel_tickets(array[(select id from public.seat_inventory where seat_label = 'A01')], 'Khách bận', 'tien_mat', 0, 'Quen') $$,
   '42501', null, 'Nhân viên bán vé không được sửa phí');
-select is((public.cancel_tickets(array[(select id from public.seat_inventory where seat_label = 'A01')], 'Khách bận', 'tien_mat', null, null) ->> 'refund')::int,
+select is((public.cancel_tickets(array[(select id from public.seat_inventory where seat_label = 'A01')], '', 'tien_mat', null, null) ->> 'refund')::int,
   (select 150000 - round(150000 * fee_pct / 100.0)::int from (select t.pct(
     extract(epoch from ((select depart_at from public.trips where id = (select v from t.ids where k = 'T')) - now())) / 3600) as fee_pct) x),
   'Hủy vé A01: hoàn tiền = giá vé − phí theo mốc');
 select is((select status from public.seat_inventory where seat_label = 'A01' and booking_id = (select v from t.ids where k = 'B1')), 'huy', 'Vé A01 đã hủy (vẫn lưu)');
+select is((select cancel_reason from public.seat_inventory where seat_label = 'A01' and booking_id = (select v from t.ids where k = 'B1')), 'Không ghi lý do',
+  'Lý do hủy để trống được');
+select throws_ok($$ select public.delete_cancelled_ticket((select id from public.seat_inventory where seat_label = 'A01' and status = 'huy')) $$, '42501', null,
+  'Nhân viên bán vé không xóa được vé đã hủy');
 select lives_ok($$ select public.hold_seat((select v from t.ids where k = 'T'), 'A01', (select v from t.ids where k = 'HN'),
   (select v from t.ids where k = 'VT'), null, null) $$, 'Ghế A01 bán lại được');
 select throws_ok($$ select public.cancel_tickets(array[(select id from public.seat_inventory where seat_label = 'A01' and status = 'huy')], 'Lần 2', 'tien_mat', null, null) $$,
@@ -141,12 +143,31 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select throws_ok($$ select public.ticket_history(current_setting('t.b1')::uuid) $$, 'P0002', null, 'Chủ B xem lịch sử vé nhà xe A: không tìm thấy');
 reset role;
 
+-- ---------------------------------------------------------------- Quản trị: sửa / xóa vé đã hủy
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.update_ticket_info((select id from public.seat_inventory where status = 'huy' order by created_at limit 1), 'Anh Hùng', '0911222333', null, null) $$,
+  'Quản trị sửa thông tin khách trên vé đã hủy');
+select is((select passenger_name from public.seat_inventory where status = 'huy' order by created_at limit 1), 'Anh Hùng', 'Đã sửa tên khách');
+select throws_ok($$ select public.delete_cancelled_ticket((select id from public.seat_inventory where status in ('dat', 'da_tt') limit 1)) $$, '22023', null,
+  'Vé còn hiệu lực không xóa được');
+select set_config('t.del', (select id::text from public.seat_inventory where status = 'huy' order by created_at limit 1), true);
+select lives_ok($$ select public.delete_cancelled_ticket(current_setting('t.del')::uuid) $$, 'Quản trị xóa vé đã hủy');
+select is((select count(*)::int from public.seat_inventory where id = current_setting('t.del')::uuid), 0, 'Vé đã hủy đã xóa');
+select is((select sum(debit) - sum(credit) from public.ledger_lines)::int, 0, 'Sổ cái giữ nguyên, vẫn cân');
+reset role;
+
 -- ---------------------------------------------------------------- Nhà xe khác
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.cancel_quote(array(select v from t.ids))), 0, 'Chủ B không xem được phí vé nhà xe A');
 select throws_ok($$ select public.cancel_tickets(array(select v from t.ids), 'x', 'tien_mat', null, null) $$, 'P0002', null,
   'Chủ B hủy vé nhà xe A: không tìm thấy');
+reset role;
+select set_config('t.del2', (select id::text from public.seat_inventory where status = 'huy' limit 1), true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.delete_cancelled_ticket(current_setting('t.del2')::uuid) $$, 'P0002', null, 'Chủ B xóa vé đã hủy nhà xe A: không tìm thấy');
 reset role;
 
 select * from finish();

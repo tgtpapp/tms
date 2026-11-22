@@ -230,6 +230,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   const [extra, setExtra] = useState<{ key: string; time: string; note: string } | null>(null);
   const [finding, setFinding] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
+  const [dead, setDead] = useState<Hit | null>(null);
   async function addExtra() {
     if (!extra) return;
     const [rid, d] = extra.key.split('|');
@@ -274,8 +275,14 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       <button type="button" className="dv-sbar" onClick={() => setFinding(true)}><i className="fi fi-rr-search" aria-hidden="true" /><span>Tìm vé theo số điện thoại, tên khách, mã vé…</span></button>
       {finding && (
         <TicketSearch routes={routes} stopName={stopName} onClose={() => setFinding(false)}
-                      onPick={(x) => { setFinding(false); setDay(x.service_date); setRf(`${x.route_id}|${x.direction}`); setTripId(x.trip_id); setFocus(x.status === 'huy' || x.status === 'het_han' ? null : x.id); }} />
+                      onPick={(x) => {
+                        setFinding(false);
+                        if (x.status === 'huy' || x.status === 'het_han') { setDead(x); return; }
+                        setDay(x.service_date); setRf(`${x.route_id}|${x.direction}`); setTripId(x.trip_id); setFocus(x.id);
+                      }} />
       )}
+      {dead && <CancelledTicket t={dead} admin={perms.has('sell.cancelled')} stopName={stopName} routeName={dirName(routes.find((r) => r.id === dead.route_id), dead.direction)}
+                                onClose={() => setDead(null)} />}
       <div className="vx">
         <aside className="vx-left">
           <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
@@ -325,6 +332,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
 interface Hit {
   id: string; trip_id: string; seat_label: string; status: SeatStatus; price: number; passenger_name: string | null; passenger_phone: string | null;
   from_stop_id: string; to_stop_id: string; created_at: string; service_date: string; route_id: string; direction: Dir; depart_at: string; code: string | null;
+  cancel_reason: string | null; pickup_note: string | null; dropoff_note: string | null;
 }
 
 function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; stopName: (id: string | null) => string; onClose: () => void; onPick: (x: Hit) => void }) {
@@ -342,7 +350,7 @@ function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; 
     if (short) { setHits(null); return; }
     let on = true;
     const t = setTimeout(() => void (async () => {
-      const cols = 'id, trip_id, seat_label, status, price, passenger_name, passenger_phone, from_stop_id, to_stop_id, created_at, trips!inner(service_date, route_id, direction, depart_at), bookings(code)';
+      const cols = 'id, trip_id, seat_label, status, price, passenger_name, passenger_phone, from_stop_id, to_stop_id, created_at, cancel_reason, pickup_note, dropoff_note, trips!inner(service_date, route_id, direction, depart_at), bookings(code)';
       let qb = supabase.from('seat_inventory').select(cols).neq('status', 'giu');
       const code = raw.toUpperCase().replace(/\s/g, '');
       if (raw && isNum) qb = qb.ilike('passenger_phone', `%${dg}%`);
@@ -394,6 +402,43 @@ function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; 
         ))}
         {hits && hits.length > lim && <button type="button" className="btn small" onClick={() => setLim(lim + 100)}>Xem thêm</button>}
       </div>
+    </Modal>
+  );
+}
+
+/** Vé đã hủy (mở từ Tìm vé): quản trị sửa thông tin khách hoặc xóa hẳn; người khác chỉ xem */
+function CancelledTicket({ t, admin, stopName, routeName, onClose }: { t: Hit; admin: boolean; stopName: (id: string | null) => string; routeName: string; onClose: () => void }) {
+  const toast = useToast();
+  const [info, setInfo] = useState({ name: t.passenger_name ?? '', phone: t.passenger_phone ?? '', pickup: t.pickup_note ?? '', dropoff: t.dropoff_note ?? '' });
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function run(fn: () => Promise<unknown>, ok: string) {
+    setBusy(true);
+    try { await fn(); toast('ok', ok); onClose(); } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Modal title={`${hhmm(t.depart_at)} · ${fmtDate(t.service_date)} · ${routeName}`} onClose={onClose}>
+      <section className="form">
+        <h2>Vé {t.code ?? ''} · ghế {t.seat_label} · <span className="state-het_han">Đã hủy</span></h2>
+        <p className="small">{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)} · {money(t.price)}{t.cancel_reason ? ` · Lý do hủy: ${t.cancel_reason}` : ''}</p>
+        <div className="grid2">
+          <label>Tên khách<input value={info.name} disabled={!admin} onChange={(e) => setInfo({ ...info, name: e.target.value })} /></label>
+          <label>SĐT<input inputMode="tel" value={info.phone} disabled={!admin} onChange={(e) => setInfo({ ...info, phone: e.target.value })} /></label>
+          <label>Ghi chú điểm đón<input value={info.pickup} disabled={!admin} onChange={(e) => setInfo({ ...info, pickup: e.target.value.toUpperCase() })} /></label>
+          <label>Ghi chú điểm trả<input value={info.dropoff} disabled={!admin} onChange={(e) => setInfo({ ...info, dropoff: e.target.value.toUpperCase() })} /></label>
+        </div>
+        {admin && (
+          <div className="actions">
+            <button type="button" className="btn small" disabled={busy} onClick={() => void run(() => rpc('update_ticket_info', {
+              p_ticket_id: t.id, p_name: info.name.trim() || KHACH_LE, p_phone: info.phone, p_pickup_note: info.pickup, p_dropoff_note: info.dropoff }), 'Đã sửa thông tin khách')}>Lưu thông tin</button>
+            {ask
+              ? <span className="inline-form"><span className="small">Xóa hẳn vé đã hủy này?</span>
+                  <button type="button" className="btn small danger" disabled={busy} onClick={() => void run(() => rpc('delete_cancelled_ticket', { p_ticket_id: t.id }), 'Đã xóa vé đã hủy')}>Xóa hẳn</button>
+                  <button type="button" className="btn small link" onClick={() => setAsk(false)}>Thôi</button></span>
+              : <button type="button" className="btn small danger" onClick={() => setAsk(true)}>Xóa vé</button>}
+          </div>
+        )}
+      </section>
     </Modal>
   );
 }
@@ -1401,7 +1446,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
       )}
       <p className="small">{anyPaid && !override ? `Phí ${money(sum('fee'))} · hoàn khách ${money(sum('refund'))}` : ''}</p>
       <div className="actions">
-        <button type="button" className="btn small danger" disabled={busy || !reason.trim() || !pick.length} onClick={() => void go()}>Xác nhận hủy</button>
+        <button type="button" className="btn small danger" disabled={busy || !pick.length} onClick={() => void go()}>Xác nhận hủy</button>
         <button type="button" className="btn small link" onClick={onClose}>Thôi</button>
       </div>
     </div>

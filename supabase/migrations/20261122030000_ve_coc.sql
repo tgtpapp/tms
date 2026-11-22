@@ -53,8 +53,8 @@ do $$
 declare v text;
 begin
   v := pg_get_functiondef('public.pay_booking(uuid, uuid[], text)'::regprocedure);
-  v := replace(v, E'    returning price\n', E'    returning price - deposit\n');
-  if v not like '%returning price - deposit%' then raise exception 'Không sửa được pay_booking'; end if;
+  v := replace(v, E'    returning price\n', E'    returning price - deposit as price\n');
+  if v not like '%returning price - deposit as price%' then raise exception 'Không sửa được pay_booking'; end if;
   execute v;
 end;
 $$;

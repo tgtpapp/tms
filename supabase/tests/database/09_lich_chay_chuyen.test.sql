@@ -155,8 +155,13 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
 select ok((select count(*) from public.trips) > 0, 'Bán vé xem được chuyến');
+reset role;
+-- phòng vé có ô Cấp lệnh thì sửa nhanh xe / lái xe được (đã duyệt 22/11); bỏ ô đó thì không xếp được
+delete from public.role_permissions where permission_code = 'order.add' and role_id in (select id from public.roles where code = 'seller');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
 select throws_ok($$ select public.assign_trip((select v from t.ids where k = 'T3'), null, null, null, null, null) $$, '42501', null,
-  'Bán vé không xếp được xe');
+  'Bán vé không có ô Cấp lệnh thì không xếp được xe');
 select throws_ok($$ select public.generate_trips() $$, '42501', null, 'Bán vé không tạo được chuyến');
 select throws_ok($$ update public.trips set note = 'x' $$, '42501', null, 'Trình duyệt không sửa thẳng bảng chuyến');
 reset role;

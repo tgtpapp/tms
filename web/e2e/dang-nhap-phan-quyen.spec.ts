@@ -742,7 +742,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu vé giấy' }).click();
   await expect(page.getByText(/Đã nhập vé giấy VG001 nhưng trùng ghế/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Vé chờ xếp ghế (1)' })).toBeVisible();
-  await page.getByRole('button', { name: /^Ghế A02 · khách/ }).click();
+  await page.getByRole('button', { name: /^Ghế A02 · Khách Lẻ/ }).click();
   await page.getByRole('button', { name: 'Chuyển ghế / chuyến' }).click();
   await page.getByLabel('Ghế mới').fill('A01');
   await page.getByRole('button', { name: 'Chuyển', exact: true }).click();

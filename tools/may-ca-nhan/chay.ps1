@@ -27,8 +27,19 @@ if (Test-Path $store) {
   $k = Get-Content $store | ForEach-Object { Plain (ConvertTo-SecureString $_) }
   $neon, $phone, $pass = $k[0], $k[1], $k[2]
 } else {
-  $neon = Plain (Read-Host 'Dan chuoi ket noi Neon (postgresql://...)' -AsSecureString)
-  if (-not $neon.StartsWith('postgres')) { Fail 'Chuoi ket noi Neon khong dung.' }
+  # Lay chuoi tu bo nho tam (nut "Copy snippet" tren Neon), khong phai dan vao cua so den
+  Write-Host 'Tren trang Neon: bam Connect, TAT "Connection pooling", bam nut "Copy snippet".'
+  $neon = ''
+  for ($t = 0; $t -lt 5; $t++) {
+    Read-Host 'Copy xong thi nhan Enter o day' | Out-Null
+    $c = ((Get-Clipboard -Raw) -replace '\s', '')
+    if ($c -match '^postgres(ql)?://[^:/]+:[^*@]+@') { $neon = $c; break }
+    if ($c -match '\*') { Write-Host 'Chuoi dang bi che mat khau (dau *). Bam nut "Copy snippet", khong boi den.' -ForegroundColor Yellow }
+    else { Write-Host 'Chua thay chuoi ket noi Neon trong bo nho tam. Bam nut "Copy snippet" tren Neon roi nhan Enter.' -ForegroundColor Yellow }
+  }
+  if (-not $neon) { Fail 'Chua lay duoc chuoi ket noi Neon.' }
+  Set-Clipboard -Value ' '
+  Write-Host 'Da lay chuoi ket noi Neon.' -ForegroundColor Green
   $phone = Read-Host 'SDT dang nhap cua Chu nha xe'
   $pass = Plain (Read-Host 'Dat mat khau cho Chu nha xe tren may nay (toi thieu 8 ky tu)' -AsSecureString)
   @($neon, $phone, $pass) | ForEach-Object { ConvertTo-SecureString $_ -AsPlainText -Force | ConvertFrom-SecureString } | Set-Content $store

@@ -15,6 +15,8 @@ export interface TicketPrintData {
   tickets: {
     seat: string; from: string; to: string; price: number; name: string | null; phone: string | null;
     pickup: string | null; dropoff: string | null; paid: boolean; holdUntil: string | null;
+    /** đã cọc (vé đặt chỗ trả trước một phần) */
+    deposit?: number;
   }[];
 }
 
@@ -52,7 +54,9 @@ export function TicketSlip({ data, i, qr }: { data: TicketPrintData; i: number; 
       <div className="vx8-pay">
         <div>
           <div className="t8r gh8-sum"><span>GIÁ VÉ</span><b>{t.price.toLocaleString('vi-VN')} đ</b></div>
-          <div className={`gh8-pay${t.paid ? ' ok' : ''}`}>{t.paid ? 'ĐÃ THANH TOÁN' : `CHƯA THANH TOÁN${t.holdUntil ? ` · giữ chỗ đến ${hm(t.holdUntil)}` : ''}`}</div>
+          <div className={`gh8-pay${t.paid ? ' ok' : ''}`}>{t.paid ? 'ĐÃ THANH TOÁN' : (t.deposit ?? 0) > 0
+            ? <>ĐÃ CỌC {(t.deposit ?? 0).toLocaleString('vi-VN')} đ<br />CÒN {(t.price - (t.deposit ?? 0)).toLocaleString('vi-VN')} đ</>
+            : `CHƯA THANH TOÁN${t.holdUntil ? ` · giữ chỗ đến ${hm(t.holdUntil)}` : ''}`}</div>
         </div>
         {qr && <img src={qr} alt={`Mã vé ${data.code}`} className="vx8-qr" />}
       </div>

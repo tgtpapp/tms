@@ -36,6 +36,8 @@ export interface Ticket {
   tc_don?: boolean; tc_tra?: boolean; printed_at?: string | null; print_count?: number;
   /** Lái xe báo về: đã gọi / nghe máy / thuê bao / khách báo hủy; vắng; đã trả khách */
   crew_call?: 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy' | null; no_show?: boolean; dropped?: boolean;
+  /** Tiền khách đã cọc (vé đặt chỗ trả trước một phần) */
+  deposit?: number;
 }
 /** Trạng thái lái xe báo về quầy (hiện trên sơ đồ ghế, danh sách khách) */
 export function crewNote(t: Ticket): { cls: string; text: string } | null {
@@ -56,7 +58,7 @@ const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZo
 const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
 const active = (t: Ticket) => (t.status === 'giu' || t.status === 'dat' || t.status === 'da_tt')
   && !(t.hold_until && t.status !== 'da_tt' && Date.parse(t.hold_until) < Date.now());
-const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra, printed_at, print_count, crew_call, no_show, dropped';
+const TICKET_COLS = 'id, booking_id, trip_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, hold_until, keep_reason, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, created_by, paid_by, pay_method, tc_don, tc_tra, printed_at, print_count, crew_call, no_show, dropped, deposit';
 /** Đã thu tiền (kể cả vé chờ xếp ghế). */
 const paid = (t: Ticket) => t.status === 'da_tt' || t.status === 'cho_xep';
 interface Fare { from_stop_id: string; to_stop_id: string; price: number }
@@ -485,7 +487,7 @@ function TripSell(props: TripSellProps) {
     tickets: list.map((t) => ({
       seat: t.seat_label, from: stopName(t.from_stop_id), to: stopName(t.to_stop_id), price: t.price,
       name: t.passenger_name, phone: t.passenger_phone, pickup: t.pickup_note, dropoff: t.dropoff_note,
-      paid: t.status === 'da_tt', holdUntil: t.status === 'dat' ? t.hold_until : null,
+      paid: t.status === 'da_tt', holdUntil: t.status === 'dat' ? t.hold_until : null, deposit: t.status === 'dat' ? t.deposit ?? 0 : 0,
     })),
   });
 
@@ -533,7 +535,7 @@ function TripSell(props: TripSellProps) {
                   <span>TC đón <b>{sold.filter((t) => t.tc_don).length}</b></span><span>TC trả <b>{sold.filter((t) => t.tc_tra).length}</b></span></div>
               </div>
               <div>
-                <div className="vx-line small"><span>Tổng tiền <b>{money(sum(sold))}</b></span><span>Đã thu <b>{money(sum(sold.filter((t) => t.status === 'da_tt')))}</b></span></div>
+                <div className="vx-line small"><span>Tổng tiền <b>{money(sum(sold))}</b></span><span>Đã thu <b>{money(sum(sold.filter((t) => t.status === 'da_tt')) + sold.reduce((a, t) => a + (t.status === 'dat' ? t.deposit ?? 0 : 0), 0))}</b></span></div>
                 <div className="vx-line small"><span>Thanh toán <b>{sold.filter((t) => t.status === 'da_tt').length}</b></span></div>
                 <div className="vx-line small"><span>Đặt chỗ <b>{sold.filter((t) => t.status === 'dat').length}</b></span>
                   {trip.manifest_printed_at && <span className="badge phoi-badge">Đã in phơi {hhmm(trip.manifest_printed_at)}</span>}</div>
@@ -583,11 +585,11 @@ function TripSell(props: TripSellProps) {
               if (!hit) return { cls: 'free' };
               if (hit.id.startsWith('q:')) return { cls: 'cho_gui', t: hit };
               const mine = isMine(hit);
-              return { cls: mine ? 'mine' : hit.status === 'giu' ? 'held' : hit.boarded ? 'boarded' : hit.status, t: hit };
+              return { cls: mine ? 'mine' : hit.status === 'giu' ? 'held' : hit.boarded ? 'boarded' : hit.status === 'dat' && (hit.deposit ?? 0) > 0 ? 'coc' : hit.status, t: hit };
             }} onClick={(l) => void clickSeat(l)} />
             <p className="muted small legend">
               <span className="seat-dot free" /> trống <span className="seat-dot mine" /> đang chọn <span className="seat-dot held" /> quầy khác giữ
-              <span className="seat-dot dat" /> đặt chưa trả <span className="seat-dot da_tt" /> đã thanh toán <span className="seat-dot boarded" /> đã lên xe
+              <span className="seat-dot dat" /> đặt chưa trả <span className="seat-dot coc" /> đã cọc <span className="seat-dot da_tt" /> đã thanh toán <span className="seat-dot boarded" /> đã lên xe
               {queue.some((x) => x.trip_id === trip.id) && <><span className="seat-dot cho_gui" /> chờ gửi</>}
             </p>
           </>
@@ -667,7 +669,7 @@ function TripSell(props: TripSellProps) {
 
 /* ------------------------------------------------------------------ Sơ đồ ghế */
 
-const ST_LABEL: Record<string, string> = { dat: 'Đặt chỗ', da_tt: 'Đã thanh toán', boarded: 'Đã lên xe', held: 'Quầy khác giữ', mine: 'Đang chọn', cho_gui: 'Chờ gửi', cho_xep: 'Chờ xếp ghế' };
+const ST_LABEL: Record<string, string> = { dat: 'Đặt chỗ', coc: 'Đã cọc', da_tt: 'Đã thanh toán', boarded: 'Đã lên xe', held: 'Quầy khác giữ', mine: 'Đang chọn', cho_gui: 'Chờ gửi', cho_xep: 'Chờ xếp ghế' };
 const shortStop = (n: string) => n.replace(/^(bến xe|bx|văn phòng|vp)\s+/i, '');
 
 /** Sơ đồ ghế kiểu Vexere: mỗi ghế là 1 thẻ lớn ghi chặng, tiền, tên, SĐT, ghi chú đón; ô tài xế / cửa ghi chữ lớn. */
@@ -818,7 +820,8 @@ function Checkout(props: {
 }) {
   const { holds, bookingId, stopName, onDone, onCancelAll, bank, onMore } = props;
   const toast = useToast();
-  const [f, setF] = useState({ phone: '', name: '', pickup: '', dropoff: '', note: '', mode: 'thu_tien' as 'thu_tien' | 'dat_cho' | 'chuyen_khoan', keep: false, reason: '', tcDon: false, tcTra: false });
+  const [f, setF] = useState({ phone: '', name: '', pickup: '', dropoff: '', note: '', mode: 'thu_tien' as 'thu_tien' | 'dat_cho' | 'chuyen_khoan' | 'coc', keep: false, reason: '', tcDon: false, tcTra: false,
+    coc: '', cocMethod: 'tien_mat' as 'tien_mat' | 'chuyen_khoan' });
   const [transfer, setTransfer] = useState<{ code: string; total: number; holdUntil: string | null } | null>(null);
   const [known, setKnown] = useState<Customer | null>(null);
   const [busy, setBusy] = useState(false);
@@ -828,7 +831,7 @@ function Checkout(props: {
   // Xem trước vé K80 ngay khi nhập (như phiếu gửi hàng)
   const draft = props.ticketBase(holds.map((h) => ({
     ...h, passenger_name: f.name || null, passenger_phone: f.phone || null, pickup_note: f.pickup || null, dropoff_note: f.dropoff || null,
-    status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus,
+    status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus, deposit: f.mode === 'coc' ? Number(f.coc || 0) : 0,
   })), '(cấp khi lưu)');
   const until = Math.min(...holds.map((t) => Date.parse(t.hold_until ?? '') || Infinity));
 
@@ -851,10 +854,13 @@ function Checkout(props: {
   async function confirm(print: boolean) {
     setBusy(true);
     try {
+      const coc = Number(f.coc || 0);
+      if (f.mode === 'coc' && !(coc > 0 && coc < total)) { toast('error', `Tiền cọc phải lớn hơn 0 và nhỏ hơn ${money(total)}`); return; }
       const r = await rpc<{ code: string }>('confirm_booking', {
-        p_booking_id: bookingId, p_phone: f.phone || null, p_name: f.name || null, p_mode: f.mode, p_keep: f.mode === 'dat_cho' && f.keep,
+        p_booking_id: bookingId, p_phone: f.phone || null, p_name: f.name || null, p_mode: f.mode === 'coc' ? 'dat_cho' : f.mode, p_keep: f.mode === 'dat_cho' && f.keep,
         p_keep_reason: f.reason || null, p_pickup_note: f.pickup || null, p_dropoff_note: f.dropoff || null, p_note: f.note || null, p_passengers: null,
       });
+      if (f.mode === 'coc') await rpc('deposit_booking', { p_booking_id: bookingId, p_amount: coc, p_method: f.cocMethod });
       if (f.tcDon || f.tcTra) {
         for (const h of holds) await rpc('set_ticket_transfer', { p_ticket_id: h.id, p_don: f.tcDon, p_tra: f.tcTra });
       }
@@ -865,7 +871,7 @@ function Checkout(props: {
         setTransfer({ code: r.code, total: list.reduce((a, t) => a + t.price, 0), holdUntil: list[0]?.hold_until ?? null });
         return;
       }
-      toast('ok', f.mode === 'thu_tien' ? `Đã bán vé ${r.code} · thu ${money(total)}` : `Đã đặt chỗ ${r.code}`);
+      toast('ok', f.mode === 'thu_tien' ? `Đã bán vé ${r.code} · thu ${money(total)}` : f.mode === 'coc' ? `Đã nhận cọc ${money(coc)} vé ${r.code} · còn ${money(total - coc)}` : `Đã đặt chỗ ${r.code}`);
       zaloKick();
       await onDone(r.code, print ? list : null);
     } catch (e) {
@@ -931,9 +937,23 @@ function Checkout(props: {
           <button type="button" role="radio" aria-checked={f.mode === 'chuyen_khoan'} className={f.mode === 'chuyen_khoan' ? 'btn small primary' : 'btn small'}
                   onClick={() => setF({ ...f, mode: 'chuyen_khoan' })}>Chuyển khoản (QR)</button>
         )}
+        <button type="button" role="radio" aria-checked={f.mode === 'coc'} className={f.mode === 'coc' ? 'btn small primary' : 'btn small'}
+                onClick={() => setF({ ...f, mode: 'coc' })}>Khách cọc trước</button>
         <button type="button" role="radio" aria-checked={f.mode === 'dat_cho'} className={f.mode === 'dat_cho' ? 'btn small primary' : 'btn small'}
                 onClick={() => setF({ ...f, mode: 'dat_cho' })}>Đặt chỗ trả sau</button>
       </div>
+      {f.mode === 'coc' && (
+        <div className="inline-form">
+          <label>Tiền cọc (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.coc} onChange={(e) => setF({ ...f, coc: e.target.value })} /></label>
+          <label>Nhận cọc bằng
+            <select value={f.cocMethod} onChange={(e) => setF({ ...f, cocMethod: e.target.value as 'tien_mat' | 'chuyen_khoan' })}>
+              <option value="tien_mat">Tiền mặt</option>
+              <option value="chuyen_khoan">Chuyển khoản</option>
+            </select>
+          </label>
+          {Number(f.coc) > 0 && <span className="small">Còn phải thu {money(Math.max(0, total - Number(f.coc)))}</span>}
+        </div>
+      )}
       {f.mode === 'dat_cho' && (
         <div className="inline-form">
           <label className="check"><input type="checkbox" checked={f.keep} onChange={(e) => setF({ ...f, keep: e.target.checked })} /> Giữ đến giờ chạy (không tự nhả)</label>
@@ -951,8 +971,8 @@ function Checkout(props: {
           <button className="btn primary" disabled={busy} onClick={() => void confirm(true)}>Tạo QR chuyển khoản</button>
         ) : (
           <>
-            <button className="btn primary" disabled={busy} onClick={() => void confirm(true)}>{f.mode === 'thu_tien' ? 'Thu tiền + in vé' : 'Đặt chỗ + in phiếu'}</button>
-            <button className="btn" disabled={busy} onClick={() => void confirm(false)}>{f.mode === 'thu_tien' ? 'Thu tiền, không in' : 'Đặt chỗ, không in'}</button>
+            <button className="btn primary" disabled={busy} onClick={() => void confirm(true)}>{f.mode === 'thu_tien' ? 'Thu tiền + in vé' : f.mode === 'coc' ? 'Nhận cọc + in vé' : 'Đặt chỗ + in phiếu'}</button>
+            <button className="btn" disabled={busy} onClick={() => void confirm(false)}>{f.mode === 'thu_tien' ? 'Thu tiền, không in' : f.mode === 'coc' ? 'Nhận cọc, không in' : 'Đặt chỗ, không in'}</button>
           </>
         )}
         <button className="btn" disabled={busy} onClick={onMore}>+ Chọn thêm ghế</button>
@@ -1041,17 +1061,17 @@ function TicketDetail(props: {
       <p className="small">{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)} · {money(t.price)} ·{' '}
         {t.status === 'cho_xep' ? 'Đã thu tiền · CHỜ XẾP GHẾ (trùng ghế khi mất mạng): chọn "Chuyển ghế / chuyến"'
           : t.status === 'da_tt' ? `Đã thanh toán${t.pay_method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}`
-          : `${t.pay_method === 'chuyen_khoan' ? 'Chờ chuyển khoản' : 'Đặt chỗ chưa trả'}${t.hold_until ? `, giữ đến ${hhmm(t.hold_until)}` : ', giữ đến giờ chạy'}`}
+          : (t.deposit ?? 0) > 0 ? `Đã cọc ${money(t.deposit ?? 0)}, còn ${money(t.price - (t.deposit ?? 0))}` : `${t.pay_method === 'chuyen_khoan' ? 'Chờ chuyển khoản' : 'Đặt chỗ chưa trả'}${t.hold_until ? `, giữ đến ${hhmm(t.hold_until)}` : ', giữ đến giờ chạy'}`}
         {t.keep_reason ? ` (${t.keep_reason})` : ''}</p>
       {unpaid.length > 0 && qr && bank && (
-        <TransferQR bank={bank} amount={unpaid.reduce((a, x) => a + x.price, 0)} code={booking?.code ?? ''} holdUntil={t.hold_until} busy={false}
+        <TransferQR bank={bank} amount={unpaid.reduce((a, x) => a + x.price - (x.deposit ?? 0), 0)} code={booking?.code ?? ''} holdUntil={t.hold_until} busy={false}
                     onConfirm={() => void run(() => rpc('pay_booking', { p_booking_id: t.booking_id, p_ticket_ids: null, p_method: 'chuyen_khoan' }),
-                      `Đã nhận chuyển khoản ${money(unpaid.reduce((a, x) => a + x.price, 0))}`)} onLater={() => setQr(false)} />
+                      `Đã nhận chuyển khoản ${money(unpaid.reduce((a, x) => a + x.price - (x.deposit ?? 0), 0))}`)} onLater={() => setQr(false)} />
       )}
       {unpaid.length > 0 && !qr && (
         <div className="actions">
           <button className="btn primary" onClick={() => void run(() => rpc('pay_booking', { p_booking_id: t.booking_id, p_ticket_ids: null, p_method: 'tien_mat' }),
-            `Đã thu ${money(unpaid.reduce((a, x) => a + x.price, 0))}`)}>Thu tiền mặt {money(unpaid.reduce((a, x) => a + x.price, 0))}</button>
+            `Đã thu ${money(unpaid.reduce((a, x) => a + x.price - (x.deposit ?? 0), 0))}`)}>Thu tiền mặt {money(unpaid.reduce((a, x) => a + x.price - (x.deposit ?? 0), 0))}</button>
           {bank && <button className="btn" onClick={() => setQr(true)}>Chuyển khoản (QR)</button>}
           {!ext && <button className="btn small" onClick={() => setExt({ keep: false, reason: '' })}>Gia hạn giữ chỗ</button>}
         </div>
@@ -1131,6 +1151,14 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
   const [method, setMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat');
   const [override, setOverride] = useState<{ fee: string; reason: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // vé đã cọc: hoàn theo phí hủy / không hoàn / tự nhập (mặc định theo Cấu hình, chọn lại được)
+  const [dep, setDep] = useState<{ mode: 'hoan_theo_phi' | 'khong_hoan' | 'tu_nhap'; amount: string }>({ mode: 'hoan_theo_phi', amount: '' });
+  useEffect(() => {
+    void supabase.from('tenant_settings').select('value').eq('key', 've.huy_coc').maybeSingle()
+      .then(({ data }) => { const v = (data as { value: unknown } | null)?.value; if (v === 'khong_hoan' || v === 'tu_nhap' || v === 'hoan_theo_phi') setDep((d) => ({ ...d, mode: v })); });
+  }, []);
+  const depOf = (id: string) => siblings.find((x) => x.id === id)?.deposit ?? 0;
+  const deposits = pick.reduce((a, id) => a + depOf(id), 0);
 
   useEffect(() => {
     if (!pick.length) return setQuote([]);
@@ -1138,7 +1166,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
   }, [pick, toast]);
 
   const sum = (k: 'fee' | 'refund') => quote.reduce((a, q) => a + q[k], 0);
-  const anyPaid = quote.some((q) => q.status !== 'dat');
+  const anyPaid = quote.some((q) => q.status !== 'dat') || deposits > 0;
 
   async function go() {
     setBusy(true);
@@ -1146,6 +1174,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
       const r = await rpc<{ tickets: number; fee: number; refund: number }>('cancel_tickets', {
         p_ticket_ids: pick, p_reason: reason, p_refund_method: method,
         p_fee_override: override ? Number(override.fee || 0) : null, p_override_reason: override?.reason ?? null,
+        p_deposit_mode: deposits > 0 ? dep.mode : null, p_deposit_refund: deposits > 0 && dep.mode === 'tu_nhap' ? Number(dep.amount || 0) : null,
       });
       await onDone(`Đã hủy ${r.tickets} vé${r.refund ? ` · hoàn ${money(r.refund)}${method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}` : ''}${r.fee ? ` · phí ${money(r.fee)}` : ''}`);
     } catch (e) {
@@ -1174,7 +1203,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
           {quote.map((q) => (
             <tr key={q.ticket_id}>
               <td>{q.seat_label}</td>
-              <td>{q.status !== 'dat' ? money(q.price) : 'chưa thu'}</td>
+              <td>{q.status !== 'dat' ? money(q.price) : depOf(q.ticket_id) > 0 ? `cọc ${money(depOf(q.ticket_id))}` : 'chưa thu'}</td>
               <td>{q.status !== 'dat' ? `${q.fee_pct}% · ${money(q.fee)}` : '—'}</td>
               <td>{q.status !== 'dat' ? money(q.refund) : '—'}</td>
             </tr>
@@ -1182,6 +1211,18 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
         </tbody>
       </table>
       {quote[0] && <p className="muted small">Còn {quote[0].hours_left} giờ đến giờ chạy. Mốc phí sửa ở Cấu hình → Hủy / đổi vé.</p>}
+      {deposits > 0 && (
+        <div className="inline-form">
+          <label>Tiền cọc {money(deposits)}
+            <select value={dep.mode} onChange={(e) => setDep({ ...dep, mode: e.target.value as typeof dep.mode })}>
+              <option value="hoan_theo_phi">Hoàn cọc sau khi trừ phí hủy</option>
+              <option value="khong_hoan">Không hoàn cọc</option>
+              <option value="tu_nhap">Nhập số tiền hoàn</option>
+            </select>
+          </label>
+          {dep.mode === 'tu_nhap' && <label>Hoàn cọc (đồng)<input type="number" min={0} max={deposits} step={1000} inputMode="numeric" value={dep.amount} onChange={(e) => setDep({ ...dep, amount: e.target.value })} /></label>}
+        </div>
+      )}
       <label>Lý do hủy<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
       {anyPaid && (
         <label>Hoàn tiền bằng

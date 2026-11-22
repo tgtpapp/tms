@@ -1295,3 +1295,7 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 .vx8-qr { width: 20mm; height: 20mm; }
 .ve-list.w58 .vx8-qr { width: 15mm; height: 15mm; }
 .vx8 .gh8-big b { font-size: 20px; }
+
+/* Vé đã cọc (trả trước một phần): màu tím, khác đặt chỗ chưa trả và đã thanh toán */
+.vxs.coc { background: #ede9fe; border-color: #a78bfa; }
+.seat-dot.coc, .vx-body .seat-dot.coc { background: #ddd6fe; }

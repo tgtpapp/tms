@@ -122,7 +122,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
     if (!Number.isInteger(fee) || fee < 0 || fee > 10000000) return toast('error', 'Phí đổi vé: số nguyên từ 0 đến 10.000.000');
     setBusy(true);
     const { error } = await supabase.from('tenant_settings').upsert([
-      { key: 'huy_ve.moc', value: t }, { key: 'doi_ve.phi_dong', value: fee },
+      { key: 'huy_ve.moc', value: t }, { key: 'doi_ve.phi_dong', value: fee }, { key: 've.huy_coc', value: sale['ve.huy_coc'] || 'hoan_theo_phi' },
     ], { onConflict: 'tenant_id,key' });
     setBusy(false);
     if (error) return toast('error', error.message);
@@ -236,6 +236,13 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         <label>Phí đổi chuyến (đồng / vé đã thanh toán)
           <input type="number" inputMode="numeric" min={0} max={10000000} step={1000} value={sale['doi_ve.phi_dong'] ?? ''}
                  onChange={(e) => setSale({ ...sale, 'doi_ve.phi_dong': e.target.value })} required />
+        </label>
+        <label>Hủy vé đã cọc (mặc định, khi hủy vẫn chọn lại được)
+          <select value={sale['ve.huy_coc'] || 'hoan_theo_phi'} onChange={(e) => setSale({ ...sale, 've.huy_coc': e.target.value })}>
+            <option value="hoan_theo_phi">Hoàn cọc sau khi trừ phí hủy</option>
+            <option value="khong_hoan">Không hoàn cọc</option>
+            <option value="tu_nhap">Nhân viên nhập số tiền hoàn</option>
+          </select>
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình hủy / đổi vé</button>
       </form>

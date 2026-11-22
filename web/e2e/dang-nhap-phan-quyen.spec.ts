@@ -625,6 +625,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'Đơn vé · 1 ghế · 150.000 đ' })).toBeVisible();
   await page.getByLabel('Số điện thoại khách').fill('0912345678');
   await page.getByLabel('Tên khách').fill('Chị Lan');
+  await expect(page.getByRole('complementary', { name: 'Xem trước vé K80' })).toContainText('Chị Lan');
   await page.evaluate(() => { window.print = () => {}; });
   await page.getByRole('button', { name: 'Thu tiền + in vé' }).click();
   await expect(page.getByText(/Đã bán vé [A-Z0-9]{6} · thu 150\.000 đ/)).toBeVisible();
@@ -665,17 +666,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Nhận hàng + in K80' }).click();
   await expect(page.getByText(/^Đã nhận hàng, phiếu /)).toBeVisible();
   await expect(page.locator('.ve-list').getByText('PHIẾU GỬI HÀNG')).toBeVisible();
-  // In nhiệt: mỗi phiếu 1 trang khổ 80mm dài đúng bằng nội dung (không in cả trang A4 / 297mm)
+  // In nhiệt như app cũ: lề 0 (không in ngày giờ / địa chỉ web), khổ giấy theo máy in cuộn, nội dung in sát đầu trang, mỗi phiếu 1 trang
   await page.getByRole('button', { name: 'In lại' }).click();
-  const pg = await page.evaluate(() => [...document.querySelectorAll('style')].map((x) => x.textContent ?? '').join('').match(/@page tpg0\{size:(\d+)mm (\d+)mm/));
-  expect(pg?.[1]).toBe('80');
-  expect(Number(pg?.[2])).toBeGreaterThan(60);
-  expect(Number(pg?.[2])).toBeLessThan(260);
+  const pg = await page.evaluate(() => [...document.querySelectorAll('style')].map((x) => x.textContent ?? '').join('').match(/@page tpg0\{size:auto;margin:0\}/));
+  expect(pg).not.toBeNull();
   const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
   const boxes = [...pdf.matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)].map((m) => [Number(m[1]), Number(m[2])]);
-  console.log('Trang in phiếu gửi hàng (pt):', JSON.stringify(boxes));
   expect(boxes.length).toBe(1);                                   // 1 phiếu = 1 trang, không trang trắng
-  expect(Math.round(boxes[0]![0]! / 72 * 25.4)).toBe(80);         // rộng 80mm
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByRole('button', { name: /^In phiếu / })).toHaveCount(1);
 

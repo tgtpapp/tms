@@ -1,16 +1,13 @@
-// In máy in nhiệt (vé, phiếu gửi hàng, phiếu dầu) như app cũ: mỗi phiếu là 1 trang dài đúng bằng nội dung phiếu
-// (khổ 80 / 58mm), không in phần còn lại của màn hình → không thừa giấy, không ra trang trắng.
-const MM = 25.4 / 96;
+// In máy in nhiệt (vé, phiếu gửi hàng, phiếu dầu) như app cũ: lề 0, khổ giấy theo máy in (cuộn 80 / 58mm), nội dung in sát đầu trang
+// → máy in tự cắt phần trắng còn lại; lề 0 nên trình duyệt không in ngày giờ / tiêu đề / địa chỉ web. Mỗi phiếu 1 trang.
 
 export function printThermal(): void {
   const list = [...document.querySelectorAll<HTMLElement>('.ve-list')].pop();
   const slips = list ? [...list.querySelectorAll<HTMLElement>(':scope > .ve')] : [];
   if (!list || !slips.length) { window.print(); return; }
-  const w58 = list.classList.contains('w58'), pageW = w58 ? 58 : 80;
   const rules = slips.map((el, i) => {
     el.classList.add(`tpg${i}`);
-    const h = Math.ceil(el.getBoundingClientRect().height * MM) + 3;
-    return `.ve.tpg${i}{page:tpg${i}} @page tpg${i}{size:${pageW}mm ${h}mm;margin:0}`;
+    return `.ve.tpg${i}{page:tpg${i}} @page tpg${i}{size:auto;margin:0}`;
   }).join('\n');
   const st = document.createElement('style');
   st.textContent = `

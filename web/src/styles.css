@@ -1289,3 +1289,9 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 @media print {
   .lenh.lenh4 { width: 194mm !important; zoom: var(--fit, 1); break-inside: avoid; }
 }
+
+/* Vé xe K80 / K58 (bố cục như phiếu gửi hàng): giá + trạng thái bên trái, mã QR nhỏ bên phải để ngắn giấy */
+.vx8-pay { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.vx8-qr { width: 20mm; height: 20mm; }
+.ve-list.w58 .vx8-qr { width: 15mm; height: 15mm; }
+.vx8 .gh8-big b { font-size: 20px; }

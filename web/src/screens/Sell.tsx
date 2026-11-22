@@ -6,7 +6,7 @@ import { Modal } from '../components/Modal';
 import { dirName } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { fmtDate, today } from '../components/Documents';
-import { TicketPrint, type TicketPrintData } from '../components/TicketPrint';
+import { TicketPrint, TicketSlip, type TicketPrintData } from '../components/TicketPrint';
 import { companyFileUrl } from '../lib/documents';
 import { TransferQR, type BankAccount } from '../components/TransferQR';
 import type { Permissions } from '../lib/permissions';
@@ -631,7 +631,7 @@ function TripSell(props: TripSellProps) {
       {myHolds.length > 0 && bookingId && ckOpen && (
         <Modal wide title={`${hhmm(trip.depart_at)} · ${fmtDate(props.day)} · ${props.routeName}`} onClose={() => setCkOpen(false)}>
         <Tabs tabs={['Thông tin chung']} />
-        <Checkout trip={trip} holds={myHolds} bookingId={bookingId} stopName={stopName} from={from} to={to} bank={props.bank}
+        <Checkout trip={trip} holds={myHolds} bookingId={bookingId} stopName={stopName} from={from} to={to} bank={props.bank} ticketBase={ticketData}
                   onDone={async (code, printed) => {
                     setBookingId(null);
                     await load();
@@ -808,7 +808,7 @@ function TripStats({ tickets, stopName }: { tickets: Ticket[]; stopName: (id: st
 
 function Checkout(props: {
   trip: Trip; holds: Ticket[]; bookingId: string; stopName: (id: string | null) => string; from: string; to: string;
-  bank: BankAccount | null;
+  bank: BankAccount | null; ticketBase: (list: Ticket[], code: string) => TicketPrintData;
   onDone: (code: string, printList: Ticket[] | null) => Promise<void>; onCancelAll: () => Promise<void>; onMore: () => void;
 }) {
   const { holds, bookingId, stopName, onDone, onCancelAll, bank, onMore } = props;
@@ -819,6 +819,12 @@ function Checkout(props: {
   const [busy, setBusy] = useState(false);
   const [left, setLeft] = useState(0);
   const total = holds.reduce((a, t) => a + t.price, 0);
+  const [pvOpen, setPvOpen] = useState(true);
+  // Xem trước vé K80 ngay khi nhập (như phiếu gửi hàng)
+  const draft = props.ticketBase(holds.map((h) => ({
+    ...h, passenger_name: f.name || null, passenger_phone: f.phone || null, pickup_note: f.pickup || null, dropoff_note: f.dropoff || null,
+    status: (f.mode === 'thu_tien' ? 'da_tt' : 'dat') as SeatStatus,
+  })), '(cấp khi lưu)');
   const until = Math.min(...holds.map((t) => Date.parse(t.hold_until ?? '') || Infinity));
 
   useEffect(() => {
@@ -896,6 +902,8 @@ function Checkout(props: {
         <h2>Đơn vé · {holds.length} ghế · {money(total)}</h2>
         <span className={left < 60 ? 'state-het_han' : 'muted'}>Giữ ghế còn {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}</span>
       </div>
+      <div className="gh-wrap">
+      <div className="form">
       <p className="small">Ghế {holds.map((h) => h.seat_label).join(', ')} · {stopName(props.from)} → {stopName(props.to)}</p>
       <div className="grid2">
         <label>Số điện thoại khách
@@ -927,6 +935,12 @@ function Checkout(props: {
           {f.keep && <label>Lý do<input value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder="vd: khách quen" /></label>}
         </div>
       )}
+      </div>
+      <aside className="gh-pv no-print" aria-label="Xem trước vé K80">
+        <div className="gh-pvh">Xem trước vé K80<button type="button" className="btn small link" onClick={() => setPvOpen(!pvOpen)}>{pvOpen ? 'Thu gọn' : 'Mở'}</button></div>
+        {pvOpen && <div className="gh-pvb"><TicketSlip data={draft} i={0} qr={null} /></div>}
+      </aside>
+      </div>
       <div className="actions">
         {f.mode === 'chuyen_khoan' ? (
           <button className="btn primary" disabled={busy} onClick={() => void confirm(true)}>Tạo QR chuyển khoản</button>

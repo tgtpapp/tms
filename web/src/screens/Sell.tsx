@@ -355,7 +355,9 @@ function TripSell(props: TripSellProps) {
   const [showStops, setShowStops] = useState(false);
   const [phoi, setPhoi] = useState(false);
   const [order, setOrder] = useState(false);
-  const [crew, setCrew] = useState<{ role: string; name: string; phone: string | null }[]>([]);
+  const [crew, setCrew] = useState<{ role: string; name: string; phone: string | null; staff_id: string }[]>([]);
+  const [crewVer, setCrewVer] = useState(0);
+  const [quick, setQuick] = useState(false);
   const [fares, setFares] = useState<Fare[]>([]);
   const [offSel, setOffSel] = useState<string[]>([]);   // ghế chọn khi mất mạng
   const [paper, setPaper] = useState(false);
@@ -409,9 +411,9 @@ function TripSell(props: TripSellProps) {
       if (!rows.length) return setCrew([]);
       const st = await supabase.from('staff_members').select('id, full_name, phone').in('id', rows.map((x) => x.staff_id));
       const sm = (st.data ?? []) as { id: string; full_name: string; phone: string | null }[];
-      setCrew(rows.map((x) => ({ role: x.role, name: sm.find((y) => y.id === x.staff_id)?.full_name ?? '', phone: sm.find((y) => y.id === x.staff_id)?.phone ?? null })));
+      setCrew(rows.map((x) => ({ role: x.role, staff_id: x.staff_id, name: sm.find((y) => y.id === x.staff_id)?.full_name ?? '', phone: sm.find((y) => y.id === x.staff_id)?.phone ?? null })));
     })();
-  }, [trip.id]);
+  }, [trip.id, crewVer]);
   // In phơi dạng sơ đồ ghế, vừa 1 trang A4; in xong ghi nhận đã in phơi
   useEffect(() => {
     if (!phoi || view !== 'so_do') return;
@@ -494,6 +496,8 @@ function TripSell(props: TripSellProps) {
   return (
     <>
       {printing && <TicketPrint data={printing} onClose={() => setPrinting(null)} />}
+      {quick && <QuickAssign tripId={trip.id} vehicleId={trip.vehicle_id ?? null} crew={crew} onClose={() => setQuick(false)}
+                             onSaved={async () => { setQuick(false); setCrewVer((v) => v + 1); await onChanged(); }} />}
       {order && <OrderIssue tripId={trip.id} tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} onClose={() => setOrder(false)} />}
       <div className="vx-tool">
         <button className="btn small" onClick={() => { setView('so_do'); setPhoi(true); }}><PrinterIcon /> In Phơi</button>
@@ -520,7 +524,8 @@ function TripSell(props: TripSellProps) {
           return (
             <div className="vx-h2">
               <div>
-                <div className="vx-line"><span>🪑 {type.name}</span><span><i className={props.plate ? 'dot ok' : 'dot'} /> <b>{props.plate ?? 'Chưa xếp xe'}</b></span></div>
+                <div className="vx-line"><span>🪑 {type.name}</span><span><i className={props.plate ? 'dot ok' : 'dot'} /> <b>{props.plate ?? 'Chưa xếp xe'}</b></span>
+                  {props.canOrder && <button type="button" className="btn small" aria-label="Sửa xe và lái xe" onClick={() => setQuick(true)}>✎ Sửa</button>}</div>
                 <div className="vx-line"><span>👤 <b>{d1 ? d1.name.toUpperCase() : 'Chưa xếp lái xe'}</b> {d1?.phone && <a href={`tel:${d1.phone}`}>{d1.phone}</a>}</span>
                   {d2 && <span>Lái xe 2: {d2.name}</span>}{px && <span>Phụ xe: {px.name}</span>}</div>
                 <div className="vx-line"><span><b className="vx-big">{props.sold}</b> /{props.total} vé đã bán</span></div>
@@ -1475,5 +1480,64 @@ function PrinterIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M6 14h12v7H6z" />
     </svg>
+  );
+}
+
+/** Sửa nhanh xe + lái xe 1 của chuyến ngay ở màn Bán vé (cùng hàm xếp xe của Điều hành: có cảnh báo thì ghi lý do rồi vẫn xếp) */
+function QuickAssign({ tripId, vehicleId, crew, onClose, onSaved }: {
+  tripId: string; vehicleId: string | null; crew: { role: string; staff_id: string }[]; onClose: () => void; onSaved: () => Promise<void>;
+}) {
+  const cur = (r: string) => crew.find((c) => c.role === r)?.staff_id ?? '';
+  const [f, setF] = useState({ vehicle: vehicleId ?? '', d1: cur('lai_xe_1') });
+  const [lists, setLists] = useState<{ vehicles: { id: string; plate: string; seats: number | null }[]; drivers: { id: string; name: string }[] } | null>(null);
+  const [warnings, setWarnings] = useState<string[] | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { void rpc<NonNullable<typeof lists>>('assign_pick_lists').then(setLists).catch((e) => setErr(errMsg(e))); }, []);
+  async function save(withReason: boolean) {
+    setBusy(true); setErr('');
+    try {
+      const r = await rpc<{ saved: boolean; warnings: string[] }>('assign_trip', {
+        p_trip_id: tripId, p_vehicle_id: f.vehicle || null, p_driver1: f.d1 || null, p_driver2: cur('lai_xe_2') || null, p_assistant: cur('phu_xe') || null,
+        p_reason: withReason ? reason.trim() || 'Đã xem cảnh báo, vẫn xếp' : null,
+      });
+      if (!r.saved) { setWarnings(r.warnings); return; }
+      await onSaved();
+    } catch (e) {
+      const m = errMsg(e);
+      setErr(/trips_vehicle_no_overlap|trip_crew_no_overlap/.test(m) ? 'Xe hoặc lái xe đang chạy chuyến khác cùng giờ' : m);
+    } finally { setBusy(false); }
+  }
+  return (
+    <Modal title="Sửa xe và lái xe" onClose={onClose}>
+      {!lists ? <p className="muted">{err || 'Đang tải…'}</p> : (
+        <div className="form">
+          <label>Xe
+            <select value={f.vehicle} onChange={(e) => { setF({ ...f, vehicle: e.target.value }); setWarnings(null); }}>
+              <option value="">Chưa xếp</option>
+              {lists.vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate}{v.seats ? ` · ${v.seats} chỗ` : ''}</option>)}
+            </select>
+          </label>
+          <label>Lái xe
+            <select value={f.d1} onChange={(e) => { setF({ ...f, d1: e.target.value }); setWarnings(null); }}>
+              <option value="">Chưa xếp</option>
+              {lists.drivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </label>
+          {warnings && (
+            <div className="warn small">
+              <ul>{warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              <label>Lý do vẫn xếp<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+            </div>
+          )}
+          {err && <p className="error-text" role="alert">{err}</p>}
+          <div className="actions">
+            <button type="button" className="btn primary" disabled={busy} onClick={() => void save(!!warnings)}>{warnings ? 'Vẫn xếp' : 'Lưu'}</button>
+            <button type="button" className="btn link" onClick={onClose}>Thôi</button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MonthPicker } from '../components/MonthPicker';
 import { PaperView, type Me } from '../components/ProfilePapers';
-import { boss, bossCol, company, head, signCol } from '../lib/profilePapers';
+import { boss, bossCol, company, head, signCol, signImg } from '../lib/profilePapers';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -252,7 +252,10 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
   const meRow = !viewAll ? base.find(mine) : undefined;
   async function printSlip(e: TStaff) {
     const s = T!.summarize(e), o = T!.payOf(e);
-    const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me)]);
+    // Chữ ký người nhận: chữ ký trong hồ sơ nhân viên, không có thì chữ ký của tài khoản (như lý lịch hành nghề)
+    const who = `nv_${e.id}`;
+    const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me, [who, e.user_id ?? ''])]);
+    const own = b.m.get(who), es = own?.img ? own : (e.user_id && b.m.get(e.user_id)) || null;
     const B = 'border:1px solid #000;padding:5px 8px;font-size:13px';
     const r = (n: string, l: string, g: string, v: number | string) => `<tr><td style="${B};text-align:center">${n}</td><td style="${B}">${l}</td><td style="${B}">${esc(g)}</td><td style="${B};text-align:right">${typeof v === 'number' ? money(v) : v}</td></tr>`;
     setView({ title: `Phiếu lương ${e.full_name} ${monthTxt}`, land: false, html: `<div style="font-size:13px">${head(c)}
@@ -265,7 +268,7 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
         ${r('4', 'Lương chuyển khoản', '', o.lck)}
         ${r('5', 'Trừ BHXH', o.bhSkip ? 'Tạm dừng tháng này' : '', o.bhSkip ? 0 : o.bh)}
         <tr style="font-weight:bold"><td style="${B}" colspan="3">THỰC NHẬN</td><td style="${B};text-align:right">${o.show ? money(o.thucNhan) : '–'}</td></tr></table>
-      <table style="width:100%;border-collapse:collapse;margin-top:14px"><tr>${signCol('NGƯỜI NHẬN', '(Ký, họ tên)', '', e.full_name, null, 33)}${signCol('KẾ TOÁN', '(Ký, họ tên)', '', '', null, 33)}${bossCol(b.b, 'GIÁM ĐỐC', 34)}</tr></table></div>` });
+      <table style="width:100%;border-collapse:collapse;margin-top:14px"><tr>${signCol('NGƯỜI NHẬN', '(Ký, họ tên)', signImg(es), e.full_name, es, 33)}${signCol('KẾ TOÁN', '(Ký, họ tên)', '', '', null, 33)}${bossCol(b.b, 'GIÁM ĐỐC', 34)}</tr></table></div>` });
   }
 
   return (

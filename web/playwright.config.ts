@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Kiểm thử giao diện trên trình duyệt thật (chạy trong CI với Supabase local).
 export default defineConfig({
   testDir: './e2e',
-  timeout: 90_000,
+  timeout: 180_000,   // kịch bản đầu-cuối dài (~1,2 phút); máy CI chậm hôm nay chạm 90 giây ở các bước khác nhau
   expect: { timeout: 15_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

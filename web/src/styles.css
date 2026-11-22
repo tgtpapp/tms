@@ -635,8 +635,9 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .hdvc { font-family: 'Times New Roman', Times, serif; font-size: 14px; line-height: 1.45; margin-bottom: 12px; }
 .hdvc p { margin: 6px 0; text-align: justify; }
 .hdvc-pax { break-before: page; page-break-before: always; padding-top: 4mm; }
-.sign-stack { position: relative; height: 90px; }
-.sign-stack img { position: absolute; left: 50%; top: 0; transform: translateX(-50%); max-height: 90px; }
+/* chỉ hợp đồng (ô ký có dấu chồng giữa); không đè kiểu dấu + chữ ký của lệnh vận chuyển (.sign-stack ở trên) */
+.sign-box.sign-stack { position: relative; height: 90px; }
+.sign-box.sign-stack img { position: absolute; left: 50%; top: 0; transform: translateX(-50%); max-height: 90px; }
 @media print {
   .print-stack { position: absolute; left: 0; top: 0; width: 100%; }
   .print-stack .lenh { position: static; break-after: page; page-break-after: always; margin: 0; }

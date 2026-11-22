@@ -104,7 +104,11 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
         setInfo(d.info ?? {});
         setLists(pl);
         setSign(d.sign !== false); setSeal(d.seal !== false);
-        setLegs([1, 2, 3, 4].map((i) => { const l = d.legs.find((x) => x.seq === i); return { seq: i, trip_id: l?.trip_id ?? null, time: l?.time ?? '', date: l?.date ?? '' }; }));
+        // lệnh mới: chỉ điền giờ chuyến đầu tiên, các lượt sau để trống (ghi tay); lệnh đã cấp: giữ đúng các lượt đã lưu
+        setLegs([1, 2, 3, 4].map((i) => {
+          const l = d.legs.find((x) => x.seq === i);
+          return !d.order_no && i > 1 ? { seq: i, trip_id: null, time: '', date: '' } : { seq: i, trip_id: l?.trip_id ?? null, time: l?.time ?? '', date: l?.date ?? '' };
+        }));
       } catch (e) { toast('error', errMsg(e)); onClose(); }
     })();
     return () => { on = false; };

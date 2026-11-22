@@ -24,8 +24,11 @@ const codes = (perm: string) => LEGACY[perm] ?? [perm];
 export class Permissions {
   constructor(private readonly grants: PermissionGrant[]) {}
 
-  /** Có quyền trên toàn nhà xe, hoặc trên chi nhánh / phòng vé chỉ định. */
+  /** Có quyền trên toàn nhà xe, hoặc trên chi nhánh / phòng vé chỉ định.
+   *  Không chỉ định chi nhánh / phòng vé (hiện mục menu, nút chung): có quyền ở bất kỳ phạm vi nào là đủ —
+   *  người được gán nhóm theo chi nhánh / phòng vé vẫn thấy màn hình; dữ liệu trong đó database tự lọc theo phạm vi. */
   has(perm: string, branchId?: string | null, officeId?: string | null): boolean {
+    if (branchId === undefined && officeId === undefined) return this.hasAnywhere(perm);
     return this.grants.some(
       (g) =>
         codes(perm).includes(g.permission_code) &&

@@ -77,11 +77,14 @@ select is(public.deposit_booking((select v from t.ids where k = 'B1'), 50000, 't
 select is((select deposit from public.seat_inventory where booking_id = (select v from t.ids where k = 'B1')), 50000::bigint, 'Vé ghi đã cọc 50.000');
 select ok((select hold_until from public.seat_inventory where booking_id = (select v from t.ids where k = 'B1')) is null, 'Đã cọc: giữ ghế tới giờ chạy');
 select is(public.pay_booking((select v from t.ids where k = 'B1'), null, 'tien_mat'), 100000::bigint, 'Thu nốt 100.000');
+reset role;
 select is((select sum(credit - debit) from public.ledger_lines where account = 'doanh_thu_ve')::int, 150000, 'Doanh thu đúng 150.000 (không thu trùng)');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 
 -- 2. Cọc 60.000 rồi hủy, không hoàn cọc
 insert into t.ids select 'B2', (public.hold_seat((select v from t.ids where k = 'T'), 'A02', (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'VT'), null, null) ->> 'booking_id')::uuid;
-select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B2'), null, null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ A02');
+select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B2'), '0922222222', null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ A02');
 select lives_ok($$ select public.deposit_booking((select v from t.ids where k = 'B2'), 60000, 'tien_mat') $$, 'Cọc 60.000');
 select is((public.cancel_tickets(array[(select id from public.seat_inventory where booking_id = (select v from t.ids where k = 'B2'))], 'Khách bỏ', 'tien_mat', null, null, 'khong_hoan', null) ->> 'refund')::int,
   0, 'Không hoàn cọc');
@@ -89,7 +92,7 @@ select is((select cancel_fee from public.seat_inventory where booking_id = (sele
 
 -- 3. Cọc 50.000 rồi hủy, nhân viên nhập hoàn 30.000
 insert into t.ids select 'B3', (public.hold_seat((select v from t.ids where k = 'T2'), 'A01', (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'VT'), null, null) ->> 'booking_id')::uuid;
-select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B3'), null, null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ chuyến 15:00');
+select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B3'), '0933333333', null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ chuyến 15:00');
 select lives_ok($$ select public.deposit_booking((select v from t.ids where k = 'B3'), 50000, 'tien_mat') $$, 'Cọc 50.000');
 select throws_ok($$ select public.cancel_tickets(array[(select id from public.seat_inventory where booking_id = (select v from t.ids where k = 'B3'))], 'X', 'tien_mat', null, null, 'tu_nhap', null) $$,
   '22023', null, 'Tự nhập phải có số tiền hoàn');
@@ -98,11 +101,12 @@ select is((public.cancel_tickets(array[(select id from public.seat_inventory whe
 
 -- 4. Cọc 40.000 rồi hủy theo mặc định (trừ phí hủy, không hoàn quá số cọc)
 insert into t.ids select 'B4', (public.hold_seat((select v from t.ids where k = 'T2'), 'A02', (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'VT'), null, null) ->> 'booking_id')::uuid;
-select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B4'), null, null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ A02 15:00');
+select lives_ok($$ select public.confirm_booking((select v from t.ids where k = 'B4'), '0944444444', null, 'dat_cho', false, null, null, null, null, null) $$, 'Đặt chỗ A02 15:00');
 select lives_ok($$ select public.deposit_booking((select v from t.ids where k = 'B4'), 40000, 'chuyen_khoan') $$, 'Cọc 40.000 chuyển khoản');
 select is((public.cancel_tickets(array[(select id from public.seat_inventory where booking_id = (select v from t.ids where k = 'B4'))], 'Bận', 'tien_mat', null, null) ->> 'refund')::int,
   (select greatest(0, 40000 - round(150000 * t.pct(extract(epoch from ((select depart_at from public.trips where id = (select v from t.ids where k = 'T2')) - now())) / 3600) / 100.0)::int)),
   'Mặc định: hoàn cọc sau khi trừ phí hủy');
+reset role;
 select is((select sum(debit) - sum(credit) from public.ledger_lines)::int, 0, 'Sổ cái cân');
 select is((select sum(credit - debit) from public.ledger_lines where account = 'doanh_thu_ve')::int, 150000, 'Doanh thu chỉ còn vé đã đi (vé cọc hủy đã đảo)');
 reset role;

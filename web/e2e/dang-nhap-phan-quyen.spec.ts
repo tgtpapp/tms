@@ -601,7 +601,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('heading', { name: 'LỆNH VẬN CHUYỂN' })).toBeVisible();
   await expect(page.getByText(/Số: 0700-\d{8}-345\/LVC-TGTP/)).toBeVisible();
   await expect(page.locator('.lenh').getByText('Lượt đi', { exact: true })).toHaveCount(1);
-  await expect(page.locator('.lenh').getByText('Lượt về', { exact: true })).toHaveCount(2);
+  await expect(page.locator('.lenh').getByText('Lượt về', { exact: true })).toHaveCount(1);
   await expect(page.locator('.lenh .lenh-blank', { hasText: '12:30' })).toHaveCount(1);
   const lvcPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
   expect([...lvcPdf.matchAll(/\/MediaBox/g)].length).toBe(1);   // 4 lượt vừa 1 tờ A4

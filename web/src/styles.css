@@ -73,6 +73,12 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 .sub { padding-left: 8px; border-left: 3px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
 .sub-item { background: var(--surface-2); }
 .user-head { display: flex; align-items: center; gap: 10px; }
+.users-tbl { margin-top: 10px; }
+.users-tbl td { vertical-align: middle; }
+.users-tbl .chips, .users-tbl .actions { margin: 0; }
+.users-tbl .actions { flex-wrap: nowrap; }
+.users-tbl .actions .btn { white-space: nowrap; }
+.users-tbl tr.users-panel td { background: var(--surface); }
 .item-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .inline-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

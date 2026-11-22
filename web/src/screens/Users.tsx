@@ -38,6 +38,8 @@ function parseScope(v: string): { scope_type: string; scope_id: string | null } 
   return { scope_type: type, scope_id: id };
 }
 
+const NO_DEPT = 'Chưa có phòng ban';
+
 export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
   const [data, setData] = useState<Data>(EMPTY);
@@ -68,19 +70,38 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   // Ảnh đại diện lấy từ hồ sơ nhân viên / lái xe gắn với tài khoản (hoặc trùng số điện thoại); không có ảnh thì hiện chữ viết tắt.
   const avatars = useAvatars(ctx.tenant_id);
-  const [staffOf, setStaffOf] = useState<Record<string, string>>({});
+  const [staffOf, setStaffOf] = useState<Record<string, { id: string; dept: string }>>({});
   useEffect(() => {
     if (!data.users.length) return;
-    void supabase.from('staff_members').select('id, user_id, phone').then(({ data: rows }) => {
-      const list = (rows ?? []) as { id: string; user_id: string | null; phone: string | null }[];
-      const m: Record<string, string> = {};
+    void supabase.from('staff_members').select('id, user_id, phone, department').then(({ data: rows }) => {
+      const list = (rows ?? []) as { id: string; user_id: string | null; phone: string | null; department: string | null }[];
+      const m: Record<string, { id: string; dept: string }> = {};
       for (const u of data.users) {
         const s = list.find((x) => x.user_id === u.id) ?? list.find((x) => !x.user_id && x.phone === u.phone);
-        if (s) m[u.id] = s.id;
+        if (s) m[u.id] = { id: s.id, dept: s.department?.trim().replace(/\s+/g, ' ') ?? '' };
       }
       setStaffOf(m);
     });
   }, [data.users]);
+
+  // Thẻ theo phòng ban (lấy từ hồ sơ nhân viên); chọn kiểu hiển thị thẻ / bảng, nhớ trên máy
+  const deptOf = (id: string) => staffOf[id]?.dept || NO_DEPT;
+  const depts = useMemo(() => {
+    const m = new Map<string, { key: string; label: string; n: number }>();
+    for (const u of data.users) {
+      const label = staffOf[u.id]?.dept || NO_DEPT;
+      const key = label.toLocaleLowerCase('vi');
+      const t = m.get(key) ?? { key, label, n: 0 };
+      t.n++;
+      m.set(key, t);
+    }
+    return [...m.values()].sort((a, b) => Number(a.label === NO_DEPT) - Number(b.label === NO_DEPT) || a.label.localeCompare(b.label, 'vi'));
+  }, [data.users, staffOf]);
+  const [tab, setTab] = useState('');
+  const cur = depts.some((t) => t.key === tab) ? tab : '';
+  const shown = cur ? data.users.filter((u) => deptOf(u.id).toLocaleLowerCase('vi') === cur) : data.users;
+  const [view, setViewState] = useState<'the' | 'bang'>(() => { try { return localStorage.getItem('tms-users-view') === 'bang' ? 'bang' : 'the'; } catch { return 'the'; } });
+  const setView = (v: 'the' | 'bang') => { setViewState(v); try { localStorage.setItem('tms-users-view', v); } catch { /* bỏ qua */ } };
 
   const scopeLabel = useCallback((type: string, id: string | null) => {
     if (type === 'branch') return `CN ${data.branches.find((b) => b.id === id)?.name ?? '?'}`;
@@ -92,13 +113,38 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     <>
       {canAdd && <CreateUserForm data={data} onCreated={load} />}
       <section className="card">
-        <h2>Người dùng ({data.users.length})</h2>
-        <ul className="list">
-          {data.users.map((u) => (
-            <UserItem key={u.id} user={u} avatar={avatars[staffOf[u.id] ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
-                      allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
+        <div className="item-head">
+          <h2>Người dùng ({data.users.length})</h2>
+          <div className="seg" role="tablist" aria-label="Kiểu hiển thị">
+            {([['the', 'Thẻ'], ['bang', 'Bảng']] as const).map(([k, l]) =>
+              <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}
+          </div>
+        </div>
+        <div className="vx-tabs" role="tablist" aria-label="Phòng ban">
+          {[{ key: '', label: 'Tất cả', n: data.users.length }, ...depts].map((t) => (
+            <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
+              {t.label} ({t.n})
+            </button>
           ))}
-        </ul>
+        </div>
+        {view === 'the' ? (
+          <ul className="list">
+            {shown.map((u) => (
+              <UserItem key={u.id} view="the" user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+                        allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
+            ))}
+          </ul>
+        ) : (
+          <table className="plist users-tbl">
+            <thead><tr><th>Họ tên</th><th>Phòng ban</th><th>Nhóm quyền</th><th>Trạng thái</th>{canManage && <th>Thao tác</th>}</tr></thead>
+            <tbody>
+              {shown.map((u) => (
+                <UserItem key={u.id} view="bang" dept={deptOf(u.id)} user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+                          allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
     </>
   );
@@ -176,7 +222,7 @@ function CreateUserForm({ data, onCreated }: { data: Data; onCreated: () => Prom
 }
 
 function UserItem(props: {
-  user: UserRow; avatar?: string; data: Data; isSelf: boolean; canManage: boolean; canPerm: boolean; allowed: (c: string) => boolean;
+  user: UserRow; avatar?: string; view: 'the' | 'bang'; dept?: string; data: Data; isSelf: boolean; canManage: boolean; canPerm: boolean; allowed: (c: string) => boolean;
   scopeLabel: (type: string, id: string | null) => string; onChanged: () => Promise<void>;
 }) {
   const { user, data, isSelf, canManage, scopeLabel, onChanged } = props;
@@ -204,18 +250,17 @@ function UserItem(props: {
     }
   }
 
-  return (
-    <li className="item">
-      <div className="item-head">
-        <div className="user-head">
-          <Avatar name={user.full_name} url={props.avatar} />
-          <div>
-          <b>{user.full_name}</b> {isSelf && <span className="muted">(bạn)</span>}
-          <div className="muted small">{user.phone}</div>
-          </div>
-        </div>
-        <span className={`badge ${user.status}`}>{user.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>
+  const name = (
+    <div className="user-head">
+      <Avatar name={user.full_name} url={props.avatar} />
+      <div>
+        <b>{user.full_name}</b> {isSelf && <span className="muted">(bạn)</span>}
+        <div className="muted small">{user.phone}</div>
       </div>
+    </div>
+  );
+  const badge = <span className={`badge ${user.status}`}>{user.status === 'active' ? 'Hoạt động' : 'Đã khóa'}</span>;
+  const chips = (
       <div className="chips">
         {myRoles.length === 0 && <span className="muted small">Chưa có nhóm quyền</span>}
         {myRoles.map((ur) => {
@@ -231,7 +276,8 @@ function UserItem(props: {
           );
         })}
       </div>
-      {canEdit && (
+  );
+  const actions = canEdit ? (
         <div className="actions">
           <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'role' ? 'none' : 'role')}>Thêm vào nhóm</button>
           {!myRoles.some((ur) => data.roles.find((r) => r.id === ur.role_id)?.code === 'owner') && (
@@ -244,7 +290,9 @@ function UserItem(props: {
             {user.status === 'active' ? 'Khóa' : 'Mở khóa'}
           </button>
         </div>
-      )}
+  ) : null;
+  const panels = (
+    <>
       {panel === 'password' && (
         <form className="inline-form" onSubmit={(e) => {
           e.preventDefault();
@@ -274,6 +322,30 @@ function UserItem(props: {
         </form>
       )}
       {panel === 'perm' && <UserPerms {...props} myRoles={myRoles} onDone={() => { setPanel('none'); void onChanged(); }} />}
+    </>
+  );
+
+  if (props.view === 'bang') return (
+    <>
+      <tr>
+        <td>{name}</td>
+        <td>{props.dept}</td>
+        <td>{chips}</td>
+        <td>{badge}</td>
+        {canManage && <td>{actions}</td>}
+      </tr>
+      {panel !== 'none' && <tr className="users-panel"><td colSpan={canManage ? 5 : 4}>{panels}</td></tr>}
+    </>
+  );
+  return (
+    <li className="item">
+      <div className="item-head">
+        {name}
+        {badge}
+      </div>
+      {chips}
+      {actions}
+      {panels}
     </li>
   );
 }

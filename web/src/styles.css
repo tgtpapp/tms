@@ -1249,7 +1249,8 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 /* Lệnh 4 lượt (2 đi + 2 về) vừa 1 trang A4 */
 .lenh4 { padding: 8mm 10mm 6mm; font-size: 13.5px; }
 .lenh4 .lenh-table td, .lenh4 .lenh-table th { padding: 3px 5px; }
-.lenh4 .lenh-leg td { height: 11.5mm; }
+.lenh4 .lenh-leg td { height: 26mm; }   /* ô Bến xe đủ rộng để bến đóng mộc (lệnh 1 lượt đi + 1 lượt về) */
+.lenh4 .lenh-table th:last-child, .lenh4 .lenh-leg td:last-child { width: 30%; }
 .lenh4 .sign-box { height: 58px; }
 .lenh4 .sign-box img { max-height: 58px; }
 .lenh4 h1 { font-size: 20px; margin: 2px 0; }

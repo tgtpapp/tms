@@ -44,7 +44,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
       supabase.from('stops').select('id, code, name, kind, province, address, is_active').order('code'),
       supabase.from('routes').select('id, code, name, name_ve, registered_code, distance_km, itinerary, itinerary_ve, is_active').order('code'),
       supabase.from('route_stops').select('route_id, seq, stop_id, minutes_from_start, allow_pickup, allow_dropoff').order('seq'),
-      supabase.from('fare_table_items').select('table_id, from_stop_id, to_stop_id, price, fare_tables!inner(route_id, valid_from, valid_to)'),
+      supabase.from('fare_table_items').select('table_id, from_stop_id, to_stop_id, price, fare_tables!inner(route_id, valid_from, valid_to, direction)').eq('fare_tables.direction', 'di'),
     ]);
     const err = s.error ?? r.error ?? rs.error ?? f.error;
     if (err) return toast('error', err.message);
@@ -250,7 +250,7 @@ function RoutesSection(props: { data: Data; canRoute: boolean; perms: Permission
                   {canRoute && <DeleteButton kind="route" id={r.id} name={`tuyến ${r.name}`} note="Giờ chạy và các chuyến chưa có vé / hàng của tuyến cũng bị xóa." onDone={reload} />}
                 </div>
               </div>
-              {editing === r.id && <Modal wide title={`Sửa tuyến ${r.name}`} onClose={() => setEditing(null)}><RouteEdit route={r} perms={perms} reload={reload} onClose={() => setEditing(null)} /></Modal>}
+              {editing === r.id && <Modal xwide title={`Sửa tuyến ${r.name}`} onClose={() => setEditing(null)}><RouteEdit route={r} data={data} perms={perms} reload={reload} onClose={() => setEditing(null)} /></Modal>}
               {open === r.id && <RouteDetail route={r} data={data} canRoute={canRoute} reload={reload} />}
             </li>
           ))}
@@ -272,7 +272,7 @@ function autoCode(name: string, used: string[]): string {
 }
 
 /** Sửa tuyến: mã, tên, mã số tuyến, cự ly, hành trình chạy xe (in trên lệnh vận chuyển) */
-function RouteEdit({ route, perms, reload, onClose }: { route: Route; perms: Permissions; reload: () => Promise<void>; onClose: () => void }) {
+function RouteEdit({ route, data, perms, reload, onClose }: { route: Route; data: Data; perms: Permissions; reload: () => Promise<void>; onClose: () => void }) {
   const toast = useToast();
   const [f, setF] = useState({ code: route.code, name: route.name, name_ve: route.name_ve ?? '', registered_code: route.registered_code ?? '',
     distance_km: route.distance_km?.toString() ?? '', itinerary: route.itinerary ?? '', itinerary_ve: route.itinerary_ve ?? '' });
@@ -294,14 +294,25 @@ function RouteEdit({ route, perms, reload, onClose }: { route: Route; perms: Per
     <div className="form">
       <div className="grid2">
         <label>Mã tuyến<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required /></label>
-        <label>Tên tuyến chiều đi<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
-        <label>Tên tuyến chiều về<input value={f.name_ve} placeholder={reverseName(f.name)} onChange={(e) => setF({ ...f, name_ve: e.target.value })} /></label>
         <label>Mã số tuyến (đăng ký với Sở)<input value={f.registered_code} onChange={(e) => setF({ ...f, registered_code: e.target.value })} /></label>
         <label>Cự ly (km)<input type="number" min={1} step="0.1" inputMode="decimal" value={f.distance_km} onChange={(e) => setF({ ...f, distance_km: e.target.value })} /></label>
       </div>
-      <label>Hành trình chiều đi<textarea rows={2} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
-      <label>Hành trình chiều về (để trống = đi ngược chiều đi)<textarea rows={2} value={f.itinerary_ve} placeholder={reverseItinerary(f.itinerary)} onChange={(e) => setF({ ...f, itinerary_ve: e.target.value })} /></label>
-      {perms.has('fare.view') && <FareTables perms={perms} routeId={route.id} onChanged={reload} />}
+      <div className="dir-panels">
+        <section className="dir-panel">
+          <h3><span className="badge">Chiều đi</span></h3>
+          <label>Tên tuyến chiều đi<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></label>
+          <label>Hành trình chiều đi<textarea rows={3} value={f.itinerary} onChange={(e) => setF({ ...f, itinerary: e.target.value })} /></label>
+          {directionPath(data, route.id, 'di') && <p className="small route-dir">Điểm dừng: {directionPath(data, route.id, 'di')}</p>}
+          {perms.has('fare.view') && <FareTables perms={perms} routeId={route.id} direction="di" onChanged={reload} />}
+        </section>
+        <section className="dir-panel">
+          <h3><span className="badge">Chiều về</span></h3>
+          <label>Tên tuyến chiều về<input value={f.name_ve} placeholder={reverseName(f.name)} onChange={(e) => setF({ ...f, name_ve: e.target.value })} /></label>
+          <label>Hành trình chiều về (để trống = đi ngược chiều đi)<textarea rows={3} value={f.itinerary_ve} placeholder={reverseItinerary(f.itinerary)} onChange={(e) => setF({ ...f, itinerary_ve: e.target.value })} /></label>
+          {directionPath(data, route.id, 've') && <p className="small route-dir">Điểm dừng: {directionPath(data, route.id, 've')}</p>}
+          {perms.has('fare.view') && <FareTables perms={perms} routeId={route.id} direction="ve" onChanged={reload} />}
+        </section>
+      </div>
       <div className="actions">
         <button type="button" className="btn small primary" disabled={busy} onClick={() => void save()}>Lưu tuyến</button>
         <button type="button" className="btn small link" onClick={onClose}>Hủy</button>

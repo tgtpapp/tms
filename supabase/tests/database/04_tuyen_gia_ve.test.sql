@@ -62,14 +62,19 @@ select lives_ok($$ select public.save_fare_table(null, (select v from t.ids wher
   jsonb_build_object('from', '', 'to', '', 'price', 150000),
   jsonb_build_object('from', 'bx  hố nai', 'to', 'Bà Rịa', 'price', 120000))) $$, 'Bảng giá: toàn tuyến 150.000, chặng Hố Nai – Bà Rịa 120.000 (tên gõ không phân biệt hoa thường)');
 select is(public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'BR')), 120000, 'Chặng có trong bảng dùng giá chặng');
-select is(public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'BR'), (select v from t.ids where k = 'HN')), 120000, 'Chiều về cùng chặng dùng chung giá');
+select throws_ok($$ select public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'BR'), (select v from t.ids where k = 'HN')) $$, 'P0002', null,
+  'Giá riêng từng chiều: chiều về chưa có bảng giá thì báo lỗi');
+select lives_ok($$ select public.save_fare_table(null, (select v from t.ids where k = 'R'), app.local_today(), null, null,
+  '[{"from":"Bà Rịa","to":"BX Hố Nai","price":110000}]', null, 've') $$, 'Bảng giá chiều về riêng');
+select is(public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'BR'), (select v from t.ids where k = 'HN')), 110000, 'Chiều về dùng giá chiều về');
+select is(public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'HN'), (select v from t.ids where k = 'BR')), 120000, 'Chiều đi vẫn giá chiều đi');
 select is(public.fare_for((select v from t.ids where k = 'R'), (select v from t.ids where k = 'BR'), (select v from t.ids where k = 'VT')), 150000, 'Chặng không có trong bảng dùng giá toàn tuyến');
 select is((select count(*)::int from public.stops where tenant_id = (select v from t.ids where k = 'A')), 3, 'Tên điểm có sẵn thì dùng lại, không tạo điểm mới');
 select throws_ok($$ select public.save_fare_table(null, (select v from t.ids where k = 'R'), app.local_today() + 5, null, null, '[{"from":"","to":"","price":1000}]') $$,
   '23P01', null, 'Không cho 2 bảng giá trùng khoảng ngày của cùng tuyến');
-select lives_ok($$ select public.save_fare_table((select id from public.fare_tables), (select v from t.ids where k = 'R'), app.local_today(), app.local_today(), 'Giá thường',
+select lives_ok($$ select public.save_fare_table((select id from public.fare_tables where direction = 'di'), (select v from t.ids where k = 'R'), app.local_today(), app.local_today(), 'Giá thường',
   (select jsonb_agg(jsonb_build_object('from', coalesce(a.name, ''), 'to', coalesce(b.name, ''), 'price', i.price) order by i.seq)
-   from public.fare_table_items i left join public.stops a on a.id = i.from_stop_id left join public.stops b on b.id = i.to_stop_id)) $$,
+   from public.fare_table_items i join public.fare_tables ft on ft.id = i.table_id and ft.direction = 'di' left join public.stops a on a.id = i.from_stop_id left join public.stops b on b.id = i.to_stop_id)) $$,
   'Sửa bảng giá: chỉ áp dụng đến hết hôm nay');
 select lives_ok($$ select public.save_fare_table(null, (select v from t.ids where k = 'R'), app.local_today() + 1, null, 'Giá mới', '[{"from":"","to":"","price":170000}]') $$,
   'Bảng giá mới từ ngày mai');
@@ -109,7 +114,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select lives_ok($$ select public.delete_fare_table((select id from public.fare_tables where note = 'Cũ')) $$, 'Chủ A xóa bảng giá cũ');
-select is((select count(*)::int from public.fare_tables), 3, 'Còn 3 bảng giá');
+select is((select count(*)::int from public.fare_tables), 4, 'Còn 4 bảng giá (3 chiều đi, 1 chiều về)');
 reset role;
 
 -- ---------------------------------------------------------------- Nhân viên bán vé A

@@ -6,7 +6,7 @@ import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface Stop { id: string; name: string }
-interface Table { id: string; route_id: string; valid_from: string; valid_to: string | null; note: string | null }
+interface Table { id: string; route_id: string; direction: 'di' | 've'; valid_from: string; valid_to: string | null; note: string | null }
 interface Item { table_id: string; seq: number; from_stop_id: string | null; to_stop_id: string | null; price: number }
 interface Row { from: string; to: string; price: string }
 
@@ -21,7 +21,7 @@ function status(t: Table): [string, string] {
 }
 
 /** Bảng giá vé của 1 tuyến (đặt trong cửa sổ Sửa tuyến, dưới hành trình): thêm / sao chép / sửa / xóa ngay tại chỗ. */
-export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; routeId: string; onChanged?: () => void | Promise<void> }) {
+export function FareTables({ perms, routeId, direction, onChanged }: { perms: Permissions; routeId: string; direction: 'di' | 've'; onChanged?: () => void | Promise<void> }) {
   const toast = useToast();
   const [stops, setStops] = useState<Stop[]>([]);
   const [routeStops, setRouteStops] = useState<{ route_id: string; stop_id: string; seq: number }[]>([]);
@@ -36,7 +36,7 @@ export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; 
     const [s, rs, t, i] = await Promise.all([
       supabase.from('stops').select('id, name').order('name'),
       supabase.from('route_stops').select('route_id, stop_id, seq').order('seq'),
-      supabase.from('fare_tables').select('id, route_id, valid_from, valid_to, note').order('valid_from', { ascending: false }),
+      supabase.from('fare_tables').select('id, route_id, direction, valid_from, valid_to, note').eq('route_id', routeId).eq('direction', direction).order('valid_from', { ascending: false }),
       supabase.from('fare_table_items').select('table_id, seq, from_stop_id, to_stop_id, price').order('seq'),
     ]);
     const err = s.error ?? rs.error ?? t.error ?? i.error;
@@ -45,7 +45,7 @@ export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; 
     setRouteStops((rs.data ?? []) as { route_id: string; stop_id: string; seq: number }[]);
     setTables((t.data ?? []) as Table[]);
     setItems((i.data ?? []) as Item[]);
-  }, [toast]);
+  }, [toast, routeId, direction]);
   const saved = async () => { setForm(null); await load(); await onChanged?.(); };
   useEffect(() => { void load(); }, [load]);
 
@@ -105,7 +105,7 @@ export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; 
         );
       })}
       {form && (
-        <FareForm id={form.id} src={form.src} rows0={form.rows} route={routeId}
+        <FareForm id={form.id} src={form.src} rows0={form.rows} route={routeId} direction={direction}
                   points={(rid) => {
                     const on = routeStops.filter((x) => x.route_id === rid).map((x) => stopName(x.stop_id));
                     return [...new Set([...on, ...stops.map((s) => s.name)])].filter(Boolean);
@@ -116,7 +116,7 @@ export function FareTables({ perms, routeId, onChanged }: { perms: Permissions; 
   );
 }
 
-function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; route: string; points: (routeId: string) => string[];
+function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; route: string; direction: 'di' | 've'; points: (routeId: string) => string[];
   onClose: () => void; onSaved: () => Promise<void> }) {
   const { id, src } = props;
   const toast = useToast();
@@ -163,7 +163,7 @@ function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; r
       await rpc('save_fare_table', {
         p_id: id, p_route_id: route, p_valid_from: from, p_valid_to: to || null, p_note: note,
         p_items: list.map((r) => ({ from: r.from.trim(), to: r.to.trim(), price: Number(r.price.replace(/\D/g, '')) })),
-        p_order: order.length ? order : null,
+        p_order: order.length ? order : null, p_direction: props.direction,
       });
       toast('ok', 'Đã lưu bảng giá');
       await props.onSaved();
@@ -190,7 +190,7 @@ function FareForm(props: { id: string | null; src: Table | null; rows0: Row[]; r
         {gen !== null && (
           <div className="bg-gen">
             <textarea rows={4} autoFocus value={gen} onChange={(e) => setGen(e.target.value)}
-                      placeholder={'Nhập các điểm theo thứ tự đi, mỗi điểm một dòng\nVD:\nBến xe Vũng Tàu\nBà Rịa\nBến xe Biên Hòa'} />
+                      placeholder={'Nhập các điểm theo thứ tự xe chạy, mỗi điểm một dòng'} />
             <div className="actions">
               <button type="button" className="btn small primary" onClick={makeAll}>Tạo mọi chặng</button>
               <span className="muted small">Tạo từng cặp điểm đi → điểm đến theo thứ tự, rồi nhập giá cho từng chặng. Để trống cả điểm đi và điểm đến = giá toàn tuyến.</span>

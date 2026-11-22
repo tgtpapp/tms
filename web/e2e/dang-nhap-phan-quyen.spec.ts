@@ -136,7 +136,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText("BX Vũng Tàu → Bà Rịa (+30') → BX Hố Nai (+90')")).toBeVisible();
   // Giá vé trong cửa sổ Sửa tuyến (dưới hành trình): giá toàn tuyến + giá chặng
   await page.locator('li.item', { hasText: 'Hố Nai – Vũng Tàu' }).getByRole('button', { name: 'Sửa', exact: true }).first().click();
-  await page.getByRole('dialog').getByRole('button', { name: '+ Thêm bảng giá' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '+ Thêm bảng giá' }).first().click();
   await page.getByLabel('Giá, chặng 1').fill('150000');
   await page.getByRole('button', { name: '+ Thêm chặng' }).click();
   await page.getByLabel('Điểm đi, chặng 2').fill('BX Hố Nai');

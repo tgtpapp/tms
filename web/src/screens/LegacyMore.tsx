@@ -124,7 +124,7 @@ export function LegacyMore({ legacy, tenantId }: { legacy: LegacyBackup; tenantI
             .filter((c) => c.price > 0);
           if (!items.length) continue;
           try {
-            await rpc('save_fare_table', { p_id: null, p_route_id: rt.id, p_valid_from: tu, p_valid_to: den, p_note: str(b, 'ghiChu'), p_items: items, p_order: null });
+            await rpc('save_fare_table', { p_id: null, p_route_id: rt.id, p_valid_from: tu, p_valid_to: den, p_note: str(b, 'ghiChu'), p_items: items, p_order: null, p_direction: rt.d });
             n++;
           } catch (e) { log.push(`Bảng giá ${tuyen} từ ${tu}: ${errMsg(e)}`); }
         }

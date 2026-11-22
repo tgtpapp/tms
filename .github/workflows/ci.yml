@@ -82,7 +82,7 @@ jobs:
           cache: true
       - name: Kiểm tra kiểu Edge Function
         if: steps.chg.outputs.sb == 'true'
-        run: deno check supabase/functions/admin-users/index.ts supabase/functions/doc-reader/index.ts supabase/functions/zalo/index.ts supabase/functions/drive/index.ts supabase/functions/doc-writer/index.ts supabase/functions/app-install/index.ts supabase/functions/push/index.ts supabase/functions/support/index.ts supabase/tests/e2e/admin_users.e2e.ts
+        run: deno check supabase/functions/admin-users/index.ts supabase/functions/doc-reader/index.ts supabase/functions/zalo/index.ts supabase/functions/drive/index.ts supabase/functions/doc-writer/index.ts supabase/functions/app-install/index.ts supabase/functions/push/index.ts supabase/functions/support/index.ts supabase/functions/lenh/index.ts supabase/tests/e2e/admin_users.e2e.ts
       - name: Danh mục giấy tờ ở giao diện và Edge Function phải giống hệt
         run: cmp supabase/functions/_shared/doc_types.ts web/src/lib/docTypes.ts
       - name: Kiểm thử AI đọc giấy tờ (fetch giả, không gọi AI thật)
@@ -225,6 +225,7 @@ jobs:
           supabase functions deploy app-install --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy push --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy support --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy lenh --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
 
   web:
     # Giao diện chỉ lên Cloudflare Pages SAU KHI database + Edge Function đã cập nhật (tránh giao diện mới gọi cột / hàm chưa có).

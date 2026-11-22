@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { LenhUpload } from './screens/LenhUpload';
 import { initTheme } from './lib/theme';
 import { initPwa } from './lib/pwa';
 import { installErrorLog } from './lib/support';
@@ -13,12 +14,14 @@ installErrorLog();   // nhớ các lỗi gần nhất trên máy để gửi kè
 
 initTheme();   // áp giao diện đã chọn trước khi vẽ (không nháy màu)
 
+// Quét mã QR trên lệnh vận chuyển (Zalo / camera): trang lưu lệnh đã đóng dấu, không cần đăng nhập
+const lenhToken = new URLSearchParams(window.location.search).get('l');
 const root = document.getElementById('root');
 if (!root) throw new Error('Không tìm thấy phần tử #root');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    {lenhToken ? <LenhUpload token={lenhToken} /> : <App />}
   </StrictMode>,
 );
 

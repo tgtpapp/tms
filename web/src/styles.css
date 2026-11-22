@@ -1300,3 +1300,8 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 .vxs.coc { background: #ede9fe; border-color: #a78bfa; }
 .seat-dot.coc, .vx-body .seat-dot.coc { background: #ddd6fe; }
 .vxs-coc { color: #5b21b6; font-weight: 600; }
+/* Trang lưu lệnh đã đóng dấu (quét mã QR trên lệnh) */
+.lenh-up { max-width: 560px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.lenh-up h1 { font-size: 1.3rem; margin: 0; }
+.lenh-up .card { display: flex; flex-direction: column; gap: 4px; }
+.lenh-up-pv { width: 100%; border-radius: 8px; border: 1px solid var(--line); }

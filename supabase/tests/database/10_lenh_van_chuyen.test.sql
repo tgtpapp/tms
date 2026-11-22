@@ -209,5 +209,20 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.order_scans), 0, 'Chủ B không thấy lệnh đã scan của nhà xe A');
 reset role;
 
+-- Mã QR trên lệnh: lưu lệnh đã đóng dấu (chỉ Edge Function / service_role)
+reset role;
+select is(length((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))), 32, 'Mỗi lệnh có mã bí mật 32 ký tự');
+select is((select count(distinct scan_token)::int from public.transport_orders), (select count(*)::int from public.transport_orders), 'Mã không trùng giữa các lệnh');
+select is((public.svc_lenh_by_token((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) ->> 'required')::int, 2,
+  'Lệnh 1 lượt có giờ: cần 2 dấu bến xe');
+select ok(public.svc_lenh_by_token('khongphaima') is null, 'Mã sai: không có lệnh');
+select ok(public.svc_lenh_by_token((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) -> 'legs' is not null, 'Có giờ các lượt');
+select is((select count(*)::int from generate_series(1, 16) g where public.svc_lenh_try((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6')))), 15,
+  'Mỗi ngày tối đa 15 lần thử lưu');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select public.svc_lenh_by_token('00000000000000000000000000000000') $$, '42501', null, 'Trình duyệt không gọi được hàm tra lệnh theo mã');
+select ok(public.transport_order_print((select id from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) ? 'scan_token', 'Dữ liệu in lệnh có mã QR lưu lệnh');
+reset role;
 select * from finish();
 rollback;

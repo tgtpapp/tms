@@ -24,3 +24,15 @@ export const SCAN_DOC: ReadDef = {
   ],
   hint: 'Các ô bắt đầu bằng "Lệnh" chỉ điền khi là Lệnh vận chuyển. Năm viết tắt (vd 26) là 2026.',
 };
+
+// Lưu lệnh đã đóng dấu (quét mã QR trên lệnh): đọc số lệnh, các dòng lệnh để xếp thư mục, đếm dấu mộc bến xe
+export const LENH_DAU: ReadDef = {
+  code: 'lenh_dau', owner: 'cong_ty', name: 'Lệnh vận chuyển đã được bến xe ký và đóng dấu', hasExpiry: false, required: false,
+  fields: [
+    t('loai', 'Loại: Lệnh vận chuyển | Khác'),
+    t('lenh_so', 'Số lệnh, chép đúng như in (vd 0700-22112026-458/LVC-TGTP)'), t('tuyen', 'Dòng Tuyến'), t('ma_tuyen', 'Mã số tuyến'), t('bien_so', 'Biển số xe'),
+    t('ngay_xuat', 'Ngày xuất bến lượt đi', 'date'),
+    t('so_dau_ben', 'Số con dấu (mộc tròn) của BẾN XE đóng trong cột "Bến xe (Ký tên và đóng dấu)" của bảng lượt xe', 'int'),
+  ],
+  hint: 'Chỉ đếm dấu mộc tròn của bến xe nằm trong cột "Bến xe" của bảng lượt xe (mỗi ô một dấu). KHÔNG đếm con dấu công ty ở ô Giám đốc, không đếm chữ ký không có dấu. Không chắc là dấu thì không đếm. Năm viết tắt (vd 26) là 2026.',
+};

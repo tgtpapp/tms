@@ -28,6 +28,7 @@ interface PrintRow {
   crew: { role: string; staff_id: string; user_id: string | null; name: string; hang: string | null }[];
   legs: { seq: number; time: string | null; date: string | null }[];
   info?: Info;
+  scan_token: string;
 }
 /** 4 mục in trên lệnh: tự điền theo xếp xe, sửa được (chưa xếp xe vẫn cấp lệnh như app cũ) */
 interface Info { plate?: string; seats?: number; driver?: string; hang?: string }
@@ -41,7 +42,8 @@ export async function loadOrderPrint(orderId: string, tenantId: string, me: { id
   const [sg, seal, qr] = await Promise.all([
     loadSigns(tenantId, keys),
     p.seal ? signatureUrl(tenantId, 'con_dau') : Promise.resolve(null),
-    QRCode.toDataURL(`LVC ${p.order_no} | ${p.plate ?? ''} | ${p.route.name} | ${fmtDate(p.valid_from)}`, { margin: 0, width: 240 }),
+    // mã QR = đường dẫn lưu lệnh đã đóng dấu (quét bằng Zalo / camera điện thoại)
+    QRCode.toDataURL(`${window.location.origin}/?l=${p.scan_token}`, { margin: 0, width: 240 }),
   ]);
   // chữ ký hồ sơ nhân viên trước, chưa có thì chữ ký theo tài khoản
   const pick = (a: string | null | undefined, b: string | null | undefined) => { const x = a ? sg.get(a) : undefined; return x?.img ? x : (b ? sg.get(b) : undefined); };

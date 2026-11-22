@@ -212,6 +212,25 @@ export function DocRow(props: {
 
   /** AI đọc lại ảnh đã lưu của giấy hiện tại, điền vào ô (chưa lưu – kiểm tra rồi bấm Lưu) */
   async function rereadSaved() {
+    // Chưa có giấy ở mục Giấy tờ, chỉ có ảnh trong Lý lịch hành nghề (vd giấy tập huấn chuyển từ app cũ): AI đọc ảnh đó, lưu thành giấy mới
+    if ((!doc || doc.files.length === 0) && props.extraFiles?.length) {
+      setMode('add');
+      setValues(valuesFromAi(def, {}));
+      setScanned(null);
+      const t0 = Date.now();
+      setAiNote('AI đang đọc lại ảnh đã lưu…');
+      try {
+        const files = (await loadStoredFiles(props.extraFiles)).slice(0, 4);
+        const r = await readByAI(def.code, files);
+        const v = valuesFromAi(def, r.fields);
+        setValues(v);
+        setScanned({ files, values: v, aiNote: `AI đã đọc lại (${((Date.now() - t0) / 1000).toFixed(1)} giây). Kiểm tra rồi bấm "Lưu giấy tờ"`, warnings: r.warnings });
+        setAiNote(null);
+      } catch (e) {
+        setAiNote(errMsg(e));
+      }
+      return;
+    }
     if (!doc || doc.files.length === 0) return;
     const base = mode === 'edit' ? values : valuesFromDoc(def, doc);
     setValues(base);
@@ -277,7 +296,7 @@ export function DocRow(props: {
           {canEdit && mode === 'view' && (
             <>
               {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
-              {doc && doc.files.length > 0 && (
+              {((doc && doc.files.length > 0) || (!doc?.files.length && !!props.extraFiles?.length)) && (
                 <button className="btn small" aria-label={`Đọc lại ${short}`} onClick={() => void rereadSaved()}>Đọc lại</button>
               )}
               <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setMode('add'); }}>
@@ -308,7 +327,7 @@ export function DocRow(props: {
             </>
           )}
           {mode === 'edit' && doc && <FilePreviews files={doc.files} />}
-          {mode === 'edit' && aiNote && <p className="muted small">{aiNote}</p>}
+          {aiNote && <p className="muted small">{aiNote}</p>}
           {mode === 'edit' && doc && doc.files.length > 0 && (
             <button type="button" className="btn small" onClick={() => void rereadSaved()}>AI đọc lại ảnh đã lưu</button>
           )}

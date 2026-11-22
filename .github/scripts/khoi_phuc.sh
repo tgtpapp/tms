@@ -9,12 +9,13 @@ W=$(mktemp -d)
 echo "1. Lấy dữ liệu từ bản dự phòng Neon"
 psql "$NEON_DATABASE_URL" -tAc "select count(*) from public.tenants" | sed 's/^/   Số nhà xe trên Neon: /'
 pg_dump "$NEON_DATABASE_URL" --data-only --no-owner --no-privileges -n public -n app -f "$W/data.sql"
-psql "$NEON_DATABASE_URL" -v ON_ERROR_STOP=1 -qc "\copy (select u.id, u.email, coalesce(a.phone, '') from auth.users u left join public.app_users a on a.id = u.id) to '$W/users.csv' csv"
+psql "$NEON_DATABASE_URL" -v ON_ERROR_STOP=1 -qc "\copy (select u.id, u.email, coalesce(a.phone, '-') from auth.users u left join public.app_users a on a.id = u.id) to '$W/users.csv'"
 echo "   Tài khoản: $(wc -l < "$W/users.csv")"
 
 echo "2. Tạo lại tài khoản đăng nhập (giữ nguyên mã tài khoản; mật khẩu ngẫu nhiên, không in ra)"
 made=0; owner=0
-while IFS=, read -r id email phone; do
+while IFS=$'\t' read -r id email phone; do
+  [ "$phone" = "-" ] && phone=''
   [ -n "$email" ] || continue
   pw=$(openssl rand -base64 24)
   if [ -n "${OWNER_PHONE:-}" ] && [ "$phone" = "$OWNER_PHONE" ] && [ -n "${OWNER_PASSWORD:-}" ]; then pw="$OWNER_PASSWORD"; owner=1; fi

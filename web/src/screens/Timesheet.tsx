@@ -33,7 +33,7 @@ async function all<T>(q: (from: number, to: number) => PromiseLike<{ data: unkno
 
 interface Data {
   staff: TStaff[]; routes: TRoute[]; vehicles: TVeh[]; trips: TTrip[]; driverOf: Map<string, string>; sched: { route_id: string; direction: Dir }[];
-  congTuyen: Record<string, number>; cpPct: number; bh14: boolean; congChuan: number; offSat: boolean; groupsCfg: { id: string; name: string; routes: string[] }[] | null;
+  congTuyen: Record<string, number>; tienTai: Record<string, number>; cpPct: number; bh14: boolean; congChuan: number; offSat: boolean; groupsCfg: { id: string; name: string; routes: string[] }[] | null;
   pay: Map<string, TPay>; firstMonth: Map<string, string>;
 }
 
@@ -59,12 +59,13 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
     setErr('');
     try {
       const from = `${ym}-01`, last = new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10);
-      const [st, rt, vh, sc, ss, trips] = await Promise.all([
+      const [st, rt, vh, vt, sc, ss, trips] = await Promise.all([
         supabase.from('staff_members').select('id, user_id, full_name, position, job_title, department, joined_on, left_on, is_active').order('full_name'),
         supabase.from('routes').select('id, name, name_ve'),
-        supabase.from('vehicles').select('id, plate, driver_pay'),
+        supabase.from('vehicles').select('id, plate, driver_pay, vehicle_type_id'),
+        supabase.from('vehicle_types').select('id, reg_seats, reg_berths'),
         supabase.from('schedules').select('route_id, direction').eq('is_active', true),
-        supabase.from('tenant_settings').select('key, value').in('key', ['cham_cong.cong_tuyen', 'cham_cong.cp_khac_lx', 'cham_cong.bh14', 'cham_cong.cong_chuan', 'hdld.ngay_nghi', 'dieu_hanh.nhom_tuyen']),
+        supabase.from('tenant_settings').select('key, value').in('key', ['cham_cong.cong_tuyen', 'cham_cong.cp_khac_lx', 'cham_cong.bh14', 'cham_cong.cong_chuan', 'cham_cong.tien_tai', 'hdld.ngay_nghi', 'dieu_hanh.nhom_tuyen']),
         all<TTrip>((a, b) => supabase.from('trips').select('id, route_id, direction, service_date, depart_at, vehicle_id').eq('status', 'mo').gte('service_date', from).lte('service_date', last).order('id').range(a, b)),
       ]);
       const e = st.error ?? rt.error ?? vh.error ?? sc.error ?? ss.error;
@@ -82,9 +83,16 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
         rpc<{ staff_id: string; first_month: string }[]>('driver_first_months', {}),
       ]);
       const cp = set('cham_cong.cp_khac_lx');
+      // Tiền tài: theo số chỗ của xe (Cài đặt tiền tài theo loại xe); số chỗ chưa khai thì lấy Tiền tài trong hồ sơ xe
+      const ttCfg = (set('cham_cong.tien_tai') && typeof set('cham_cong.tien_tai') === 'object' ? set('cham_cong.tien_tai') : {}) as Record<string, number>;
+      const seatsOf = new Map(((vt.data ?? []) as { id: string; reg_seats: number; reg_berths: number }[]).map((t) => [t.id, t.reg_seats + t.reg_berths]));
       setD({
         staff: (st.data ?? []) as TStaff[], routes: (rt.data ?? []) as TRoute[],
-        vehicles: ((vh.data ?? []) as TVeh[]).map((v) => ({ ...v, driver_pay: Number(v.driver_pay) || 0 })),
+        vehicles: ((vh.data ?? []) as (TVeh & { vehicle_type_id: string | null })[]).map((v) => {
+          const n = v.vehicle_type_id ? seatsOf.get(v.vehicle_type_id) : undefined, c = n != null ? ttCfg[String(n)] : undefined;
+          return { id: v.id, plate: v.plate, driver_pay: c != null ? Number(c) || 0 : Number(v.driver_pay) || 0 };
+        }),
+        tienTai: ttCfg,
         trips, driverOf: new Map(crew.map((c) => [c.trip_id, c.staff_id])), sched: (sc.data ?? []) as { route_id: string; direction: Dir }[],
         congTuyen: (set('cham_cong.cong_tuyen') && typeof set('cham_cong.cong_tuyen') === 'object' ? set('cham_cong.cong_tuyen') : {}) as Record<string, number>,
         cpPct: cp == null ? 4 : Number(cp), bh14: set('cham_cong.bh14') === true, congChuan: Number(set('cham_cong.cong_chuan')) || 26,
@@ -335,6 +343,8 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
         </div>
       </details>}
 
+      {viewAll && money_ && <TienTaiCfg cfg={d.tienTai} canEdit={canEdit} save={(v, msg) => saveSet({ tien_tai: v }, msg)} />}
+
       {viewAll && money_ && <details className="cc-ct" open={poOpen} onToggle={(e) => setPoOpen((e.target as HTMLDetailsElement).open)}>
         <summary>Xử lý khi lái xe không đủ tiền trừ <span className="muted small">Phần thiếu không chuyển sang tháng sau</span></summary>
         <div className="cc-ctb po-rules">
@@ -397,5 +407,36 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
       {view && <PaperView title={view.title} pages={[{ html: view.html, land: view.land ?? true }]} onClose={() => setView(null)} />}
     </section>
     </>
+  );
+}
+
+/** Tiền tài theo số chỗ của xe (đ / công lái xe): bảng chấm công tự nhân theo xe đã xếp trong lịch chạy. */
+function TienTaiCfg({ cfg, canEdit, save }: { cfg: Record<string, number>; canEdit: boolean; save: (v: Record<string, number>, msg: string) => Promise<void> }) {
+  const init = () => Object.entries(cfg).sort((a, b) => Number(a[0]) - Number(b[0])).map(([k, v]) => ({ cho: k, gia: String(v) }));
+  const [rows, setRows] = useState(init);
+  useEffect(() => setRows(init()), [cfg]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const [open, setOpen] = useState(false);
+  const fmt = (x: string) => (x ? Number(x.replace(/[^0-9]/g, '')).toLocaleString('vi-VN') : '');
+  function commit(L: { cho: string; gia: string }[]) {
+    const out: Record<string, number> = {};
+    for (const r of L) { const c = r.cho.replace(/[^0-9]/g, ''); if (c && r.gia !== '') out[String(Number(c))] = Number(r.gia.replace(/[^0-9]/g, '')) || 0; }
+    if (JSON.stringify(out) !== JSON.stringify(cfg)) void save(out, 'Đã lưu tiền tài theo loại xe');
+  }
+  return (
+    <details className="cc-ct" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary>Tiền tài theo loại xe <span className="muted small">{rows.length ? rows.map((r) => `${r.cho} chỗ ${fmt(r.gia)} đ`).join(' · ') : 'theo Tiền tài trong hồ sơ xe'}</span></summary>
+      <div className="cc-ctb po-rules">
+        {rows.map((r, i) => (
+          <div key={i} className="po-r">
+            <label className="inline">Xe <input type="number" min={1} max={999} aria-label={`Số chỗ dòng ${i + 1}`} disabled={!canEdit} value={r.cho}
+              onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, cho: e.target.value } : x)))} onBlur={() => commit(rows)} /> chỗ</label>
+            <label className="inline">× <input inputMode="numeric" style={{ width: 110 }} aria-label={`Tiền tài xe ${r.cho} chỗ`} disabled={!canEdit} value={fmt(r.gia)}
+              onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, gia: e.target.value.replace(/[^0-9]/g, '') } : x)))} onBlur={() => commit(rows)} /> đ / công</label>
+            {canEdit && <button type="button" className="btn small" onClick={() => { const L = rows.filter((_, j) => j !== i); setRows(L); commit(L); }}>Xóa</button>}
+          </div>
+        ))}
+        {canEdit && <div><button type="button" className="btn small" onClick={() => setRows([...rows, { cho: '', gia: '' }])}>+ Thêm loại xe</button></div>}
+      </div>
+    </details>
   );
 }

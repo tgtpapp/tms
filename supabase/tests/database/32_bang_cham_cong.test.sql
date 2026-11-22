@@ -32,6 +32,9 @@ select lives_ok($$ select public.save_timesheet_settings('{"cong_tuyen":{"x|di":
 select is((select value from public.tenant_settings where key = 'cham_cong.cp_khac_lx'), '4'::jsonb, 'Đã lưu % chi phí khác');
 select throws_ok($$ select public.save_timesheet_settings('{"cp_khac_lx":150}') $$, '22023', null, 'Chặn % sai');
 select throws_ok($$ select public.save_timesheet_settings('{"cong_tuyen":{"x":-1}}') $$, '22023', null, 'Chặn công/chuyến âm');
+select lives_ok($$ select public.save_timesheet_settings('{"tien_tai":{"16":150000,"29":180000}}') $$, 'Lưu tiền tài theo số chỗ');
+select is((select value from public.tenant_settings where key = 'cham_cong.tien_tai'), '{"16":150000,"29":180000}'::jsonb, 'Đã lưu tiền tài 16 / 29 chỗ');
+select throws_ok($$ select public.save_timesheet_settings('{"tien_tai":{"abc":1}}') $$, '22023', null, 'Chặn số chỗ sai');
 select throws_ok($$ select public.save_timesheet_settings('{"khac":1}') $$, '22023', null, 'Chặn khóa lạ');
 select is((select count(*)::int from public.driver_first_months()), 0, 'Chưa có chuyến nào');
 select is((select count(distinct permission_code)::int from public.my_permissions() where permission_code like 'timesheet.%'), 3, 'Chủ có đủ quyền chấm công');

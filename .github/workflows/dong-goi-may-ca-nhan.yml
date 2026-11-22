@@ -28,9 +28,9 @@ jobs:
         working-directory: web
         run: |
           npm ci --no-audit --no-fund
-          grep -vE '^(VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY|VITE_APP_ENV)=' .env.production > .env.local
-          printf 'VITE_APP_ENV=local\nVITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$LOCAL_ANON" >> .env.local
-          npx vite build --mode local --outDir ../out/web
+          grep -vE '^(VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY|VITE_APP_ENV)=' .env.production > .env.maycanhan
+          printf 'VITE_APP_ENV=local\nVITE_SUPABASE_URL=http://127.0.0.1:54321\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\n' "$LOCAL_ANON" >> .env.maycanhan
+          npx vite build --mode maycanhan --outDir ../out/web
       - name: Gói
         run: |
           D=out

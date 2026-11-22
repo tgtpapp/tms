@@ -24,6 +24,6 @@ jobs:
                    (select string_agg(k, ',') from jsonb_object_keys(app.order_info_default(t.tenant_id, t.id)) k) info_co,
                    (select string_agg(k, ',') from public.transport_orders o, jsonb_object_keys(o.info) k where o.tenant_id=t.tenant_id and o.trip_id=t.id) info_lenh
             from public.trips t
-            where t.service_date between current_date - 1 and current_date + 1
+            where t.service_date = (now() at time zone 'Asia/Ho_Chi_Minh')::date
               and (t.vehicle_id is not null or exists (select 1 from public.trip_crew c where c.tenant_id=t.tenant_id and c.trip_id=t.id))
-            order by t.depart_at limit 40"
+            order by t.depart_at limit 60"

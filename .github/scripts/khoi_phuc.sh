@@ -25,7 +25,7 @@ while IFS=, read -r id email phone; do
     -H "apikey: $TARGET_SERVICE_KEY" -H "Authorization: Bearer $TARGET_SERVICE_KEY" -H 'Content-Type: application/json' -d "$body")
   if [ "$code" = "200" ] || [ "$code" = "201" ]; then made=$((made+1));
   elif grep -qiE 'already|exists|registered' "$W/r.json"; then made=$((made+1));
-  else echo "   ::warning::Không tạo được 1 tài khoản (mã $code, $(grep -oE '"(error_code|code)":"?[a-z_0-9]+' "$W/r.json" | head -1))"; fi
+  else echo "   ::warning::Không tạo được 1 tài khoản (mã $code, $(grep -oE '"(msg|message|error_description)":"[^"]{0,120}' "$W/r.json" | head -1 | sed -E 's/[^ ]+@[^ ]+/<email>/g'))"; fi
 done < "$W/users.csv"
 echo "   Đã tạo $made tài khoản; mật khẩu tạm cho Chủ nhà xe: $([ $owner = 1 ] && echo đã đặt || echo chưa đặt)"
 

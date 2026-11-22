@@ -1299,3 +1299,4 @@ html[data-mode='dark'] .trip-chip.past { background: #263238; border-color: #374
 /* Vé đã cọc (trả trước một phần): màu tím, khác đặt chỗ chưa trả và đã thanh toán */
 .vxs.coc { background: #ede9fe; border-color: #a78bfa; }
 .seat-dot.coc, .vx-body .seat-dot.coc { background: #ddd6fe; }
+.vxs-coc { color: #5b21b6; font-weight: 600; }

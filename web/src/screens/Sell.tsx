@@ -431,6 +431,7 @@ function TripSell(props: TripSellProps) {
 
   /** Tiền cọc của cả đơn (cọc tính theo đơn, không theo từng ghế) */
   const bookingDep = (bid: string) => tickets.reduce((a, x) => a + (x.booking_id === bid && x.status === 'dat' ? x.deposit ?? 0 : 0), 0);
+  const bookingDue = (bid: string) => tickets.reduce((a, x) => a + (x.booking_id === bid && x.status === 'dat' ? x.price : 0), 0) - bookingDep(bid);
   const all = useMemo(() => [...tickets.filter((t) => !t.id.startsWith('q:')), ...queuedTickets(queue, trip.id, stopIds)], [tickets, queue, trip.id, stopIds]);
   const waiting = tickets.filter((t) => t.status === 'cho_xep');
   const fareOf = (a: string, b: string) => fares.find((x) => x.from_stop_id === a && x.to_stop_id === b)?.price ?? null;
@@ -585,7 +586,7 @@ function TripSell(props: TripSellProps) {
         )}
         {view === 'so_do' && (
           <>
-            <SeatMap type={type} seats={seats} stopName={stopName} bookingOf={bookingOf} statusOf={(label) => {
+            <SeatMap type={type} seats={seats} stopName={stopName} bookingOf={bookingOf} depOf={(bid) => { const p = bookingDep(bid); return p > 0 ? { paid: p, due: bookingDue(bid) } : null; }} statusOf={(label) => {
               if (offSel.includes(label)) return { cls: 'mine' };
               const hit = overlapping(label);
               if (!hit) return { cls: 'free' };
@@ -680,8 +681,9 @@ const shortStop = (n: string) => n.replace(/^(bến xe|bx|văn phòng|vp)\s+/i, 
 
 /** Sơ đồ ghế kiểu Vexere: mỗi ghế là 1 thẻ lớn ghi chặng, tiền, tên, SĐT, ghi chú đón; ô tài xế / cửa ghi chữ lớn. */
 function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | null) => string; bookingOf: (id: string) => Booking | undefined;
+                          depOf: (bookingId: string) => { paid: number; due: number } | null;
                           statusOf: (label: string) => { cls: string; t?: Ticket }; onClick: (label: string) => void }) {
-  const { type, seats, statusOf, onClick, stopName, bookingOf } = props;
+  const { type, seats, statusOf, onClick, stopName, bookingOf, depOf } = props;
   return (
     <div className="decks">
       {Array.from({ length: type.decks }, (_, i) => i + 1).map((d) => (
@@ -708,6 +710,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
                       <span className="vxs-r"><span>{shortStop(stopName(t.from_stop_id))} - {shortStop(stopName(t.to_stop_id))}</span><b>{money(t.price)}</b></span>
                       <span className="vxs-r"><span>{t.passenger_name ?? ''}</span><b>{t.passenger_phone ?? ''}</b></span>
                       {t.dropoff_note && <span className="vxs-n">Trả: {t.dropoff_note}</span>}
+                      {st.cls === 'coc' && (() => { const d = depOf(t.booking_id); return d && <span className="vxs-r vxs-coc"><span>Cọc {money(d.paid)}</span><b>Còn {money(d.due)}</b></span>; })()}
                       {(() => { const c = crewNote(t); return c && <span className={`vxs-crew ${c.cls}`}>{c.text}</span>; })()}
                       <span className="vxs-r vxs-s"><span>{bookingOf(t.booking_id)?.code ?? ''}</span><span>{ST_LABEL[st.cls] ?? ''}</span></span>
                     </>

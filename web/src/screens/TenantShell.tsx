@@ -79,7 +79,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       setMyStaff((me.data as { id: string } | null)?.id ?? null);
       setPerms(p);
       // Chủ nhà xe: tệp còn ở kho cũ tự chuyển dần lên Google Drive (chạy nền)
-      if (p.has('settings.manage')) void moveOldFiles();
+      if (p.has('settings.edit')) void moveOldFiles();
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
       setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
       if (hasShare()) {

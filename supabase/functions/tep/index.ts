@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
 
     if (b.action === 'chuyen') {
       const P = await user.rpc('my_permissions');
-      if (!((P.data ?? []) as { permission_code: string }[]).some((p) => p.permission_code === 'settings.manage')) throw new FileError(403, 'Không có quyền');
+      if (!((P.data ?? []) as { permission_code: string }[]).some((p) => p.permission_code === 'settings.edit')) throw new FileError(403, 'Không có quyền');
       const c = await getCfg();
       if (!c) return json(200, { moved: 0, left: -1 });
       await admin.rpc('svc_file_backfill', { p_tenant: tid });   // tệp do app bản cũ tải thẳng lên kho cũ

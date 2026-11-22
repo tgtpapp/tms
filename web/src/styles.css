@@ -1379,3 +1379,14 @@ html:not([data-mode='dark']) .side-pin { border-color: color-mix(in srgb, var(--
 @media (prefers-reduced-motion: reduce) { .side-link .fi, .side-link.on .fi { animation: none; transition: none; } .nav-rip { display: none; } }
 .form .ux-sw { flex-direction: row; }
 html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7fb); }
+/* Soạn văn bản: xem trước bên cạnh (như app cũ) */
+.modal.xwide { max-width: min(1500px, 96vw); }
+.doc-edit { display: grid; gap: 16px; }
+@media (min-width: 1100px) {
+  .doc-edit { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .doc-pv { position: sticky; top: 0; max-height: calc(92vh - 90px); overflow: auto; }
+}
+.doc-pv { background: #e5e7eb; border-radius: var(--radius-s); padding: 10px; }
+.doc-pv .vx-tabs { background: var(--surface); border-radius: var(--radius-s); margin-bottom: 10px; }
+.doc-pv .lenh.dp { zoom: .62; box-shadow: 0 2px 10px rgba(0, 0, 0, .15); margin: 0 auto 14px; }
+@media (max-width: 1099px) { .doc-pv .lenh.dp { zoom: .45; } }

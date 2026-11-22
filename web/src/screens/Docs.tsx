@@ -13,6 +13,7 @@ import { TV_HT, TV_LY_DO, earliest, notice, tvFacts } from '../lib/resignation';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { sanitizeHtml } from '../lib/sanitize';
 
 /** Menu soạn văn bản mới: nhóm gọn, tên ngắn. Điện thoại: khay trượt từ dưới lên; tablet / máy tính: thả xuống dưới nút. */
 const MENU: [string, [Template, string][]][] = [
@@ -216,6 +217,20 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   }
 
   const pendingNo = (x: Form) => x.number ?? `……/${x.signed_on.slice(0, 4)}/${codeLabel(tplOf(x.template).code)}-…`;
+  // Xem trước bên cạnh khi soạn (như app cũ): văn bản 2 phần (đơn + quyết định) xem theo thẻ
+  const [pctx, setPctx] = useState<DocCtx | null>(null);
+  const [pvTab, setPvTab] = useState<'don' | 'qd'>('qd');
+  const fStaff = f?.staff_id ?? null, fOpen = !!f;
+  useEffect(() => {
+    if (!fOpen) { setPctx(null); return; }
+    let on = true;
+    void loadDocCtx(tenantId, me, fStaff || null).then((x) => { if (on) setPctx(x); }).catch(() => undefined);
+    return () => { on = false; };
+  }, [fOpen, fStaff, tenantId, me]);
+  const livePages = useMemo(() => {
+    if (!f || !pctx) return [];
+    try { return docPages(f.template, pendingNo(f), f.signed_on, f.title, f.content, pctx, f.template === 'qd_thoi_viec' ? pvTab : undefined); } catch { return []; }
+  }, [f, pctx, pvTab]);   // eslint-disable-line react-hooks/exhaustive-deps
   const fields = f ? FIELDS[f.template] : [];
   /** Form Nghỉ việc (như app cũ) + sửa tự do từng mẫu */
   function tvForm() {
@@ -318,7 +333,8 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       )}
 
       {f && (
-        <Modal wide title={f.id ? `Sửa văn bản số ${f.number}` : `Soạn: ${tplOf(f.template).name}`} onClose={() => { if (!busy) setF(null); }}>
+        <Modal xwide title={f.id ? `Sửa văn bản số ${f.number}` : `Soạn: ${tplOf(f.template).name}`} onClose={() => { if (!busy) setF(null); }}>
+          <div className="doc-edit">
           <div className="form">
             <div className="grid2">
               <label>Số văn bản<input value={f.number ?? 'Tự cấp khi lưu (001 trở đi)'} disabled /></label>
@@ -350,6 +366,17 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
               <button className="btn" disabled={!!busy} onClick={() => void preview(f.template, pendingNo(f), f.signed_on, f.title, f.content, f.staff_id || null, f.template === 'qd_thoi_viec' ? 'qd' : undefined)}>{f.template === 'qd_thoi_viec' ? 'Xem quyết định' : 'Xem trước'}</button>
               <button className="btn primary" disabled={!!busy} onClick={() => void save()}>{f.id ? 'Lưu' : 'Lưu & cấp số'}</button>
             </div>
+          </div>
+          <aside className="doc-pv" aria-label="Xem trước">
+            {f.template === 'qd_thoi_viec' && (
+              <div className="vx-tabs" role="tablist" aria-label="Phần văn bản">
+                {([['don', 'Đơn xin nghỉ việc'], ['qd', 'Quyết định thôi việc']] as const).map(([k, l]) =>
+                  <button key={k} type="button" role="tab" aria-selected={pvTab === k} className={pvTab === k ? 'on' : ''} onClick={() => setPvTab(k)}>{l}</button>)}
+              </div>
+            )}
+            {!livePages.length && <p className="small muted">Đang dựng bản xem trước…</p>}
+            {livePages.map((html, i) => <div key={i} className="lenh dp" dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />)}
+          </aside>
           </div>
         </Modal>
       )}

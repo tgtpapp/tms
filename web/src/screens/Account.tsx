@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { MIN_PASSWORD, weakPassword } from '../lib/login';
 import { supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-import { THEMES, useTheme, type Mode } from '../lib/theme';
+import { UiSettings } from '../components/UiSettings';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
 /** canManage: có quyền Sửa hồ sơ Lái xe & nhân viên. Nhân viên thường không tự đổi ảnh đại diện, chữ ký (nhờ quản lý nhân sự). */
@@ -43,7 +43,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
   return (
     <>
       <NotifySettings />
-      <ThemePicker />
+      <UiSettings />
       <section className="card">
         <div className="item-head">
           <div>
@@ -75,32 +75,5 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
         <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Đổi mật khẩu'}</button>
       </form>
     </>
-  );
-}
-
-/** Giao diện: mẫu + sáng / tối / tự động. Lưu trên máy này. */
-function ThemePicker() {
-  const [cfg, setCfg] = useTheme();
-  const modes: [Mode, string][] = [['light', 'Sáng'], ['dark', 'Tối'], ['auto', 'Theo máy']];
-  return (
-    <section className="card form">
-      <h2>Giao diện</h2>
-      <div className="seg" role="radiogroup" aria-label="Chế độ sáng tối">
-        {modes.map(([m, label]) => (
-          <button key={m} type="button" role="radio" aria-checked={cfg.mode === m} className={cfg.mode === m ? 'on' : ''}
-                  onClick={() => setCfg({ ...cfg, mode: m })}>{label}</button>
-        ))}
-      </div>
-      <div className="theme-grid" role="radiogroup" aria-label="Mẫu giao diện">
-        {THEMES.map((t) => (
-          <button key={t.id} type="button" role="radio" aria-checked={cfg.theme === t.id} className={cfg.theme === t.id ? 'theme-opt on' : 'theme-opt'}
-                  onClick={() => setCfg({ ...cfg, theme: t.id })}>
-            <span className="theme-dot" style={{ background: t.swatch }} />
-            <b>{t.name}</b>
-            <span className="muted small">{t.note}</span>
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }

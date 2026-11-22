@@ -15,6 +15,7 @@ import { cacheGet, cacheSet, enqueue, isNetworkError, localCode, queueAll, remov
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { zaloKick } from '../lib/zalo';
+import { loadUi } from '../lib/theme';
 
 type Dir = 'di' | 've';
 type SeatStatus = 'giu' | 'dat' | 'da_tt' | 'cho_xep' | 'het_han' | 'huy';
@@ -369,6 +370,24 @@ function TripSell(props: TripSellProps) {
   const locked = !!trip.departed_at && !trip.edit_unlocked_at;
   const fromIdx = stopIds.indexOf(from);
   const toIdx = stopIds.indexOf(to);
+
+  // Hoạt cảnh đón khách (Giao diện của tôi): khách vừa được báo đã lên xe / lái xe vừa ghi kết quả gọi khách trên chuyến đang xem
+  const seen = useRef<Map<string, { b: boolean; c: string | null }> | null>(null);
+  useEffect(() => { seen.current = null; }, [trip.id]);
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = new Map(tickets.map((x) => [x.id, { b: x.boarded, c: x.crew_call ?? null }]));
+    if (!prev || !loadUi().anim) return;
+    const nm = (x: Ticket) => `Ghế ${x.seat_label}${x.passenger_name ? ` · ${x.passenger_name}` : ''}`;
+    const up = tickets.filter((x) => x.boarded && prev.has(x.id) && !prev.get(x.id)!.b);
+    const hm = new Date(trip.depart_at).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false });
+    if (up.length) { void import('../lib/hoatCanh').then((h) => h.playScene({ cap: `${hm} · ${up.length > 1 ? `${up.length} khách` : nm(up[0]!)} đã lên xe` })); return; }
+    const cg = tickets.find((x) => x.crew_call && x.crew_call !== 'bao_huy' && prev.has(x.id) && prev.get(x.id)!.c !== x.crew_call);
+    if (cg) {
+      const kq = cg.crew_call === 'thue_bao' ? 'tb' : 'ok';
+      void import('../lib/hoatCanh').then((h) => h.playScene({ mode: 'call', kq, cap: `${hm} · ${nm(cg)} · ${crewNote(cg)?.text ?? 'LX đã gọi'}` }));
+    }
+  }, [tickets, trip.depart_at]);
 
   const cacheKey = `ban_ve:${ctx.tenant_id}:chuyen:${trip.id}`;
   const load = useCallback(async () => {

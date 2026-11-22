@@ -49,6 +49,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   // Menu trái máy tính: ghim (luôn mở) hoặc tự thu gọn thành cột biểu tượng, rê chuột vào thì mở
   const [pinned, setPinnedState] = useState(() => { try { return localStorage.getItem('menu.ghim') !== '0'; } catch { return true; } });
   const setPinned = (v: boolean) => { setPinnedState(v); try { localStorage.setItem('menu.ghim', v ? '1' : '0'); } catch { /* bỏ qua */ } };
+  // Giao diện của tôi đổi kiểu menu trái → cập nhật ngay
+  useEffect(() => { const on = () => { try { setPinnedState(localStorage.getItem('menu.ghim') !== '0'); } catch { /* bỏ qua */ } }; window.addEventListener('tms-ui', on); return () => window.removeEventListener('tms-ui', on); }, []);
   const [tab, setTab] = useState<Tab | null>(null);
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
   const [myStaff, setMyStaff] = useState<string | null>(null);

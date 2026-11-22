@@ -600,7 +600,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Cấp lệnh & in' }).click();
   await expect(page.getByRole('heading', { name: 'LỆNH VẬN CHUYỂN' })).toBeVisible();
   await expect(page.getByText(/Số: 0700-\d{8}-345\/LVC-TGTP/)).toBeVisible();
-  await expect(page.locator('.lenh').getByText('Lượt đi', { exact: true })).toHaveCount(2);
+  await expect(page.locator('.lenh').getByText('Lượt đi', { exact: true })).toHaveCount(1);
   await expect(page.locator('.lenh').getByText('Lượt về', { exact: true })).toHaveCount(2);
   await expect(page.locator('.lenh .lenh-blank', { hasText: '12:30' })).toHaveCount(1);
   const lvcPdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
@@ -730,7 +730,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: '🧾 Cấp lệnh' }).click();
   await expect(page.getByLabel('Biển số')).toBeVisible();
   await page.getByRole('button', { name: 'Chỉnh lượt' }).click();
-  await expect(page.getByLabel('Chuyến Lượt về 2')).toBeVisible();
+  await expect(page.getByLabel('Chuyến Lượt về 1')).toBeVisible();
   await expect(page.getByLabel('In chữ ký Giám đốc')).toBeChecked();
   await expect(page.getByLabel('In con dấu')).toBeChecked();
   await page.getByRole('button', { name: 'Thôi' }).click();

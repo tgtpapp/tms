@@ -15,7 +15,7 @@ import { useToast } from '../lib/toast';
 const TZ = 'Asia/Ho_Chi_Minh';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-const TITLES = ['Lượt đi 1', 'Lượt về 1', 'Lượt đi 2', 'Lượt về 2'];
+const TITLES = ['Lượt đi 1', 'Lượt về 1'];   // lệnh 1 lượt đi + 1 lượt về
 
 interface Leg { seq: number; trip_id: string | null; time: string; date: string }
 interface Cand { id: string; route_id: string; direction: Dir; depart_at: string; service_date: string }
@@ -63,7 +63,7 @@ export async function loadOrderPrint(orderId: string, tenantId: string, me: { id
     plate: inf.plate ?? p.plate ?? '', seats: inf.seats ?? p.seats, routeName: dirName(p.route, p.direction), distanceKm: p.route.distance_km, registeredCode: p.route.registered_code,
     itinerary: (p.direction === 've' ? p.route.itinerary_ve || reverseItinerary(p.route.itinerary ?? '') : p.route.itinerary) || null,
     fromStop: from, toStop: to,
-    legs: [1, 2, 3, 4].map((i) => { const l = p.legs.find((x) => x.seq === i); return { time: l?.time ?? null, date: l?.date ?? null }; }),
+    legs: [1, 2].map((i) => { const l = p.legs.find((x) => x.seq === i); return { time: l?.time ?? null, date: l?.date ?? null }; }),
     qr,
   };
 }
@@ -107,7 +107,7 @@ export function OrderIssue({ tripId, tenantId, me, onClose, onDone }: { tripId: 
         setLists(pl);
         setSign(d.sign !== false); setSeal(d.seal !== false);
         // lệnh mới: chỉ điền giờ chuyến đầu tiên, các lượt sau để trống (ghi tay); lệnh đã cấp: giữ đúng các lượt đã lưu
-        setLegs([1, 2, 3, 4].map((i) => {
+        setLegs([1, 2].map((i) => {
           const l = d.legs.find((x) => x.seq === i);
           return !d.order_no && i > 1 ? { seq: i, trip_id: null, time: '', date: '' } : { seq: i, trip_id: l?.trip_id ?? null, time: l?.time ?? '', date: l?.date ?? '' };
         }));

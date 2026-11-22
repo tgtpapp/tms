@@ -139,7 +139,7 @@ export function TransportOrderPrint({ data, onClose }: { data: OrderPrintData; o
             <tr className="c">
               <th>Lượt xe thực hiện</th><th>Bến xe đi, đến</th><th>Giờ xe chạy</th><th>Số khách</th><th>Bến xe<br /><i>(Ký tên và đóng dấu)</i></th>
             </tr>
-            {[0, 1, 2, 3].map((i) => {
+            {[0, 1].map((i) => {
               const l = data.legs[i], di = i % 2 === 0;
               return leg(i, di ? 'Lượt đi' : 'Lượt về', di ? data.fromStop : data.toStop, di ? data.toStop : data.fromStop, l?.time ?? null, l?.date ?? null);
             })}

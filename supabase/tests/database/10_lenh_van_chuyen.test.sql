@@ -125,7 +125,7 @@ select is((public.save_transport_order((select v from t.ids where k = 'T6'), jso
 select is(public.transport_order_print((select id from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) -> 'info',
   '{"plate": "51B-999.88", "seats": 16, "driver": "Nguyễn Văn A", "hang": "D2"}'::jsonb, 'In đúng biển số, số ghế, lái xe, hạng GPLX đã điền');
 select is((select vehicle_id from public.trips where id = (select v from t.ids where k = 'T6')), null, 'Không đổi xếp xe của chuyến');
-select is((public.save_transport_order((select v from t.ids where k = 'T7'), jsonb_build_array(jsonb_build_object('seq', 1, 'trip_id', (select v from t.ids where k = 'T7')))))).order_no,
+select is((public.save_transport_order((select v from t.ids where k = 'T7'), jsonb_build_array(jsonb_build_object('seq', 1, 'trip_id', (select v from t.ids where k = 'T7'))))).order_no,
   '1000-' || to_char(app.local_today() + 1, 'DDMMYYYY') || '/LVC-TGTP', 'Không có biển số: số lệnh bỏ phần biển số, in ô trống để ghi tay');
 select is(public.transport_order_draft((select v from t.ids where k = 'T2')) -> 'info' ->> 'plate', '60B-123.45', 'Đã xếp xe: tự điền biển số theo xếp xe');
 

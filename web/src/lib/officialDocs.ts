@@ -260,7 +260,7 @@ const GS_DIEU: [string, string[]][] = [
   ['#3.2. Theo dõi, giám sát khi xe đang hoạt động', [
     'Theo dõi dữ liệu thiết bị giám sát hành trình và thiết bị ghi nhận hình ảnh người lái xe (nếu thuộc diện phải lắp), hệ thống quản lý của Công ty.',
     'Phát hiện, ghi nhận, thông báo và theo dõi khắc phục các trường hợp: vượt tốc độ; vi phạm thời gian lái xe; sai hành trình; dừng/đỗ bất thường; thiết bị mất kết nối hoặc dữ liệu gián đoạn; nguy cơ bất thường khác.',
-    'Khi phát hiện vi phạm thời gian lái xe liên tục, thời gian trong ngày/tuần, sai hành trình hoặc thiết bị không hoạt động, kịp thời thông tin cho lái xe để điều chỉnh/khắc phục và thông báo điều hành.',
+    'Khi phát hiện vi phạm thời gian lái xe liên tục (quá 04 giờ), thời giờ làm việc trong ngày, tuần theo Bộ luật Lao động, sai hành trình hoặc thiết bị không hoạt động, kịp thời thông tin cho lái xe để điều chỉnh/khắc phục và thông báo điều hành.',
     'Không liên lạc theo cách làm lái xe mất tập trung. Nếu cần liên hệ, ưu tiên thông báo qua điều hành hoặc yêu cầu lái xe dừng tại nơi an toàn trước khi trao đổi.',
     'Đối với sự cố, thời tiết, đường sá, ùn tắc, tai nạn, nguy cơ trên tuyến: ghi nhận, cảnh báo, phối hợp điều hành phương án an toàn.',
     'Tiếp nhận phản ánh/đề xuất của lái xe về điều kiện an toàn, phương tiện, hành trình, thời gian làm việc; ghi nhận và phản hồi hoặc chuyển cấp có thẩm quyền.']],

@@ -66,7 +66,9 @@ export async function loadBase(): Promise<Base> {
     routes: new Map(((rt.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((r) => [r.id, r])),
     docs: mergeRecordPapers((dc.data ?? []) as Doc[], (rc.data ?? []) as { staff_id: string; kind: string; data: Record<string, unknown> | null }[],
       (sid, type, exp): Doc => ({ vehicle_id: null, staff_id: sid, doc_type: type, expires_on: exp })),
-    events: (ev.data ?? []) as SEvent[],
+    // Bỏ khỏi sổ / báo cáo: cảnh báo giờ lái trong ngày / tuần do phần mềm tự ghi theo quy định đã bãi bỏ
+    // (Luật 118/2025/QH15 từ 01/7/2026 chỉ còn giới hạn lái xe liên tục 4 giờ); vẫn lưu trong dữ liệu.
+    events: ((ev.data ?? []) as SEvent[]).filter((e) => !(e.auto && e.status === 'dong' && e.conclusion === 'khong_vi_pham' && /Luật 118\/2025/.test(e.result ?? ''))),
     supervisor: q?.staff_id ? { name: staff.get(q.staff_id) ?? '', since: q.content?.hieu_luc || q.signed_on } : null,
   };
 }

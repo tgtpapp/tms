@@ -42,7 +42,7 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select is((select count(*)::int from public.file_store where name like '%/chu_ky/giam_doc.png' or name like '%/chu_ky/con_dau.png'), 2, 'Nhân viên xem được chữ ký Giám đốc + con dấu (in giấy tờ)');
-select is((select count(*)::int from public.file_store where name like '%/chu_ky/00000000-0000-0000-0000-0000000000b1.png'), 0, 'Không xem chữ ký riêng của người khác');
+select is((select count(*)::int from public.file_store where name like '%/chu_ky/00000000-0000-0000-0000-0000000000b1.png'), 1, 'Bán vé có ô Cấp lệnh xem được chữ ký in trên lệnh (như kho cũ)');
 select throws_ok(format($$ insert into public.file_store (tenant_id, name, drive_id) values ('%1$s', '%1$s/cong_ty/giay_phep.jpg', 'x') $$,
   (select v from t.ids where k = 'A')), '42501', null, 'Bán vé không lưu được tệp công ty');
 update public.file_store set drive_id = 'hack' where name like '%/chu_ky/giam_doc.png';

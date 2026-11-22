@@ -19,6 +19,7 @@ create table public.file_store (
   check (name like tenant_id::text || '/%')
 );
 alter table public.file_store enable row level security;
+revoke all on public.file_store from public, anon;
 grant select, insert, update, delete on public.file_store to authenticated, service_role;
 
 -- Chỉ trong nhà xe của mình (áp cho mọi thao tác)
@@ -74,26 +75,16 @@ grant execute on function public.svc_file_backfill(uuid) to service_role;
 
 select public.svc_file_backfill(null);
 
--- Dung lượng: tệp còn ở kho cũ (chưa chuyển lên Drive) của nhà xe
-create or replace function public.storage_usage()
-returns jsonb
-language plpgsql stable security definer set search_path = ''
-as $$
-declare v_tid uuid := app.current_tenant_id();
+-- Dung lượng: thêm số tệp / dung lượng đã chuyển lên Drive của nhà xe (giữ nguyên quyền xem hiện có)
+do $$
+declare v text;
 begin
-  if v_tid is null or not app.has_permission('settings.manage') then
-    raise exception 'Không có quyền xem dung lượng' using errcode = '42501';
-  end if;
-  return jsonb_build_object(
-    'db_bytes', pg_database_size(current_database()),
-    'files_bytes', (select coalesce(sum((metadata ->> 'size')::bigint), 0) from storage.objects),
-    'tenant_files_bytes', (select coalesce(sum((metadata ->> 'size')::bigint), 0) from storage.objects
-                           where bucket_id = 'giay-to' and (storage.foldername(name))[1] = v_tid::text),
-    'tenant_files_count', (select count(*) from storage.objects where bucket_id = 'giay-to' and (storage.foldername(name))[1] = v_tid::text),
-    'drive_items', (select count(*) from public.archive_items where tenant_id = v_tid and kind = 'file'),
-    'drive_bytes', (select coalesce(sum(size_bytes), 0) from public.archive_items where tenant_id = v_tid and kind = 'file'),
-    'drive_files', (select count(*) from public.file_store where tenant_id = v_tid and drive_id is not null),
-    'drive_files_bytes', (select coalesce(sum(size_bytes), 0) from public.file_store where tenant_id = v_tid and drive_id is not null)
-  );
+  select pg_get_functiondef('public.storage_usage()'::regprocedure) into v;
+  v := replace(v, '''drive_bytes'', (select coalesce(sum(size_bytes), 0) from public.archive_items where tenant_id = v_tid and kind = ''file'')',
+    '''drive_bytes'', (select coalesce(sum(size_bytes), 0) from public.archive_items where tenant_id = v_tid and kind = ''file''),
+    ''drive_files'', (select count(*) from public.file_store where tenant_id = v_tid and drive_id is not null),
+    ''drive_files_bytes'', (select coalesce(sum(size_bytes), 0) from public.file_store where tenant_id = v_tid and drive_id is not null)');
+  if v not like '%drive_files_bytes%' then raise exception 'Không sửa được storage_usage'; end if;
+  execute v;
 end;
 $$;

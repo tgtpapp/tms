@@ -1,0 +1,24 @@
+name: Tạm - đếm tệp theo loại
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  dem:
+    runs-on: ubuntu-latest
+    env:
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PGUSER: postgres.vnqkmaauqygnckgtshus
+      PGDATABASE: postgres
+      PGPORT: 5432
+    steps:
+      - run: |
+          for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do
+            if PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1; then export PGHOST=$h; break; fi; done
+          psql -P pager=off -c "
+          with f as (
+            select split_part(name, '/', 2) as nhom,
+                   coalesce((select c from unnest(array['dang_ky','kiem_dinh','bh_tnds','bh_vat_chat','bh_hanh_khach','phu_hieu','hop_dong_thue','cai_tao','cccd','gplx','kham_suc_khoe','tap_huan','hop_dong_ld','ll_suc_khoe','ll_vi_pham','ll_tai_nan','ll_khen_thuong','ll_ky_luat','ll_dao_tao','gpkd_van_tai']) c where name ~ ('_' || c || '_[0-9]') order by length(c) desc limit 1),
+                            case when split_part(name, '/', 2) in ('chu_ky','cong_ty','anh_dai_dien','anh_xe') then regexp_replace(split_part(name, '/', -1), '^(nv_|hdtx_)?.*$', '\1') else '(khác)' end) as loai,
+                   coalesce((metadata->>'size')::bigint, 0) as sz
+            from storage.objects where bucket_id = 'giay-to')
+          select nhom, loai, count(*) as so_tep, round(sum(sz)/1048576.0, 1) as mb from f group by 1, 2 order by mb desc;"

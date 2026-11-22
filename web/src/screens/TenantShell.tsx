@@ -177,9 +177,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
             </div>
           ))}
         </nav>
-        <div className="side-foot">
-          <a href="https://www.flaticon.com/uicons" target="_blank" rel="noopener noreferrer">Biểu tượng: Uicons by Flaticon</a>
-        </div>
+        {config.credit && <div className="side-foot">{config.credit}</div>}
       </aside>
       <div className="main">
         <main className="content">

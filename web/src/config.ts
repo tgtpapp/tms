@@ -5,6 +5,8 @@ export type AppEnv = 'production' | 'staging' | 'local';
 
 export interface AppConfig {
   appName: string;
+  /** Dòng ghi công cuối thanh menu (để trống = không hiện) */
+  credit: string;
   appEnv: AppEnv;
   supabaseUrl: string;
   supabasePublishableKey: string;
@@ -34,6 +36,7 @@ const RAW = {
   VITE_LOGIN_EMAIL_DOMAIN: import.meta.env.VITE_LOGIN_EMAIL_DOMAIN as string | undefined,
   VITE_DB_LIMIT_MB: import.meta.env.VITE_DB_LIMIT_MB as string | undefined,
   VITE_FILE_LIMIT_MB: import.meta.env.VITE_FILE_LIMIT_MB as string | undefined,
+  VITE_CREDIT: import.meta.env.VITE_CREDIT as string | undefined,
 };
 
 type RawKey = keyof typeof RAW;
@@ -51,6 +54,7 @@ export function loadConfig(): ConfigResult {
 
   const config: AppConfig = {
     appName: read('VITE_APP_NAME', missing) || 'TMS',
+    credit: read('VITE_CREDIT', null),
     appEnv,
     supabaseUrl: read('VITE_SUPABASE_URL', missing),
     supabasePublishableKey: read('VITE_SUPABASE_PUBLISHABLE_KEY', missing),

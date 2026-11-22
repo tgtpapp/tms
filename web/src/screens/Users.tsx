@@ -38,7 +38,7 @@ function parseScope(v: string): { scope_type: string; scope_id: string | null } 
   return { scope_type: type, scope_id: id };
 }
 
-const NO_DEPT = 'Chưa có phòng ban';
+const NO_BRANCH = 'Chưa có chi nhánh';
 
 export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
@@ -70,36 +70,44 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
   // Ảnh đại diện lấy từ hồ sơ nhân viên / lái xe gắn với tài khoản (hoặc trùng số điện thoại); không có ảnh thì hiện chữ viết tắt.
   const avatars = useAvatars(ctx.tenant_id);
-  const [staffOf, setStaffOf] = useState<Record<string, { id: string; dept: string }>>({});
+  const [staffOf, setStaffOf] = useState<Record<string, { id: string; branch: string | null }>>({});
   useEffect(() => {
     if (!data.users.length) return;
-    void supabase.from('staff_members').select('id, user_id, phone, department').then(({ data: rows }) => {
-      const list = (rows ?? []) as { id: string; user_id: string | null; phone: string | null; department: string | null }[];
-      const m: Record<string, { id: string; dept: string }> = {};
+    void supabase.from('staff_members').select('id, user_id, phone, branch_id').then(({ data: rows }) => {
+      const list = (rows ?? []) as { id: string; user_id: string | null; phone: string | null; branch_id: string | null }[];
+      const m: Record<string, { id: string; branch: string | null }> = {};
       for (const u of data.users) {
         const s = list.find((x) => x.user_id === u.id) ?? list.find((x) => !x.user_id && x.phone === u.phone);
-        if (s) m[u.id] = { id: s.id, dept: s.department?.trim().replace(/\s+/g, ' ') ?? '' };
+        if (s) m[u.id] = { id: s.id, branch: s.branch_id };
       }
       setStaffOf(m);
     });
   }, [data.users]);
 
-  // Thẻ theo phòng ban (lấy từ hồ sơ nhân viên); chọn kiểu hiển thị thẻ / bảng, nhớ trên máy
-  const deptOf = (id: string) => staffOf[id]?.dept || NO_DEPT;
+  // Thẻ theo chi nhánh: theo hồ sơ nhân viên; chưa ghi thì theo chi nhánh / phòng vé của nhóm quyền. Chọn kiểu hiển thị thẻ / bảng, nhớ trên máy
+  const branchOf = (id: string): string => {
+    const own = staffOf[id]?.branch;
+    if (own && data.branches.some((b) => b.id === own)) return own;
+    for (const ur of data.userRoles.filter((r) => r.user_id === id)) {
+      if (ur.scope_type === 'branch' && ur.scope_id) return ur.scope_id;
+      if (ur.scope_type === 'ticket_office') { const o = data.offices.find((x) => x.id === ur.scope_id); if (o) return o.branch_id; }
+    }
+    return '-';
+  };
+  const branchName = (k: string) => data.branches.find((b) => b.id === k)?.name ?? NO_BRANCH;
   const depts = useMemo(() => {
     const m = new Map<string, { key: string; label: string; n: number }>();
     for (const u of data.users) {
-      const label = staffOf[u.id]?.dept || NO_DEPT;
-      const key = label.toLocaleLowerCase('vi');
-      const t = m.get(key) ?? { key, label, n: 0 };
+      const key = branchOf(u.id);
+      const t = m.get(key) ?? { key, label: branchName(key), n: 0 };
       t.n++;
       m.set(key, t);
     }
-    return [...m.values()].sort((a, b) => Number(a.label === NO_DEPT) - Number(b.label === NO_DEPT) || a.label.localeCompare(b.label, 'vi'));
-  }, [data.users, staffOf]);
+    return [...m.values()].sort((a, b) => Number(a.key === '-') - Number(b.key === '-') || a.label.localeCompare(b.label, 'vi'));
+  }, [data, staffOf]);
   const [tab, setTab] = useState('');
   const cur = depts.some((t) => t.key === tab) ? tab : '';
-  const shown = cur ? data.users.filter((u) => deptOf(u.id).toLocaleLowerCase('vi') === cur) : data.users;
+  const shown = cur ? data.users.filter((u) => branchOf(u.id) === cur) : data.users;
   const [view, setViewState] = useState<'the' | 'bang'>(() => { try { return localStorage.getItem('tms-users-view') === 'bang' ? 'bang' : 'the'; } catch { return 'the'; } });
   const setView = (v: 'the' | 'bang') => { setViewState(v); try { localStorage.setItem('tms-users-view', v); } catch { /* bỏ qua */ } };
 
@@ -120,7 +128,7 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
               <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? 'on' : ''} onClick={() => setView(k)}>{l}</button>)}
           </div>
         </div>
-        <div className="vx-tabs" role="tablist" aria-label="Phòng ban">
+        <div className="vx-tabs" role="tablist" aria-label="Chi nhánh">
           {[{ key: '', label: 'Tất cả', n: data.users.length }, ...depts].map((t) => (
             <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
               {t.label} ({t.n})
@@ -136,10 +144,10 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           </ul>
         ) : (
           <table className="plist users-tbl">
-            <thead><tr><th>Họ tên</th><th>Phòng ban</th><th>Nhóm quyền</th><th>Trạng thái</th>{canManage && <th>Thao tác</th>}</tr></thead>
+            <thead><tr><th>Họ tên</th><th>Chi nhánh</th><th>Nhóm quyền</th><th>Trạng thái</th>{canManage && <th>Thao tác</th>}</tr></thead>
             <tbody>
               {shown.map((u) => (
-                <UserItem key={u.id} view="bang" dept={deptOf(u.id)} user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+                <UserItem key={u.id} view="bang" dept={branchName(branchOf(u.id))} user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
                           allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
               ))}
             </tbody>

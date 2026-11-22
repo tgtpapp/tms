@@ -1,4 +1,4 @@
-name: Tạm - phân loại nhật ký
+name: Tạm - thu gọn nhật ký
 on: workflow_dispatch
 permissions:
   contents: read
@@ -14,6 +14,6 @@ jobs:
       - run: |
           for h in aws-1-ap-southeast-1.pooler.supabase.com aws-0-ap-southeast-1.pooler.supabase.com; do
             if PGHOST=$h psql -tAc 'select 1' >/dev/null 2>&1; then export PGHOST=$h; break; fi; done
-          psql -P pager=off -c "select (created_at at time zone 'Asia/Ho_Chi_Minh')::date as ngay, count(*), pg_size_pretty(sum(pg_column_size(detail))::bigint) as detail from public.audit_logs group by 1 order by 1;"
-          psql -P pager=off -c "select entity, action, count(*), pg_size_pretty(sum(pg_column_size(detail))::bigint) as detail from public.audit_logs group by 1,2 order by 3 desc limit 25;"
-          psql -P pager=off -c "select date_trunc('hour', created_at at time zone 'Asia/Ho_Chi_Minh') as gio, count(*) from public.audit_logs group by 1 having count(*) > 500 order by 1;"
+          psql -P pager=off -c "select pg_size_pretty(pg_database_size(current_database())) as truoc, (select count(*) from public.audit_logs) as dong_nhat_ky;"
+          psql -c "vacuum full public.audit_logs;"
+          psql -P pager=off -c "select pg_size_pretty(pg_database_size(current_database())) as sau, pg_size_pretty(pg_total_relation_size('public.audit_logs')) as nhat_ky;"

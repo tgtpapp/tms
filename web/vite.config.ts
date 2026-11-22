@@ -27,8 +27,8 @@ function security(supabaseUrl: string): Plugin {
   let sb = '';
   try { const u = new URL(supabaseUrl); sb = `${u.origin} ${u.origin.replace(/^http/, 'ws')}`; } catch { /* thiếu cấu hình: chỉ 'self' */ }
   const csp = [
-    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", `img-src 'self' data: blob: ${sb}`,
-    "font-src 'self' data:", `connect-src 'self' data: blob: ${sb}`, `frame-src 'self' blob: ${sb}`, "worker-src 'self'", `manifest-src 'self' ${sb}`,
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", `img-src 'self' data: blob: ${sb}`,
+    "font-src 'self' data: https://fonts.gstatic.com",   // font chữ tự chọn trong Giao diện của tôi (Google Fonts) `connect-src 'self' data: blob: ${sb}`, `frame-src 'self' blob: ${sb}`, "worker-src 'self'", `manifest-src 'self' ${sb}`,
     `media-src 'self' blob: ${sb}`, "object-src 'none'", "base-uri 'self'", "form-action 'self'",
   ].join('; ');
   const headers = `/*

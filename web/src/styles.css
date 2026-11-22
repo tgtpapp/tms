@@ -139,8 +139,13 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 .clear-bg { background-color: #fff !important; background-image: conic-gradient(#dfe3ea 25%, #fff 0 50%, #dfe3ea 0 75%, #fff 0) !important; background-size: 16px 16px !important; }
 
 /* Lệnh vận chuyển (A4) */
-.lenh-overlay { position: fixed; inset: 0; z-index: 50; background: #e9ecef; overflow: auto; padding: 8px; }
-.lenh-bar { position: sticky; top: 0; display: flex; gap: 8px; align-items: center; justify-content: flex-end; padding: 8px; background: #fff; border-radius: 8px; margin-bottom: 8px; }
+/* Xem / in giấy tờ (lệnh, hợp đồng, phiếu, vé…): hiện dạng cửa sổ bật lên giống cửa sổ sửa, nền mờ phía sau */
+.lenh-overlay { position: fixed; inset: 0; z-index: 950; background: rgba(15, 23, 42, .45); overflow: auto; padding: 3vh 12px; }
+.lenh-overlay > * { max-width: min(232mm, 100%); margin-left: auto; margin-right: auto; }
+.lenh-overlay > .lenh, .lenh-overlay > .print-area, .lenh-overlay > .ve-list { box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.lenh-bar { position: sticky; top: -3vh; z-index: 2; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; padding: 12px 16px;
+            background: var(--surface, #fff); border-radius: 16px 16px 0 0; border-bottom: 1px solid var(--line); margin-bottom: 0; }
+@media (max-width: 600px) { .lenh-overlay { padding: 0; } .lenh-bar { top: 0; border-radius: 0; } }
 .lenh-bar b { margin-right: auto; }
 .lenh { page: auto; width: 210mm; max-width: 100%; margin: 0 auto; background: #fff; padding: 12mm 12mm 8mm; color: #000;
         font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.45; }

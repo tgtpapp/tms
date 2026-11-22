@@ -54,7 +54,7 @@ export async function loadLaborCtx(tenantId: string, me: { id: string | null; na
     boss: b, director: set('cong_ty.giam_doc'), title: set('cong_ty.chuc_danh_ky') || 'Giám đốc', terms,
     person: { name: s.full_name, gender: p?.gender === 'nu' ? 'Nữ' : p?.gender === 'nam' ? 'Nam' : null, birth: p?.birth_date ?? null,
       nation: String(d?.data?.quoc_tich ?? '') || null, cccd: d?.doc_no ?? null, cccdOn: d?.issued_on ?? null, cccdBy: d?.issuer ?? null,
-      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address ?? null, phone: s.phone,
+      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || p?.address || null,   // trống: lấy nơi cư trú trên CCCD phone: s.phone,
       sign: own?.img ? own : (s.user_id && signs.get(s.user_id)) || { img: null, hasName: false } },
   };
 }

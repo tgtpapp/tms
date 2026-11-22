@@ -105,7 +105,8 @@ async function loadPerson(tenantId: string, id: string): Promise<Person | null> 
   const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null; current_address?: string | null } | null;
   const sm = s.data as { full_name: string; phone: string | null; job_title: string | null; position: string; joined_on: string; department: string | null };
   const cd = d.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
-  return { current: pv?.current_address ?? null, phone: sm.phone, job: sm.job_title || ({ lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' } as Record<string, string>)[sm.position] || null,
+  return { current: pv?.current_address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || pv?.address || null,   // trống: lấy nơi cư trú trên CCCD
+    phone: sm.phone, job: sm.job_title || ({ lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' } as Record<string, string>)[sm.position] || null,
     joined: sm.joined_on, dept: sm.department, name: sm.full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
     cccd: cd?.doc_no ?? null, cccdOn: cd?.issued_on ?? null, cccdBy: cd?.issuer ?? null, address: pv?.address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || null,
     sign: own?.img ? own : null, hd: hd ? { number: hd.number, kind: hd.kind, start: hd.start_on, end: hd.end_on } : null };

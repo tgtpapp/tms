@@ -10,7 +10,7 @@ async function pickDay(page: Page, iso: string) {
 }
 
 async function login(page: Page, phone: string, password: string) {
-  await expect(page.getByRole('heading', { name: 'Đăng nhập' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible();
   await page.getByLabel('Số điện thoại', { exact: true }).fill(phone);
   await page.getByLabel('Mật khẩu', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();

@@ -7,7 +7,7 @@ import { PermMatrix } from '../components/PermMatrix';
 import { Avatar, useAvatars } from '../components/StaffAvatar';
 import { isPersonal } from './Roles';
 
-interface UserRow { id: string; phone: string; full_name: string; status: 'active' | 'locked' }
+interface UserRow { id: string; phone: string; full_name: string; status: 'active' | 'locked'; device_check: 'can' | 'khong' | null }
 interface RoleRow { id: string; code: string; name: string }
 interface UserRoleRow { id: string; user_id: string; role_id: string; scope_type: string; scope_id: string | null }
 interface BranchRow { id: string; name: string }
@@ -50,7 +50,7 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const load = useCallback(async () => {
     try {
       const [users, roles, userRoles, branches, offices, rp, cat] = await Promise.all([
-        select<UserRow>('app_users', 'id, phone, full_name, status', 'full_name'),
+        select<UserRow>('app_users', 'id, phone, full_name, status, device_check', 'full_name'),
         select<RoleRow>('roles', 'id, code, name', 'created_at'),
         select<UserRoleRow>('user_roles', 'id, user_id, role_id, scope_type, scope_id', 'created_at'),
         select<BranchRow>('branches', 'id, name', 'name'),
@@ -292,6 +292,14 @@ function UserItem(props: {
             <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'perm' ? 'none' : 'perm')}>Phân quyền {user.full_name}</button>
           )}
           <button className="btn small" disabled={busy} onClick={() => setPanel(panel === 'password' ? 'none' : 'password')}>Đặt lại mật khẩu</button>
+          <label className="small">Duyệt thiết bị lạ
+            <select value={user.device_check ?? ''} disabled={busy}
+                    onChange={(e) => void run(() => rpc('set_user_device_check', { p_user_id: user.id, p_mode: e.target.value || null }), 'Đã lưu')}>
+              <option value="">Theo cài đặt nhà xe</option>
+              <option value="can">Luôn cần duyệt</option>
+              <option value="khong">Không cần duyệt</option>
+            </select>
+          </label>
           <button className="btn small" disabled={busy}
                   onClick={() => void run(() => rpc('set_user_status', { p_user_id: user.id, p_status: user.status === 'active' ? 'locked' : 'active' }),
                                           user.status === 'active' ? 'Đã khóa tài khoản' : 'Đã mở khóa')}>

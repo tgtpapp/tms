@@ -15,6 +15,8 @@ reset role;
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b1', (select id from public.tenants where code = 'nha-xe-a'), '0900000001', 'Chủ A', 'owner') $$, 'Chủ A');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000b2', (select id from public.tenants where code = 'nha-xe-a'), '0900000002', 'Lái A', 'driver') $$, 'Lái xe A');
 select lives_ok($$ select public.svc_register_app_user('00000000-0000-0000-0000-0000000000c1', (select id from public.tenants where code = 'nha-xe-b'), '0900000003', 'Chủ B', 'owner') $$, 'Chủ B');
+-- Nhà xe A bật "duyệt thiết bị lạ"
+insert into public.tenant_settings (tenant_id, key, value) values ((select id from public.tenants where code = 'nha-xe-a'), 'bao_mat.duyet_thiet_bi', 'true');
 insert into auth.sessions (id, user_id, created_at, updated_at, user_agent, ip) values
   ('11111111-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000b1', now() - interval '2 days', now(), 'Mozilla/5.0 (Linux; Android 14) Chrome/130', '1.2.3.4'),
   ('11111111-0000-0000-0000-000000000002', '00000000-0000-0000-0000-0000000000b1', now() - interval '1 day', now(), 'Mozilla/5.0 (Windows NT 10.0) Chrome/130', '5.6.7.8'),
@@ -90,6 +92,21 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated","session_id":"33333333-0000-0000-0000-000000000002"}';
 select is(public.device_hello('lx-may-tinh-2', 'Chrome · Windows'), 'ok', 'Lái xe đăng nhập thiết bị khác không phải duyệt');
 reset role;
+
+-- ---------------------------------------------------------------- Chọn riêng từng tài khoản
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000001"}';
+select lives_ok($$ select public.set_user_device_check('00000000-0000-0000-0000-0000000000b2', 'can') $$, 'Quản lý chọn: lái xe này luôn cần duyệt');
+select throws_ok($$ select public.set_user_device_check('00000000-0000-0000-0000-0000000000c1', 'khong') $$, 'P0002', null, 'Không sửa được tài khoản nhà xe khác');
+reset role;
+select ok(not app.device_exempt('00000000-0000-0000-0000-0000000000b2'), 'Lái xe được chọn riêng: phải duyệt');
+update public.app_users set device_check = 'khong' where id = '00000000-0000-0000-0000-0000000000b1';
+select ok(app.device_exempt('00000000-0000-0000-0000-0000000000b1'), 'Chọn riêng không cần duyệt: không phải duyệt dù nhà xe bật');
+update public.app_users set device_check = null where id = '00000000-0000-0000-0000-0000000000b1';
+update public.tenant_settings set value = 'false' where key = 'bao_mat.duyet_thiet_bi';
+select ok(app.device_exempt('00000000-0000-0000-0000-0000000000b1'), 'Nhà xe tắt: không phải duyệt');
+update public.tenant_settings set value = 'true' where key = 'bao_mat.duyet_thiet_bi';
+select ok(app.device_exempt('00000000-0000-0000-0000-0000000000c1'), 'Nhà xe B chưa bật: không phải duyệt');
 
 -- ---------------------------------------------------------------- Đăng nhập máy tính bằng mã QR
 set local role anon;

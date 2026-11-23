@@ -186,6 +186,20 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       <DriveSettings />
       {!loaded && <p className="muted">Đang tải cấu hình…</p>}
       {loaded && (<>
+      <section className="card form">
+        <h2>Bảo mật đăng nhập</h2>
+        <label className="check"><input type="checkbox" checked={sale['bao_mat.duyet_thiet_bi'] === 'true'} disabled={busy}
+          onChange={(e) => void (async () => {
+            const on = e.target.checked;
+            setBusy(true);
+            const { error } = await supabase.from('tenant_settings').upsert([{ key: 'bao_mat.duyet_thiet_bi', value: on }], { onConflict: 'tenant_id,key' });
+            setBusy(false);
+            if (error) return toast('error', error.message);
+            toast('ok', on ? 'Đã bật duyệt thiết bị lạ' : 'Đã tắt duyệt thiết bị lạ');
+            await load();
+          })()} /> Nhân viên văn phòng, quản lý đăng nhập trên thiết bị lạ phải được cho phép</label>
+        <p className="muted small">Lái xe, phụ xe không áp dụng. Muốn khác cho từng người: vào Người dùng, chọn ở ô "Duyệt thiết bị lạ" của người đó.</p>
+      </section>
       <form className="card form" onSubmit={saveSale}>
         <h2>Bán vé</h2>
         <div className="grid2">

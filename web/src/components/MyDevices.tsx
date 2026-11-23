@@ -61,7 +61,8 @@ export function MyDevices() {
   };
   return (
     <section className="card">
-      <h2>Quản lý thiết bị đăng nhập</h2>
+      <div className="item-head"><h2>Quản lý thiết bị đăng nhập</h2>
+        <button type="button" className="btn small" onClick={() => window.dispatchEvent(new Event('tms-qr-scan'))}>Quét mã QR đăng nhập máy tính</button></div>
       <h3 className="section-title">Thiết bị này</h3>
       <ul className="list">{cur.map(row)}</ul>
       <h3 className="section-title">Thiết bị khác đang đăng nhập ({others.length})</h3>

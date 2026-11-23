@@ -184,8 +184,8 @@ function QrLogin({ onBack }: { onBack: () => void }) {
       <h2>Đăng nhập bằng mã QR</h2>
       {state === 'cho' && (img ? <img src={img} alt="Mã QR đăng nhập" width={280} height={280} /> : <p className="muted">Đang tạo mã…</p>)}
       {state === 'cho' && <ol className="small">
-        <li>Mở camera trên điện thoại đang đăng nhập app (hoặc app quét mã) và quét mã này.</li>
-        <li>Điện thoại mở app, bấm <b>Đồng ý</b>.</li>
+        <li>Mở app trên điện thoại, bấm <b>Quét QR</b> (đầu thanh menu) hoặc <b>Tài khoản của tôi → Quét mã QR đăng nhập máy tính</b>.</li>
+        <li>Hướng camera vào mã này, bấm <b>Đồng ý</b>.</li>
       </ol>}
       {state === 'dang_vao' && <p>Đang đăng nhập…</p>}
       {state === 'het_han' && <p>Mã đã hết hạn.</p>}

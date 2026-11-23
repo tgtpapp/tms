@@ -1468,3 +1468,5 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
 .dev-row .badge { margin-left: 6px; }
 .qr-login img { display: block; margin: 0 auto; border-radius: 12px; background: #fff; padding: 8px; }
 .qr-login ol { margin: 0; padding-left: 20px; }
+.qr-scan video { width: 100%; max-height: 60vh; border-radius: 12px; background: #000; object-fit: cover; aspect-ratio: 1; }
+@media (min-width: 900px) { .side-qr-m { display: none !important; } }

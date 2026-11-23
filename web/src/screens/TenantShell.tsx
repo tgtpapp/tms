@@ -184,6 +184,11 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           </button>
         </div>
         <nav className="side-nav" aria-label="Mục chính">
+          {/* Điện thoại: quét mã QR trên máy tính để máy tính đăng nhập (như Zalo) */}
+          <button type="button" className="side-link side-qr-m" style={{ ['--ic' as string]: '#0f766e' }}
+                  onClick={() => window.dispatchEvent(new Event('tms-qr-scan'))}>
+            <i className="fi fi-rr-qrcode" aria-hidden="true" /><span>Quét QR</span>
+          </button>
           {groups.map((g) => (
             <div key={g} className="side-group">
               <div className="side-group-title">{g}</div>

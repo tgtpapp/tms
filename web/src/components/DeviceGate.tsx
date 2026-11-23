@@ -1,5 +1,5 @@
 // Duyệt thiết bị lạ + đăng nhập máy tính bằng mã QR (như Zalo).
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Centered } from './Centered';
 import { Modal } from './Modal';
 import { errMsg, rpc, supabase } from '../lib/supabase';
@@ -46,6 +46,18 @@ export function DeviceApprovals() {
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ id: string; name: string | null; status: string } | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
+  const [scan, setScan] = useState(false);
+  useEffect(() => {
+    const open = () => setScan(true);
+    window.addEventListener('tms-qr-scan', open);
+    return () => window.removeEventListener('tms-qr-scan', open);
+  }, []);
+  const found = useCallback((id: string) => {
+    setScan(false);
+    void rpc<{ name: string | null; status: string } | null>('qr_info', { p_id: id })
+      .then((r) => setQr(r ? { id, ...r } : { id, name: null, status: 'het_han' }))
+      .catch((e) => toast('error', errMsg(e)));
+  }, [toast]);
 
   const load = useCallback(async () => {
     if (document.hidden || !navigator.onLine) return;
@@ -94,6 +106,7 @@ export function DeviceApprovals() {
   const shown = list.filter((x) => !hidden.includes(x.session_id));
   return (
     <>
+      {scan && <QrScanner onFound={found} onClose={() => setScan(false)} />}
       {qr && (
         <Modal title="Đăng nhập trên máy tính" onClose={() => setQr(null)}>
           {qr.status === 'cho' ? (
@@ -126,5 +139,52 @@ export function DeviceApprovals() {
         </Modal>
       )}
     </>
+  );
+}
+
+type Detector = { detect: (src: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
+
+/** Quét mã QR đăng nhập máy tính ngay trong app (như Zalo): mở camera sau, thấy mã thì hỏi Đồng ý */
+function QrScanner({ onFound, onClose }: { onFound: (id: string) => void; onClose: () => void }) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let timer = 0;
+    let stop = false;
+    const BD = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector;
+    if (!BD) { setErr('Điện thoại này chưa quét được trong app. Mở camera của điện thoại, quét mã trên máy tính rồi bấm vào đường dẫn hiện ra.'); return; }
+    const det = new BD({ formats: ['qr_code'] });
+    void (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        if (stop || !video.current) return;
+        video.current.srcObject = stream;
+        await video.current.play();
+        const tick = async () => {
+          if (stop || !video.current) return;
+          try {
+            const r = await det.detect(video.current);
+            const m = r.map((x) => /(?:[#&]qr=)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(x.rawValue)).find(Boolean);
+            if (m) { stop = true; onFound(m[1]!); return; }
+          } catch { /* khung hình lỗi: bỏ qua */ }
+          timer = window.setTimeout(() => void tick(), 250);
+        };
+        void tick();
+      } catch {
+        setErr('Không mở được camera. Cho phép app dùng camera rồi thử lại.');
+      }
+    })();
+    return () => { stop = true; clearTimeout(timer); stream?.getTracks().forEach((t) => t.stop()); };
+  }, [onFound]);
+  return (
+    <Modal title="Quét mã QR đăng nhập máy tính" onClose={onClose}>
+      {err ? <p>{err}</p> : (
+        <div className="qr-scan">
+          <video ref={video} playsInline muted />
+          <p className="muted small">Hướng camera vào mã QR trên màn hình máy tính.</p>
+        </div>
+      )}
+    </Modal>
   );
 }

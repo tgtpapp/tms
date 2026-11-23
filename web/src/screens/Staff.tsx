@@ -357,14 +357,21 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
           return (
             <fieldset key={def.code} className="sub">
               <legend><b>{def.name}</b></legend>
-              {d ? <DocFields def={def} values={docVals[def.code] ?? {}} onChange={(v) => setDocVals({ ...docVals, [def.code]: v })} />
+              {pd ? null : (
+                <div className="inline-form">
+                  {d && d.files.length > 0 && <FilesButton files={d.files} />}
+                  <span className="small muted">{d ? 'Tải ảnh mới (thay giấy đang dùng):' : 'Tải ảnh giấy tờ:'}</span>
+                </div>
+              )}
+              {!pd && <Scanner def={def} onScanned={(sc) => onScanned(def, sc)} />}
+              {d && !pd ? <DocFields def={def} values={docVals[def.code] ?? {}} onChange={(v) => setDocVals({ ...docVals, [def.code]: v })} />
                 : pd ? (
                   <>
                     <p className="muted small">{pd.scanned.aiNote} · {pd.scanned.files.length} tệp <button type="button" className="btn small link" onClick={() => setPending(pending.filter((x) => x !== pd))}>Bỏ giấy này</button></p>
                     <DocFields def={def} values={pd.scanned.values}
                                onChange={(v) => setPending(pending.map((x) => (x === pd ? { ...x, scanned: { ...x.scanned, values: v } } : x)))} />
                   </>
-                ) : <Scanner def={def} onScanned={(sc) => onScanned(def, sc)} />}
+                ) : null}
             </fieldset>
           );
         })}

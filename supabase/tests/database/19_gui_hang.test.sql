@@ -159,5 +159,22 @@ select is((select count(*)::int from public.shipments), 0, 'Chủ B không thấ
 select throws_ok($$ select public.deliver_shipment('88888888-8888-8888-8888-888888888881', null, 'tien_mat') $$, 'P0002', null, 'Chủ B: không tìm thấy');
 reset role;
 
+-- Nơi gửi / nơi nhận chưa có: bán vé thêm mới được (chữ in hoa), gõ lại không tạo trùng, nhà xe khác không thấy
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select set_config('t.ct', public.parcel_stop('chợ  long thành')::text, true);
+select is((select name from public.stops where id = current_setting('t.ct')::uuid), 'CHỢ LONG THÀNH', 'Thêm nơi mới, chữ in hoa');
+select is(public.parcel_stop('Chợ Long Thành'), current_setting('t.ct')::uuid, 'Gõ lại tên đã có: dùng lại, không tạo trùng');
+select throws_ok($$ select public.parcel_stop(' ') $$, '22023', null, 'Phải có tên');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select is((select count(*)::int from public.stops where id = current_setting('t.ct')::uuid), 0, 'Nhà xe khác không thấy nơi mới');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select throws_ok($$ select public.parcel_stop('Bến mới') $$, '42501', null, 'Lái xe (không có quyền nhận hàng) không thêm được');
+reset role;
+
 select * from finish();
 rollback;

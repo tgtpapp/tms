@@ -37,11 +37,11 @@ select is(array(select n.nspname || '.' || p.proname from pg_proc p join pg_name
                   and not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) x where x like 'search_path=%') order by 1), '{}'::text[],
           'Hàm SECURITY DEFINER đều đặt search_path');
 
--- 5. Khách chưa đăng nhập chỉ gọi được các hàm công khai đã duyệt (platform_initialized: màn hình khởi tạo lần đầu)
+-- 5. Khách chưa đăng nhập chỉ gọi được các hàm công khai đã duyệt (platform_initialized: màn hình khởi tạo lần đầu; qr_start: máy tính xin mã QR đăng nhập)
 select is(array(select n.nspname || '.' || p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                 where n.nspname in ('public', 'app') and p.prokind = 'f'
                   and has_function_privilege('anon', p.oid, 'EXECUTE')
-                  and p.proname not in (select unnest(array['platform_initialized']))
+                  and p.proname not in (select unnest(array['platform_initialized', 'qr_start']))
                   and p.prorettype <> 'trigger'::regtype order by 1), '{}'::text[],
           'anon chỉ gọi được hàm công khai đã duyệt');
 

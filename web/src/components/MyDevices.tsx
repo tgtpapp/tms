@@ -2,19 +2,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { errMsg, rpc } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { deviceName } from '../lib/device';
 
-interface Sess { id: string; created_at: string; last_active: string; user_agent: string | null; ip: string | null; is_current: boolean }
+interface Sess { id: string; created_at: string; last_active: string; user_agent: string | null; ip: string | null; is_current: boolean; approved: boolean }
 
-/** "Chrome · Windows", "Samsung Internet · Android"… từ chuỗi trình duyệt */
-export function deviceName(ua: string | null): { name: string; mobile: boolean } {
-  const u = ua ?? '';
-  const os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows'
-    : /Mac OS X|Macintosh/.test(u) ? 'macOS' : /Linux/.test(u) ? 'Linux' : '';
-  const br = /Zalo/i.test(u) ? 'Zalo' : /SamsungBrowser/.test(u) ? 'Samsung Internet' : /Edg\//.test(u) ? 'Edge' : /OPR\/|Opera/.test(u) ? 'Opera'
-    : /CocCoc|coc_coc/i.test(u) ? 'Cốc Cốc' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /Chrome|CriOS/.test(u) ? 'Chrome' : /Safari/.test(u) ? 'Safari' : '';
-  const name = [br, os].filter(Boolean).join(' · ') || 'Thiết bị không rõ';
-  return { name, mobile: /iPhone|Android|iPad|Mobile/.test(u) };
-}
 const when = (iso: string) => {
   const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
   if (m < 2) return 'vừa xong';
@@ -41,6 +32,12 @@ export function MyDevices() {
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }
 
+  async function decide(id: string, ok: boolean) {
+    setBusy(true);
+    try { await rpc('approve_device', { p_session_id: id, p_ok: ok }); toast('ok', ok ? 'Đã cho phép thiết bị' : 'Đã từ chối thiết bị'); await load(); }
+    catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+
   if (!list) return null;
   const cur = list.filter((x) => x.is_current);
   const others = list.filter((x) => !x.is_current);
@@ -54,7 +51,11 @@ export function MyDevices() {
           <div className="small muted">Đăng nhập {new Date(s.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric', hour12: false })}
             {' · '}dùng gần nhất {when(s.last_active)}{s.ip ? ` · IP ${s.ip}` : ''}</div>
         </div>
-        {!s.is_current && <button type="button" className="btn small" disabled={busy} aria-label={`Đăng xuất ${d.name}`} onClick={() => void out(s.id)}>Đăng xuất</button>}
+        {!s.is_current && !s.approved && <>
+          <span className="badge warn-badge">Chờ duyệt</span>
+          <button type="button" className="btn small primary" disabled={busy} aria-label={`Cho phép ${d.name}`} onClick={() => void decide(s.id, true)}>Cho phép</button>
+        </>}
+        {!s.is_current && <button type="button" className="btn small" disabled={busy} aria-label={`Đăng xuất ${d.name}`} onClick={() => void out(s.id)}>{s.approved ? 'Đăng xuất' : 'Từ chối'}</button>}
       </li>
     );
   };

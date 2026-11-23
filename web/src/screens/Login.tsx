@@ -1,5 +1,7 @@
 import { InstallApp } from '../components/InstallApp';
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import QRCode from 'qrcode';
+import { deviceName, setQrJustUsed } from '../lib/device';
 import { Centered } from '../components/Centered';
 import { config } from '../config';
 import { loginEmail } from '../lib/login';
@@ -40,6 +42,7 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [report, setReport] = useState(false);
+  const [qr, setQr] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -55,6 +58,8 @@ export function LoginScreen() {
     if (err) return setError(isEmail ? 'Sai email hoặc mật khẩu' : 'Sai mã nhà xe, số điện thoại hoặc mật khẩu');
     if (!isEmail) rememberCode(otherTenant ? code : null);
   }
+
+  if (qr) return <Centered><QrLogin onBack={() => setQr(false)} /></Centered>;
 
   return (
     <Centered>
@@ -84,6 +89,7 @@ export function LoginScreen() {
             {otherTenant ? 'Quay lại đăng nhập mặc định' : 'Đăng nhập nhà xe khác'}
           </button>
         )}
+        <button type="button" className="btn" onClick={() => setQr(true)}>Đăng nhập bằng mã QR</button>
         <p className="muted small">Quên mật khẩu: liên hệ quản trị nhà xe để đặt lại.</p>
         <button type="button" className="btn link" onClick={() => setReport(true)}>Báo sự cố</button>
         <InstallApp name={config.appName} />
@@ -139,5 +145,54 @@ export function LoginReport({ code, askCode, phone, onClose }: { code: string; a
         </form>
       )}
     </Modal>
+  );
+}
+
+/** Đăng nhập máy tính bằng mã QR (như Zalo PC): quét bằng camera điện thoại đang đăng nhập app, bấm Đồng ý */
+function QrLogin({ onBack }: { onBack: () => void }) {
+  const [code, setCode] = useState<{ id: string; secret: string } | null>(null);
+  const [img, setImg] = useState('');
+  const [state, setState] = useState<'cho' | 'het_han' | 'tu_choi' | 'dang_vao' | 'loi'>('cho');
+  const [err, setErr] = useState('');
+  const start = useCallback(async () => {
+    setErr(''); setState('cho'); setImg('');
+    const { data, error } = await supabase.rpc('qr_start', { p_name: deviceName().name });
+    if (error) { setState('loi'); setErr(error.message); return; }
+    const c = data as { id: string; secret: string };
+    setCode(c);
+    setImg(await QRCode.toDataURL(`${location.origin}${location.pathname}#qr=${c.id}`, { margin: 1, width: 280 }));
+  }, []);
+  useEffect(() => { void start(); }, [start]);
+  useEffect(() => {
+    if (!code || state !== 'cho') return;
+    const t = setInterval(() => void (async () => {
+      const { data, error } = await supabase.functions.invoke('qr-login', { body: { action: 'poll', id: code.id, secret: code.secret } });
+      if (error) return;
+      const r = data as { status: string; token_hash?: string };
+      if (r.status === 'ok' && r.token_hash) {
+        setState('dang_vao');
+        setQrJustUsed(code);
+        const v = await supabase.auth.verifyOtp({ token_hash: r.token_hash, type: 'magiclink' });
+        if (v.error) { setQrJustUsed(null); setState('loi'); setErr(v.error.message); }
+      } else if (r.status === 'het_han' || r.status === 'khong_thay') setState('het_han');
+      else if (r.status === 'tu_choi') setState('tu_choi');
+    })(), 2000);
+    return () => clearInterval(t);
+  }, [code, state]);
+  return (
+    <section className="card form narrow qr-login">
+      <h2>Đăng nhập bằng mã QR</h2>
+      {state === 'cho' && (img ? <img src={img} alt="Mã QR đăng nhập" width={280} height={280} /> : <p className="muted">Đang tạo mã…</p>)}
+      {state === 'cho' && <ol className="small">
+        <li>Mở camera trên điện thoại đang đăng nhập app (hoặc app quét mã) và quét mã này.</li>
+        <li>Điện thoại mở app, bấm <b>Đồng ý</b>.</li>
+      </ol>}
+      {state === 'dang_vao' && <p>Đang đăng nhập…</p>}
+      {state === 'het_han' && <p>Mã đã hết hạn.</p>}
+      {state === 'tu_choi' && <p className="error-text">Điện thoại đã từ chối.</p>}
+      {state === 'loi' && <p className="error-text">{err || 'Không tạo được mã'}</p>}
+      {(state === 'het_han' || state === 'tu_choi' || state === 'loi') && <button type="button" className="btn primary" onClick={() => void start()}>Làm mới mã</button>}
+      <button type="button" className="btn link" onClick={onBack}>Đăng nhập bằng mật khẩu</button>
+    </section>
   );
 }

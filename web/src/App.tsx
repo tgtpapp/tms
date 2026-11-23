@@ -8,6 +8,7 @@ import { BootstrapScreen } from './screens/Bootstrap';
 import { LoginReport, LoginScreen } from './screens/Login';
 import { PlatformScreen } from './screens/Platform';
 import { TenantShell } from './screens/TenantShell';
+import { DeviceApprovals, deviceHello, PendingDevice } from './components/DeviceGate';
 
 type View =
   | { kind: 'loading' }
@@ -16,7 +17,8 @@ type View =
   | { kind: 'login' }
   | { kind: 'platform' }
   | { kind: 'tenant'; ctx: AccountContext }
-  | { kind: 'no_access' };
+  | { kind: 'no_access' }
+  | { kind: 'pending_device' };
 
 export function App() {
   return (
@@ -43,6 +45,8 @@ function Root() {
         setView(initialized ? { kind: 'login' } : { kind: 'bootstrap', signedIn: false });
         return;
       }
+      // Thiết bị lạ của nhân viên văn phòng / quản lý: chờ cho phép từ thiết bị đang dùng
+      if (await deviceHello() === 'cho_duyet') { setView({ kind: 'pending_device' }); return; }
       const ctx = await loadAccountContext();
       if (ctx.tenant_id) setView({ kind: 'tenant', ctx });
       else if (ctx.is_platform_admin) setView({ kind: 'platform' });
@@ -101,10 +105,12 @@ function Root() {
       return <BootstrapScreen signedIn={view.signedIn} onDone={() => void resolve()} />;
     case 'login':
       return <LoginScreen />;
+    case 'pending_device':
+      return <PendingDevice onOk={() => void resolve()} />;
     case 'platform':
-      return <PlatformScreen />;
+      return <><PlatformScreen /><DeviceApprovals /></>;
     case 'tenant':
-      return <TenantShell ctx={view.ctx} />;
+      return <><TenantShell ctx={view.ctx} /><DeviceApprovals /></>;
     case 'no_access':
       return <NoAccess />;
   }

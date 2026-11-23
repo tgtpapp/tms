@@ -415,13 +415,12 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
 
 function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
-  const [editing, setEditing] = useState(false);
+  // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
+  const [editing, setEditing] = useState(canEdit);
   const [tab, setTab] = useState<'tt' | 'gt' | 'll'>('tt');
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
   const age = ageCheck(p, s.position);
   const required = REQUIRED[s.position];
-
-  if (editing) return <div className="sub"><StaffForm {...props} editing={s} onDone={() => setEditing(false)} /></div>;
 
   // Giấy tờ bắt buộc còn thiếu / hết hạn (tính cả giấy khám SK, tập huấn ghi trong Lý lịch hành nghề)
   const td = today();
@@ -456,7 +455,8 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={[tab === t.key && 'on', t.warn && 'warn'].filter(Boolean).join(' ')} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
       </div>
-      {tab === 'tt' && (
+      {tab === 'tt' && editing && <div className="prof-pane"><StaffForm {...props} editing={s} onDone={() => setEditing(false)} /></div>}
+      {tab === 'tt' && !editing && (
         <div className="prof-pane">
           <dl className="info">
             <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>

@@ -805,8 +805,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // 5m. Lái xe báo đổ dầu từ app (như app cũ). Thử bằng cách gắn tài khoản chủ vào hồ sơ lái xe Nguyễn Văn Tài:
   // chọn ảnh → (CI không có AI) nhập tay → gửi → Nhiên liệu thấy phiếu chờ duyệt → duyệt thành phiếu đổ ngoài
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ
   await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
-  await page.getByRole('button', { name: 'Sửa hồ sơ' }).click();
   const hsTai = page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' });
   const acc = hsTai.getByLabel('Tài khoản đăng nhập (nếu có)');
   await acc.selectOption((await acc.locator('option', { hasText: '0901000001' }).getAttribute('value'))!);

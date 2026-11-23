@@ -1463,3 +1463,6 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
   .sidebar { height: calc(100vh / var(--ux-zoom, 1)); height: calc(100dvh / var(--ux-zoom, 1)); }
   .shell.unpinned .sidebar { bottom: 0; }
 }
+.dev-row { display: flex; align-items: center; gap: 12px; }
+.dev-row > .fi { font-size: 26px; color: var(--muted); display: inline-flex; }
+.dev-row .badge { margin-left: 6px; }

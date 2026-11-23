@@ -6,6 +6,7 @@ import { MIN_PASSWORD, weakPassword } from '../lib/login';
 import { supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { UiSettings } from '../components/UiSettings';
+import { MyDevices } from '../components/MyDevices';
 
 /** Tài khoản của tôi: xem thông tin, đổi mật khẩu. */
 /** canManage: có quyền Sửa hồ sơ Lái xe & nhân viên. Nhân viên thường không tự đổi ảnh đại diện, chữ ký (nhờ quản lý nhân sự). */
@@ -74,6 +75,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
         </label>
         <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Đổi mật khẩu'}</button>
       </form>
+      <MyDevices />
     </>
   );
 }

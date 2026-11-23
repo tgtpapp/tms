@@ -49,7 +49,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Mật khẩu ban đầu').fill('chub123');
   await page.getByRole('button', { name: 'Tạo nhà xe' }).click();
   await expect(page.getByRole('heading', { name: 'Nhà xe (2)' })).toBeVisible();
-  await page.getByRole('button', { name: 'Đăng xuất' }).click();
+  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
 
   // 3. Chủ nhà xe đăng nhập bằng số điện thoại
   await login(page, '0901000001', 'chu123');
@@ -869,7 +869,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Lọc theo loại').selectOption({ label: 'Sơ đồ ghế' });
   await expect(page.getByText('Sửa Sơ đồ ghế').first()).toBeVisible();
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
-  await page.getByRole('button', { name: 'Đăng xuất' }).click();
+  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
 
   // 6. Nhân viên đăng nhập: thấy chi nhánh, không có mục Người dùng, không thêm được chi nhánh
   await login(page, '0902000002', 'nv1234');
@@ -897,7 +897,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 7. Sai mật khẩu
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
-  await page.getByRole('button', { name: 'Đăng xuất' }).click();
+  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
   await login(page, '0902000002', 'sai-mat-khau');
   await expect(page.getByText('Sai mã nhà xe, số điện thoại hoặc mật khẩu')).toBeVisible();
 
@@ -916,7 +916,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 9. Máy nhớ mã nhà xe: đăng xuất ra vẫn hiện sẵn mã nha-xe-b
   await page.getByRole('button', { name: 'Tài khoản của tôi' }).click();
-  await page.getByRole('button', { name: 'Đăng xuất' }).click();
+  await page.getByRole('button', { name: 'Đăng xuất', exact: true }).click();
   await expect(page.getByLabel('Mã nhà xe', { exact: true })).toHaveValue('nha-xe-b');
   // 10. Cài app vào máy (như app cũ): trình duyệt chưa mời cài thì hiện hướng dẫn theo loại máy
   await page.getByRole('button', { name: '📲 Cài app vào máy' }).click();

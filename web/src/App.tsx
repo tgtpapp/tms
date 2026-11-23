@@ -65,6 +65,20 @@ function Root() {
     return () => data.subscription.unsubscribe();
   }, [resolve]);
 
+  // Bị đăng xuất từ thiết bị khác (Quản lý thiết bị đăng nhập): tự thoát trên máy này
+  const signedIn = view.kind === 'tenant' || view.kind === 'platform' || view.kind === 'no_access';
+  useEffect(() => {
+    if (!signedIn) return;
+    const check = () => {
+      if (document.hidden || !navigator.onLine) return;
+      void rpc<boolean>('session_alive').then((ok) => { if (ok === false) void supabase.auth.signOut({ scope: 'local' }); }).catch(() => undefined);
+    };
+    check();
+    const t = setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', check); };
+  }, [signedIn]);
+
   if (missingConfig.length > 0) {
     return (
       <Centered>

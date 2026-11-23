@@ -1450,3 +1450,6 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
 .qh-b { font-style: normal; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .qh-b.g { background: var(--ok-soft); color: var(--ok); } .qh-b.r { background: #fee2e2; color: #b91c1c; }
 .qs-hl { outline: 2px solid var(--primary); outline-offset: 2px; }
+.paper-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; }
+.paper-row > div:first-child { flex: 1; min-width: 0; }
+.paper-row .fp-pop { flex-basis: 100%; }

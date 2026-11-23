@@ -12,6 +12,9 @@ import { MyCharters } from './Charters';
 import { FuelReportCard } from '../components/FuelReport';
 import { Modal } from '../components/Modal';
 import { ScanScreen } from './Scan';
+import { DOC_COLS, docState, type Doc } from '../components/Documents';
+import { FilesViewButton } from '../components/FilePreview';
+import { DOC_TYPES } from '../lib/docTypes';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -135,10 +138,71 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       </section>
       {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
       {sorted.length > cut && <section className="card"><div className="drv-trips">{sorted.slice(cut).map(chip)}</div></section>}
+      {staffId && <MyPapers staffId={staffId} plates={plates} />}
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <MyTransfers day={day} />
       <MyCharters />
       <MyMonthTrips routes={routes} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+    </>
+  );
+}
+
+/** Giấy tờ để xuất trình khi cơ quan chức năng kiểm tra (như app cũ): giấy tờ cá nhân + giấy tờ xe mình chạy, bấm Xem để mở ảnh */
+function MyPapers({ staffId, plates }: { staffId: string; plates: string[] }) {
+  const [mine, setMine] = useState<Doc[]>([]);
+  const [cars, setCars] = useState<{ id: string; plate: string }[]>([]);
+  const [carDocs, setCarDocs] = useState<Doc[]>([]);
+  useEffect(() => {
+    void supabase.from('documents').select(DOC_COLS).eq('staff_id', staffId).eq('is_current', true)
+      .then(({ data }) => setMine((data ?? []) as Doc[]));
+  }, [staffId]);
+  const key = plates.join('|');
+  useEffect(() => {
+    if (!key) { setCars([]); setCarDocs([]); return; }
+    void (async () => {
+      const v = await supabase.from('vehicles').select('id, plate').in('plate', key.split('|'));
+      const l = ((v.data ?? []) as { id: string; plate: string }[]).sort((a, b) => key.split('|').indexOf(a.plate) - key.split('|').indexOf(b.plate));
+      setCars(l);
+      if (!l.length) { setCarDocs([]); return; }
+      const d = await supabase.from('documents').select(DOC_COLS).in('vehicle_id', l.map((x) => x.id)).eq('is_current', true);
+      setCarDocs((d.data ?? []) as Doc[]);
+    })();
+  }, [key]);
+  const row = (code: string, doc: Doc | undefined) => {
+    const def = DOC_TYPES.find((x) => x.code === code)!;
+    const st = docState(def, doc, 30, def.required);
+    const hang = doc?.data?.hang ? ` · Hạng ${String(doc.data.hang)}` : '';
+    return (
+      <li key={code} className="item paper-row">
+        <div>
+          <b>{def.name}</b>
+          <div className={`small state-${st.state}`}>{doc?.doc_no ? `Số ${doc.doc_no}${hang} · ` : ''}{st.text}</div>
+        </div>
+        {doc && doc.files.length > 0 ? <FilesViewButton files={doc.files} label="Xem" /> : <span className="muted small">Chưa có ảnh</span>}
+      </li>
+    );
+  };
+  const personal = ['cccd', 'gplx', 'tap_huan', 'kham_suc_khoe', 'hop_dong_ld'].filter((c) => ['cccd', 'gplx'].includes(c) || mine.some((d) => d.doc_type === c));
+  const carTypes = DOC_TYPES.filter((d) => d.owner === 'xe');
+  return (
+    <>
+      <section className="card">
+        <h2>Giấy tờ của tôi</h2>
+        <p className="muted small">Xuất trình khi cơ quan chức năng kiểm tra · bấm Xem để mở ảnh giấy tờ</p>
+        <ul className="list">{personal.map((c) => row(c, mine.find((d) => d.doc_type === c)))}</ul>
+      </section>
+      {cars.length > 0 && (
+        <section className="card">
+          <h2>Giấy tờ xe tôi chạy</h2>
+          {cars.map((v) => (
+            <div key={v.id} className="sub">
+              <b>Xe {v.plate}</b>{v.plate === plates[0] ? <span className="badge">Gần nhất</span> : null}
+              <ul className="list">{carTypes.filter((t) => t.required || carDocs.some((d) => d.vehicle_id === v.id && d.doc_type === t.code))
+                .map((t) => row(t.code, carDocs.find((d) => d.vehicle_id === v.id && d.doc_type === t.code)))}</ul>
+            </div>
+          ))}
+        </section>
+      )}
     </>
   );
 }

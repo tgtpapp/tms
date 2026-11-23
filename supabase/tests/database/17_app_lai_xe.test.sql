@@ -108,6 +108,9 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
 select is((select count(*)::int from public.my_trips(app.local_today(), app.local_today() + 7)), 1, 'Lái xe thấy 1 chuyến của mình');
 select is((select my_role from public.my_trips(app.local_today(), app.local_today() + 7)), 'lai_xe_1', 'Vai trò lái xe 1');
+select is((select count(*)::int from public.documents where owner_kind = 'nhan_su'), 2, 'Lái xe thấy giấy tờ của mình (GPLX, khám sức khỏe), không thấy của người khác');
+select is((select count(*)::int from public.documents where owner_kind = 'xe' and vehicle_id = (select v from t.ids where k = 'X1')), 3,
+  'Lái xe thấy giấy tờ xe mình chạy để xuất trình khi kiểm tra');
 select throws_ok($$ select public.trip_mark((select v from t.ids where k = 'T1'), 'den_ben') $$, '22023', null, 'Chưa xuất bến thì chưa đến bến');
 select isnt(public.trip_mark((select v from t.ids where k = 'T1'), 'xuat_ben'), null, 'Báo xuất bến');
 select isnt((select departed_at from public.trips where id = (select v from t.ids where k = 'T1')), null, 'Đã ghi giờ xuất bến');

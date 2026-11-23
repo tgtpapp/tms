@@ -49,7 +49,7 @@ export function valuesFromAi(def: DocTypeDef, fields: Record<string, FieldValue>
   for (const x of def.fields) v[x.key] = fields[x.key] == null ? '' : String(fields[x.key]);
   return v;
 }
-function valuesFromDoc(def: DocTypeDef, d: Doc): Values {
+export function valuesFromDoc(def: DocTypeDef, d: Doc): Values {
   const v: Values = {};
   for (const x of def.fields) {
     const raw = CORE[x.key] ? d[CORE[x.key]] : d.data?.[x.key];

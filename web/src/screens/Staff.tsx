@@ -9,7 +9,7 @@ import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   DOC_COLS, DocFields, DocRow, docState, FilesButton, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
-  type Values,
+  type Values, valuesFromDoc,
 } from '../components/Documents';
 import { DOC_TYPES, docTypeOf, type DocTypeDef } from '../lib/docTypes';
 import type { FieldValue } from '../lib/documents';
@@ -220,6 +220,11 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
   const [id] = useState(() => editing?.id ?? crypto.randomUUID());
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const linked = new Set(staff.filter((s) => s.user_id && s.id !== editing?.id).map((s) => s.user_id));
+  // Sửa hồ sơ: hiện luôn các trường giấy tờ (CCCD, GPLX, tập huấn nghiệp vụ, khám sức khỏe…) để sửa cùng lúc
+  const docDefs = editing ? STAFF_DOCS.filter((d) => !(props.labor.view && d.code === 'hop_dong_ld')) : [];
+  const curDoc = (code: string) => (editing ? props.docs.find((d) => d.staff_id === editing.id && d.doc_type === code && d.is_current) : undefined);
+  const [docVals0] = useState<Record<string, Values>>(() => Object.fromEntries(docDefs.flatMap((def) => { const d = curDoc(def.code); return d ? [[def.code, valuesFromDoc(def, d)]] : []; })));
+  const [docVals, setDocVals] = useState<Record<string, Values>>(docVals0);
 
   function onScanned(def: DocTypeDef, s: Scanned) {
     if (s.files.length === 0) return toast('error', s.aiNote);
@@ -240,6 +245,19 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
       return toast('error', errMsg(err));
     }
     let failed = 0;
+    for (const def of docDefs) {
+      const d = curDoc(def.code);
+      const v = docVals[def.code];
+      if (!d || !v || JSON.stringify(v) === JSON.stringify(docVals0[def.code])) continue;
+      try {
+        const r = toRpc(def, v);
+        await rpc('update_document', { p_id: d.id, p_doc_no: r.p_doc_no, p_issuer: r.p_issuer, p_issued_on: r.p_issued_on,
+                                       p_valid_from: r.p_valid_from, p_expires_on: r.p_expires_on, p_data: r.p_data, p_note: d.note });
+      } catch (err) {
+        failed++;
+        toast('error', `${def.name}: ${errMsg(err)}`);
+      }
+    }
     for (const p of pending) {
       try {
         const paths = await uploadFiles(tenantId, 'nhan_su', id, f.full_name, p.def.code, p.scanned.files);
@@ -333,6 +351,23 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
           {editing && <label>Ngày nghỉ việc<input type="date" value={f.left_on} onChange={set('left_on')} /></label>}
           <label>Ghi chú<input value={f.note} onChange={set('note')} /></label>
         </div>
+        {docDefs.map((def) => {
+          const d = curDoc(def.code);
+          const pd = pending.find((x) => x.def.code === def.code);
+          return (
+            <fieldset key={def.code} className="sub">
+              <legend><b>{def.name}</b></legend>
+              {d ? <DocFields def={def} values={docVals[def.code] ?? {}} onChange={(v) => setDocVals({ ...docVals, [def.code]: v })} />
+                : pd ? (
+                  <>
+                    <p className="muted small">{pd.scanned.aiNote} · {pd.scanned.files.length} tệp <button type="button" className="btn small link" onClick={() => setPending(pending.filter((x) => x !== pd))}>Bỏ giấy này</button></p>
+                    <DocFields def={def} values={pd.scanned.values}
+                               onChange={(v) => setPending(pending.map((x) => (x === pd ? { ...x, scanned: { ...x.scanned, values: v } } : x)))} />
+                  </>
+                ) : <Scanner def={def} onScanned={(sc) => onScanned(def, sc)} />}
+            </fieldset>
+          );
+        })}
         <div className="actions">
           <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : editing ? 'Lưu hồ sơ' : 'Lưu nhân viên'}</button>
           {editing && <button type="button" className="btn link" onClick={onDone}>Hủy</button>}

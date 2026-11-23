@@ -1457,3 +1457,9 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
 /* Ghế ưu tiên: chữ mờ in chìm, không viền */
 .vxs-wm { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; text-align: center;
   font-size: 1.05rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: rgba(100, 116, 139, .18); line-height: 1.15; padding: 0 6px; }
+/* Thanh menu luôn cao bằng màn hình: chữ to/nhỏ (body zoom) làm 100vh co theo → chia lại cho tỉ lệ zoom */
+.shell { min-height: calc(100vh / var(--ux-zoom, 1)); }
+@media (min-width: 900px) {
+  .sidebar { height: calc(100vh / var(--ux-zoom, 1)); height: calc(100dvh / var(--ux-zoom, 1)); }
+  .shell.unpinned .sidebar { bottom: 0; }
+}

@@ -455,7 +455,12 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={[tab === t.key && 'on', t.warn && 'warn'].filter(Boolean).join(' ')} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
       </div>
-      {tab === 'tt' && editing && <div className="prof-pane"><StaffForm {...props} editing={s} onDone={() => setEditing(false)} /></div>}
+      {tab === 'tt' && editing && (
+        <div className="prof-pane">
+          <StaffForm {...props} editing={s} onDone={() => setEditing(false)} />
+          <StaffSignature tenantId={tenantId} staffId={s.id} canEdit={canEdit} />
+        </div>
+      )}
       {tab === 'tt' && !editing && (
         <div className="prof-pane">
           <dl className="info">

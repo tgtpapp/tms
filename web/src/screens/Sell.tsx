@@ -868,6 +868,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
               return (
                 <button key={idx} type="button" className={`vxs ${st.cls}${s.is_priority ? ' prio' : ''}`}
                         aria-label={`Ghế ${s.label}${st.cls === 'free' ? ' trống' : ''}`} onClick={() => onClick(s.label)}>
+                  {s.is_priority && <span className="vxs-wm" aria-hidden="true">Ghế ưu tiên</span>}
                   <span className="vxs-h"><b>{s.label}</b>
                     {t?.printed_at && <span className="printed" title={`Đã in vé ${t.print_count ?? 1} lần`} aria-label="Đã in vé"><PrinterIcon /></span>}
                     {t?.pickup_note && <span className="vxs-tag">{t.pickup_note}</span>}</span>

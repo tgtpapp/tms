@@ -34,6 +34,8 @@ const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number); ret
 export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: AccountContext; perms: Permissions; shareFiles?: File[] | null; onShareDone?: () => void }) {
   const toast = useToast();
   const canAdd = perms.has('fuel.add'), canEdit = perms.has('fuel.edit'), canDel = perms.has('fuel.delete');
+  // Chỉ ô Xem (lái xe): chỉ thấy phiếu xe mình chạy, không xem bồn / giá vốn / sổ
+  const self = !perms.has('fuel.view_all') && !canAdd && !canEdit && !canDel;
   const [rows, setRows] = useState<FuelEntry[]>([]);
   const [set, setSet] = useState<FuelSettings>(DEFAULT_FUEL);
   const [vehicles, setVehicles] = useState<Veh[]>([]);
@@ -205,7 +207,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
     const km = withKm.reduce((a, r) => a + (led.map.get(r.id)?.km ?? 0), 0), litKm = withKm.reduce((a, r) => a + r.liters, 0);
     const g = gps.get(v.id) ?? 0;   // không có km đồng hồ thì dùng km GPS của tháng (như app cũ)
     return { v, n: L.length, lit, amount, km: km || g, src: km ? 'đồng hồ' : g ? 'GPS' : '', per100: km ? (litKm / km) * 100 : g && lit ? (lit / g) * 100 : 0 };
-  }).filter((x) => x.n > 0 || (x.v.is_active && !veh));
+  }).filter((x) => x.n > 0 || (!self && x.v.is_active && !veh));
 
   // Sổ nhập xuất nhiên liệu (như app cũ): in A4 ngang có chữ ký, tải Excel (CSV)
   const bookCols = ['Số phiếu', 'Ngày', 'Giờ', 'Loại', 'Xe / Nhà cung cấp', 'Lái xe', 'Cây xăng', 'Km đồng hồ', 'Số lít', 'Đơn giá', 'Thành tiền', 'Km chạy', 'L/100km', 'Tồn bồn sau'];
@@ -253,7 +255,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
           </div>}
         {ai && <p className="small muted">{ai}</p>}
         </div>
-        <div className="fuel-tank">
+        {!self && <><div className="fuel-tank">
           <div className={`fuel-bar${low ? ' low' : ''}`} role="meter" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Tồn bồn"><i style={{ width: `${pct}%` }} /></div>
           <div><b>{set.tank_name}</b>: tồn <b className={low ? 'danger-text' : ''}>{num(led.tank, 2)} lít</b> / {num(set.capacity_l)} lít ({Math.round(pct)}%)
             · giá bình quân <b>{money(led.avg)}</b>/lít · {set.fuel_type}
@@ -261,7 +263,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
         </div>
         <MarketCard mk={mk} fuelType={set.fuel_type} avg={led.avg} saved={(() => { const mp = mkPrice(mk, set.fuel_type); return mp ? led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + (mp - (led.map.get(r.id)?.price ?? 0)) * r.liters, 0) : 0; })()}
           bonLit={led.list.filter((r) => r.kind === 'bon' && inMonth(r)).reduce((t, r) => t + r.liters, 0)}
-          onEdit={canEdit ? () => { setMkEdit(Object.fromEntries(MK.map((k) => [k, mk?.gia[k] ? String(mk.gia[k]) : '']))); setMkAt(new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16)); } : undefined} />
+          onEdit={canEdit ? () => { setMkEdit(Object.fromEntries(MK.map((k) => [k, mk?.gia[k] ? String(mk.gia[k]) : '']))); setMkAt(new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 16)); } : undefined} /></>}
         {reports.length > 0 && (
           <div className="fuel-wait" role="region" aria-label="Phiếu đổ dầu lái xe gửi chờ duyệt">
             <b>⛽ {reports.length} phiếu đổ dầu lái xe gửi qua app đang chờ duyệt</b>
@@ -276,24 +278,25 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
           </div>
         )}
         <div className="seg" role="tablist" aria-label="Xem">
-          {([['phieu', 'Phiếu'], ['xe', 'Theo xe'], ['cai', 'Thiết lập']] as const).map(([k, l]) =>
+          {([['phieu', 'Phiếu'], ['xe', 'Theo xe'], ['cai', 'Thiết lập']] as const).filter(([k]) => !self || k !== 'cai').map(([k, l]) =>
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
         </div>
         {tab !== 'cai' && <div className="inline-form">
           <MonthPicker value={month} onChange={setMonth} allowEmpty />
-          <label>Xe<select value={veh} onChange={(e) => setVeh(e.target.value)}><option value="">Tất cả xe</option>{vehicles.map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>
+          <label>Xe<select value={veh} onChange={(e) => setVeh(e.target.value)}><option value="">Tất cả xe</option>{vehicles.filter((v) => !self || rows.some((r) => r.vehicle_id === v.id)).map((v) => <option key={v.id} value={v.id}>{v.plate}</option>)}</select></label>
           {tab === 'phieu' && <label>Loại<select value={kind} onChange={(e) => setKind(e.target.value as FuelKind | '')}><option value="">Tất cả</option>
             {(Object.keys(FUEL_KIND) as FuelKind[]).map((k) => <option key={k} value={k}>{FUEL_KIND[k].short}</option>)}</select></label>}
           {month && <button className="btn small link" onClick={() => setMonth('')}>Xem mọi tháng</button>}
-          {tab === 'phieu' && <><button className="btn small" onClick={() => void printBook()}>In sổ</button>
+          {tab === 'phieu' && !self && <><button className="btn small" onClick={() => void printBook()}>In sổ</button>
             <button className="btn small" onClick={() => bookCsv()}>Tải Excel (CSV)</button></>}
         </div>}
       </section>
 
       {tab === 'phieu' && (
         <section className="card">
-          <p className="small muted">{shown.length} phiếu · cấp cho xe {num(out.reduce((a, r) => a + r.liters, 0), 2)} lít · {money(out.reduce((a, r) => a + (led.map.get(r.id)?.amount ?? 0), 0))}
-            {' · '}nhập bồn {num(shown.filter((r) => r.kind === 'nhap').reduce((a, r) => a + r.liters, 0), 2)} lít</p>
+          {self ? <p className="small muted">{shown.length} phiếu · {num(out.reduce((a, r) => a + r.liters, 0), 2)} lít</p>
+            : <p className="small muted">{shown.length} phiếu · cấp cho xe {num(out.reduce((a, r) => a + r.liters, 0), 2)} lít · {money(out.reduce((a, r) => a + (led.map.get(r.id)?.amount ?? 0), 0))}
+            {' · '}nhập bồn {num(shown.filter((r) => r.kind === 'nhap').reduce((a, r) => a + r.liters, 0), 2)} lít</p>}
           {shown.length === 0 && <p className="muted">Chưa có phiếu.</p>}
           <div className="table-wrap">
             <table className="plist">
@@ -311,11 +314,11 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
                         <FilesViewButton files={r.files} label={`Xem ${r.files.length} chứng từ`} /></td>
                       <td>{r.odo_km ? num(r.odo_km) : ''}{m?.km ? <div className="small muted">+{num(m.km)} km</div> : null}</td>
                       <td className={r.kind === 'nhap' ? 'ok-text' : ''}><b>{r.kind === 'nhap' ? '+' : ''}{num(r.liters, 2)}</b></td>
-                      <td>{m ? num(Math.round(m.price)) : ''}{r.kind === 'bon' && r.unit_price == null && <div className="small muted">bình quân</div>}{r.market_price && <div className="small muted">niêm yết</div>}</td>
-                      <td>{m ? num(m.amount) : ''}</td>
+                      <td>{self ? (r.unit_price != null ? num(r.unit_price) : '') : <>{m ? num(Math.round(m.price)) : ''}{r.kind === 'bon' && r.unit_price == null && <div className="small muted">bình quân</div>}{r.market_price && <div className="small muted">niêm yết</div>}</>}</td>
+                      <td>{self ? (r.unit_price != null ? num(Math.round(r.unit_price * r.liters)) : '') : m ? num(m.amount) : ''}</td>
                       <td>{m?.per100 ? <span className={`badge${lv === 'bad' ? ' locked' : lv === 'warn' ? ' warn-badge' : ''}`}>{num(m.per100, 1)} L/100km</span> : ''}</td>
-                      <td className="small">{r.kind !== 'ngoai' && m ? num(m.tank, 2) : ''}</td>
-                      <td className="hs-act"><button className="btn small" aria-label={`In phiếu ${r.code}`} onClick={() => void printSlips([r.id])}>In</button>
+                      <td className="small">{!self && r.kind !== 'ngoai' && m ? num(m.tank, 2) : ''}</td>
+                      <td className="hs-act">{!self && <button className="btn small" aria-label={`In phiếu ${r.code}`} onClick={() => void printSlips([r.id])}>In</button>}
                         {canEdit && <button className="btn small" onClick={() => open(r)}>Sửa</button>}
                         {canDel && <button className="btn small link danger-text" onClick={() => void del(r)}>Xóa</button>}</td>
                     </tr>

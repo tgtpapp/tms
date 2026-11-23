@@ -27,6 +27,17 @@ select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa0
 reset role;
 update public.staff_members set user_id = '00000000-0000-0000-0000-0000000000b2' where id = '00000000-0000-0000-0000-00000000aa01';
 update public.staff_members set user_id = '00000000-0000-0000-0000-0000000000b4' where id = '00000000-0000-0000-0000-00000000aa02';
+-- Xe 60F-004.39 có trong chuyến xếp cho cả 2 lái xe; xe 51B-999.99 không ai chạy
+insert into public.vehicles (id, tenant_id, plate, vehicle_type_id) values
+  ('00000000-0000-0000-0000-0000000000e3', (select id from public.tenants where code = 'nha-xe-a'), '51B-999.99', '00000000-0000-0000-0000-0000000000e1');
+insert into public.routes (id, tenant_id, code, name) values
+  ('00000000-0000-0000-0000-0000000000f1', (select id from public.tenants where code = 'nha-xe-a'), 'T1', 'Hố Nai – Vũng Tàu');
+insert into public.trips (id, tenant_id, route_id, direction, service_date, depart_at, arrive_at, vehicle_id) values
+  ('00000000-0000-0000-0000-0000000000f2', (select id from public.tenants where code = 'nha-xe-a'), '00000000-0000-0000-0000-0000000000f1', 'di',
+   app.local_today(), now() + interval '1 hour', now() + interval '3 hours', '00000000-0000-0000-0000-0000000000e2');
+insert into public.trip_crew (tenant_id, trip_id, role, staff_id, during)
+select (select id from public.tenants where code = 'nha-xe-a'), '00000000-0000-0000-0000-0000000000f2', r, s, tstzrange(now() + interval '1 hour', now() + interval '3 hours')
+from (values ('lai_xe_1', '00000000-0000-0000-0000-00000000aa01'::uuid), ('lai_xe_2', '00000000-0000-0000-0000-00000000aa02'::uuid)) x(r, s);
 
 -- Lái xe 1 gửi
 set local role authenticated;
@@ -39,6 +50,8 @@ select is((select count(*)::int from public.fuel_reports), 1, 'Không sinh phi�
 select is((select unit_price from public.fuel_reports), 26823::bigint, 'Đơn giá tính từ thành tiền / số lít');
 select throws_ok($$ select public.report_fuel('{"key":"k2","plate":"99Z-999.99","liters":10,"unit_price":27000}') $$, 'P0002', null, 'Biển số không có');
 select throws_ok($$ select public.report_fuel('{"key":"k3","plate":"60F-004.39","liters":0,"unit_price":27000}') $$, '22023', null, 'Chặn số lít 0');
+select throws_ok($$ select public.report_fuel('{"key":"k7","plate":"51B-999.99","liters":10,"unit_price":27000}') $$, '42501', null,
+  'Lái xe chạy xe nào báo xe đó: xe không có trong chuyến của mình bị chặn');
 select throws_ok(format($$ select public.report_fuel('{"key":"k4","plate":"60F-004.39","liters":10,"unit_price":27000,"files":["%s/bao_dau/00000000-0000-0000-0000-00000000aa02/x.jpg"]}') $$,
   (select id from public.tenants where code = 'nha-xe-a')), '22023', null, 'Không gắn ảnh của người khác');
 select throws_ok($$ insert into public.fuel_reports (staff_id, vehicle_id, plate, entry_date, liters, unit_price, client_key) values ('00000000-0000-0000-0000-00000000aa01', '00000000-0000-0000-0000-0000000000e2', 'x', '2026-11-20', 1, 1, 'x') $$, '42501', null, 'Không ghi thẳng bảng');
@@ -76,6 +89,11 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
 select is((select reject_reason from public.fuel_reports), 'Ảnh mờ', 'Lái xe thấy lý do phiếu của mình bị bỏ');
+select is((select count(*)::int from public.fuel_entries where vehicle_id = '00000000-0000-0000-0000-0000000000e2'), 1, 'Lái xe xem được phiếu nhiên liệu của xe mình chạy');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
+select is((select count(*)::int from public.fuel_entries), 0, 'Bán vé (không có quyền nhiên liệu) không thấy phiếu');
 reset role;
 
 -- Nhà xe B

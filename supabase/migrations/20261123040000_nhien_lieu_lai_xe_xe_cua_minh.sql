@@ -57,3 +57,19 @@ begin
   execute v;
 end;
 $$;
+
+-- Phiếu báo đổ dầu (chờ duyệt) và ảnh gửi kèm: chỉ ô Xem thì chỉ thấy phiếu mình gửi
+drop policy fuel_reports_select on public.fuel_reports;
+create policy fuel_reports_select on public.fuel_reports for select to authenticated
+  using (tenant_id = app.current_tenant_id()
+         and ((app.has_permission('fuel.view') and not app.fuel_self_only()) or app.is_my_staff(staff_id::text)));
+drop policy bao_dau_select on storage.objects;
+create policy bao_dau_select on storage.objects for select to authenticated
+  using (bucket_id = 'giay-to' and (storage.foldername(name))[1] = app.current_tenant_id()::text
+         and (storage.foldername(name))[2] = 'bao_dau'
+         and (app.is_my_staff((storage.foldername(name))[3]) or (app.has_permission('fuel.view') and not app.fuel_self_only())));
+drop policy if exists f_bao_dau_select on public.file_store;
+create policy f_bao_dau_select on public.file_store for select to authenticated
+  using ((storage.foldername(name))[1] = app.current_tenant_id()::text
+         and (storage.foldername(name))[2] = 'bao_dau'
+         and (app.is_my_staff((storage.foldername(name))[3]) or (app.has_permission('fuel.view') and not app.fuel_self_only())));

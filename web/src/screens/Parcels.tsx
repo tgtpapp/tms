@@ -23,7 +23,7 @@ export const STATUS: Record<Status, [string, string]> = {
   nhan: ['Đã nhận', 'idle'], tren_xe: ['Đã lên xe', 'warn-badge'], den: ['Đã đến', 'warn-badge'], giao: ['Đã giao', ''], huy: ['Đã hủy', 'locked'],
 };
 const TZ = 'Asia/Ho_Chi_Minh';
-const up = (x: string) => x.toLocaleUpperCase('vi-VN');
+const upper = (x: string) => x.toLocaleUpperCase('vi-VN');
 const norm = (x: string) => x.trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi-VN');
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 export const money = (n: number) => `${n.toLocaleString('vi-VN')} đ`;
@@ -144,7 +144,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const pickTrip = (t: Trip | null) => {
     if (!t) return setF((x) => ({ ...x, trip_id: '' }));
     const ids = ordered(t.route_id, t.direction);
-    const nm = (id: string | undefined) => (id ? up(stopName(id)) : '');
+    const nm = (id: string | undefined) => (id ? upper(stopName(id)) : '');
     const names = ids.map((id) => norm(stopName(id)));
     setF((x) => ({ ...x, trip_id: t.id, from: names.includes(norm(x.from)) ? x.from : nm(ids[0]) || x.from, to: names.includes(norm(x.to)) ? x.to : nm(ids[ids.length - 1]) || x.to }));
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
@@ -171,7 +171,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     fee: Number(f.fee) || 0, payer: f.payer, cod: Number(f.cod) || 0, note: f.note, at: new Date().toISOString() });
   async function printSaved(s: Shipment) {
     const info = await tripInfo(s.trip_id).catch(() => ({ plate: '', driver: '', phone: '' }));
-    setPrinting([slipOf({ code: s.code, trip_id: s.trip_id, from: up(stopName(s.from_stop_id)), to: up(stopName(s.to_stop_id)), sender_name: s.sender_name ?? '', sender_phone: s.sender_phone,
+    setPrinting([slipOf({ code: s.code, trip_id: s.trip_id, from: upper(stopName(s.from_stop_id)), to: upper(stopName(s.to_stop_id)), sender_name: s.sender_name ?? '', sender_phone: s.sender_phone,
       receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone, description: s.description, packages: s.packages, weight: s.weight_kg, value: null,
       fee: s.fee, payer: s.fee_payer, cod: s.cod_amount, note: s.note ?? '', at: new Date().toISOString() }, info)]);
   }
@@ -183,7 +183,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     setBusy(true);
     try {
       // Nơi gửi / nhận chưa có thì thêm mới (chữ in hoa)
-      const idOf = async (name: string) => stops.find((x) => norm(x.name) === norm(name))?.id ?? await rpc<string>('parcel_stop', { p_name: up(name) });
+      const idOf = async (name: string) => stops.find((x) => norm(x.name) === norm(name))?.id ?? await rpc<string>('parcel_stop', { p_name: upper(name) });
       const [fromId, toId] = [await idOf(f.from), await idOf(f.to)];
       const r = await rpc<{ code: string; repeated: boolean }>('create_shipment', {
         p: {
@@ -249,12 +249,12 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
             <div className="gh-wrap">
               <div className="grid2">
                 <label>Gửi tại
-                  <input list="gh-diem" className="upper" value={f.from} onChange={(e) => setF({ ...f, from: up(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI GỬI" required />
+                  <input list="gh-diem" className="upper" value={f.from} onChange={(e) => setF({ ...f, from: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI GỬI" required />
                 </label>
                 <label>Nhận tại
-                  <input list="gh-diem" className="upper" value={f.to} onChange={(e) => setF({ ...f, to: up(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI NHẬN" required />
+                  <input list="gh-diem" className="upper" value={f.to} onChange={(e) => setF({ ...f, to: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI NHẬN" required />
                 </label>
-                <datalist id="gh-diem">{[...new Set([...stopOpts, ...stops].map((s) => up(s.name)))].map((n) => <option key={n} value={n} />)}</datalist>
+                <datalist id="gh-diem">{[...new Set([...stopOpts, ...stops].map((s) => upper(s.name)))].map((n) => <option key={n} value={n} />)}</datalist>
                 <label>SĐT người gửi<input inputMode="tel" value={f.sender_phone} onChange={(e) => setF({ ...f, sender_phone: e.target.value })} required /></label>
                 <label>Tên người gửi<input value={f.sender_name} onChange={(e) => setF({ ...f, sender_name: e.target.value })} /></label>
                 <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} required /></label>

@@ -451,8 +451,8 @@ export function StaffCards({ staff, avas }: Common) {
       <div style="font-size:6pt;font-weight:bold;color:#555;line-height:1.25;max-height:2.5em;overflow:hidden">${esc(co.toUpperCase())}</div>
       <div style="font-size:7pt;font-weight:bold;color:${color(s)};letter-spacing:1.5px;margin-top:1.5mm">THẺ NHÂN VIÊN</div>
       <div style="font-size:12pt;font-weight:bold;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
-      <div style="font-size:8pt;margin-top:1mm">${esc(job(s))}</div>
-      <div style="font-size:7pt;color:${color(s)};font-weight:bold">${esc(dept(s))}</div>
+      <div style="font-size:7.5pt;color:${color(s)};font-weight:bold;margin-top:1mm">${esc(dept(s))}</div>
+      <div style="font-size:8pt">${esc(job(s))}</div>
       <div style="margin-top:auto;font-size:7pt"><span style="color:#666">Ngày vào làm</span> <b>${fmtDate(s.joined_on)}</b>${s.phone ? `<br><span style="color:#666">ĐT</span> <b>${esc(s.phone)}</b>` : ''}</div></div></div>`;
   async function print() {
     setBusy(true);

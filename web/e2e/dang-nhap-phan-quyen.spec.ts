@@ -353,7 +353,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(syll.getByText('079123456789', { exact: true })).toBeVisible();
   await syll.getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByRole('tab', { name: 'Công việc & lương' }).click();
-  await expect(page.getByText('Ngày vào làm', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByText('Ngày vào làm', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Thông tin cá nhân', exact: true }).click();
   await page.getByLabel('Ảnh chữ ký', { exact: true }).setInputFiles({ name: 'chu-ky-lx.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
   await expect(page.getByRole('img', { name: 'Ảnh cần cắt' })).toBeVisible();

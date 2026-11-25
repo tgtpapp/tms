@@ -8,7 +8,7 @@ import { loadPermissions, type Permissions } from '../lib/permissions';
 import { moveOldFiles } from '../lib/fileStore';
 import { setBusName } from '../lib/theme';
 import { errMsg, supabase, type AccountContext } from '../lib/supabase';
-import { archiveMissingContracts } from '../lib/laborAutoArchive';
+import { autoArchiveProfiles } from '../lib/profileAutoArchive';
 import { AccountScreen } from './Account';
 import { AuditScreen } from './Audit';
 import { BranchesScreen } from './Branches';
@@ -136,14 +136,21 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     const t = window.setTimeout(run, 120_000), iv = window.setInterval(run, 3600_000);
     return () => { window.clearTimeout(t); window.clearInterval(iv); };
   }, [autoAtgt]);
-  // Hợp đồng lao động năm mới (máy chủ tự lập ngày 01/01): tự lưu PDF còn thiếu vào Lưu trữ hồ sơ, chạy ngầm sau khi mở app
-  const autoHd = !!perms && perms.has('labor.view_all') && perms.has('archive.view') && perms.has('archive.add');
+  // Lưu trữ hồ sơ tự cập nhật: lý lịch hành nghề, lý lịch phương tiện, hợp đồng lao động năm nay (kể cả hợp đồng năm mới máy chủ tự lập)
+  // – dựng lại khi dữ liệu đổi và lưu đè đúng chỗ cũ: sau khi mở app, ngay sau khi sửa hồ sơ / giấy tờ / xe (chờ 20 giây gom nhiều lần sửa), và mỗi 3 giờ
+  const arch = !!perms && perms.has('archive.view') && perms.has('archive.add');
+  const canDrv = arch && perms.has('staff.view_all'), canVeh = arch && perms.has('vehicle.view'), canCt = arch && perms.has('labor.view_all');
   useEffect(() => {
     const tid = ctx.tenant_id;
-    if (!autoHd || !tid) return;
-    const t = window.setTimeout(() => { void archiveMissingContracts(tid, { id: ctx.user_id, name: ctx.full_name ?? '' }).catch(() => undefined); }, 60_000);
-    return () => window.clearTimeout(t);
-  }, [autoHd, ctx.tenant_id, ctx.user_id, ctx.full_name]);
+    if (!tid || !(canDrv || canVeh || canCt)) return;
+    const me = { id: ctx.user_id, name: ctx.full_name ?? '' };
+    const run = () => { if (!document.hidden && navigator.onLine) void autoArchiveProfiles(tid, me, { drivers: canDrv, vehicles: canVeh, contracts: canCt }).catch((e) => console.warn('Tự cập nhật hồ sơ', e)); };
+    let deb: number | undefined;
+    const changed = () => { window.clearTimeout(deb); deb = window.setTimeout(run, 20_000); };
+    const t = window.setTimeout(run, 90_000), iv = window.setInterval(run, 3 * 3600_000);
+    window.addEventListener('tms-hs-doi', changed);
+    return () => { window.clearTimeout(t); window.clearTimeout(deb); window.clearInterval(iv); window.removeEventListener('tms-hs-doi', changed); };
+  }, [canDrv, canVeh, canCt, ctx.tenant_id, ctx.user_id, ctx.full_name]);
 
   if (error) return <Centered><p className="error-text">{error}</p></Centered>;
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;

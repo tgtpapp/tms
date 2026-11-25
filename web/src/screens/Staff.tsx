@@ -4,6 +4,7 @@ import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
 import { staffCvPages } from '../lib/staffCv';
+import { profileChanged } from '../lib/profileAutoArchive';
 import { rankOf, StaffCards, StaffDashboard, StaffOrg, StaffReport, useOrgCfg } from '../components/StaffOverview';
 import { LeaveOfStaff, LeavePage } from '../components/StaffLeave';
 import { downloadXlsx, type XCell } from '../lib/xlsxWrite';
@@ -142,7 +143,9 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const papers = useMemo(() => mergeRecordPapers(docs.filter((d) => d.is_current), records, (sid, type, exp): Doc => ({
     id: `ly-lich:${sid}:${type}`, vehicle_id: null, staff_id: sid, doc_type: type, doc_no: null, issuer: null, issued_on: null, valid_from: null,
     expires_on: exp, data: {}, files: [], note: 'Theo Lý lịch hành nghề', is_current: true, created_at: '' })), [docs, records]);
-  const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') },
+  // sửa xong (hồ sơ, giấy tờ, lý lịch, hợp đồng…) → báo để Lưu trữ hồ sơ tự cập nhật bản PDF
+  const reload = useCallback(async () => { await load(); profileChanged(); }, [load]);
+  const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') },
     leave: { add: perms.has('leave.add'), edit: perms.has('leave.edit'), viewAll: perms.has('leave.view_all') }, myUserId: ctx.user_id };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);

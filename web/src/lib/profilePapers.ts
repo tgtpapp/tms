@@ -291,9 +291,16 @@ const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/
 export const DRIVER_PATH = () => [year(), '02. Nhân sự', 'Lý lịch hành nghề'];
 export const VEHICLE_PATH = () => [year(), '03. Phương tiện', 'Lý lịch phương tiện'];
 
-export async function saveDriverPaper(x: DriverPaper): Promise<void> {
-  await savePdf(DRIVER_PATH(), `Lý lịch hành nghề · ${x.s.full_name}`, `LLHN_${slug(x.s.full_name)}.pdf`, driverPages(x), 'Lý lịch hành nghề người lái xe', `llhn:${x.s.id}`);
+/** Mã nội dung giấy (bỏ dòng "ngày … tháng … năm …" đổi theo ngày in) để biết hồ sơ có đổi không */
+function hash(t: string): string {
+  let a = 5381, b = 52711;
+  for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = (Math.imul(a, 33) ^ c) >>> 0; b = (Math.imul(b, 31) + c) >>> 0; }
+  return a.toString(36) + b.toString(36);
 }
-export async function saveVehiclePaper(x: VehiclePaper): Promise<void> {
-  await savePdf(VEHICLE_PATH(), `Lý lịch phương tiện · ${x.v.plate}`, `LLPT_${slug(x.v.plate)}.pdf`, vehiclePages(x), 'Lý lịch phương tiện', `llpt:${x.v.id}`);
+export const paperSig = (pages: Page[]) => hash(pages.map((p) => p.html).join('').replace(/ngày \d{1,2} tháng \d{1,2} năm \d{4}/g, ''));
+export async function saveDriverPaper(x: DriverPaper, pages = driverPages(x)): Promise<void> {
+  await savePdf(DRIVER_PATH(), `Lý lịch hành nghề · ${x.s.full_name}`, `LLHN_${slug(x.s.full_name)}.pdf`, pages, `Lý lịch hành nghề người lái xe · sig:${paperSig(pages)}`, `llhn:${x.s.id}`);
+}
+export async function saveVehiclePaper(x: VehiclePaper, pages = vehiclePages(x)): Promise<void> {
+  await savePdf(VEHICLE_PATH(), `Lý lịch phương tiện · ${x.v.plate}`, `LLPT_${slug(x.v.plate)}.pdf`, pages, `Lý lịch phương tiện · sig:${paperSig(pages)}`, `llpt:${x.v.id}`);
 }

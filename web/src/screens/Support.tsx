@@ -33,7 +33,13 @@ export function SupportScreen({ me, canHandle, lastKey, prefill, onPrefillUsed }
     if (r.error) setErr(r.error.message);
     else { setErr(''); setList((r.data ?? []) as Ticket[]); }
   }, []);
-  useEffect(() => { void load(); const iv = window.setInterval(() => void load(), 30_000); return () => window.clearInterval(iv); }, [load]);
+  useEffect(() => {
+    void load();
+    const iv = window.setInterval(() => { if (!document.hidden) void load(); }, 30_000);
+    const vis = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { window.clearInterval(iv); document.removeEventListener('visibilitychange', vis); };
+  }, [load]);
   useEffect(() => { if (prefill) { setText(prefill); onPrefillUsed?.(); } }, [prefill, onPrefillUsed]);
 
   async function send() {
@@ -115,7 +121,13 @@ function Thread({ t: t0, me, canHandle, onClose }: { t: Ticket; me: string | nul
     if (m.error) setErr(m.error.message); else setMsgs((m.data ?? []) as Msg[]);
     if (s.data) setT(s.data as Ticket);
   }, [t0.id]);
-  useEffect(() => { void load(); const iv = window.setInterval(() => void load(), 10_000); return () => window.clearInterval(iv); }, [load]);
+  useEffect(() => {
+    void load();
+    const iv = window.setInterval(() => { if (!document.hidden) void load(); }, 10_000);
+    const vis = () => { if (!document.hidden) void load(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { window.clearInterval(iv); document.removeEventListener('visibilitychange', vis); };
+  }, [load]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [msgs.length]);
 
   async function act(fn: () => Promise<unknown>) {

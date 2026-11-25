@@ -28,7 +28,7 @@ export function FuelReportAlert({ tenantId, onOpen }: { tenantId: string; onOpen
       setList(fresh.map((r) => ({ r: { ...r, liters: Number(r.liters) }, who: names.get(r.staff_id) ?? 'Lái xe' })));
     };
     void check();
-    const iv = window.setInterval(() => void check(), 60_000);
+    const iv = window.setInterval(() => { if (!document.hidden) void check(); }, 120_000);
     return () => { stop = true; window.clearInterval(iv); };
   }, [tenantId]);
   useEffect(() => { if (!list.length) return; const t = window.setTimeout(() => setList([]), 20_000); return () => window.clearTimeout(t); }, [list]);

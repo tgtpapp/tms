@@ -65,7 +65,7 @@ export function DeviceApprovals() {
   }, []);
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 15000);
+    const t = setInterval(() => void load(), 60_000);   // quay lại app thì kiểm tra ngay
     document.addEventListener('visibilitychange', load);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', load); };
   }, [load]);

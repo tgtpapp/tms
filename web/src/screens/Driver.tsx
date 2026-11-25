@@ -92,11 +92,14 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
 
 
   // Thứ tự: chuyến chuẩn bị chạy (xanh) + chi tiết chuyến lên đầu → các chuyến tiếp theo (vàng nhạt) → chuyến đã kết thúc / qua giờ (xám).
-  // Mỗi phút xếp lại và tải lại trạng thái: chuyến chạy xong thì chuyến tiếp theo được đẩy lên.
+  // Mỗi phút xếp lại; 3 phút tải lại trạng thái (quay lại app thì tải ngay): chuyến chạy xong thì chuyến tiếp theo được đẩy lên.
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const t = setInterval(() => { setNow(Date.now()); if (!document.hidden && day === today()) void load(); }, 60_000);
-    return () => clearInterval(t);
+    let n = 0;
+    const t = setInterval(() => { setNow(Date.now()); n += 1; if (n % 3 === 0 && !document.hidden && day === today()) void load(); }, 60_000);
+    const vis = () => { if (!document.hidden && day === today()) void load(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
   }, [day, load]);
   const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, trips, now)) - Number(isUpcoming(a, trips, now)) || a.depart_at.localeCompare(b.depart_at));
   const first = sorted.find((t) => isUpcoming(t, trips, now));

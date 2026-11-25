@@ -78,7 +78,7 @@ function Root() {
       void rpc<boolean>('session_alive').then((ok) => { if (ok === false) void supabase.auth.signOut({ scope: 'local' }); }).catch(() => undefined);
     };
     check();
-    const t = setInterval(check, 60_000);
+    const t = setInterval(check, 180_000);   // quay lại app thì kiểm tra ngay
     document.addEventListener('visibilitychange', check);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', check); };
   }, [signedIn]);

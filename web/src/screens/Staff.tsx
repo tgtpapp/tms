@@ -369,10 +369,10 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
       <form className="form" onSubmit={submit}>
         <div className="grid2">
           <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
-          <label>Chức vụ<input value={f.job_title} onChange={set('job_title')} list="chuc-vu" maxLength={80} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe" /></label>
-          <datalist id="chuc-vu">{[...new Set([...props.staff.map((x) => x.job_title?.trim() ?? '').filter(Boolean), 'Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ'])].map((x) => <option key={x} value={x} />)}</datalist>
-          <label>Phòng ban<input value={f.department} onChange={set('department')} list="phong-ban" maxLength={80} placeholder="vd: Văn phòng, Điều hành, Lái xe" /></label>
-          <datalist id="phong-ban">{[...new Set(props.staff.map((x) => x.department?.trim() ?? '').filter(Boolean))].map((x) => <option key={x} value={x} />)}</datalist>
+          <ChipInput label="Chức vụ" value={f.job_title} onChange={(v) => setF((cur) => ({ ...cur, job_title: v }))} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe"
+                     options={[...props.staff.map((x) => x.job_title ?? ''), 'Giám đốc', 'Phó giám đốc', 'Kế toán', 'Điều hành', 'Người điều hành vận tải', 'Bán vé', 'Lái xe', 'Phụ xe', 'Bảo vệ', 'Tạp vụ']} />
+          <ChipInput label="Phòng ban" value={f.department} onChange={(v) => setF((cur) => ({ ...cur, department: v }))} placeholder="vd: Văn phòng, Điều hành, Lái xe"
+                     options={props.staff.map((x) => x.department ?? '')} />
           <label>Nhóm (để xếp chuyến, giấy tờ bắt buộc)
             <select value={f.position} onChange={set('position')}>
               {Object.entries(POSITION).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -447,6 +447,25 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
         </div>
       </form>
     </Wrap>
+  );
+}
+
+/** Ô gõ tự do + hàng chip chọn nhanh (thay danh sách gợi ý của trình duyệt: trên điện thoại chỉ hiện mục trùng chữ đang gõ, khó chọn) */
+function ChipInput({ label, value, onChange, options, placeholder }: { label: string; value: string; onChange: (v: string) => void; options: string[]; placeholder?: string }) {
+  const seen = new Set<string>();
+  const opts = options.map((x) => x.trim()).filter((x) => { const k = x.toLocaleLowerCase('vi'); if (!x || seen.has(k)) return false; seen.add(k); return true; });
+  const cur = value.trim().toLocaleLowerCase('vi');
+  return (
+    <div className="nsx-ci">
+      <label>{label}<input value={value} onChange={(e) => onChange(e.target.value)} maxLength={80} placeholder={placeholder} autoComplete="off" /></label>
+      {opts.length > 0 && (
+        <div className="nsx-ci-chips" role="group" aria-label={`Chọn nhanh ${label.toLowerCase()}`}>
+          {opts.map((o) => (
+            <button key={o} type="button" className={o.toLocaleLowerCase('vi') === cur ? 'on' : ''} aria-pressed={o.toLocaleLowerCase('vi') === cur} onClick={() => onChange(o)}>{o}</button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

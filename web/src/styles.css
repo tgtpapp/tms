@@ -1781,3 +1781,9 @@ button.nsx-whob:hover { background: var(--surface-2); }
 .nsx-swatch { display: flex; gap: 6px; flex-wrap: wrap; }
 .nsx-swatch button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
 .nsx-swatch button.on { box-shadow: 0 0 0 2px var(--text); }
+/* Ô chức vụ / phòng ban: chip chọn nhanh vuốt ngang */
+.nsx-ci { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nsx-ci-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.nsx-ci-chips::-webkit-scrollbar { display: none; }
+.nsx-ci-chips > button { flex: 0 0 auto; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: .85rem; white-space: nowrap; cursor: pointer; }
+.nsx-ci-chips > button.on { background: var(--primary); border-color: var(--primary); color: #fff; }

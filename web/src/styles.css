@@ -1766,3 +1766,18 @@ button.nsx-whob:hover { background: var(--surface-2); }
 }
 @media screen and (max-width: 400px) { .nsx-cardsheet { zoom: .86; } }
 @media screen and (max-width: 360px) { .nsx-cardsheet { zoom: .8; } }
+/* Sơ đồ tổ chức: chọn kiểu rồi Áp dụng */
+.nsx-ocfg { display: flex; flex-direction: column; gap: 14px; padding: 14px; margin-bottom: 14px; border: 1px dashed var(--primary-ring); border-radius: 14px; background: var(--primary-soft); }
+.nsx-ocfg-row { display: flex; flex-direction: column; gap: 6px; }
+.nsx-ocfg .nsx-seg { flex-wrap: wrap; align-self: flex-start; }
+.nsx-ocfg .nsx-tp { flex-direction: row; }
+.nsx-ocfg .nsx-tp small { font-size: .72rem; }
+.nsx-ocfg-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.nsx-ocfg-g { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--primary); }
+.nsx-ocfg-gh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.nsx-ocfg-gh small { margin-right: auto; }
+.nsx-ocfg-mv { display: flex; gap: 4px; }
+.nsx-ocfg-mv .btn { min-width: 44px; min-height: 44px; }
+.nsx-swatch { display: flex; gap: 6px; flex-wrap: wrap; }
+.nsx-swatch button { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.nsx-swatch button.on { box-shadow: 0 0 0 2px var(--text); }

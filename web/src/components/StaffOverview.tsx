@@ -13,7 +13,7 @@ import { useToast } from '../lib/toast';
 type Position = 'lai_xe' | 'phu_xe' | 'nhan_vien';
 export interface OvStaff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; joined_on: string; left_on: string | null;
-  is_active: boolean; job_title: string | null; department: string | null;
+  is_active: boolean; job_title: string | null; department: string | null; branch_id?: string | null;
 }
 export interface OvPriv { staff_id: string; birth_date: string | null; gender: 'nam' | 'nu' | null }
 interface Common { staff: OvStaff[]; priv: OvPriv[]; avas: Record<string, string>; onOpen?: (id: string) => void }
@@ -251,20 +251,125 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
 
 /* ------------------------------------------------------------------ Sơ đồ tổ chức */
 
-function orgOf(staff: OvStaff[]) {
+/** Cấu hình sơ đồ tổ chức của nhà xe (Cấu hình 'nhan_su.so_do'). Thiếu ô nào thì tự động theo chức vụ. */
+export type OrgGroup = 'bophan' | 'chucvu' | 'nhom' | 'chinhanh';
+export interface OrgCfg { group?: OrgGroup; top?: string[] | null; order?: string[]; heads?: Record<string, string[]>; colors?: Record<string, string> }
+const GROUP_NAME: Record<OrgGroup, string> = { bophan: 'Bộ phận', chucvu: 'Chức vụ', nhom: 'Nhóm (lái xe / phụ xe / nhân viên)', chinhanh: 'Chi nhánh' };
+const SWATCH = ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#db2777', '#ea580c', '#475569', '#0f766e', '#b91c1c'];
+
+function orgOf(staff: OvStaff[], cfg: OrgCfg, branches: { id: string; label: string }[]) {
   const act = staff.filter((s) => s.is_active);
-  const bosses = act.filter(isBoss).sort((a, b) => Number(fold(job(a)).includes('pho')) - Number(fold(job(b)).includes('pho')) || a.full_name.localeCompare(b.full_name, 'vi'));
+  const g = cfg.group ?? 'bophan';
+  const keyOf = (s: OvStaff) => g === 'chucvu' ? job(s) : g === 'nhom' ? POS[s.position]
+    : g === 'chinhanh' ? (branches.find((b) => b.id === s.branch_id)?.label ?? 'Chưa có chi nhánh') : dept(s);
+  const byId = new Map(act.map((s) => [s.id, s]));
+  const bosses = cfg.top
+    ? cfg.top.map((id) => byId.get(id)).filter((x): x is OvStaff => !!x)
+    : act.filter(isBoss).sort((a, b) => Number(fold(job(a)).includes('pho')) - Number(fold(job(b)).includes('pho')) || a.full_name.localeCompare(b.full_name, 'vi'));
+  const top = new Set(bosses.map((s) => s.id));
   const m = new Map<string, OvStaff[]>();
-  for (const s of act.filter((x) => !isBoss(x))) m.set(dept(s), [...(m.get(dept(s)) ?? []), s]);
-  const depts = [...m.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'vi')).map(([name, list], i) => ({
-    name, color: COLORS[i % COLORS.length]!, heads: list.filter(isHead), rest: list.filter((s) => !isHead(s)).sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi')), n: list.length,
-  }));
+  for (const s of act.filter((x) => !top.has(x.id))) m.set(keyOf(s), [...(m.get(keyOf(s)) ?? []), s]);
+  const order = cfg.order ?? [];
+  const names = [...m.keys()].sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    if (ia >= 0 || ib >= 0) return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+    return m.get(b)!.length - m.get(a)!.length || a.localeCompare(b, 'vi');
+  });
+  const depts = names.map((name, i) => {
+    const list = m.get(name)!;
+    const chosen = cfg.heads?.[name];
+    const heads = chosen ? chosen.map((id) => list.find((s) => s.id === id)).filter((x): x is OvStaff => !!x) : list.filter(isHead);
+    const hs = new Set(heads.map((h) => h.id));
+    return { name, color: cfg.colors?.[name] ?? COLORS[i % COLORS.length]!, heads, rest: list.filter((s) => !hs.has(s.id)).sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi')), n: list.length, all: list };
+  });
   return { bosses, depts, total: act.length };
 }
 
-export function StaffOrg({ staff, avas, onOpen }: Common) {
+/** Chọn kiểu sơ đồ: chia nhóm theo gì, ai ở hàng trên cùng, thứ tự / màu / trưởng từng nhóm → Áp dụng (lưu cho cả nhà xe) */
+function OrgConfig({ staff, cfg, setCfg, branches, onApply, onReset, onCancel, busy }: {
+  staff: OvStaff[]; cfg: OrgCfg; setCfg: (c: OrgCfg) => void; branches: { id: string; label: string }[];
+  onApply: () => void; onReset: () => void; onCancel: () => void; busy: boolean;
+}) {
+  const o = orgOf(staff, cfg, branches);
+  const act = staff.filter((s) => s.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi'));
+  const top = new Set(o.bosses.map((s) => s.id));
+  const names = o.depts.map((d) => d.name);
+  const move = (i: number, d: -1 | 1) => { const n = [...names]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j]!, n[i]!]; setCfg({ ...cfg, order: n }); };
+  return (
+    <div className="nsx-ocfg">
+      <div className="nsx-ocfg-row"><b>Chia nhóm theo</b>
+        <div className="nsx-seg" role="group" aria-label="Chia nhóm theo">
+          {(Object.keys(GROUP_NAME) as OrgGroup[]).map((k) => (
+            <button key={k} type="button" className={(cfg.group ?? 'bophan') === k ? 'on' : ''} aria-pressed={(cfg.group ?? 'bophan') === k}
+                    onClick={() => setCfg({ ...cfg, group: k, order: [], heads: {}, colors: {} })}>{GROUP_NAME[k]}</button>
+          ))}
+        </div>
+      </div>
+      <div className="nsx-ocfg-row"><b>Hàng trên cùng (Ban lãnh đạo)</b><span className="muted small">Chạm để chọn / bỏ. Người chọn trước đứng giữa, nổi bật.</span>
+        <div className="nsx-pick">{act.map((s) => (
+          <label key={s.id} className={`nsx-tp${top.has(s.id) ? ' on' : ''}`}>
+            <input type="checkbox" checked={top.has(s.id)} onChange={(e) => {
+              const cur = o.bosses.map((x) => x.id);
+              setCfg({ ...cfg, top: e.target.checked ? [...cur, s.id] : cur.filter((id) => id !== s.id) });
+            }} />
+            <span>{s.full_name}</span><small className="muted">{job(s)}</small>
+          </label>
+        ))}</div>
+      </div>
+      <div className="nsx-ocfg-row"><b>Các nhóm</b><span className="muted small">Thứ tự từ trái sang phải, màu, trưởng nhóm</span>
+        <div className="nsx-ocfg-groups">
+          {o.depts.map((d, i) => (
+            <div key={d.name} className="nsx-ocfg-g" style={{ borderLeftColor: d.color }}>
+              <div className="nsx-ocfg-gh">
+                <b>{d.name}</b><small className="muted">{d.n} người</small>
+                <span className="nsx-ocfg-mv">
+                  <button type="button" className="btn small" aria-label={`Đưa ${d.name} sang trái`} disabled={i === 0} onClick={() => move(i, -1)}>←</button>
+                  <button type="button" className="btn small" aria-label={`Đưa ${d.name} sang phải`} disabled={i === o.depts.length - 1} onClick={() => move(i, 1)}>→</button>
+                </span>
+              </div>
+              <div className="nsx-swatch" role="group" aria-label={`Màu ${d.name}`}>
+                {SWATCH.map((c) => <button key={c} type="button" className={d.color === c ? 'on' : ''} style={{ background: c }} aria-label={`Màu ${c}`}
+                                           onClick={() => setCfg({ ...cfg, order: names, colors: { ...(cfg.colors ?? {}), [d.name]: c } })} />)}
+              </div>
+              <label>Trưởng nhóm
+                <select value={d.heads[0]?.id ?? ''} aria-label={`Trưởng nhóm ${d.name}`}
+                        onChange={(e) => setCfg({ ...cfg, order: names, heads: { ...(cfg.heads ?? {}), [d.name]: e.target.value ? [e.target.value] : [] } })}>
+                  <option value="">— Không có —</option>
+                  {d.all.map((s) => <option key={s.id} value={s.id}>{s.full_name} · {job(s)}</option>)}
+                </select>
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="actions">
+        <button type="button" className="btn primary" disabled={busy} onClick={onApply}>{busy ? 'Đang lưu…' : 'Áp dụng'}</button>
+        <button type="button" className="btn" disabled={busy} onClick={onReset}>Về tự động</button>
+        <button type="button" className="btn link" onClick={onCancel}>Hủy</button>
+      </div>
+    </div>
+  );
+}
+
+export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Common & { branches?: { id: string; label: string }[]; canConfig?: boolean }) {
   const toast = useToast();
-  const o = useMemo(() => orgOf(staff), [staff]);
+  const [saved, setSaved] = useState<OrgCfg>({});
+  const [draft, setDraft] = useState<OrgCfg | null>(null);   // đang chọn kiểu (chưa áp dụng): sơ đồ bên dưới xem trước ngay
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void supabase.from('tenant_settings').select('value').eq('key', 'nhan_su.so_do').maybeSingle()
+      .then(({ data }) => { const v = data?.value; if (v && typeof v === 'object' && !Array.isArray(v)) setSaved(v as OrgCfg); });
+  }, []);
+  const cfg = draft ?? saved;
+  const o = useMemo(() => orgOf(staff, cfg, branches), [staff, cfg, branches]);
+  async function apply(next: OrgCfg) {
+    setBusy(true);
+    const { error } = await supabase.from('tenant_settings').upsert([{ key: 'nhan_su.so_do', value: next }], { onConflict: 'tenant_id,key' });
+    setBusy(false);
+    if (error) return toast('error', error.message);
+    setSaved(next); setDraft(null);
+    toast('ok', 'Đã áp dụng sơ đồ tổ chức');
+  }
   const [view, setView] = useState<Page[] | null>(null);
   async function print() {
     try {
@@ -280,7 +385,11 @@ export function StaffOrg({ staff, avas, onOpen }: Common) {
   }
   return (
     <div className="nsx-org">
-      <div className="nsx-org-bar"><span className="muted">{o.total} người · {o.depts.length} bộ phận</span><button type="button" className="btn small" onClick={() => void print()}>🖨 In sơ đồ</button></div>
+      <div className="nsx-org-bar"><span className="muted">{o.total} người · {o.depts.length} nhóm</span>
+        {canConfig && !draft && <button type="button" className="btn small" onClick={() => setDraft({ ...saved })}>⚙ Chọn kiểu sơ đồ</button>}
+        <button type="button" className="btn small" onClick={() => void print()}>🖨 In sơ đồ</button></div>
+      {draft && <OrgConfig staff={staff} cfg={draft} setCfg={setDraft} branches={branches} busy={busy}
+                           onApply={() => void apply(draft)} onReset={() => void apply({})} onCancel={() => setDraft(null)} />}
       <div className="nsx-org-scroll">
         <div className="nsx-tree" style={{ ['--n' as string]: Math.max(1, o.depts.length) }}>
           <div className="nsx-tree-top">
@@ -288,7 +397,7 @@ export function StaffOrg({ staff, avas, onOpen }: Common) {
               <button key={s.id} type="button" className={`nsx-node${i === 0 ? ' ceo' : ''}`} onClick={() => onOpen?.(s.id)}>
                 <Avatar name={s.full_name} url={avas[s.id]} size={i === 0 ? 80 : 62} /><b>{s.full_name}</b><small>{job(s)}</small>
               </button>
-            )) : <span className="muted">Chưa có Ban giám đốc (chức vụ có chữ "giám đốc")</span>}
+            )) : <span className="muted">Chưa có hàng lãnh đạo – bấm "Chọn kiểu sơ đồ" để chọn người</span>}
           </div>
           {o.depts.length > 0 && <div className="nsx-vline" />}
           <div className="nsx-tree-depts">

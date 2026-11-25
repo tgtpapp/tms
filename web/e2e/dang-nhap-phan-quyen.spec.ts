@@ -297,6 +297,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('NHÂN SỰ ĐANG LÀM VIỆC')).toBeVisible();
   await page.getByRole('tab', { name: 'Sơ đồ tổ chức', exact: true }).click();
   await expect(page.locator('.nsx-tree').getByText('Nguyễn Văn Tài')).toBeVisible();
+  // Chọn kiểu sơ đồ → Áp dụng (lưu cho cả nhà xe) → Về tự động
+  await page.getByRole('button', { name: '⚙ Chọn kiểu sơ đồ' }).click();
+  await page.getByRole('button', { name: 'Chức vụ', exact: true }).click();
+  await page.getByRole('button', { name: 'Áp dụng', exact: true }).click();
+  await expect(page.getByText('Đã áp dụng sơ đồ tổ chức')).toBeVisible();
+  await page.getByRole('button', { name: '⚙ Chọn kiểu sơ đồ' }).click();
+  await page.getByRole('button', { name: 'Về tự động', exact: true }).click();
+  await expect(page.getByRole('button', { name: '⚙ Chọn kiểu sơ đồ' })).toBeVisible();
   await page.getByRole('tab', { name: 'In thẻ', exact: true }).click();
   await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
   await page.getByRole('button', { name: '🖨 In 1 thẻ' }).click();

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { meter } from '../lib/egress';
 
 export interface Note {
   id: string; kind: string; title: string; body: string; priority: 'thuong' | 'quan_trong' | 'khan_cap'; ack_required: boolean;
@@ -14,22 +15,70 @@ const PRI: Record<string, string> = { quan_trong: 'Quan trọng', khan_cap: 'Kh�
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false }) : '—');
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
 
-/** Danh sách thông báo 7 ngày gần nhất, tự cập nhật mỗi 30 giây và khi quay lại app */
+/** Danh sách thông báo 7 ngày gần nhất, dùng chung cho mọi chỗ hiện (chuông, băng nhắc) – chỉ 1 lần tải.
+ *  Mỗi 30 giây chỉ hỏi tin mới; tải đủ danh sách khi quay lại app, khi có tín hiệu thông báo và mỗi 5 phút. */
+type Sub = (l: Note[]) => void;
+const store: { list: Note[]; subs: Set<Sub>; timer: number | null; lastFull: number; busy: boolean; again: boolean } = { list: [], subs: new Set(), timer: null, lastFull: 0, busy: false, again: false };
+const emit = () => store.subs.forEach((f) => f(store.list));
+async function fetchNotes(full: boolean) {
+  if (store.busy) { if (full) store.again = true; return; }
+  store.busy = true;
+  try {
+    const since = Date.now() - 7 * 86400e3;
+    const newest = store.list[0]?.created_at;
+    if (full || !newest || Date.now() - store.lastFull > 5 * 60_000) {
+      const r = await supabase.from('notifications').select(COLS).gte('created_at', new Date(since).toISOString())
+        .order('created_at', { ascending: false }).limit(100);
+      meter('Thông báo: tải đủ', r.data);
+      if (r.error) return;
+      store.list = (r.data ?? []) as Note[];
+      store.lastFull = Date.now();
+    } else {
+      // lùi 2 phút để không sót tin ghi cùng lúc; trùng thì gộp theo mã
+      const from = new Date(new Date(newest).getTime() - 120_000).toISOString();
+      const r = await supabase.from('notifications').select(COLS).gte('created_at', from).order('created_at', { ascending: false }).limit(100);
+      meter('Thông báo: hỏi tin mới', r.data);
+      if (r.error) return;
+      const got = (r.data ?? []) as Note[];
+      const known = new Set(store.list.map((x) => x.id));
+      const fresh = got.filter((x) => !known.has(x.id));
+      if (!fresh.length) return;
+      store.list = [...fresh, ...store.list].sort((x, y) => y.created_at.localeCompare(x.created_at)).slice(0, 100);
+    }
+    emit();
+  } finally {
+    store.busy = false;
+    if (store.again) { store.again = false; void fetchNotes(true); }
+  }
+}
+const onVis = () => { if (!document.hidden) void fetchNotes(true); };
+function subscribe(f: Sub) {
+  store.subs.add(f);
+  if (store.subs.size === 1) {
+    void fetchNotes(true);
+    store.timer = window.setInterval(() => { if (!document.hidden) void fetchNotes(false); }, 30_000);
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('tms-thong-bao', onVis);
+  } else f(store.list);
+  return () => {
+    store.subs.delete(f);
+    if (!store.subs.size) {
+      if (store.timer) window.clearInterval(store.timer);
+      store.timer = null;
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('tms-thong-bao', onVis);
+      store.list = []; store.lastFull = 0;
+    }
+  };
+}
 export function useNotes() {
-  const [list, setList] = useState<Note[]>([]);
-  const load = useCallback(async () => {
-    const r = await supabase.from('notifications').select(COLS).gte('created_at', new Date(Date.now() - 7 * 86400e3).toISOString())
-      .order('created_at', { ascending: false }).limit(100);
-    if (!r.error) setList((r.data ?? []) as Note[]);
+  const [list, setLocal] = useState<Note[]>(store.list);
+  useEffect(() => subscribe(setLocal), []);
+  const setList = useCallback((v: Note[] | ((l: Note[]) => Note[])) => {
+    store.list = typeof v === 'function' ? v(store.list) : v;
+    emit();
   }, []);
-  useEffect(() => {
-    void load();
-    const t = setInterval(() => { if (!document.hidden) void load(); }, 30_000);
-    const vis = () => { if (!document.hidden) void load(); };
-    document.addEventListener('visibilitychange', vis);
-    window.addEventListener('tms-thong-bao', vis);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); window.removeEventListener('tms-thong-bao', vis); };
-  }, [load]);
+  const load = useCallback(() => fetchNotes(true), []);
   return { list, setList, load };
 }
 const reloadAll = () => window.dispatchEvent(new Event('tms-thong-bao'));

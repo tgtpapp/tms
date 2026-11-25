@@ -17,6 +17,7 @@ import { useToast } from '../lib/toast';
 import { zaloKick } from '../lib/zalo';
 import { loadUi } from '../lib/theme';
 import { meter } from '../lib/egress';
+import { cachedRows } from '../lib/rowCache';
 
 type Dir = 'di' | 've';
 type SeatStatus = 'giu' | 'dat' | 'da_tt' | 'cho_xep' | 'het_han' | 'huy';
@@ -125,12 +126,12 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     const [t, r, rs, st, vt, se, v] = await Promise.all([
       supabase.from('trips').select('id, route_id, direction, depart_at, arrive_at, status, vehicle_id, vehicle_type_id, service_date, departed_at, edit_unlocked_at, manifest_printed_at')
         .eq('service_date', day).eq('status', 'mo').order('depart_at'),
-      supabase.from('routes').select('id, name, name_ve, is_active'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:tuyen`, 'routes', 'id, name, name_ve, is_active'),
       supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
-      supabase.from('stops').select('id, name'),
-      supabase.from('vehicle_types').select('id, name, decks, layout_rows, layout_cols'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:diem`, 'stops', 'id, name'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:loai_xe`, 'vehicle_types', 'id, name, decks, layout_rows, layout_cols'),
       supabase.from('vehicle_type_seats').select('vehicle_type_id, label, deck, row_no, col_no, kind, is_priority, is_sellable'),
-      supabase.from('vehicles').select('id, plate'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:xe`, 'vehicles', 'id, plate'),
     ]);
     const err = t.error ?? r.error ?? rs.error ?? st.error ?? vt.error ?? se.error ?? v.error;
     if (err) {
@@ -158,7 +159,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     apply(d);
     setCachedAt(null);
     cacheSet(cacheKey, d);
-  }, [day, toast, apply, ctx.tenant_id]);
+  }, [day, toast, apply, ctx.tenant_id, ctx.user_id]);
 
   // Có mạng lại: tự gửi vé đã bán trên máy
   const sync = useCallback(async () => {

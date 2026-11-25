@@ -17,6 +17,7 @@ import { prepareFile, uploadFiles } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { cachedRows } from '../lib/rowCache';
 
 type Position = 'lai_xe' | 'phu_xe' | 'nhan_vien';
 type Gender = 'nam' | 'nu';
@@ -107,11 +108,11 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
       supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title, department').order('full_name'),
       supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note'),
-      supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'nhan_su'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:giay_to_nv`, 'documents', DOC_COLS, (q) => q.eq('owner_kind', 'nhan_su')),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
       supabase.from('branches').select('id, name').order('name'),
       supabase.from('tenant_settings').select('value').eq('key', 'giay_to.canh_bao_truoc_ngay').maybeSingle(),
-      supabase.from('staff_records').select('id, staff_id, kind, occurred_on, doc_no, title, vehicle_id, data, files').order('occurred_on', { ascending: false }),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:ly_lich`, 'staff_records', 'id, staff_id, kind, occurred_on, doc_no, title, vehicle_id, data, files', undefined, (q) => q.order('occurred_on', { ascending: false })),
       supabase.from('vehicle_types').select('id, name').eq('is_active', true).order('name'),
       supabase.rpc('license_matrix'),
     ]);
@@ -127,7 +128,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     setRecords((r.data ?? []) as StaffRecord[]);
     setTypes(((vt.data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, label: x.name })));
     setLicenses((lm.data ?? []) as LicenseRow[]);
-  }, [toast, canView, ctx.user_id]);
+  }, [toast, canView, ctx.user_id, ctx.tenant_id]);
 
   useEffect(() => {
     void load();

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { cachedRows } from '../lib/rowCache';
 import { AddVehicle, DOC_COLS, VEHICLE_COLS, VehicleList, type Doc, type Vehicle } from './VehicleList';
 
 type BodyStyle = 'ghe_ngoi' | 'giuong_nam' | 'limousine' | 'phong_nam' | 'khac';
@@ -44,7 +45,7 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
       supabase.from('vehicle_types').select('id, code, name, brand, model_code, body_style, decks, reg_seats, reg_berths, reg_standing, curb_weight_kg, gross_weight_kg, fuel, amenities, layout_rows, layout_cols, is_active').order('code'),
       supabase.from('vehicle_type_seats').select('vehicle_type_id, label, deck, row_no, col_no, kind, is_priority, is_sellable'),
       supabase.from('vehicles').select(VEHICLE_COLS).order('plate'),
-      supabase.from('documents').select(DOC_COLS).eq('owner_kind', 'xe'),
+      cachedRows(`${ctx.tenant_id}:${ctx.user_id}:giay_to_xe`, 'documents', DOC_COLS, (q) => q.eq('owner_kind', 'xe')),
       supabase.from('tenant_settings').select('value').eq('key', 'giay_to.canh_bao_truoc_ngay').maybeSingle(),
     ]);
     const err = t.error ?? s.error ?? v.error ?? d.error ?? w.error;
@@ -54,7 +55,7 @@ export function VehiclesScreen({ ctx, perms }: { ctx: AccountContext; perms: Per
     setVehicles((v.data ?? []) as Vehicle[]);
     setDocs((d.data ?? []) as Doc[]);
     setWarnDays(Number(w.data?.value ?? 30) || 30);
-  }, [toast]);
+  }, [toast, ctx.tenant_id, ctx.user_id]);
 
   useEffect(() => {
     void load();

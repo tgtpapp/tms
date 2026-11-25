@@ -335,11 +335,11 @@ export function StaffCards({ staff, avas }: Common) {
   const chosen = list.filter((s) => sel.has(s.id));
   const color = (s: OvStaff) => (s.position === 'lai_xe' ? '#16a34a' : s.position === 'phu_xe' ? '#f59e0b' : '#2563eb');
   const card = (s: OvStaff, photo: string | null) => `<div style="width:85.6mm;height:54mm;border:1px dashed #9aa3b5;border-radius:3mm;overflow:hidden;display:flex;font-family:Arial,sans-serif;color:#111;break-inside:avoid">
-    <div style="width:30mm;background:${color(s)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <div style="flex:0 0 30mm;width:30mm;background:${color(s)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       ${photo ? `<img src="${photo}" alt="" style="width:23mm;height:23mm;border-radius:2mm;object-fit:cover;border:0.8mm solid #fff">` : `<div style="width:23mm;height:23mm;border-radius:2mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
       <div style="font-size:7pt;font-weight:bold;letter-spacing:.5px">${esc(POS[s.position].toUpperCase())}</div></div>
-    <div style="flex:1;padding:3mm 3.5mm;display:flex;flex-direction:column">
-      <div style="font-size:6pt;font-weight:bold;color:#555">${esc(co.toUpperCase())}</div>
+    <div style="flex:1 1 auto;min-width:0;padding:3mm 3.5mm;display:flex;flex-direction:column;overflow:hidden">
+      <div style="font-size:6pt;font-weight:bold;color:#555;line-height:1.25;max-height:2.5em;overflow:hidden">${esc(co.toUpperCase())}</div>
       <div style="font-size:7pt;font-weight:bold;color:${color(s)};letter-spacing:1.5px;margin-top:1.5mm">THẺ NHÂN VIÊN</div>
       <div style="font-size:12pt;font-weight:bold;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
       <div style="font-size:8pt;margin-top:1mm">${esc(job(s))}</div>
@@ -351,7 +351,7 @@ export function StaffCards({ staff, avas }: Common) {
       const photos = await Promise.all(chosen.map((s) => toDataUrl(avas[s.id] ?? null)));
       const cards = chosen.map((s, i) => card(s, photos[i] ?? null));
       const pages: Page[] = [];
-      for (let i = 0; i < cards.length; i += 8) pages.push({ land: false, html: `<div style="display:grid;grid-template-columns:repeat(2,85.6mm);gap:6mm 8mm;justify-content:center">${cards.slice(i, i + 8).join('')}</div>` });
+      for (let i = 0; i < cards.length; i += 8) pages.push({ land: false, html: `<div class="nsx-cardsheet" style="display:grid;grid-template-columns:repeat(2,85.6mm);gap:6mm 8mm;justify-content:center">${cards.slice(i, i + 8).join('')}</div>` });
       setView(pages);
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }

@@ -1759,3 +1759,10 @@ button.nsx-whob:hover { background: var(--surface-2); }
 .nsx-rep .nsx-kpi { border-top: 3px solid var(--primary); }
 .nsx-rep .nsx-kpi:nth-child(2) { border-top-color: #16a34a; } .nsx-rep .nsx-kpi:nth-child(3) { border-top-color: #dc2626; } .nsx-rep .nsx-kpi:nth-child(5) { border-top-color: #f59e0b; }
 .nsx-rep .nsx-tbl th { background: var(--primary-soft); color: var(--primary-d); }
+/* In thẻ: xem trước trên điện thoại – trang A4 hẹp lại, thẻ xếp 1 cột và thu nhỏ vừa màn hình (bản in giữ nguyên 2 cột, đúng 85,6 x 54 mm) */
+@media screen and (max-width: 820px) {
+  .lenh:has(.nsx-cardsheet) { padding: 10px; }
+  .nsx-cardsheet { grid-template-columns: 85.6mm !important; gap: 4mm !important; }
+}
+@media screen and (max-width: 400px) { .nsx-cardsheet { zoom: .86; } }
+@media screen and (max-width: 360px) { .nsx-cardsheet { zoom: .8; } }

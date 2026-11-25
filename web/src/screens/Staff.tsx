@@ -4,7 +4,7 @@ import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
 import { staffCvPages } from '../lib/staffCv';
-import { StaffCards, StaffDashboard, StaffOrg, StaffReport } from '../components/StaffOverview';
+import { rankOf, StaffCards, StaffDashboard, StaffOrg, StaffReport, useOrgCfg } from '../components/StaffOverview';
 import { LeaveOfStaff, LeavePage } from '../components/StaffLeave';
 import { downloadXlsx, type XCell } from '../lib/xlsxWrite';
 import { readSheet, type Cell } from '../lib/sheetRead';
@@ -480,7 +480,11 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
 
   const shown = staff.filter((s) => showLeft || s.is_active);
   const words = fold(q.trim()).split(/\s+/).filter(Boolean);
-  const list = shown.filter((s) => !cur || jobKey(s) === cur).filter((s) => {
+  // Thứ tự chức vụ từ lớn đến nhỏ (theo sơ đồ tổ chức đã chọn), người đã nghỉ sau cùng
+  const [orgCfg] = useOrgCfg();
+  const rank = useMemo(() => rankOf(staff, orgCfg, branches), [staff, orgCfg, branches]);
+  const rk = (s: Staff) => rank.get(s.id) ?? 1e6;
+  const list = shown.filter((s) => !cur || jobKey(s) === cur).sort((a, b) => Number(!a.is_active) - Number(!b.is_active) || rk(a) - rk(b) || a.full_name.localeCompare(b.full_name, 'vi')).filter((s) => {
     if (!words.length) return true;
     const text = fold([s.full_name, s.phone ?? '', jobLabel(s), s.department ?? ''].join(' '));
     return words.every((w) => text.includes(w));

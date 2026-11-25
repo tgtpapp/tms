@@ -290,6 +290,31 @@ function orgOf(staff: OvStaff[], cfg: OrgCfg, branches: { id: string; label: str
   return { bosses, depts, total: act.length };
 }
 
+/** Cấu hình sơ đồ tổ chức đã áp dụng (dùng chung: Sơ đồ tổ chức + thứ tự danh sách Hồ sơ) */
+export function useOrgCfg(): [OrgCfg, (c: OrgCfg) => void] {
+  const [cfg, setCfg] = useState<OrgCfg>({});
+  useEffect(() => {
+    let live = true;
+    const load = () => void supabase.from('tenant_settings').select('value').eq('key', 'nhan_su.so_do').maybeSingle()
+      .then(({ data }) => { const v = data?.value; if (live) setCfg(v && typeof v === 'object' && !Array.isArray(v) ? (v as OrgCfg) : {}); });
+    load();
+    window.addEventListener('tms-so-do', load);
+    return () => { live = false; window.removeEventListener('tms-so-do', load); };
+  }, []);
+  return [cfg, setCfg];
+}
+/** Thứ tự chức vụ từ lớn đến nhỏ theo sơ đồ tổ chức: hàng lãnh đạo → trưởng từng nhóm → thành viên (nhóm theo thứ tự trên sơ đồ).
+ *  Người đã nghỉ xếp sau cùng. Đổi thứ tự bằng "Chọn kiểu sơ đồ" ở tab Sơ đồ tổ chức. */
+export function rankOf(staff: OvStaff[], cfg: OrgCfg, branches: { id: string; label: string }[]): Map<string, number> {
+  const o = orgOf(staff, cfg, branches);
+  const r = new Map<string, number>();
+  let i = 0;
+  for (const s of o.bosses) r.set(s.id, i++);
+  for (const d of o.depts) for (const s of d.heads) r.set(s.id, i++);
+  for (const d of o.depts) for (const s of d.rest) r.set(s.id, i++);
+  return r;
+}
+
 /** Chọn kiểu sơ đồ: chia nhóm theo gì, ai ở hàng trên cùng, thứ tự / màu / trưởng từng nhóm → Áp dụng (lưu cho cả nhà xe) */
 function OrgConfig({ staff, cfg, setCfg, branches, onApply, onReset, onCancel, busy }: {
   staff: OvStaff[]; cfg: OrgCfg; setCfg: (c: OrgCfg) => void; branches: { id: string; label: string }[];
@@ -358,13 +383,9 @@ function OrgConfig({ staff, cfg, setCfg, branches, onApply, onReset, onCancel, b
 
 export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Common & { branches?: { id: string; label: string }[]; canConfig?: boolean }) {
   const toast = useToast();
-  const [saved, setSaved] = useState<OrgCfg>({});
+  const [saved, setSaved] = useOrgCfg();
   const [draft, setDraft] = useState<OrgCfg | null>(null);   // đang chọn kiểu (chưa áp dụng): sơ đồ bên dưới xem trước ngay
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    void supabase.from('tenant_settings').select('value').eq('key', 'nhan_su.so_do').maybeSingle()
-      .then(({ data }) => { const v = data?.value; if (v && typeof v === 'object' && !Array.isArray(v)) setSaved(v as OrgCfg); });
-  }, []);
   const cfg = draft ?? saved;
   const o = useMemo(() => orgOf(staff, cfg, branches), [staff, cfg, branches]);
   async function apply(next: OrgCfg) {
@@ -373,6 +394,7 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
     setBusy(false);
     if (error) return toast('error', error.message);
     setSaved(next); setDraft(null);
+    window.dispatchEvent(new Event('tms-so-do'));
     toast('ok', 'Đã áp dụng sơ đồ tổ chức');
   }
   const [view, setView] = useState<Page[] | null>(null);

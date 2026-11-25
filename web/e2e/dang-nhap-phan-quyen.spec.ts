@@ -687,6 +687,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu lịch chạy: 1 giờ, tạo 0 chuyến')).toBeVisible();
   await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
   await pickDay(page, ngay(1));
+  await page.getByLabel('Tuyến', { exact: true }).selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A01 trống' }).click();
   await page.getByRole('button', { name: 'Tiếp tục' }).click();
@@ -725,8 +726,13 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // ô Tuyến luôn có đủ tuyến (kể cả ngày chưa có chuyến)
   await expect(page.getByLabel('Tuyến', { exact: true }).locator('option', { hasText: 'Vũng Tàu – Hố Nai' })).toHaveCount(1);
   await pickDay(page, ngay(1));
+  await page.getByLabel('Tuyến', { exact: true }).selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await expect(page.locator('.gh-cur')).toContainText('07:00');
+  // Kiểu chọn tuyến bằng thẻ (như app cũ), không có "Tất cả tuyến"
+  await page.getByRole('button', { name: 'Thẻ tuyến' }).click();
+  await expect(page.getByRole('button', { name: /^HỐ NAI – VŨNG TÀU\d+ chuyến/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Ô chọn' }).click();
   expect(await page.getByLabel('Gửi tại').inputValue()).not.toBe('');
   expect(await page.getByLabel('Nhận tại').inputValue()).not.toBe('');
   await page.getByLabel('SĐT người gửi', { exact: true }).fill('0911111111');
@@ -779,6 +785,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu tài khoản nhận chuyển khoản')).toBeVisible();
   await page.getByRole('button', { name: 'Bán vé', exact: true }).click();
   await pickDay(page, ngay(1));
+  await page.getByLabel('Tuyến', { exact: true }).selectOption({ label: 'Hố Nai – Vũng Tàu' });
   await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await page.getByRole('button', { name: 'Ghế A02 trống' }).click();
   await page.getByRole('button', { name: 'Tiếp tục' }).click();

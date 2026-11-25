@@ -1833,3 +1833,13 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .use-gauge .g-pct { font-size: 26px; line-height: 1.1; color: var(--ok); }
 .use-gauge .g-pct.warn { color: var(--warn-text); } .use-gauge .g-pct.bad { color: var(--danger); }
 .use-gauge p { margin: 4px 0 0; }
+
+/* Bán vé / Gửi hàng: chọn tuyến bằng thẻ tuyến (như app cũ) */
+.vx-rv { align-self: flex-start; }
+.vx-rcards { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.vx-rc { --rc: var(--primary); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; cursor: pointer; font: inherit;
+  background: var(--surface); color: var(--text); border: 1.5px solid var(--line); border-left: 6px solid var(--rc); border-radius: 12px; padding: 12px 14px; min-height: 64px; }
+.vx-rc b { font-size: 17px; line-height: 1.3; }
+.vx-rc span { font-size: 14px; color: var(--muted); }
+.vx-rc.on { border-color: var(--rc); background: color-mix(in srgb, var(--rc) 10%, var(--surface)); box-shadow: var(--shadow); }
+.vx-rc.on b { color: var(--rc); }

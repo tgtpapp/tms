@@ -1,4 +1,5 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
+import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
 import { dirName, type Dir } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { MiniCal } from '../components/MiniCal';
@@ -130,7 +131,9 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     return keys.map((k) => { const [rid, d] = k.split('|'); const r = routes.find((x) => x.id === rid); return { key: k, label: dirName(r, d as Dir), pair: r?.name ?? '', d }; })
       .sort((x, y) => x.pair.localeCompare(y.pair, 'vi') || (x.d === 'di' ? 0 : 1) - (y.d === 'di' ? 0 : 1));
   }, [trips, routes]);
-  const rfOk = routeOpts.some((o) => o.key === rf) ? rf : '';
+  // Luôn đang ở 1 tuyến (không có "Tất cả tuyến" để tránh đặt nhầm tuyến)
+  const rfOk = routeOpts.some((o) => o.key === rf) ? rf : (routeOpts[0]?.key ?? '');
+  const [rview, setRview] = useRouteView();
   const shown = rfOk ? trips.filter((t) => `${t.route_id}|${t.direction}` === rfOk) : trips;
   const cur = trips.find((t) => t.id === f.trip_id) ?? null;
   // Điểm gửi / nhận: theo tuyến của chuyến đang chọn (hoặc tuyến đang lọc), xếp theo thứ tự chạy; chưa chọn tuyến thì tất cả
@@ -226,10 +229,11 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
       )}
       <div className="vx">
         <aside className="vx-left">
-          <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
-            <option value="">Tất cả tuyến</option>
-            {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-          </select>
+          <RouteViewToggle view={rview} onChange={setRview} />
+          {rview === 'o' ? <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
+              {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+            : <RouteCards opts={routeOpts} trips={trips} counts={counts} unit="phiếu" value={rfOk} onPick={pickRoute} />}
           <div className="vx-cal">
             {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setF((x) => ({ ...x, trip_id: '' })); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
             <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>

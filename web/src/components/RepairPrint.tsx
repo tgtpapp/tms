@@ -9,7 +9,7 @@ import { moneyWords } from '../lib/vnWords';
 import { toDataUrl } from '../lib/pdfMaker';
 
 export interface RepairPrintOrder {
-  id: string; code: string; vehicle_id: string; plate: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null;
+  id: string; code: string; vehicle_id: string; driver_id?: string | null; plate: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null;
   items: { content: string; unit: string | null; qty: number; unit_price: number }[];
 }
 interface Info { co: { name: string; address: string; phone: string; tax: string }; logo: string | null; driver: string; driverSign: Sign | null; maker: string; sign: Sign | null }
@@ -30,9 +30,10 @@ async function loadInfo(o: RepairPrintOrder, tenantId: string, me: { id: string 
   const t = (tn.data ?? {}) as { name?: string; legal_name?: string | null; address?: string | null; phone?: string | null; tax_code?: string | null };
   let driver = '', driverSign: Sign | null = null;
   const tid = ((tr.data ?? []) as { id: string }[])[0]?.id;
-  if (tid) {
-    const c = await supabase.from('trip_crew').select('staff_id').eq('trip_id', tid).eq('role', 'lai_xe_1').eq('active', true).limit(1);
-    const sid = ((c.data ?? []) as { staff_id: string }[])[0]?.staff_id;
+  // lái xe đã chọn trên phiếu; phiếu cũ chưa chọn thì như trước (lái xe chuyến gần nhất)
+  if (o.driver_id || tid) {
+    const c = o.driver_id ? null : await supabase.from('trip_crew').select('staff_id').eq('trip_id', tid!).eq('role', 'lai_xe_1').eq('active', true).limit(1);
+    const sid = o.driver_id ?? ((c?.data ?? []) as { staff_id: string }[])[0]?.staff_id;
     if (sid) {
       const dr = (((await supabase.from('staff_members').select('full_name, user_id').eq('id', sid).limit(1)).data ?? []) as { full_name: string; user_id: string | null }[])[0];
       driver = dr?.full_name ?? '';

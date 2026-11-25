@@ -38,6 +38,20 @@ select lives_ok($$ select public.save_repair((select id from public.repair_order
 select is((select count(*)::int from public.repair_items), 1, 'Hạng mục được thay');
 select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-10-06'), '[]') $$, 'Phiếu 2');
 select is((select max(code) from public.repair_orders), 'PSX0002', 'Phiếu 2 số PSX0002');
+-- Lái xe trên phiếu sửa chữa: lưu được lái xe nhà mình, lái xe nhà xe khác báo không tìm thấy
+reset role;
+insert into t.ids select 'LXA', gen_random_uuid();
+insert into t.ids select 'LXB', gen_random_uuid();
+insert into public.staff_members (id, tenant_id, full_name, joined_on) values
+  ((select v from t.ids where k = 'LXA'), (select v from t.ids where k = 'A'), 'Lái xe A', '2026-01-01'),
+  ((select v from t.ids where k = 'LXB'), (select id from public.tenants where code = 'nha-xe-b'), 'Lái xe B', '2026-01-01');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_repair((select id from public.repair_orders where code = 'PSX0002'), jsonb_build_object('vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-10-06',
+  'driver_id', (select v from t.ids where k = 'LXA')), '[]') $$, 'Lưu lái xe trên phiếu');
+select is((select driver_id from public.repair_orders where code = 'PSX0002'), (select v from t.ids where k = 'LXA'), 'Phiếu có lái xe');
+select throws_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select id from public.vehicles), 'repaired_on', '2026-10-07',
+  'driver_id', (select v from t.ids where k = 'LXB')), '[]') $$, 'P0002', null, 'Lái xe nhà xe khác: không tìm thấy');
 -- Nhiên liệu: nhập bồn, cấp từ bồn, đổ ngoài; số phiếu theo loại
 select lives_ok($$ insert into public.fuel_settings (tank_name, opening_l, opening_price) values ('Bồn A', 1000, 20000) $$, 'Thiết lập bồn');
 select lives_ok($$ select public.save_fuel(null, jsonb_build_object('kind', 'nhap', 'entry_date', '2026-10-01', 'liters', 2000, 'unit_price', 21000, 'supplier', 'Petrolimex')) $$, 'Nhập bồn');

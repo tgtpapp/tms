@@ -117,8 +117,8 @@ export async function autoArchiveProfiles(tenantId: string, me: { id: string | n
       // Phiếu nhiều: chỉ dựng phiếu chưa lưu hoặc đã sửa sau lần lưu gần nhất
       const saved = new Map(((await fetchAll<{ note: string | null; created_at: string }>(() => supabase.from('archive_items').select('note, created_at').eq('is_old', false)
         .like('note', '%[psc:%').order('id'))) ?? []).map((r) => [/\[psc:([0-9a-f-]+)\]/.exec(r.note ?? '')?.[1] ?? '', r.created_at]));
-      const orders = await fetchAll<{ id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null; updated_at: string }>(
-        () => supabase.from('repair_orders').select('id, code, vehicle_id, repaired_on, odo_km, workshop, note, created_by, updated_at').order('id'));
+      const orders = await fetchAll<{ id: string; code: string; vehicle_id: string; driver_id: string | null; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null; updated_at: string }>(
+        () => supabase.from('repair_orders').select('id, code, vehicle_id, driver_id, repaired_on, odo_km, workshop, note, created_by, updated_at').order('id'));
       const todo = orders.filter((o) => !saved.has(o.id) || o.updated_at > saved.get(o.id)!);
       if (todo.length) {
         const { data: vs } = await supabase.from('vehicles').select('id, plate');

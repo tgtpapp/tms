@@ -2,7 +2,9 @@ import { mergeRecordPapers, RECORD_OF, recordExpiry } from '../lib/recordPapers'
 import { Modal } from '../components/Modal';
 import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
-import { BulkPaperSave, PaperActions, type Me } from '../components/ProfilePapers';
+import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
+import { staffCvPages } from '../lib/staffCv';
+import type { Page } from '../lib/profilePapers';
 import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
@@ -544,11 +546,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   );
 }
 
-function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean; startEdit?: boolean }) {
+function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean; startEdit?: boolean; avas?: Record<string, string> }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
   const [editing, setEditing] = useState(canEdit && props.startEdit !== false);
-  const [tab, setTab] = useState<'tt' | 'gt' | 'll'>('tt');
+  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'hd' | 'll'>('tt');
+  const [cv, setCv] = useState<Page[] | null>(null);
+  const [cvBusy, setCvBusy] = useState(false);
+  const toast = useToast();
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
   const age = ageCheck(p, s.position);
   const required = REQUIRED[s.position];
@@ -561,19 +566,30 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   }).length;
   const nRec = props.records.filter((r) => r.staff_id === s.id).length;
   const tabs: { key: typeof tab; label: string; warn?: boolean }[] = [
-    { key: 'tt', label: 'Thông tin' },
-    { key: 'gt', label: warnDocs ? `Giấy tờ (thiếu ${warnDocs})` : 'Giấy tờ', warn: warnDocs > 0 },
+    { key: 'tt', label: 'Thông tin cá nhân' },
+    { key: 'cv', label: 'Công việc & lương' },
+    { key: 'gt', label: `${s.position === 'lai_xe' ? 'Giấy tờ lái xe' : 'Giấy tờ'}${warnDocs ? ` (thiếu ${warnDocs})` : ''}`, warn: warnDocs > 0 },
+    ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng' }] : []),
     ...(canEdit || s.position === 'lai_xe' ? [{ key: 'll' as const, label: canEdit ? `Lý lịch hành nghề (${nRec})` : 'Lý lịch hành nghề' }] : []),
   ];
 
+  async function printCv() {
+    setCvBusy(true);
+    try { setCv(await staffCvPages(tenantId, s.id, props.me, props.avas?.[s.id] ?? null)); }
+    catch (e) { toast('error', errMsg(e)); } finally { setCvBusy(false); }
+  }
+  const cccd = props.papers.find((x) => x.staff_id === s.id && x.doc_type === 'cccd' && x.is_current);
+
   return (
     <div className="sub prof">
+      {cv && <PaperView title={`Sơ yếu lý lịch · ${s.full_name}`} pages={cv} onClose={() => setCv(null)} />}
       <div className="prof-head">
         <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
         <div className="prof-id">
           <b>{s.full_name}</b>
           <span className="muted">{jobLabel(s)}{s.joined_on ? ` · vào ${fmtDate(s.joined_on)} (${seniority(s.joined_on, s.left_on)})` : ''}</span>
           {s.phone && <a href={`tel:${s.phone}`}>📞 {s.phone}</a>}
+          <button type="button" className="btn small nsx-cvbtn" disabled={cvBusy} onClick={() => void printCv()}>{cvBusy ? 'Đang lấy dữ liệu…' : '🖨 In sơ yếu lý lịch'}</button>
           <span className="prof-chips">
             {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
             {warnDocs ? <span className="badge warn-badge">Giấy tờ thiếu / hết hạn: {warnDocs}</span> : <span className="badge">Giấy tờ đủ</span>}
@@ -597,9 +613,11 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           <dl className="info">
             <dt>Ngày sinh</dt><dd>{p?.birth_date ? `${fmtDate(p.birth_date)} (${yearsBetween(p.birth_date, today())} tuổi)` : '—'}</dd>
             <dt>Giới tính</dt><dd>{p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '—'}</dd>
+            <dt>Điện thoại</dt><dd>{s.phone ? <a href={`tel:${s.phone}`}>{s.phone}</a> : '—'}</dd>
+            <dt>Số CCCD</dt><dd>{cccd?.doc_no ?? '—'}</dd>
+            {cccd && (cccd.issued_on || cccd.issuer) && <><dt>Ngày cấp, nơi cấp</dt><dd>{[cccd.issued_on ? fmtDate(cccd.issued_on) : '', cccd.issuer ?? ''].filter(Boolean).join(', ')}</dd></>}
             <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
             <dt>Chỗ ở hiện nay</dt><dd>{p?.current_address ?? '—'}</dd>
-            <dt>Loại hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
             {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
           </dl>
           {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
@@ -617,20 +635,70 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
                       owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
                       required={required.includes(def.code)} reload={reload} />
             ))}
-            {/* Hợp đồng lao động (bản PDF) ngay dưới giấy tờ */}
-            {props.labor.view && (
-              <li className="item">
-                <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
-                                canAdd={props.labor.add} canEdit={props.labor.edit} />
-              </li>
-            )}
           </ul>
           <OldDocs docs={mine} />
           {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
         </div>
       )}
+      {tab === 'cv' && <div className="prof-pane"><WorkPay s={s} p={p} branches={props.branches} papers={props.papers} /></div>}
+      {tab === 'hd' && props.labor.view && (
+        <div className="prof-pane">
+          <ul className="list">
+            <li className="item">
+              <StaffContracts s={s} contractType={p?.contract_type} tenantId={tenantId} me={props.me} canArchive={props.canArchive}
+                              canAdd={props.labor.add} canEdit={props.labor.edit} />
+            </li>
+          </ul>
+        </div>
+      )}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Công việc & lương */
+
+interface PayCtr { number: string | null; kind: string; start_on: string; end_on: string | null; salary: number | null; allowances: Record<string, number> | null }
+/** Công việc + lương theo hợp đồng đang hiệu lực + BHXH tháng gần nhất. Không có quyền xem thì database không trả, phần lương tự ẩn. */
+function WorkPay({ s, p, branches, papers }: { s: Staff; p: StaffPrivate | undefined; branches: Option[]; papers: Doc[] }) {
+  const [ctr, setCtr] = useState<PayCtr | null>(null);
+  const [pay, setPay] = useState<{ month: string; has_bhxh: boolean; bhxh_pay: number; transfer_pay: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const td = today();
+    void Promise.all([
+      supabase.from('labor_contracts').select('number, kind, start_on, end_on, salary, allowances').eq('staff_id', s.id).eq('status', 'hieu_luc')
+        .lte('start_on', td).order('start_on', { ascending: false }).limit(1),
+      supabase.from('staff_pay_months').select('month, has_bhxh, bhxh_pay, transfer_pay').eq('staff_id', s.id).order('month', { ascending: false }).limit(1),
+    ]).then(([c, m]) => {
+      if (!live) return;
+      setCtr(((c.data ?? []) as PayCtr[])[0] ?? null);
+      setPay(((m.data ?? []) as { month: string; has_bhxh: boolean; bhxh_pay: number; transfer_pay: number }[])[0] ?? null);
+    });
+    return () => { live = false; };
+  }, [s.id]);
+  const money = (n: unknown) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
+  const allow = ctr?.allowances ? Object.values(ctr.allowances).reduce((a, x) => a + (Number(x) || 0), 0) : 0;
+  const gplx = papers.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
+  return (
+    <dl className="info">
+      <dt>Chức vụ</dt><dd>{jobLabel(s)}</dd>
+      <dt>Vị trí</dt><dd>{POSITION[s.position]}</dd>
+      <dt>Bộ phận</dt><dd>{s.department || '—'}</dd>
+      {s.branch_id && <><dt>Chi nhánh</dt><dd>{branches.find((b) => b.id === s.branch_id)?.label ?? '—'}</dd></>}
+      <dt>Ngày vào làm</dt><dd>{s.joined_on ? `${fmtDate(s.joined_on)} (${seniority(s.joined_on, s.left_on)})` : '—'}</dd>
+      {!s.is_active && <><dt>Ngày nghỉ việc</dt><dd>{s.left_on ? fmtDate(s.left_on) : '—'}</dd></>}
+      <dt>Loại hợp đồng</dt><dd>{p?.contract_type ? CONTRACT[p.contract_type] : '—'}</dd>
+      {s.position === 'lai_xe' && <><dt>Hạng GPLX</dt><dd>{gplx?.data?.hang ? String(gplx.data.hang) : 'Chưa có'}</dd></>}
+      {ctr && ctr.salary != null && <>
+        <dt>Lương theo hợp đồng</dt><dd>{money(ctr.salary)}{ctr.number ? ` · HĐ ${ctr.number}` : ''}{ctr.end_on ? ` · đến ${fmtDate(ctr.end_on)}` : ''}</dd>
+        {allow > 0 && <><dt>Phụ cấp, hỗ trợ</dt><dd>{money(allow)} / tháng</dd></>}
+      </>}
+      {pay && <>
+        <dt>BHXH tháng {pay.month.slice(5, 7)}/{pay.month.slice(0, 4)}</dt><dd>{pay.has_bhxh ? `Có đóng · lương đóng ${money(pay.bhxh_pay)}` : 'Không đóng'}</dd>
+        <dt>Lương chuyển khoản</dt><dd>{money(pay.transfer_pay)}</dd>
+      </>}
+    </dl>
   );
 }
 

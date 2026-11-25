@@ -1515,3 +1515,4 @@ button.nsx-stat.on { border-color: var(--primary); background: var(--primary-sof
   .staff-top .nsx-chips { order: 2; flex: 1 1 100%; }
 }
 .item-head + .nsx-bar { margin-top: 10px; }
+.nsx-cvbtn { align-self: flex-start; margin: 4px 0; min-height: 44px; }

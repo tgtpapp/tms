@@ -315,7 +315,16 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await llhn.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(llhn).toHaveCount(0);
   // 5j2. Chữ ký lái xe trong hồ sơ (đang mở trong cửa sổ): chọn ảnh → khung cắt hiện trên cùng → lưu → ảnh chữ ký hiện trong hồ sơ
-  await page.getByRole('tab', { name: 'Thông tin', exact: true }).click();
+  // In sơ yếu lý lịch: bản A4 có tên, số CCCD
+  await page.getByRole('button', { name: '🖨 In sơ yếu lý lịch' }).click();
+  const syll = page.locator('.paper-top');
+  await expect(syll.getByRole('heading', { name: 'SƠ YẾU LÝ LỊCH NHÂN VIÊN' })).toBeVisible();
+  await expect(syll.getByText('NGUYỄN VĂN TÀI', { exact: true })).toBeVisible();
+  await expect(syll.getByText('079123456789', { exact: true })).toBeVisible();
+  await syll.getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByRole('tab', { name: 'Công việc & lương' }).click();
+  await expect(page.getByText('Ngày vào làm', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Thông tin cá nhân', exact: true }).click();
   await page.getByLabel('Ảnh chữ ký', { exact: true }).setInputFiles({ name: 'chu-ky-lx.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAASwAAACgCAIAAAA5GsY1AAABQ0lEQVR42u3dwRHAIAhFwW8m/bdMqsCMuFuAB5x3hQQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOM3qe7qqzJdRtayWXh6ThX+JEEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECCIERAgiBEQIIgRECNl5s6XV69tQmghhfmkiRGkiRGlxglaEKE2EKM1ZdRGiNBGiNESoNKWJEKUhQqUpTYQoDREqDREqTWmIUGmIUGmIEKUhQqUhQqUpDREqDRHeQGmIUGkwJUKlEXtHFQiW/4IIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARGCCAERgggBEYIIARECAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAf6eBC0PFch8MAAAAASUVORK5CYII=', 'base64') });
   await expect(page.getByRole('img', { name: 'Ảnh cần cắt' })).toBeVisible();
   await page.getByRole('button', { name: 'Dùng cả ảnh' }).click();
@@ -552,7 +561,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   await page.getByRole('button', { name: 'Xem hồ sơ Nguyễn Văn Tài', exact: true }).click();
-  await page.getByRole('tab', { name: /^Giấy tờ/ }).click();
+  await page.getByRole('tab', { name: 'Hợp đồng', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();
   await page.getByRole('button', { name: /^Xem HĐ 001\/\d{4}\/HĐLĐ/ }).click();
   await expect(page.locator('.paper-top').getByText('NGƯỜI LAO ĐỘNG (BÊN B):')).toBeVisible();

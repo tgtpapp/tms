@@ -249,6 +249,7 @@ function UserItem(props: {
     try {
       await fn();
       toast('ok', okText);
+      window.dispatchEvent(new Event('tms-quyen'));
       setPanel('none');
       await onChanged();
     } catch (e) {
@@ -395,6 +396,7 @@ function UserPerms(props: {
     try {
       await rpc('set_user_permissions', { p_user_id: user.id, p_grants: [...value].filter((c) => !inherited.has(c)), p_denies: [...inherited].filter((c) => !value.has(c)) });
       toast('ok', `Đã lưu quyền của ${user.full_name}`);
+      window.dispatchEvent(new Event('tms-quyen'));
       onDone();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }

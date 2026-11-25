@@ -2,12 +2,15 @@
 // Xem = mở mục (dữ liệu theo người: chỉ của chính mình); Xem tất cả = thấy dữ liệu của mọi người.
 // inherited: các ô có từ nhóm (đánh dấu; bỏ tích = chặn riêng người đó). allowed: ô người đang thao tác được cấp (không cấp vượt quyền mình; bỏ tích luôn được).
 export const SCREENS: [string, string][] = [
-  ['sell', 'Bán vé'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['order', 'Cấp lệnh vận chuyển'], ['safety', 'Giám sát ATGT'], ['route', 'Tuyến'], ['fare', 'Bảng giá vé'],
+  ['sell', 'Bán vé'], ['sell_admin', 'Vé đã hủy (sửa / xóa)'], ['parcel', 'Gửi hàng'], ['charter', 'Hợp đồng vận chuyển'], ['trip', 'Điều hành'], ['order', 'Cấp lệnh vận chuyển'], ['safety', 'Giám sát ATGT'], ['route', 'Tuyến'], ['fare', 'Bảng giá vé'],
   ['repair', 'Sửa chữa'], ['fuel', 'Nhiên liệu'], ['report', 'Báo cáo'], ['km', 'Km xe'], ['vehicle', 'Xe'], ['staff', 'Lái xe & nhân viên'],
   ['labor', 'Hợp đồng lao động'], ['timesheet', 'Bảng chấm công'], ['salary', 'BHXH & lương chuyển khoản'], ['branch', 'Chi nhánh'], ['office', 'Phòng vé'], ['doc', 'Văn bản'],
   ['archive', 'Lưu trữ hồ sơ'], ['user', 'Người dùng'], ['role', 'Vai trò (phân quyền)'], ['settings', 'Cấu hình'], ['audit', 'Nhật ký'],
 ];
 export const ACTS: [string, string][] = [['view', 'Xem'], ['add', 'Thêm'], ['edit', 'Sửa'], ['delete', 'Xóa'], ['view_all', 'Xem tất cả']];
+/** Ô có mã quyền riêng (không theo dạng màn hình.thao tác) */
+const ALIAS: Record<string, string> = { 'sell_admin.edit': 'sell_admin.cancelled' };
+export const permCode = (s: string, a: string) => ALIAS[`${s}.${a}`] ?? `${s}.${a}`;
 
 export function PermMatrix({ catalog, value, onChange, allowed, inherited, readOnly }: {
   catalog: Set<string>; value: Set<string>; onChange: (v: Set<string>) => void; allowed: (code: string) => boolean;
@@ -20,8 +23,8 @@ export function PermMatrix({ catalog, value, onChange, allowed, inherited, readO
     for (const c of codes) if (can(c) && (!v || allowed(c) || inherited?.has(c))) { if (v) next.add(c); else next.delete(c); }
     onChange(next);
   };
-  const rowCodes = (s: string) => ACTS.map(([a]) => `${s}.${a}`).filter((c) => catalog.has(c));
-  const colCodes = (a: string) => SCREENS.map(([s]) => `${s}.${a}`).filter((c) => catalog.has(c));
+  const rowCodes = (s: string) => ACTS.map(([a]) => permCode(s, a)).filter((c) => catalog.has(c));
+  const colCodes = (a: string) => SCREENS.map(([s]) => permCode(s, a)).filter((c) => catalog.has(c));
   const all = (codes: string[]) => codes.length > 0 && codes.every(on);
   return (
     <div className="table-wrap">
@@ -39,7 +42,7 @@ export function PermMatrix({ catalog, value, onChange, allowed, inherited, readO
             <tr key={s}>
               <td>{label}</td>
               {ACTS.map(([a, l]) => {
-                const c = `${s}.${a}`;
+                const c = permCode(s, a);
                 if (!catalog.has(c)) return <td key={a} className="c muted">—</td>;
                 return (
                   <td key={a} className={`c${inherited?.has(c) ? (on(c) ? ' inh' : ' deny') : on(c) && inherited ? ' own' : ''}`}

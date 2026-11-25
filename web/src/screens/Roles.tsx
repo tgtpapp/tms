@@ -62,6 +62,7 @@ export function RolesScreen({ perms }: { perms: Permissions }) {
     try {
       await rpc('set_role_permissions', { p_role_id: role.id, p_permissions: [...value] });
       toast('ok', `Đã lưu quyền nhóm ${role.name}`);
+      window.dispatchEvent(new Event('tms-quyen'));
       await load();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }

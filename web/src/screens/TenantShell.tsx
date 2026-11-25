@@ -114,6 +114,20 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   useEffect(() => {
     void load();
   }, [load]);
+  // Quyền theo nhóm áp dụng ngay khi chủ / quản lý sửa nhóm hoặc gán nhóm khác (không phải đăng xuất, tải lại trang):
+  // quay lại app và cứ 5 phút hỏi lại danh sách quyền (nhỏ), có đổi mới cập nhật giao diện
+  useEffect(() => {
+    if (!perms) return;
+    const cur = perms.key();
+    const check = () => {
+      if (document.hidden || !navigator.onLine) return;
+      void loadPermissions().then((p) => { if (p.key() !== cur) setPerms(p); }).catch(() => undefined);
+    };
+    const t = window.setInterval(check, 5 * 60_000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('tms-quyen', check);   // vừa lưu nhóm / gán nhóm trên máy này: áp dụng ngay
+    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', check); window.removeEventListener('tms-quyen', check); };
+  }, [perms]);
   // Giám sát ATGT: tự lập checklist trước chuyến, sổ ngày, biên bản, báo cáo tuần / tháng / năm vào Lưu trữ hồ sơ (sau khi mở app, rồi mỗi giờ)
   const autoAtgt = !!perms && perms.has('safety.view') && perms.has('archive.view') && perms.has('archive.add');
   useEffect(() => {

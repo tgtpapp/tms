@@ -24,6 +24,11 @@ const codes = (perm: string) => LEGACY[perm] ?? [perm];
 export class Permissions {
   constructor(private readonly grants: PermissionGrant[]) {}
 
+  /** Dấu để so: quyền có đổi không (nhóm vừa được sửa / người vừa được gán nhóm khác) */
+  key(): string {
+    return this.grants.map((g) => `${g.permission_code}|${g.scope_type}|${g.scope_id ?? ''}`).sort().join(',');
+  }
+
   /** Có quyền trên toàn nhà xe, hoặc trên chi nhánh / phòng vé chỉ định.
    *  Không chỉ định chi nhánh / phòng vé (hiện mục menu, nút chung): có quyền ở bất kỳ phạm vi nào là đủ —
    *  người được gán nhóm theo chi nhánh / phòng vé vẫn thấy màn hình; dữ liệu trong đó database tự lọc theo phạm vi. */

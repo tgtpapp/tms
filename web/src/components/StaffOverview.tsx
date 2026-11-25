@@ -448,17 +448,27 @@ export function StaffCards({ staff, avas }: Common) {
   useEffect(() => { void company().then((c) => setCo(c.name)).catch(() => undefined); }, []);
   const chosen = list.filter((s) => sel.has(s.id));
   const color = (s: OvStaff) => (s.position === 'lai_xe' ? '#16a34a' : s.position === 'phu_xe' ? '#f59e0b' : '#2563eb');
-  const card = (s: OvStaff, photo: string | null) => `<div style="width:85.6mm;height:54mm;border:1px dashed #9aa3b5;border-radius:3mm;overflow:hidden;display:flex;font-family:Arial,sans-serif;color:#111;break-inside:avoid">
-    <div style="flex:0 0 30mm;width:30mm;background:${color(s)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-      ${photo ? `<img src="${photo}" alt="" style="width:23mm;height:23mm;border-radius:2mm;object-fit:cover;border:0.8mm solid #fff">` : `<div style="width:23mm;height:23mm;border-radius:2mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
-      ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-size:7pt;font-weight:bold;letter-spacing:.5px">${esc(POS[s.position].toUpperCase())}</div>`}</div>
-    <div style="flex:1 1 auto;min-width:0;padding:3mm 3.5mm;display:flex;flex-direction:column;overflow:hidden">
-      <div style="font-size:6pt;font-weight:bold;color:#555;line-height:1.25;max-height:2.5em;overflow:hidden">${esc(co.toUpperCase())}</div>
-      <div style="font-size:7pt;font-weight:bold;color:${color(s)};letter-spacing:1.5px;margin-top:1.5mm">THẺ NHÂN VIÊN</div>
-      <div style="font-size:12pt;font-weight:bold;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
-      ${s.department?.trim() && fold(s.department) !== fold(job(s)) ? `<div style="font-size:7.5pt;color:${color(s)};font-weight:bold;margin-top:1mm">${esc(s.department.trim())}</div>` : ''}
-      <div style="font-size:8pt">${esc(job(s))}</div>
-      <div style="margin-top:auto;font-size:7pt"><span style="color:#666">Ngày vào làm</span> <b>${fmtDate(s.joined_on)}</b>${s.phone ? `<br><span style="color:#666">ĐT</span> <b>${esc(s.phone)}</b>` : ''}</div></div></div>`;
+  /** Màu đậm hơn (dải trái của thẻ) */
+  const shade = (hex: string, k: number) => `#${[1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;
+  const card = (s: OvStaff, photo: string | null) => {
+    const c = color(s);
+    return `<div style="width:85.6mm;height:54mm;border-radius:3.2mm;overflow:hidden;display:flex;background:#fff;border:1px solid #d9dfeb;box-shadow:0 6px 20px rgba(16,24,40,.12);font-family:Arial,sans-serif;color:#1b2333;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    <div style="flex:0 0 31mm;width:31mm;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.25),transparent 55%),linear-gradient(165deg,${shade(c, 0.45)},${c});display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2mm;color:#fff;padding:3mm 2mm">
+      <div style="width:7mm;height:7mm;border-radius:2mm;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:4mm">🚌</div>
+      ${photo ? `<img src="${photo}" alt="" style="width:23mm;height:23mm;border-radius:2.5mm;object-fit:cover;border:0.8mm solid #fff;background:#fff">`
+        : `<div style="width:23mm;height:23mm;border-radius:2.5mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
+      ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-weight:bold;font-size:7.5pt;letter-spacing:.5px;background:rgba(255,255,255,.2);border-radius:10px;padding:.3mm 3mm">${esc(POS[s.position])}</div>`}</div>
+    <div style="flex:1 1 auto;min-width:0;padding:3.4mm 4mm 3mm;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(circle at 100% 0,${c}22,#fff 55%)">
+      <div style="font-size:5.6pt;font-weight:bold;color:#6b7488;letter-spacing:.2px;line-height:1.3;max-height:2.6em;overflow:hidden">${esc(co.toUpperCase())}</div>
+      <div style="font-size:7pt;font-weight:800;color:${c};letter-spacing:1.6px;margin-top:1.6mm">THẺ NHÂN VIÊN</div>
+      <div style="font-size:12.5pt;font-weight:800;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
+      ${s.department?.trim() && fold(s.department) !== fold(job(s)) ? `<div style="font-size:7.5pt;color:${c};font-weight:bold;margin-top:1.2mm">${esc(s.department.trim())}</div>` : ''}
+      <div style="font-size:7.5pt;font-weight:600;margin-top:.6mm;line-height:1.25">${esc(job(s))}</div>
+      <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:2mm">
+        <div style="font-size:7.5pt;font-weight:bold"><div style="font-size:5.5pt;color:#6b7488;font-weight:500">Ngày vào làm</div>${fmtDate(s.joined_on)}</div>
+        <div style="width:21mm;height:7mm;background:repeating-linear-gradient(90deg,#1b2333 0 .35mm,transparent .35mm .7mm,#1b2333 .7mm 1.3mm,transparent 1.3mm 1.6mm,#1b2333 1.6mm 1.85mm,transparent 1.85mm 2.5mm)"></div>
+      </div></div></div>`;
+  };
   async function print() {
     setBusy(true);
     try {

@@ -578,36 +578,36 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
       {view === 'the' ? (
       <div className="nsx-emps">
         {list.map((s) => {
-          const { gplx, bad, mine, canOpen } = info(s);
+          const { p, gplx, bad, mine, canOpen } = info(s);
           const pay = salary.get(s.id);
           return (
-            <div key={s.id} id={`nv-${s.id}`} className={`nsx-emp pos-${s.position}${s.is_active ? '' : ' off'}`}>
-              {/* bấm vào thẻ = xem hồ sơ (như file mẫu); nút Xem hồ sơ / Sửa ở dưới cho bàn phím, trình đọc màn hình */}
-              <div className={`nsx-emp-main${canOpen ? ' can' : ''}`} onClick={canOpen ? () => openOne(s.id, true) : undefined}>
-                <span className="nsx-emp-cov">
-                  {!sameAsGroup(s) && <span className="nsx-emp-pos">{POSITION[s.position]}</span>}
-                  {bad > 0 && <span className="nsx-emp-warn" title={`${bad} việc cần xử lý`} aria-hidden="true">⚠</span>}
-                </span>
-                <span className="nsx-emp-ph"><Avatar name={s.full_name} url={avas[s.id]} size={88} /></span>
-                <b className="nsx-emp-nm">{s.full_name}</b>
-                <span className="nsx-emp-rl">{jobLabel(s)}</span>
-                <span className="nsx-emp-tags">
-                  {s.department?.trim() && s.department.trim().toLocaleLowerCase('vi') !== jobKey(s) && <span className="nsx-dtag">{s.department}</span>}
-                  {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
-                  {mine && <span className="badge">Tôi</span>}
-                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
-                </span>
-                <span className="nsx-emp-ct">
-                  {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
-                  {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
-                </span>
-                <span className="nsx-emp-ft">
-                  <span><small>Thâm niên</small>{seniority(s.joined_on, s.left_on)}</span>
-                  {pay ? <span><small>Lương cơ bản</small>{pay >= 1e6 ? `${(pay / 1e6).toFixed(1).replace('.', ',')} tr` : pay.toLocaleString('vi-VN')}</span>
-                    : <span><small>Ngày vào làm</small>{fmtDate(s.joined_on)}</span>}
-                </span>
-              </div>
-              {(s.phone || canOpen) && <div className="nsx-emp-acts">{call(s)}{acts(s, canOpen)}</div>}
+            <div key={s.id} id={`nv-${s.id}`} className={`nsx-emp pos-${s.position}${s.is_active ? '' : ' off'}${canOpen ? ' can' : ''}`}
+                 onClick={canOpen ? () => openOne(s.id, true) : undefined}>
+              <span className="nsx-emp-cov">
+                {!sameAsGroup(s) && <span className="nsx-emp-pos">{POSITION[s.position]}</span>}
+                {bad > 0 && <span className="nsx-emp-warn" title={`${bad} việc cần xử lý`} aria-hidden="true">⚠</span>}
+              </span>
+              <span className="nsx-emp-ph"><Avatar name={s.full_name} url={avas[s.id]} size={112} /></span>
+              {canOpen
+                ? <button type="button" className="nsx-emp-nm" aria-label={`Xem hồ sơ ${s.full_name}`} onClick={(e) => { e.stopPropagation(); openOne(s.id, true); }}>{s.full_name}</button>
+                : <b className="nsx-emp-nm">{s.full_name}</b>}
+              <span className="nsx-emp-rl">{jobLabel(s)}</span>
+              <span className="nsx-emp-tags">
+                {s.department?.trim() && s.department.trim().toLocaleLowerCase('vi') !== jobKey(s) && <span className="nsx-dtag">{s.department}</span>}
+                {s.is_active ? <span className="nsx-stag ok">Đang làm</span> : <span className="nsx-stag off">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                {mine && <span className="nsx-stag">Tôi</span>}
+                {bad > 0 && <span className="nsx-stag warn">{bad} việc cần xử lý</span>}
+              </span>
+              <span className="nsx-emp-ct">
+                {p?.birth_date && <span>📅 {fmtDate(p.birth_date)}</span>}
+                {s.phone && <a href={`tel:${s.phone}`} aria-label={`Gọi ${s.full_name} ${s.phone}`} onClick={(e) => e.stopPropagation()}>{s.phone}</a>}
+                {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
+              </span>
+              <span className="nsx-emp-ft">
+                <span><small>Thâm niên</small>{seniority(s.joined_on, s.left_on)}</span>
+                {pay ? <span><small>Lương cơ bản</small>{pay >= 1e6 ? `${(pay / 1e6).toFixed(1).replace('.', ',')} tr` : pay.toLocaleString('vi-VN')}</span>
+                  : <span><small>Ngày vào làm</small>{fmtDate(s.joined_on)}</span>}
+              </span>
             </div>
           );
         })}

@@ -292,6 +292,14 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' }).getByRole('button', { name: 'Sửa hồ sơ' })).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await page.getByRole('button', { name: 'Thẻ', exact: true }).click();
+  // Nhập Excel: xem trước (người mới → Thêm mới), chưa nhập
+  await page.getByRole('button', { name: '⬆ Nhập Excel' }).click();
+  await page.getByLabel('Chọn file Excel nhân viên').setInputFiles({ name: 'nv.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('Họ và tên,Điện thoại,Ngày vào công ty\nTrần Văn Bình,0912345678,01/02/2024\n') });
+  await expect(page.getByRole('cell', { name: 'Trần Văn Bình' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nhập 1 dòng' })).toBeEnabled();
+  await page.getByRole('button', { name: 'Hủy', exact: true }).click();
+  await expect(page.getByRole('button', { name: '⬇ Xuất Excel' })).toBeVisible();
   await page.getByRole('button', { name: 'Sửa Nguyễn Văn Tài', exact: true }).click();
   // Hồ sơ chia thẻ: Thông tin / Giấy tờ / Hợp đồng lao động / Lý lịch hành nghề
   await page.getByRole('tab', { name: /^Giấy tờ/ }).click();

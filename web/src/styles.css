@@ -1516,3 +1516,15 @@ button.nsx-stat.on { border-color: var(--primary); background: var(--primary-sof
 }
 .item-head + .nsx-bar { margin-top: 10px; }
 .nsx-cvbtn { align-self: flex-start; margin: 4px 0; min-height: 44px; }
+/* Giấy tờ nhân sự: ô AI chưa đọc, giấy lỗi / hết hạn, nút ✕ đỏ chọn lại ảnh */
+label.nsx-miss input { background: #fffbeb; border-color: #f59e0b; }
+.nsx-miss-hint { font-size: .75rem; color: #b45309; }
+.nsx-err { margin: 4px 0; padding: 6px 10px; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: .88rem; }
+.nsx-expired { margin: 4px 0; padding: 6px 10px; border-radius: 8px; background: #fff7ed; color: #9a3412; font-size: .88rem; }
+.nsx-scanline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nsx-x { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid #fecaca; background: #fef2f2; color: #dc2626; font-size: 1.2rem; font-weight: 700; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.nsx-x:hover { background: #fee2e2; }
+.nsx-xl { display: flex; gap: 6px; flex-wrap: wrap; }
+.nsx-xl .btn { min-height: 44px; }
+.nsx-imp { display: flex; flex-direction: column; gap: 10px; }
+.nsx-imp .btn { min-height: 44px; }

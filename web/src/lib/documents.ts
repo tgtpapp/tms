@@ -287,11 +287,12 @@ export type AvaDir = 'anh_dai_dien' | 'anh_xe';
 const avatarPath = (tenantId: string, staffId: string, dir: AvaDir = 'anh_dai_dien') => `${tenantId}/${dir}/${staffId}.jpg`;
 
 /** Thu ảnh về khung vuông 320px (cắt giữa), JPEG ~20-40 KB. */
-async function prepareAvatar(file: Blob): Promise<Blob> {
+/** px: cạnh ảnh vuông tối đa; q: chất lượng JPEG. Ảnh đại diện nhân viên ~15 KB (240 px, 0,78). */
+async function prepareAvatar(file: Blob, px = 320, q = 0.85): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh');
   const bmp = await createImageBitmap(file);
   const side = Math.min(bmp.width, bmp.height);
-  const S = Math.min(320, side);
+  const S = Math.min(px, side);
   const canvas = document.createElement('canvas');
   canvas.width = S; canvas.height = S;
   const g = canvas.getContext('2d');
@@ -299,11 +300,11 @@ async function prepareAvatar(file: Blob): Promise<Blob> {
   g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
   g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, S, S);
   bmp.close();
-  return new Promise((ok, bad) => canvas.toBlob((b) => (b ? ok(b) : bad(new Error('Không nén được ảnh'))), 'image/jpeg', 0.85));
+  return new Promise((ok, bad) => canvas.toBlob((b) => (b ? ok(b) : bad(new Error('Không nén được ảnh'))), 'image/jpeg', q));
 }
 
 export async function uploadAvatar(tenantId: string, staffId: string, file: Blob, dir: AvaDir = 'anh_dai_dien'): Promise<void> {
-  const blob = await prepareAvatar(file);
+  const blob = dir === 'anh_dai_dien' ? await prepareAvatar(file, 240, 0.78) : await prepareAvatar(file);
   await putImage(avatarPath(tenantId, staffId, dir), blob, 'image/jpeg');
   window.dispatchEvent(new Event('tms-avatar'));
 }

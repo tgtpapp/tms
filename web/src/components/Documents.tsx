@@ -65,16 +65,20 @@ export function toRpc(def: DocTypeDef, v: Values) {
     data[x.key] = s === '' ? null : x.kind === 'int' || x.kind === 'money' ? Number(s.replace(/[^0-9]/g, '')) : s;
   }
   const g = (k: string) => (v[k] ?? '').trim() || null;
-  return { p_doc_no: g('so_giay'), p_issuer: g('noi_cap'), p_issued_on: g('ngay_cap'), p_valid_from: g('hieu_luc_tu'),
+  // Số CCCD: bỏ dấu cách / chấm AI hay đọc kèm ("079 123 456 789") – database chỉ nhận 12 chữ số liền
+  const no = def.code === 'cccd' ? (g('so_giay')?.replace(/[\s.\-]/g, '') || null) : g('so_giay');
+  return { p_doc_no: no, p_issuer: g('noi_cap'), p_issued_on: g('ngay_cap'), p_valid_from: g('hieu_luc_tu'),
            p_expires_on: g('het_han'), p_data: data };
 }
 
-export function DocFields({ def, values, onChange }: { def: DocTypeDef; values: Values; onChange: (v: Values) => void }) {
+/** ai: giá trị vừa do AI đọc – ô AI không đọc được tô vàng để nhập tay bổ sung */
+export function DocFields({ def, values, onChange, ai }: { def: DocTypeDef; values: Values; onChange: (v: Values) => void; ai?: boolean }) {
   const short = SHORT[def.code] ?? def.name;
   return (
     <div className="grid2">
       {def.fields.map((x) => (
-        <label key={x.key}>{x.label}
+        <label key={x.key} className={ai && !(values[x.key] ?? '').trim() ? 'nsx-miss' : undefined}>{x.label}
+          {ai && !(values[x.key] ?? '').trim() && <span className="nsx-miss-hint">AI chưa đọc được – nhập tay</span>}
           <input aria-label={`${short}: ${x.label}`} value={values[x.key] ?? ''}
                  type={x.kind === 'date' ? 'date' : x.kind === 'text' ? 'text' : 'number'}
                  inputMode={x.kind === 'int' || x.kind === 'money' ? 'numeric' : undefined}
@@ -194,6 +198,10 @@ export function DocRow(props: {
   reload: () => Promise<void>; check?: (values: Values) => ReactNode;
   /** Ngày hết hạn theo Lý lịch hành nghề (khám sức khỏe / tập huấn); undefined = lý lịch không có */
   recordExp?: string | null;
+  /** Nút ✕ đỏ bỏ ảnh vừa chọn để chọn ảnh khác */
+  clearable?: boolean;
+  /** Giấy đã hết hạn: không sửa đè, chỉ cập nhật bằng giấy mới (giấy cũ chuyển vào mục giấy cũ) */
+  lockExpired?: boolean;
 }) {
   const { def, doc, tenantId, owner, warnDays, canEdit, reload, check, recordExp } = props;
   const toast = useToast();
@@ -209,6 +217,8 @@ export function DocRow(props: {
     return { ...r, text: `${r.text} (theo Lý lịch hành nghề)` }; })() : st0;
   const short = SHORT[def.code] ?? def.name;
   const [aiNote, setAiNote] = useState<string | null>(null);
+  const [scanKey, setScanKey] = useState(0);
+  const expired = !!props.lockExpired && !!doc?.expires_on && doc.expires_on < today();
 
   /** AI đọc lại ảnh đã lưu của giấy hiện tại, điền vào ô (chưa lưu – kiểm tra rồi bấm Lưu) */
   async function rereadSaved() {
@@ -295,12 +305,12 @@ export function DocRow(props: {
         <div className="actions">
           {canEdit && mode === 'view' && (
             <>
-              {doc && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
+              {doc && !expired && <button className="btn small" aria-label={`Sửa ${short}`} onClick={() => { setAiNote(null); setValues(valuesFromDoc(def, doc)); setMode('edit'); }}>Sửa</button>}
               {((doc && doc.files.length > 0) || (!doc?.files.length && !!props.extraFiles?.length)) && (
                 <button className="btn small" aria-label={`Đọc lại ${short}`} onClick={() => void rereadSaved()}>Đọc lại</button>
               )}
               <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setMode('add'); }}>
-                {doc ? 'Thêm bản mới' : 'Thêm'}
+                {expired ? 'Cập nhật giấy mới' : doc ? 'Thêm bản mới' : 'Thêm'}
               </button>
             </>
           )}
@@ -312,7 +322,8 @@ export function DocRow(props: {
         <div className="sub">
           {mode === 'add' && (
             <>
-              <Scanner def={def} onScanned={(s) => {
+              {expired && <p className="nsx-expired">Giấy đang dùng đã hết hạn {fmtDate(doc!.expires_on!)}. Tải ảnh giấy mới; lưu xong giấy cũ tự chuyển vào mục giấy cũ.</p>}
+              <Scanner key={scanKey} def={def} onScanned={(s) => {
                 if (s.files.length === 0) return toast('error', s.aiNote);
                 setScanned(s);
                 setValues((cur) => {
@@ -321,7 +332,9 @@ export function DocRow(props: {
                   return next;
                 });
               }} />
-              {scanned && <p className="muted small">{scanned.aiNote} · {scanned.files.length} tệp</p>}
+              {scanned && <p className="muted small nsx-scanline">{scanned.aiNote} · {scanned.files.length} tệp
+                {props.clearable && <button type="button" className="nsx-x" aria-label={`Chọn lại ảnh ${short}`} title="Bỏ ảnh này, chọn ảnh khác"
+                  onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setScanKey((k) => k + 1); }}>✕</button>}</p>}
               {scanned && <FilePreviews blobs={scanned.files.map((f) => f.blob)} />}
               {scanned && scanned.warnings.length > 0 && <ul className="warn small">{scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
             </>
@@ -331,7 +344,7 @@ export function DocRow(props: {
           {mode === 'edit' && doc && doc.files.length > 0 && (
             <button type="button" className="btn small" onClick={() => void rereadSaved()}>AI đọc lại ảnh đã lưu</button>
           )}
-          <DocFields def={def} values={values} onChange={setValues} />
+          <DocFields def={def} values={values} onChange={setValues} ai={mode === 'add' && !!scanned} />
           {check?.(values)}
           <div className="actions">
             <button type="button" className="btn small primary" disabled={busy || (mode === 'add' && !scanned)}

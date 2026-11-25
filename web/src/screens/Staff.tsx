@@ -4,6 +4,8 @@ import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
 import { staffCvPages } from '../lib/staffCv';
+import { downloadXlsx, type XCell } from '../lib/xlsxWrite';
+import { readSheet, type Cell } from '../lib/sheetRead';
 import type { Page } from '../lib/profilePapers';
 import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
@@ -229,7 +231,8 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
   const [scanType, setScanType] = useState('cccd');
   const [pending, setPending] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
-  const [id] = useState(() => editing?.id ?? crypto.randomUUID());
+  const [errs, setErrs] = useState<Record<string, string>>({});   // giấy chưa lưu được: lý do theo loại giấy
+  const [id, setId] = useState(() => editing?.id ?? crypto.randomUUID());
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const linked = new Set(staff.filter((s) => s.user_id && s.id !== editing?.id).map((s) => s.user_id));
   // Sửa hồ sơ: hiện luôn các trường giấy tờ (CCCD, GPLX, tập huấn nghiệp vụ, khám sức khỏe…) để sửa cùng lúc
@@ -249,6 +252,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
     if (!f.full_name.trim()) return toast('error', 'Nhập họ tên');
     if (!f.joined_on) return toast('error', 'Nhập ngày vào công ty');
     if (f.phone && !/^0[0-9]{9}$/.test(f.phone.trim())) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
+    if (f.left_on && f.joined_on && f.left_on < f.joined_on) return toast('error', 'Ngày nghỉ việc không được trước ngày vào công ty');
     setBusy(true);
     try {
       await rpc('save_staff', { p_id: id, p: { ...f, full_name: f.full_name.trim(), phone: f.phone.trim(), is_active: !f.left_on } });
@@ -257,19 +261,22 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
       return toast('error', errMsg(err));
     }
     let failed = 0;
+    const why: Record<string, string> = {};
     for (const def of docDefs) {
       const d = curDoc(def.code);
       const v = docVals[def.code];
       if (!d || !v || JSON.stringify(v) === JSON.stringify(docVals0[def.code])) continue;
+      if (pending.some((x) => x.def.code === def.code)) continue;   // đã chọn ảnh giấy mới: lưu thành giấy mới bên dưới
       try {
         const r = toRpc(def, v);
         await rpc('update_document', { p_id: d.id, p_doc_no: r.p_doc_no, p_issuer: r.p_issuer, p_issued_on: r.p_issued_on,
                                        p_valid_from: r.p_valid_from, p_expires_on: r.p_expires_on, p_data: r.p_data, p_note: d.note });
       } catch (err) {
         failed++;
-        toast('error', `${def.name}: ${errMsg(err)}`);
+        why[def.code] = errMsg(err);
       }
     }
+    const left: Pending[] = [];
     for (const p of pending) {
       try {
         const paths = await uploadFiles(tenantId, 'nhan_su', id, f.full_name, p.def.code, p.scanned.files);
@@ -277,17 +284,23 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
                                           p_files: paths, p_note: null, p_request_id: p.key });
       } catch (err) {
         failed++;
-        toast('error', `${p.def.name}: ${errMsg(err)}`);
+        why[p.def.code] = errMsg(err);
+        left.push(p);
       }
     }
     setBusy(false);
+    setErrs(why);
+    setPending(left);
     const name = f.full_name.trim();
-    toast('ok', failed ? `Đã lưu ${name}, còn ${failed} giấy tờ chưa lưu – thêm lại ở mục Giấy tờ` : editing ? `Đã lưu hồ sơ ${name}` : `Đã thêm ${name}`);
     await reload();
+    // Giấy lỗi: giữ nguyên form và ảnh đã đọc để sửa ô báo đỏ rồi bấm Lưu lại (không phải chụp, đọc lại)
+    if (failed) return toast('error', `Đã lưu ${name}, còn ${failed} giấy tờ chưa lưu được – sửa ô báo đỏ rồi bấm Lưu lại`);
+    toast('ok', editing ? `Đã lưu hồ sơ ${name}` : `Đã thêm ${name}`);
     if (editing) onDone?.();
     else {
       setF(EMPTY);
       setPending([]);
+      setId(crypto.randomUUID());
     }
   }
 
@@ -308,11 +321,12 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
             <div key={p.key} className="item sub-item">
               <div className="item-head">
                 <b>{p.def.name}</b>
-                <button type="button" className="btn small link" onClick={() => setPending(pending.filter((x) => x !== p))}>Bỏ giấy này</button>
+                <button type="button" className="nsx-x" aria-label={`Chọn lại ảnh ${SHORT[p.def.code] ?? p.def.name}`} title="Bỏ ảnh này, chọn ảnh khác" onClick={() => setPending(pending.filter((x) => x !== p))}>✕</button>
               </div>
               <p className="muted small">{p.scanned.aiNote} · {p.scanned.files.length} tệp</p>
+              {errs[p.def.code] && <p className="nsx-err">Chưa lưu được: {errs[p.def.code]}</p>}
               {p.scanned.warnings.length > 0 && <ul className="warn small">{p.scanned.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
-              <DocFields def={p.def} values={p.scanned.values}
+              <DocFields ai def={p.def} values={p.scanned.values}
                          onChange={(v) => setPending(pending.map((x) => (x === p ? { ...x, scanned: { ...x.scanned, values: v } } : x)))} />
             </div>
           ))}
@@ -366,21 +380,25 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
         {docDefs.map((def) => {
           const d = curDoc(def.code);
           const pd = pending.find((x) => x.def.code === def.code);
+          const expired = !!d?.expires_on && d.expires_on < today();
           return (
             <fieldset key={def.code} className="sub">
               <legend><b>{def.name}</b></legend>
+              {errs[def.code] && <p className="nsx-err">Chưa lưu được: {errs[def.code]}</p>}
+              {expired && !pd && <p className="nsx-expired">Đã hết hạn {fmtDate(d!.expires_on)}. Tải ảnh giấy mới bên dưới; lưu xong giấy cũ tự chuyển vào mục giấy cũ.</p>}
               {pd ? null : (
                 <div className="inline-form">
                   {d && d.files.length > 0 && <FilesButton files={d.files} />}
-                  <span className="small muted">{d ? 'Tải ảnh mới (thay giấy đang dùng):' : 'Tải ảnh giấy tờ:'}</span>
+                  <span className="small muted">{d ? (expired ? 'Tải ảnh giấy mới:' : 'Tải ảnh mới (thay giấy đang dùng):') : 'Tải ảnh giấy tờ:'}</span>
                 </div>
               )}
               {!pd && <Scanner def={def} onScanned={(sc) => onScanned(def, sc)} />}
-              {d && !pd ? <DocFields def={def} values={docVals[def.code] ?? {}} onChange={(v) => setDocVals({ ...docVals, [def.code]: v })} />
+              {d && !pd && !expired ? <DocFields def={def} values={docVals[def.code] ?? {}} onChange={(v) => setDocVals({ ...docVals, [def.code]: v })} />
                 : pd ? (
                   <>
-                    <p className="muted small">{pd.scanned.aiNote} · {pd.scanned.files.length} tệp <button type="button" className="btn small link" onClick={() => setPending(pending.filter((x) => x !== pd))}>Bỏ giấy này</button></p>
-                    <DocFields def={def} values={pd.scanned.values}
+                    <p className="muted small nsx-scanline">{pd.scanned.aiNote} · {pd.scanned.files.length} tệp
+                      <button type="button" className="nsx-x" aria-label={`Chọn lại ảnh ${SHORT[def.code] ?? def.name}`} title="Bỏ ảnh này, chọn ảnh khác" onClick={() => setPending(pending.filter((x) => x !== pd))}>✕</button></p>
+                    <DocFields ai def={def} values={pd.scanned.values}
                                onChange={(v) => setPending(pending.map((x) => (x === pd ? { ...x, scanned: { ...x.scanned, values: v } } : x)))} />
                   </>
                 ) : null}
@@ -420,6 +438,23 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
     return words.every((w) => text.includes(w));
   });
   const openOne = (id: string, onlyView: boolean) => { setViewOnly(onlyView); setOpen(id); };
+  const [imp, setImp] = useState(false);
+  /** Xuất danh sách đang xem (đã lọc chức vụ / tìm kiếm). Số CCCD, địa chỉ chỉ có khi người xuất quản lý nhân sự. */
+  function exportXlsx() {
+    const exp = (sid: string, code: string) => papers.find((d) => d.staff_id === sid && d.doc_type === code && d.is_current);
+    const dd = (x: string | null | undefined) => (x ? fmtDate(x) : '');
+    const head = ['Họ và tên', 'Chức vụ', 'Nhóm', 'Bộ phận', 'Điện thoại', 'Ngày sinh', 'Giới tính', 'Ngày vào công ty', 'Thâm niên', 'Ngày nghỉ việc',
+      'Hạng GPLX', 'GPLX hết hạn', 'Khám sức khỏe hết hạn', 'Tập huấn hết hạn', ...(canEdit ? ['Số CCCD', 'Nơi thường trú', 'Chỗ ở hiện nay', 'Loại hợp đồng'] : [])];
+    const rows: XCell[][] = list.map((s) => {
+      const p = priv.find((x) => x.staff_id === s.id);
+      const g = exp(s.id, 'gplx');
+      return [s.full_name, jobLabel(s), POSITION[s.position], s.department ?? '', s.phone ?? '', dd(p?.birth_date), p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '',
+        dd(s.joined_on), seniority(s.joined_on, s.left_on), dd(s.left_on), g?.data?.hang ? String(g.data.hang) : '', dd(g?.expires_on),
+        dd(exp(s.id, 'kham_suc_khoe')?.expires_on), dd(exp(s.id, 'tap_huan')?.expires_on),
+        ...(canEdit ? [exp(s.id, 'cccd')?.doc_no ?? '', p?.address ?? '', p?.current_address ?? '', p?.contract_type ? CONTRACT[p.contract_type] : ''] : [])];
+    });
+    downloadXlsx(`Lai xe va nhan vien ${today()}`, 'Lái xe & nhân viên', head, rows, [24, 18, 11, 16, 13, 12, 9, 13, 14, 12, 9, 13, 13, 13, 15, 36, 36, 20]);
+  }
   const cur1 = open ? staff.find((x) => x.id === open) : undefined;
   const canOpenCur = cur1 && (canEdit || cur1.user_id === myUserId);
   const info = (s: Staff) => {
@@ -446,7 +481,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
             {showLeft ? 'Ẩn người đã nghỉ' : `Hiện người đã nghỉ (${left})`}
           </button>
         )}
+        {!props.selfOnly && (
+          <div className="nsx-xl">
+            {list.length > 0 && <button type="button" className="btn small" onClick={exportXlsx}>⬇ Xuất Excel</button>}
+            {canEdit && <button type="button" className="btn small" onClick={() => setImp(true)}>⬆ Nhập Excel</button>}
+          </div>
+        )}
       </div>
+      {imp && <StaffImport staff={staff} priv={priv} onClose={() => setImp(false)} reload={props.reload} />}
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
       {/* chỉ có hồ sơ của mình: hiện thẳng hồ sơ dạng thẻ, không cần bấm mở */}
       {props.selfOnly && shown.length === 1 && shown[0]!.user_id === myUserId ? (
@@ -633,7 +675,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
                       recordExp={recordExpiry(props.records, s.id, def.code)}
                       extraFiles={RECORD_OF[def.code] ? props.records.filter((r) => r.staff_id === s.id && r.kind === RECORD_OF[def.code]).flatMap((r) => r.files) : undefined}
                       owner={{ kind: 'nhan_su', id: s.id, label: s.full_name }} warnDays={warnDays} canEdit={canEdit}
-                      required={required.includes(def.code)} reload={reload} />
+                      required={required.includes(def.code)} reload={reload} clearable lockExpired />
             ))}
           </ul>
           <OldDocs docs={mine} />
@@ -653,6 +695,134 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       )}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Nhập danh sách từ Excel */
+
+const IMP_COLS: { key: keyof Form; label: string; alias: string[] }[] = [
+  { key: 'full_name', label: 'Họ và tên', alias: ['hovaten', 'hoten', 'ten', 'tennhanvien', 'tenlaixe'] },
+  { key: 'phone', label: 'Điện thoại', alias: ['dienthoai', 'sodienthoai', 'sdt', 'didong'] },
+  { key: 'job_title', label: 'Chức vụ', alias: ['chucvu', 'chucdanh', 'vitri'] },
+  { key: 'position', label: 'Nhóm', alias: ['nhom', 'loai'] },
+  { key: 'department', label: 'Bộ phận', alias: ['bophan', 'phongban', 'phong'] },
+  { key: 'joined_on', label: 'Ngày vào công ty', alias: ['ngayvaocongty', 'ngayvaolam', 'ngayvao'] },
+  { key: 'birth_date', label: 'Ngày sinh', alias: ['ngaysinh'] },
+  { key: 'gender', label: 'Giới tính', alias: ['gioitinh'] },
+  { key: 'address', label: 'Nơi thường trú', alias: ['noithuongtru', 'thuongtru', 'diachi'] },
+  { key: 'current_address', label: 'Chỗ ở hiện nay', alias: ['choohiennay', 'noio', 'choo'] },
+  { key: 'note', label: 'Ghi chú', alias: ['ghichu'] },
+];
+const keyOf = (x: unknown) => fold(String(x ?? '')).replace(/[^a-z0-9]/g, '');
+/** Ngày từ ô Excel: kiểu ngày, số ngày Excel, dd/mm/yyyy, yyyy-mm-dd */
+function cellDate(v: Cell): string {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? '' : `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  if (typeof v === 'number' && v > 20000) { const t = new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 864e5); return t.toISOString().slice(0, 10); }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/);
+  if (m) return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  return m ? `${m[1]}-${m[2]!.padStart(2, '0')}-${m[3]!.padStart(2, '0')}` : '';
+}
+const phoneOf = (v: Cell) => { let d = String(v ?? '').replace(/\D/g, ''); if (d.length === 9) d = `0${d}`; if (d.startsWith('84') && d.length === 11) d = `0${d.slice(2)}`; return d; };
+interface ImpRow { row: number; f: Form; id: string; old: boolean; err: string | null }
+
+function StaffImport({ staff, priv, onClose, reload }: { staff: Staff[]; priv: StaffPrivate[]; onClose: () => void; reload: () => Promise<void> }) {
+  const toast = useToast();
+  const [rows, setRows] = useState<ImpRow[]>([]);
+  const [note, setNote] = useState('Chưa chọn file');
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'update' | 'skip'>('update');
+
+  function parse(cells: Cell[][]): ImpRow[] {
+    let hr = -1; let map: Partial<Record<keyof Form, number>> = {};
+    for (let r = 0; r < Math.min(cells.length, 20) && hr < 0; r++) {
+      const m: Partial<Record<keyof Form, number>> = {};
+      (cells[r] ?? []).forEach((h, i) => { const k = keyOf(h); const c = IMP_COLS.find((x) => keyOf(x.label) === k || x.alias.includes(k)); if (c && m[c.key] === undefined) m[c.key] = i; });
+      if (m.full_name !== undefined) { hr = r; map = m; }
+    }
+    if (hr < 0) throw new Error('Không thấy cột "Họ và tên" trong file. Hãy dùng file mẫu.');
+    const out: ImpRow[] = [];
+    const seen = new Set<string>();
+    cells.slice(hr + 1).forEach((r, k) => {
+      const get = (key: keyof Form) => (map[key] === undefined ? null : r[map[key]!] ?? null);
+      const name = String(get('full_name') ?? '').trim();
+      if (!name) return;
+      const phone = phoneOf(get('phone'));
+      const old = (phone && staff.find((x) => x.phone && phoneOf(x.phone) === phone)) || undefined;
+      const base = old ? formOf(old, priv.find((x) => x.staff_id === old.id)) : { ...EMPTY };
+      const f: Form = { ...base, full_name: name };
+      const txt = (key: keyof Form) => { const v = get(key); return v == null ? '' : String(v).trim(); };
+      if (phone) f.phone = phone;
+      for (const key of ['job_title', 'department', 'address', 'current_address', 'note'] as const) if (txt(key)) f[key] = txt(key);
+      const pos = keyOf(txt('position') || txt('job_title'));
+      if (txt('position') || !old) f.position = pos.includes('phuxe') ? 'phu_xe' : pos.includes('laixe') || pos.includes('taixe') ? 'lai_xe' : txt('position') ? 'nhan_vien' : f.position;
+      const g = keyOf(txt('gender'));
+      if (g) f.gender = g.startsWith('nu') ? 'nu' : g.startsWith('nam') ? 'nam' : f.gender;
+      if (cellDate(get('joined_on'))) f.joined_on = cellDate(get('joined_on'));
+      if (cellDate(get('birth_date'))) f.birth_date = cellDate(get('birth_date'));
+      let err: string | null = null;
+      if (!f.joined_on) err = 'Thiếu ngày vào công ty';
+      else if (f.phone && !/^0[0-9]{9}$/.test(f.phone)) err = 'Số điện thoại phải gồm 10 số';
+      else if (phone && seen.has(phone)) err = 'Trùng số điện thoại trong file';
+      if (phone) seen.add(phone);
+      out.push({ row: hr + k + 2, f, id: old?.id ?? crypto.randomUUID(), old: !!old, err });
+    });
+    return out;
+  }
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setNote(`Đang đọc ${file.name}…`);
+    try { const r = parse(await readSheet(file)); setRows(r); setNote(`${file.name} · đọc được ${r.length} dòng`); }
+    catch (e) { setRows([]); setNote('Chưa đọc được file'); toast('error', errMsg(e)); }
+  }
+  const todo = rows.filter((r) => !r.err && (!r.old || mode === 'update'));
+  async function run() {
+    setBusy(true);
+    let ok = 0, bad = 0;
+    for (const r of todo) {
+      try { await rpc('save_staff', { p_id: r.id, p: { ...r.f, is_active: !r.f.left_on } }); ok++; }
+      catch (e) { bad++; setRows((cur) => cur.map((x) => (x === r ? { ...x, err: errMsg(e) } : x))); }
+    }
+    setBusy(false);
+    await reload();
+    if (bad) toast('error', `Đã nhập ${ok} dòng, ${bad} dòng lỗi – xem cột Tình trạng`);
+    else { toast('ok', `Đã nhập ${ok} lái xe / nhân viên`); onClose(); }
+  }
+  const sample = () => downloadXlsx('Mau nhap lai xe nhan vien', 'Lái xe & nhân viên', IMP_COLS.map((c) => c.label),
+    [['Nguyễn Văn A', '0901234567', 'Lái xe', 'Lái xe', 'Đội xe', '01/03/2024', '12/05/1990', 'Nam', '', '', '']], [24, 13, 16, 11, 14, 14, 12, 9, 36, 36, 20]);
+  return (
+    <Modal wide title="Nhập lái xe / nhân viên từ Excel" onClose={onClose}>
+      <div className="nsx-imp">
+        <div className="actions">
+          <label className="btn primary upload-btn">⬆ Chọn file Excel<input type="file" hidden accept=".xlsx,.xls,.csv" aria-label="Chọn file Excel nhân viên" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} /></label>
+          <button type="button" className="btn" onClick={sample}>⬇ Tải file mẫu</button>
+        </div>
+        <p className="muted small">{note}. Cột bắt buộc: <b>Họ và tên</b>, <b>Ngày vào công ty</b> (người mới). Trùng <b>số điện thoại</b> với người đã có thì là cập nhật; ô để trống giữ nguyên thông tin cũ. Giấy tờ nhập ở hồ sơ từng người.</p>
+        {rows.some((r) => r.old) && (
+          <div className="nsx-seg" role="group" aria-label="Người đã có">
+            <button type="button" className={mode === 'update' ? 'on' : ''} onClick={() => setMode('update')}>Cập nhật người đã có</button>
+            <button type="button" className={mode === 'skip' ? 'on' : ''} onClick={() => setMode('skip')}>Bỏ qua người đã có</button>
+          </div>
+        )}
+        {rows.length > 0 && (
+          <div className="nsx-tblw">
+            <table className="nsx-tbl">
+              <thead><tr><th>Dòng</th><th>Họ và tên</th><th>Điện thoại</th><th>Chức vụ</th><th>Ngày vào</th><th>Tình trạng</th></tr></thead>
+              <tbody>{rows.map((r) => (
+                <tr key={r.row}><td>{r.row}</td><td>{r.f.full_name}</td><td>{r.f.phone}</td><td>{r.f.job_title || POSITION[r.f.position]}</td><td>{r.f.joined_on ? fmtDate(r.f.joined_on) : ''}</td>
+                  <td>{r.err ? <span className="badge locked">{r.err}</span> : r.old ? <span className="badge warn-badge">{mode === 'update' ? 'Cập nhật' : 'Bỏ qua'}</span> : <span className="badge">Thêm mới</span>}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+        <div className="actions">
+          <button type="button" className="btn primary" disabled={busy || todo.length === 0} onClick={() => void run()}>{busy ? 'Đang nhập…' : `Nhập ${todo.length} dòng`}</button>
+          <button type="button" className="btn link" onClick={onClose}>Hủy</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

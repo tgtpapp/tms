@@ -750,13 +750,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Nhận hàng + in K80' }).click();
   await expect(page.getByText(/^Đã nhận hàng, phiếu /)).toBeVisible();
   await expect(page.locator('.ve-list').getByText('PHIẾU GỬI HÀNG')).toBeVisible();
-  // In nhiệt như app cũ: lề 0 (không in ngày giờ / địa chỉ web), khổ giấy theo máy in cuộn, nội dung in sát đầu trang, mỗi phiếu 1 trang
+  // In nhiệt như app cũ: lề 0 (không in ngày giờ / địa chỉ web), khổ 80mm, chiều dài vừa đúng nội dung phiếu, mỗi phiếu 1 trang
+  await expect(page.getByText(/^Dài dự kiến:/)).toBeVisible();
   await page.getByRole('button', { name: 'In lại' }).click();
-  const pg = await page.evaluate(() => [...document.querySelectorAll('style')].map((x) => x.textContent ?? '').join('').match(/@page tpg0\{size:auto;margin:0\}/));
+  const pg = await page.evaluate(() => [...document.querySelectorAll('style')].map((x) => x.textContent ?? '').join('').match(/@page tpg0\{size:80mm (\d+)mm;margin:0\}/));
   expect(pg).not.toBeNull();
+  const len = Number(pg![1]);
+  expect(len).toBeGreaterThan(40);
+  expect(len).toBeLessThan(250);                                  // không kéo giấy dài cố định
   const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
   const boxes = [...pdf.matchAll(/\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/g)].map((m) => [Number(m[1]), Number(m[2])]);
   expect(boxes.length).toBe(1);                                   // 1 phiếu = 1 trang, không trang trắng
+  expect(Math.abs(boxes[0]![0] - 226.77)).toBeLessThan(2);        // rộng 80mm
+  expect(Math.abs(boxes[0]![1] - (len * 72) / 25.4)).toBeLessThan(2);   // dài đúng chiều dài đã tính
   await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByRole('button', { name: /^In phiếu / })).toHaveCount(1);
 

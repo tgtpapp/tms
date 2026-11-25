@@ -1811,3 +1811,8 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 /* Xem trước thẻ trong tab In thẻ: vừa bề ngang điện thoại */
 .nsx-cardpv { box-shadow: none; background: none; }
 @media (max-width: 400px) { .nsx-cardpv { zoom: .92; } }
+/* Tường ảnh đội ngũ: lưới đều, 3 cột trên điện thoại, ảnh lớn */
+.nsx-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 16px 10px; }
+.nsx-tw { width: auto; min-width: 0; }
+.nsx-tw small { max-width: 100%; font-size: .82rem; }
+@media (max-width: 520px) { .nsx-wall { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 8px; } }

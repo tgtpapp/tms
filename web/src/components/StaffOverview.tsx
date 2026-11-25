@@ -21,8 +21,11 @@ interface Common { staff: OvStaff[]; priv: OvPriv[]; avas: Record<string, string
 const POS: Record<Position, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
 const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#db2777', '#ea580c', '#475569'];
 const fold = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
+/** Bỏ trùng không phân biệt hoa / thường, giữ cách viết gặp trước */
+const uniqF = (a: string[]) => { const m = new Map<string, string>(); for (const x of a) if (!m.has(fold(x))) m.set(fold(x), x); return [...m.values()]; };
 const job = (s: OvStaff) => s.job_title?.trim() || POS[s.position];
-const dept = (s: OvStaff) => s.department?.trim() || POS[s.position];
+/** Bộ phận; trống hoặc trùng tên nhóm ("Lái Xe" / "Lái xe") thì lấy tên nhóm để không tách 2 nhóm giống nhau */
+const dept = (s: OvStaff) => { const d = s.department?.trim(); return !d || fold(d) === fold(POS[s.position]) ? POS[s.position] : d; };
 /** Nối các phần chữ, bỏ ô trống và phần trùng (vd chức vụ "Lái Xe" với nhóm "Lái xe" chỉ hiện 1 lần) */
 const joinU = (parts: (string | null | undefined)[], sep = ' · ') => {
   const seen = new Set<string>();
@@ -133,8 +136,12 @@ function Donut({ items, center }: { items: { label: string; value: number; color
 
 interface Ctr { staff_id: string; salary: number | null; start_on: string; end_on: string | null; kind: string }
 
-export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, onAdd }: Common & { papers: Doc[]; warnDays: number; onAdd?: () => void }) {
+export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, onAdd, branches = [] }: Common & { papers: Doc[]; warnDays: number; onAdd?: () => void; branches?: { id: string; label: string }[] }) {
   const td = today();
+  // Thứ tự chức vụ lớn đến nhỏ như tab Hồ sơ (theo sơ đồ tổ chức đã chọn)
+  const [orgCfg] = useOrgCfg();
+  const rank = useMemo(() => rankOf(staff, orgCfg, branches), [staff, orgCfg, branches]);
+  const byRank = (a: OvStaff, b: OvStaff) => (rank.get(a.id) ?? 1e6) - (rank.get(b.id) ?? 1e6) || a.full_name.localeCompare(b.full_name, 'vi');
   const [ctrs, setCtrs] = useState<Ctr[]>([]);
   // Hợp đồng lao động đang hiệu lực (không có quyền xem thì database không trả → phần lương / hợp đồng tự ẩn)
   useEffect(() => {
@@ -150,9 +157,10 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
   const left = ms.map((k) => staff.filter((s) => s.left_on?.startsWith(k)).length);
   const prevHc = hc[hc.length - 2] ?? 0;
   const delta = prevHc ? ((act.length - prevHc) / prevHc) * 100 : 0;
-  const deptNames = [...new Set(act.map(dept))].sort((a, b) => act.filter((s) => dept(s) === b).length - act.filter((s) => dept(s) === a).length);
-  const dColor = (d: string) => COLORS[Math.max(0, deptNames.indexOf(d)) % COLORS.length]!;
-  const byDept = deptNames.map((d) => ({ label: d, value: act.filter((s) => dept(s) === d).length, color: dColor(d) }));
+  const inDept = (s: OvStaff, d: string) => fold(dept(s)) === fold(d);
+  const deptNames = uniqF(act.map(dept)).sort((a, b) => act.filter((s) => inDept(s, b)).length - act.filter((s) => inDept(s, a)).length);
+  const dColor = (d: string) => COLORS[Math.max(0, deptNames.findIndex((x) => fold(x) === fold(d))) % COLORS.length]!;
+  const byDept = deptNames.map((d) => ({ label: d, value: act.filter((s) => inDept(s, d)).length, color: dColor(d) }));
   const pv = new Map(priv.map((p) => [p.staff_id, p]));
   const ages = act.map((s) => pv.get(s.id)?.birth_date).filter((b): b is string => !!b).map((b) => years(b, td));
   const nam = act.filter((s) => pv.get(s.id)?.gender === 'nam').length, nu = act.filter((s) => pv.get(s.id)?.gender === 'nu').length;
@@ -200,9 +208,9 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
       <section className="card nsx-team">
         <div className="nsx-card-h"><h3>Đội ngũ nhân sự</h3>
           <div className="nsx-legend">{deptNames.map((d) => <span key={d}><i style={{ background: dColor(d) }} />{d}</span>)}</div></div>
-        <div className="nsx-wall">{deptNames.flatMap((d) => act.filter((s) => dept(s) === d)).map((s) => (
+        <div className="nsx-wall">{[...act].sort(byRank).map((s) => (
           <button key={s.id} type="button" className="nsx-tw" style={{ ['--dc' as string]: dColor(dept(s)) }} title={`${s.full_name} · ${job(s)}`} onClick={() => onOpen?.(s.id)}>
-            <Avatar name={s.full_name} url={avas[s.id]} size={56} /><small>{s.full_name.trim().split(/\s+/).slice(-1)[0]}</small></button>
+            <Avatar name={s.full_name} url={avas[s.id]} size={84} /><small>{s.full_name.trim().split(/\s+/).slice(-2).join(' ')}</small></button>
         ))}</div>
       </section>
 
@@ -265,8 +273,12 @@ const SWATCH = ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#db2777'
 function orgOf(staff: OvStaff[], cfg: OrgCfg, branches: { id: string; label: string }[]) {
   const act = staff.filter((s) => s.is_active);
   const g = cfg.group ?? 'bophan';
-  const keyOf = (s: OvStaff) => g === 'chucvu' ? job(s) : g === 'nhom' ? POS[s.position]
+  const raw = (s: OvStaff) => g === 'chucvu' ? job(s) : g === 'nhom' ? POS[s.position]
     : g === 'chinhanh' ? (branches.find((b) => b.id === s.branch_id)?.label ?? 'Chưa có chi nhánh') : dept(s);
+  // gộp cách viết khác hoa / thường ("Lái Xe" / "Lái xe") thành 1 nhóm, lấy cách viết gặp trước
+  const canon = new Map<string, string>();
+  for (const s of act) { const v = raw(s).trim().replace(/\s+/g, ' '); if (!canon.has(fold(v))) canon.set(fold(v), v); }
+  const keyOf = (s: OvStaff) => canon.get(fold(raw(s).trim().replace(/\s+/g, ' '))) ?? raw(s);
   const byId = new Map(act.map((s) => [s.id, s]));
   const bosses = cfg.top
     ? cfg.top.map((id) => byId.get(id)).filter((x): x is OvStaff => !!x)
@@ -457,13 +469,19 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
 
 /* ------------------------------------------------------------------ In thẻ nhân viên (85,6 x 54 mm) */
 
-export function StaffCards({ staff, avas }: Common) {
+export function StaffCards({ staff, avas, branches = [] }: Common & { branches?: { id: string; label: string }[] }) {
   const toast = useToast();
-  const act = useMemo(() => staff.filter((s) => s.is_active).sort((a, b) => a.full_name.localeCompare(b.full_name, 'vi')), [staff]);
-  const depts = [...new Set(act.map(dept))].sort((a, b) => a.localeCompare(b, 'vi'));
+  const [orgCfg] = useOrgCfg();
+  const rank = useMemo(() => rankOf(staff, orgCfg, branches), [staff, orgCfg, branches]);
+  // xếp theo chức vụ lớn đến nhỏ như tab Hồ sơ
+  const act = useMemo(() => staff.filter((s) => s.is_active)
+    .sort((a, b) => (rank.get(a.id) ?? 1e6) - (rank.get(b.id) ?? 1e6) || a.full_name.localeCompare(b.full_name, 'vi')), [staff, rank]);
+  const depts = uniqF(act.map(dept)).sort((a, b) => a.localeCompare(b, 'vi'));
   const [d, setD] = useState('');
-  const list = act.filter((s) => !d || dept(s) === d);
-  const [sel, setSel] = useState<Set<string>>(() => new Set());
+  const list = act.filter((s) => !d || fold(dept(s)) === fold(d));
+  // mở tab là chọn sẵn tất cả (như file mẫu), bên dưới hiện ngay các thẻ
+  const [picked, setSel] = useState<Set<string> | null>(null);
+  const sel = picked ?? new Set(act.map((s) => s.id));
   const [co, setCo] = useState('');
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<Page[] | null>(null);
@@ -529,9 +547,9 @@ export function StaffReport({ staff, avas }: Common) {
   const [view, setView] = useState<Page[] | null>(null);
   const first = `${k}-01`, last = monthEnd(k);
   const before = new Date(Date.parse(first) - 864e5).toISOString().slice(0, 10);
-  const depts = [...new Set(staff.filter((s) => workingAt(s, last) || workingAt(s, before) || s.joined_on?.startsWith(k) || s.left_on?.startsWith(k)).map(dept))].sort((a, b) => a.localeCompare(b, 'vi'));
+  const depts = uniqF(staff.filter((s) => workingAt(s, last) || workingAt(s, before) || s.joined_on?.startsWith(k) || s.left_on?.startsWith(k)).map(dept)).sort((a, b) => a.localeCompare(b, 'vi'));
   const rows = depts.map((d) => {
-    const inD = staff.filter((s) => dept(s) === d);
+    const inD = staff.filter((s) => fold(dept(s)) === fold(d));
     const end = inD.filter((s) => workingAt(s, last));
     return { d, beg: inD.filter((s) => workingAt(s, before)).length, hire: inD.filter((s) => s.joined_on?.startsWith(k)).length, left: inD.filter((s) => s.left_on?.startsWith(k)).length,
       end: end.length, lx: end.filter((s) => s.position === 'lai_xe').length, px: end.filter((s) => s.position === 'phu_xe').length, nv: end.filter((s) => s.position === 'nhan_vien').length };

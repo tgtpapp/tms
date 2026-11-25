@@ -177,10 +177,10 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           ))}
         </div>
       )}
-      {canView && mod === 'tq' && <StaffDashboard {...ov} papers={papers} warnDays={warnDays}
+      {canView && mod === 'tq' && <StaffDashboard {...ov} papers={papers} warnDays={warnDays} branches={branches}
         onAdd={canEdit ? () => { setMod('hs'); setTimeout(() => document.getElementById('nv-moi')?.scrollIntoView({ behavior: 'smooth' }), 80); } : undefined} />}
       {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} branches={branches} canConfig={perms.has('settings.edit')} /></section>}
-      {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} /></section>}
+      {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} branches={branches} /></section>}
       {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
       {canView && mod === 'np' && perms.has('leave.view_all') && <LeavePage staff={staff} perms={common.leave} myUserId={ctx.user_id} avas={avas} onOpen={openFromTab} />}
       {(!canView || mod === 'hs') && <>

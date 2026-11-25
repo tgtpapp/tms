@@ -731,7 +731,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.locator('.gh-cur')).toContainText('07:00');
   // Kiểu chọn tuyến bằng thẻ (như app cũ), không có "Tất cả tuyến"
   await page.getByRole('button', { name: 'Thẻ tuyến' }).click();
-  await expect(page.getByRole('button', { name: /^HỐ NAI – VŨNG TÀU\d+ chuyến/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: /^HỐ NAI – VŨNG TÀU\s*\d+ chuyến/ })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Ô chọn' }).click();
   expect(await page.getByLabel('Gửi tại').inputValue()).not.toBe('');
   expect(await page.getByLabel('Nhận tại').inputValue()).not.toBe('');

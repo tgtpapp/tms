@@ -140,18 +140,18 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   // – dựng lại khi dữ liệu đổi và lưu đè đúng chỗ cũ: sau khi mở app, ngay sau khi sửa hồ sơ / giấy tờ / xe (chờ 20 giây gom nhiều lần sửa), và mỗi 3 giờ
   const arch = !!perms && perms.has('archive.view') && perms.has('archive.add');
   const canDrv = arch && perms.has('staff.view_all'), canVeh = arch && perms.has('vehicle.view'), canCt = arch && perms.has('labor.view_all');
-  const canDoc = arch && perms.has('doc.view'), canPay = arch && perms.has('salary.view');
+  const canDoc = arch && perms.has('doc.view'), canPay = arch && perms.has('salary.view'), canRep = arch && perms.has('repair.view');
   useEffect(() => {
     const tid = ctx.tenant_id;
-    if (!tid || !(canDrv || canVeh || canCt || canDoc || canPay)) return;
+    if (!tid || !(canDrv || canVeh || canCt || canDoc || canPay || canRep)) return;
     const me = { id: ctx.user_id, name: ctx.full_name ?? '' };
-    const run = () => { if (!document.hidden && navigator.onLine) void autoArchiveProfiles(tid, me, { drivers: canDrv, vehicles: canVeh, contracts: canCt, cv: canDrv, docs: canDoc, leases: canVeh, pay: canPay }).catch((e) => console.warn('Tự cập nhật hồ sơ', e)); };
+    const run = () => { if (!document.hidden && navigator.onLine) void autoArchiveProfiles(tid, me, { drivers: canDrv, vehicles: canVeh, contracts: canCt, cv: canDrv, docs: canDoc, leases: canVeh, pay: canPay, repairs: canRep }).catch((e) => console.warn('Tự cập nhật hồ sơ', e)); };
     let deb: number | undefined;
     const changed = () => { window.clearTimeout(deb); deb = window.setTimeout(run, 20_000); };
     const t = window.setTimeout(run, 90_000), iv = window.setInterval(run, 3 * 3600_000);
     window.addEventListener('tms-hs-doi', changed);
     return () => { window.clearTimeout(t); window.clearTimeout(deb); window.clearInterval(iv); window.removeEventListener('tms-hs-doi', changed); };
-  }, [canDrv, canVeh, canCt, canDoc, canPay, ctx.tenant_id, ctx.user_id, ctx.full_name]);
+  }, [canDrv, canVeh, canCt, canDoc, canPay, canRep, ctx.tenant_id, ctx.user_id, ctx.full_name]);
 
   if (error) return <Centered><p className="error-text">{error}</p></Centered>;
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;

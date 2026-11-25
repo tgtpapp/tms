@@ -9,6 +9,7 @@ import { prepareFile, uploadFiles } from '../lib/documents';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { profileChanged } from '../lib/profileAutoArchive';
 
 interface Order { id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; kind: string; note: string | null; files: string[]; created_by: string | null }
 interface Item { order_id: string; seq: number; content: string; unit: string | null; qty: number; unit_price: number }
@@ -76,6 +77,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
       await rpc('save_repair', { p_id: f.id, p: { vehicle_id: f.vehicle_id, repaired_on: f.repaired_on, odo_km: f.odo_km, workshop: f.workshop, kind: f.kind, note: f.note, files },
         p_items: f.lines.filter((l) => l.content.trim()).map((l) => ({ content: l.content, unit: l.unit.trim(), qty: Number(l.qty) || 1, unit_price: Number(l.unit_price) || 0 })) });
       toast('ok', f.id ? 'Đã lưu phiếu sửa chữa' : 'Đã thêm phiếu sửa chữa');
+      profileChanged();   // Lưu trữ hồ sơ tự lưu / lưu đè PDF phiếu này
       setF(null);
       await load();
     } catch (e) {

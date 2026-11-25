@@ -7,11 +7,13 @@
 //   <năm> / … / <loại văn bản>                      – văn bản còn hiệu lực           [vb:<id>]
 //   <năm> / 03. Phương tiện / Hợp đồng thuê xe       – hợp đồng thuê xe              [hdtx:<id>]
 //   <năm> / Tài chính - Kế toán / BHXH & lương chuyển khoản – mỗi tháng có dữ liệu   [bhxh:<yyyy-mm>]
+//   <năm> / 03. Phương tiện / Sửa chữa / Tháng mm-yyyy – mỗi phiếu sửa chữa             [psc:<id>]
 // Nội dung không đổi (so mã nội dung "sig" ghi trong ghi chú tệp) thì bỏ qua, không tải lên lại.
 // PDF phải vẽ trên trình duyệt nên chạy ngầm trên máy người có quyền: sau khi mở app, khi vừa sửa dữ liệu, và định kỳ.
 import { drive } from './drive';
 import { avatarUrls } from './documents';
 import { staffCvPages } from './staffCv';
+import { repairPaperHtml } from '../components/RepairPrint';
 import { loadDocCtx, saveDocPdf, type OfficialDoc } from './officialDocs';
 import { archiveLeasePdf, LEASE_COLS, loadLeaseCtx, type Lease } from './vehicleLease';
 import { resetFolders, savePdf } from './dispatchPapers';
@@ -20,7 +22,7 @@ import { loadLaborCtx, saveContractPdf, type Contract } from './laborContract';
 import { CONTRACT_COLS } from '../components/ContractEditor';
 import { fetchAll, supabase } from './supabase';
 
-export interface AutoCan { drivers: boolean; vehicles: boolean; contracts: boolean; cv: boolean; docs: boolean; leases: boolean; pay: boolean }
+export interface AutoCan { drivers: boolean; vehicles: boolean; contracts: boolean; cv: boolean; docs: boolean; leases: boolean; pay: boolean; repairs: boolean }
 let running = false, again = false;
 
 /** Dựng lại và lưu đè hồ sơ đã đổi / còn thiếu. Trả số tệp đã lưu. */
@@ -109,6 +111,29 @@ export async function autoArchiveProfiles(tenantId: string, me: { id: string | n
           await savePdf([y!, 'Tài chính - Kế toán', 'BHXH & lương chuyển khoản'], `BHXH và lương chuyển khoản tháng ${mo}/${y}`, `BHXH-LuongCK-${m}.pdf`, pages, `Bảng tháng ${mo}/${y} · sig:${sig}`, `bhxh:${m}`);
           return true;
         }, `BHXH tháng ${m}`);
+      }
+    }
+    if (can.repairs) {
+      // Phiếu nhiều: chỉ dựng phiếu chưa lưu hoặc đã sửa sau lần lưu gần nhất
+      const saved = new Map(((await fetchAll<{ note: string | null; created_at: string }>(() => supabase.from('archive_items').select('note, created_at').eq('is_old', false)
+        .like('note', '%[psc:%').order('id'))) ?? []).map((r) => [/\[psc:([0-9a-f-]+)\]/.exec(r.note ?? '')?.[1] ?? '', r.created_at]));
+      const orders = await fetchAll<{ id: string; code: string; vehicle_id: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null; updated_at: string }>(
+        () => supabase.from('repair_orders').select('id, code, vehicle_id, repaired_on, odo_km, workshop, note, created_by, updated_at').order('id'));
+      const todo = orders.filter((o) => !saved.has(o.id) || o.updated_at > saved.get(o.id)!);
+      if (todo.length) {
+        const { data: vs } = await supabase.from('vehicles').select('id, plate');
+        const plates = new Map(((vs ?? []) as { id: string; plate: string }[]).map((v) => [v.id, v.plate]));
+        for (const o of todo) {
+          await step(async () => {
+            const { data: its } = await supabase.from('repair_items').select('content, unit, qty, unit_price').eq('order_id', o.id).order('seq');
+            const plate = plates.get(o.vehicle_id) ?? '';
+            const html = await repairPaperHtml({ ...o, plate, items: ((its ?? []) as { content: string; unit: string | null; qty: number; unit_price: number }[]) }, tenantId, me);
+            const [y, m, d] = o.repaired_on.split('-');
+            await savePdf([y!, '03. Phương tiện', 'Sửa chữa', `Tháng ${m}-${y}`], `Phiếu sửa chữa ${o.code} · ${plate} · ${d}/${m}/${y}`, `${slug(o.code)}_${slug(plate)}.pdf`,
+              [{ html, land: false }], 'Phiếu sửa chữa phương tiện', `psc:${o.id}`);
+            return true;
+          }, `phiếu sửa chữa ${o.code}`);
+        }
       }
     }
     return n;

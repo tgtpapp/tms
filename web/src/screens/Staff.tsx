@@ -5,6 +5,7 @@ import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
 import { staffCvPages } from '../lib/staffCv';
 import { StaffCards, StaffDashboard, StaffOrg, StaffReport } from '../components/StaffOverview';
+import { LeaveOfStaff, LeavePage } from '../components/StaffLeave';
 import { downloadXlsx, type XCell } from '../lib/xlsxWrite';
 import { readSheet, type Cell } from '../lib/sheetRead';
 import type { Page } from '../lib/profilePapers';
@@ -32,7 +33,7 @@ interface Staff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
   joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null; department: string | null;
 }
-interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; contract_type: Contract | null; note: string | null }
+interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; contract_type: Contract | null; note: string | null; bhxh_no: string | null; bank_account: string | null }
 interface Option { id: string; label: string }
 type RecordKind = 'suc_khoe' | 'vi_pham' | 'tai_nan' | 'khen_thuong' | 'ky_luat' | 'dao_tao';
 interface StaffRecord {
@@ -106,14 +107,14 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
   const [showLeft, setShowLeft] = useState(false);
-  const [mod, setMod] = useState<'hs' | 'tq' | 'sd' | 'the' | 'bc'>('hs');   // tab của module
+  const [mod, setMod] = useState<'hs' | 'tq' | 'sd' | 'np' | 'the' | 'bc'>('hs');   // tab của module
   const canEdit = perms.has('staff.manage');
   const canView = perms.has('staff.view_all');   // không có: chỉ thấy hồ sơ của chính mình
 
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
       supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title, department').order('full_name'),
-      supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note'),
+      supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note, bhxh_no, bank_account'),
       cachedRows(`${ctx.tenant_id}:${ctx.user_id}:giay_to_nv`, 'documents', DOC_COLS, (q) => q.eq('owner_kind', 'nhan_su')),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
       supabase.from('branches').select('id, name').order('name'),
@@ -148,7 +149,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const papers = useMemo(() => mergeRecordPapers(docs.filter((d) => d.is_current), records, (sid, type, exp): Doc => ({
     id: `ly-lich:${sid}:${type}`, vehicle_id: null, staff_id: sid, doc_type: type, doc_no: null, issuer: null, issued_on: null, valid_from: null,
     expires_on: exp, data: {}, files: [], note: 'Theo Lý lịch hành nghề', is_current: true, created_at: '' })), [docs, records]);
-  const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') } };
+  const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload: load, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') },
+    leave: { add: perms.has('leave.add'), edit: perms.has('leave.edit'), viewAll: perms.has('leave.view_all') }, myUserId: ctx.user_id };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
@@ -169,6 +171,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   };
   const MODS: { k: typeof mod; label: string; show: boolean }[] = [
     { k: 'hs', label: 'Hồ sơ', show: true }, { k: 'tq', label: 'Tổng quan', show: true }, { k: 'sd', label: 'Sơ đồ tổ chức', show: true },
+    { k: 'np', label: 'Nghỉ phép', show: perms.has('leave.view_all') },
     { k: 'the', label: 'In thẻ', show: canEdit }, { k: 'bc', label: 'Báo cáo nhân sự', show: true },
   ];
   const ov = { staff, priv, avas, onOpen: openFromTab };
@@ -185,6 +188,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
       {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} /></section>}
       {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} /></section>}
       {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
+      {canView && mod === 'np' && perms.has('leave.view_all') && <LeavePage staff={staff} perms={common.leave} myUserId={ctx.user_id} avas={avas} onOpen={openFromTab} />}
       {(!canView || mod === 'hs') && <>
       <div className="staff-top">
         <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ" ref={chipsRef}>
@@ -219,6 +223,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 const EMPTY = {
   full_name: '', job_title: '', department: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
   user_id: '', birth_date: '', gender: '' as Gender | '', address: '', current_address: '', contract_type: '' as Contract | '', note: '',
+  bhxh_no: '', bank_account: '',
 };
 type Form = typeof EMPTY;
 
@@ -227,6 +232,7 @@ function formOf(s: Staff, p: StaffPrivate | undefined): Form {
     full_name: s.full_name, job_title: s.job_title ?? '', department: s.department ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
     left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
     gender: p?.gender ?? '', address: p?.address ?? '', current_address: p?.current_address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
+    bhxh_no: p?.bhxh_no ?? '', bank_account: p?.bank_account ?? '',
   };
 }
 
@@ -248,6 +254,7 @@ interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; papers: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
   canArchive: boolean; me: Me; labor: { view: boolean; add: boolean; edit: boolean };
+  leave: { add: boolean; edit: boolean; viewAll: boolean }; myUserId: string | null;
 }
 
 function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
@@ -401,6 +408,8 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
             </select>
           </label>
           {editing && <label>Ngày nghỉ việc<input type="date" value={f.left_on} onChange={set('left_on')} /></label>}
+          <label>Số sổ BHXH<input value={f.bhxh_no} onChange={set('bhxh_no')} maxLength={20} inputMode="numeric" /></label>
+          <label>Tài khoản ngân hàng<input value={f.bank_account} onChange={set('bank_account')} maxLength={120} placeholder="Ngân hàng - số tài khoản" /></label>
           <label>Ghi chú<input value={f.note} onChange={set('note')} /></label>
         </div>
         {docDefs.map((def) => {
@@ -470,14 +479,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
     const exp = (sid: string, code: string) => papers.find((d) => d.staff_id === sid && d.doc_type === code && d.is_current);
     const dd = (x: string | null | undefined) => (x ? fmtDate(x) : '');
     const head = ['Họ và tên', 'Chức vụ', 'Nhóm', 'Bộ phận', 'Điện thoại', 'Ngày sinh', 'Giới tính', 'Ngày vào công ty', 'Thâm niên', 'Ngày nghỉ việc',
-      'Hạng GPLX', 'GPLX hết hạn', 'Khám sức khỏe hết hạn', 'Tập huấn hết hạn', ...(canEdit ? ['Số CCCD', 'Nơi thường trú', 'Chỗ ở hiện nay', 'Loại hợp đồng'] : [])];
+      'Hạng GPLX', 'GPLX hết hạn', 'Khám sức khỏe hết hạn', 'Tập huấn hết hạn', ...(canEdit ? ['Số CCCD', 'Nơi thường trú', 'Chỗ ở hiện nay', 'Loại hợp đồng', 'Số sổ BHXH', 'Tài khoản ngân hàng'] : [])];
     const rows: XCell[][] = list.map((s) => {
       const p = priv.find((x) => x.staff_id === s.id);
       const g = exp(s.id, 'gplx');
       return [s.full_name, jobLabel(s), POSITION[s.position], s.department ?? '', s.phone ?? '', dd(p?.birth_date), p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '',
         dd(s.joined_on), seniority(s.joined_on, s.left_on), dd(s.left_on), g?.data?.hang ? String(g.data.hang) : '', dd(g?.expires_on),
         dd(exp(s.id, 'kham_suc_khoe')?.expires_on), dd(exp(s.id, 'tap_huan')?.expires_on),
-        ...(canEdit ? [exp(s.id, 'cccd')?.doc_no ?? '', p?.address ?? '', p?.current_address ?? '', p?.contract_type ? CONTRACT[p.contract_type] : ''] : [])];
+        ...(canEdit ? [exp(s.id, 'cccd')?.doc_no ?? '', p?.address ?? '', p?.current_address ?? '', p?.contract_type ? CONTRACT[p.contract_type] : '', p?.bhxh_no ?? '', p?.bank_account ?? ''] : [])];
     });
     downloadXlsx(`Lai xe va nhan vien ${today()}`, 'Lái xe & nhân viên', head, rows, [24, 18, 11, 16, 13, 12, 9, 13, 14, 12, 9, 13, 13, 13, 15, 36, 36, 20]);
   }
@@ -618,7 +627,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
   const [editing, setEditing] = useState(canEdit && props.startEdit !== false);
-  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'hd' | 'll'>('tt');
+  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'hd' | 'np' | 'll'>('tt');
   const [cv, setCv] = useState<Page[] | null>(null);
   const [cvBusy, setCvBusy] = useState(false);
   const toast = useToast();
@@ -638,6 +647,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
     { key: 'cv', label: 'Công việc & lương' },
     { key: 'gt', label: `${s.position === 'lai_xe' ? 'Giấy tờ lái xe' : 'Giấy tờ'}${warnDocs ? ` (thiếu ${warnDocs})` : ''}`, warn: warnDocs > 0 },
     ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng' }] : []),
+    { key: 'np' as const, label: 'Nghỉ phép' },
     ...(canEdit || s.position === 'lai_xe' ? [{ key: 'll' as const, label: canEdit ? `Lý lịch hành nghề (${nRec})` : 'Lý lịch hành nghề' }] : []),
   ];
 
@@ -719,6 +729,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           </ul>
         </div>
       )}
+      {tab === 'np' && <div className="prof-pane"><LeaveOfStaff s={s} perms={props.leave} myUserId={props.myUserId} /></div>}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
   );
@@ -737,6 +748,8 @@ const IMP_COLS: { key: keyof Form; label: string; alias: string[] }[] = [
   { key: 'gender', label: 'Giới tính', alias: ['gioitinh'] },
   { key: 'address', label: 'Nơi thường trú', alias: ['noithuongtru', 'thuongtru', 'diachi'] },
   { key: 'current_address', label: 'Chỗ ở hiện nay', alias: ['choohiennay', 'noio', 'choo'] },
+  { key: 'bhxh_no', label: 'Số sổ BHXH', alias: ['sosobhxh', 'sobhxh', 'bhxh'] },
+  { key: 'bank_account', label: 'Tài khoản ngân hàng', alias: ['taikhoannganhang', 'taikhoan', 'stk', 'sotaikhoan'] },
   { key: 'note', label: 'Ghi chú', alias: ['ghichu'] },
 ];
 const keyOf = (x: unknown) => fold(String(x ?? '')).replace(/[^a-z0-9]/g, '');
@@ -781,7 +794,7 @@ function StaffImport({ staff, priv, onClose, reload }: { staff: Staff[]; priv: S
       const f: Form = { ...base, full_name: name };
       const txt = (key: keyof Form) => { const v = get(key); return v == null ? '' : String(v).trim(); };
       if (phone) f.phone = phone;
-      for (const key of ['job_title', 'department', 'address', 'current_address', 'note'] as const) if (txt(key)) f[key] = txt(key);
+      for (const key of ['job_title', 'department', 'address', 'current_address', 'note', 'bhxh_no', 'bank_account'] as const) if (txt(key)) f[key] = txt(key);
       const pos = keyOf(txt('position') || txt('job_title'));
       if (txt('position') || !old) f.position = pos.includes('phuxe') ? 'phu_xe' : pos.includes('laixe') || pos.includes('taixe') ? 'lai_xe' : txt('position') ? 'nhan_vien' : f.position;
       const g = keyOf(txt('gender'));
@@ -817,7 +830,7 @@ function StaffImport({ staff, priv, onClose, reload }: { staff: Staff[]; priv: S
     else { toast('ok', `Đã nhập ${ok} lái xe / nhân viên`); onClose(); }
   }
   const sample = () => downloadXlsx('Mau nhap lai xe nhan vien', 'Lái xe & nhân viên', IMP_COLS.map((c) => c.label),
-    [['Nguyễn Văn A', '0901234567', 'Lái xe', 'Lái xe', 'Đội xe', '01/03/2024', '12/05/1990', 'Nam', '', '', '']], [24, 13, 16, 11, 14, 14, 12, 9, 36, 36, 20]);
+    [['Nguyễn Văn A', '0901234567', 'Lái xe', 'Lái xe', 'Đội xe', '01/03/2024', '12/05/1990', 'Nam', '', '', '', '', '']], [24, 13, 16, 11, 14, 14, 12, 9, 36, 36, 14, 26, 20]);
   return (
     <Modal wide title="Nhập lái xe / nhân viên từ Excel" onClose={onClose}>
       <div className="nsx-imp">
@@ -890,6 +903,8 @@ function WorkPay({ s, p, branches, papers }: { s: Staff; p: StaffPrivate | undef
         <dt>Lương theo hợp đồng</dt><dd>{money(ctr.salary)}{ctr.number ? ` · HĐ ${ctr.number}` : ''}{ctr.end_on ? ` · đến ${fmtDate(ctr.end_on)}` : ''}</dd>
         {allow > 0 && <><dt>Phụ cấp, hỗ trợ</dt><dd>{money(allow)} / tháng</dd></>}
       </>}
+      {p?.bhxh_no && <><dt>Số sổ BHXH</dt><dd>{p.bhxh_no}</dd></>}
+      {p?.bank_account && <><dt>Tài khoản ngân hàng</dt><dd>{p.bank_account}</dd></>}
       {pay && <>
         <dt>BHXH tháng {pay.month.slice(5, 7)}/{pay.month.slice(0, 4)}</dt><dd>{pay.has_bhxh ? `Có đóng · lương đóng ${money(pay.bhxh_pay)}` : 'Không đóng'}</dd>
         <dt>Lương chuyển khoản</dt><dd>{money(pay.transfer_pay)}</dd>

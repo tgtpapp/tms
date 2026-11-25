@@ -12,6 +12,7 @@ export const ACC = [
   { id: 'goc', name: 'Mặc định', c: '#635bff' }, { id: 'sky', name: 'Xanh biển', c: '#0ea5e9' }, { id: 'blue', name: 'Xanh dương', c: '#2563eb' },
   { id: 'violet', name: 'Tím', c: '#7c3aed' }, { id: 'teal', name: 'Ngọc lam', c: '#0d9488' }, { id: 'emerald', name: 'Lục bảo', c: '#059669' },
   { id: 'rose', name: 'Hồng', c: '#e11d48' }, { id: 'amber', name: 'Hổ phách', c: '#d97706' }, { id: 'gold', name: 'Vàng kim', c: '#b8892e' }, { id: 'slate', name: 'Than chì', c: '#475569' },
+  { id: 'nhansu', name: 'Xanh đậm', c: '#2f5bea' },
 ];
 export const FONTS = [
   { id: 'bvp', name: 'Be Vietnam Pro' }, { id: 'inter', name: 'Inter' }, { id: 'roboto', name: 'Roboto' }, { id: 'nunito', name: 'Nunito' },
@@ -26,6 +27,7 @@ export const PRESETS: { id: string; name: string; d: string; v: Partial<UiCfg> }
   { id: 'midnight', name: 'Nửa đêm', d: 'Tím trên nền tối', v: { acc: 'violet', font: 'inter', rad: 'lg', den: 'std', mode: 'dark' } },
   { id: 'graphite', name: 'Than chì', d: 'Tối giản, nền tối', v: { acc: 'slate', font: 'inter', rad: 'sm', den: 'compact', mode: 'dark' } },
   { id: 'sunset', name: 'Hoàng hôn', d: 'Cam ấm áp', v: { acc: 'amber', font: 'nunito', rad: 'lg', den: 'roomy' } },
+  { id: 'nhansu', name: 'Xanh đậm', d: 'Xanh đậm như mẫu Nhân Sự Pro', v: { acc: 'nhansu', font: 'bvp', rad: 'lg', den: 'std' } },
 ];
 export const DEF: UiCfg = { mode: 'light', preset: 'saas', acc: 'goc', custom: '', font: 'bvp', size: 100, den: 'std', rad: 'md', menu: 'pin', out: false, anim: false };
 

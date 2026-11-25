@@ -1581,3 +1581,32 @@ button.nsx-whob:hover { background: var(--surface-2); }
 .nsx-rep .nsx-kpis { margin-bottom: 12px; }
 .nsx-tbl tfoot td { border-top: 2px solid var(--line); }
 .nsx-twocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+/* Nghỉ phép (tiền tố lvx-) */
+.lvx { display: flex; flex-direction: column; gap: 12px; }
+.lvx .nsx-kpis { margin: 0; }
+.lvx-k { border-top: 3px solid var(--primary); }
+.lvx-k.warn { border-top-color: #f59e0b; } .lvx-k.ok { border-top-color: #16a34a; } .lvx-k.vio { border-top-color: #7c3aed; }
+.lvx-k b em { font-style: normal; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.lvx-card { padding: 14px; }
+.lvx-h { display: flex; gap: 8px 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+.lvx-h h3 { margin: 0; font-size: 1rem; }
+.lvx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 18px; max-height: 320px; overflow: auto; }
+.lvx-pp { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 6px; border: 0; background: none; border-radius: 10px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.lvx-pp:hover { background: var(--surface-2); }
+.lvx-m { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.lvx-m b { font-size: .88rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lvx-bar { height: 6px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.lvx-bar i { display: block; height: 100%; border-radius: 6px; }
+.lvx-n { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.lvx-n b { color: var(--text); font-size: .95rem; }
+.lvx-tools { flex-wrap: wrap; }
+.lvx-tools .nsx-search { flex: 1 1 160px; }
+.lvx-add { min-height: 44px; }
+.lvx-st { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.lvx-apv { display: flex; gap: 4px; }
+.lvx-apv .btn { min-height: 36px; }
+.lvx-sum { display: flex; gap: 10px 24px; flex-wrap: wrap; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.lvx-sum small { display: block; color: var(--muted); font-size: .78rem; }
+.lvx-sum b { font-size: 1.1rem; }
+.lvx-sum b.ok { color: #16a34a; }
+.lvx-sum .lvx-add { margin-left: auto; }

@@ -304,6 +304,15 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   await page.getByRole('tab', { name: 'Báo cáo nhân sự', exact: true }).click();
   await expect(page.locator('.nsx-rep').getByText('Tỷ lệ nghỉ việc')).toBeVisible();
+  // Nghỉ phép: ghi đơn → Chờ duyệt → Duyệt ngay trong bảng
+  await page.getByRole('tab', { name: 'Nghỉ phép', exact: true }).click();
+  await page.getByRole('button', { name: '+ Thêm đơn nghỉ' }).click();
+  await page.getByLabel('Nhân viên', { exact: true }).selectOption({ label: 'Nguyễn Văn Tài' });
+  await page.getByLabel('Lý do', { exact: true }).fill('Về quê');
+  await page.getByRole('button', { name: 'Gửi đơn nghỉ' }).click();
+  await expect(page.getByText('Đã gửi đơn nghỉ')).toBeVisible();
+  await page.locator('.lvx-tbl').getByRole('button', { name: 'Duyệt', exact: true }).click();
+  await expect(page.locator('.lvx-tbl').getByText('Đã duyệt', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Hồ sơ', exact: true }).click();
   // Nhập Excel: xem trước (người mới → Thêm mới), chưa nhập
   await page.getByRole('button', { name: '⬆ Nhập Excel' }).click();

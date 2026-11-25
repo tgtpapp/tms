@@ -28,7 +28,7 @@ interface Ctr { number: string | null; kind: string; start_on: string; end_on: s
 export async function staffCvPages(tenantId: string, staffId: string, me: { id: string | null; name: string }, photoUrl: string | null): Promise<Page[]> {
   const [sm, pv, dc, rc, hd, pay, co] = await Promise.all([
     supabase.from('staff_members').select('id, full_name, position, job_title, department, phone, joined_on, left_on, is_active, user_id').eq('id', staffId).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, gender, address, current_address, contract_type').eq('staff_id', staffId).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, gender, address, current_address, contract_type, bhxh_no').eq('staff_id', staffId).maybeSingle(),
     supabase.from('documents').select('doc_type, doc_no, issuer, issued_on, expires_on, is_current, data').eq('staff_id', staffId),
     supabase.from('staff_records').select('kind, occurred_on, doc_no, title, data').eq('staff_id', staffId).in('kind', ['khen_thuong', 'ky_luat']).order('occurred_on'),
     supabase.from('labor_contracts').select('number, kind, start_on, end_on, salary, position, allowances, status').eq('staff_id', staffId).eq('status', 'hieu_luc').order('start_on'),
@@ -37,7 +37,7 @@ export async function staffCvPages(tenantId: string, staffId: string, me: { id: 
   ]);
   if (!sm.data) throw new Error('Không tìm thấy nhân viên');
   const s = sm.data as { full_name: string; position: string; job_title: string | null; department: string | null; phone: string | null; joined_on: string; left_on: string | null; is_active: boolean; user_id: string | null };
-  const p = (pv.data ?? null) as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null; contract_type: string | null } | null;
+  const p = (pv.data ?? null) as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null; contract_type: string | null; bhxh_no: string | null } | null;
   const docs = (dc.data ?? []) as DocRow[];
   const cur = (t: string) => docs.find((g) => g.doc_type === t && g.is_current);
   const cccd = cur('cccd'), gplx = cur('gplx');
@@ -77,6 +77,7 @@ export async function staffCvPages(tenantId: string, staffId: string, me: { id: 
     ...(s.position === 'lai_xe' ? [['Hạng GPLX', String(gplx?.data?.hang ?? '')] as [string, string]] : []),
     ...(now?.salary != null ? [['Lương theo hợp đồng', `${num(now.salary)} đồng`] as [string, string]] : []),
     ...(now?.salary != null && allow ? [['Phụ cấp, hỗ trợ', `${num(allow)} đồng/tháng`] as [string, string]] : []),
+    ...(p?.bhxh_no ? [['Số sổ BHXH', p.bhxh_no] as [string, string]] : []),
     ...(lastPay ? [['Lương đóng BHXH', lastPay.has_bhxh ? `${num(lastPay.bhxh_pay)} đồng` : 'Không đóng'] as [string, string]] : []),
     ...(!s.is_active ? [['Ngày nghỉ việc', d(s.left_on)] as [string, string]] : []),
   ])}

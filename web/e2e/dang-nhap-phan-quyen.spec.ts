@@ -292,6 +292,19 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' }).getByRole('button', { name: 'Sửa hồ sơ' })).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await page.getByRole('button', { name: 'Thẻ', exact: true }).click();
+  // Tab module: Tổng quan · Sơ đồ tổ chức · In thẻ · Báo cáo nhân sự
+  await page.getByRole('tab', { name: 'Tổng quan', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Số người cuối mỗi tháng' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Sơ đồ tổ chức', exact: true }).click();
+  await expect(page.locator('.nsx-depts').getByText('Nguyễn Văn Tài')).toBeVisible();
+  await page.getByRole('tab', { name: 'In thẻ', exact: true }).click();
+  await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
+  await page.getByRole('button', { name: '🖨 In 1 thẻ' }).click();
+  await expect(page.locator('.paper-top').getByText('THẺ NHÂN VIÊN').first()).toBeVisible();
+  await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
+  await page.getByRole('tab', { name: 'Báo cáo nhân sự', exact: true }).click();
+  await expect(page.locator('.nsx-rep').getByText('Tỷ lệ nghỉ việc')).toBeVisible();
+  await page.getByRole('tab', { name: 'Hồ sơ', exact: true }).click();
   // Nhập Excel: xem trước (người mới → Thêm mới), chưa nhập
   await page.getByRole('button', { name: '⬆ Nhập Excel' }).click();
   await page.getByLabel('Chọn file Excel nhân viên').setInputFiles({ name: 'nv.csv', mimeType: 'text/csv',

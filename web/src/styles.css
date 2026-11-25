@@ -1528,3 +1528,56 @@ label.nsx-miss input { background: #fffbeb; border-color: #f59e0b; }
 .nsx-xl .btn { min-height: 44px; }
 .nsx-imp { display: flex; flex-direction: column; gap: 10px; }
 .nsx-imp .btn { min-height: 44px; }
+/* Lái xe & nhân viên: tab module, Tổng quan, Sơ đồ tổ chức, In thẻ, Báo cáo */
+.nsx-mtabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.nsx-mtabs::-webkit-scrollbar { display: none; }
+.nsx-mtabs > button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.nsx-mtabs > button.on { color: var(--primary); border-bottom-color: var(--primary); }
+.nsx-ov { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.nsx-ov > .card { padding: 14px; }
+.nsx-ov h3, .nsx-rep h3 { font-size: 1rem; margin: 0 0 8px; }
+.nsx-kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 4px; }
+.nsx-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.nsx-kpi small { color: var(--muted); font-size: .8rem; }
+.nsx-kpi b { font-size: 1.4rem; }
+.nsx-kpi span { color: var(--muted); font-size: .78rem; }
+.nsx-chart { width: 100%; height: auto; display: block; }
+.nsx-grid { stroke: var(--line); }
+.nsx-ax { font-size: 9px; fill: var(--muted); }
+.nsx-legend { display: flex; gap: 14px; font-size: .8rem; color: var(--muted); margin: 4px 0 0; }
+.nsx-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.nsx-hbars { display: flex; flex-direction: column; gap: 8px; }
+.nsx-hb-h { display: flex; justify-content: space-between; gap: 8px; font-size: .88rem; margin-bottom: 3px; }
+.nsx-hb-bar { height: 9px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.nsx-hb-bar i { display: block; height: 100%; border-radius: 6px; }
+.nsx-list { display: flex; flex-direction: column; }
+.nsx-li { display: flex; align-items: center; gap: 8px; justify-content: space-between; border-bottom: 1px solid var(--line-soft); padding: 4px 0; }
+.nsx-li:last-child { border-bottom: 0; }
+.nsx-whob { display: flex; align-items: center; gap: 10px; min-height: 44px; min-width: 0; padding: 4px; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+div.nsx-whob { cursor: default; }
+button.nsx-whob:hover { background: var(--surface-2); }
+.nsx-who-t { display: flex; flex-direction: column; min-width: 0; }
+.nsx-who-t b { overflow-wrap: anywhere; }
+.nsx-who-t small { color: var(--muted); font-size: .8rem; }
+.nsx-org-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.nsx-org-bar .muted { margin-right: auto; }
+.nsx-org-bar .nsx-search { flex: 1 1 180px; }
+.nsx-org-bar .btn { min-height: 44px; }
+.nsx-org-top { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
+.nsx-onode { border: 1px solid var(--line); border-radius: 14px; padding: 6px 12px; background: var(--surface); }
+.nsx-onode.ceo { background: var(--primary-soft); border-color: var(--primary-ring); }
+.nsx-depts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.nsx-dcol { border: 1px solid var(--line); border-top: 4px solid var(--primary); border-radius: 12px; background: var(--surface); overflow: hidden; }
+.nsx-dh { font-weight: 700; padding: 10px 12px 4px; }
+.nsx-dhead { padding: 0 8px 6px; border-bottom: 1px solid var(--line-soft); }
+.nsx-mem { padding: 0 8px; border-top: 1px solid var(--line-soft); }
+.nsx-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.nsx-tp { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; min-height: 44px; padding: 2px 12px 2px 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font-size: .88rem; cursor: pointer; }
+.nsx-tp input { width: 18px; height: 18px; margin: 0 0 0 6px; }
+.nsx-tp.on { border-color: var(--primary); background: var(--primary-soft); }
+.nsx-cardgrid { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.nsx-cardpv { background: #fff; border-radius: 3mm; box-shadow: 0 4px 14px rgba(0, 0, 0, .12); }
+@media (max-width: 400px) { .nsx-cardpv { zoom: .9; } }
+.nsx-rep .nsx-kpis { margin-bottom: 12px; }
+.nsx-tbl tfoot td { border-top: 2px solid var(--line); }
+.nsx-twocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }

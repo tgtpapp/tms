@@ -4,6 +4,7 @@ import { StaffSignature } from '../components/StaffSignature';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { BulkPaperSave, PaperActions, PaperView, type Me } from '../components/ProfilePapers';
 import { staffCvPages } from '../lib/staffCv';
+import { StaffCards, StaffDashboard, StaffOrg, StaffReport } from '../components/StaffOverview';
 import { downloadXlsx, type XCell } from '../lib/xlsxWrite';
 import { readSheet, type Cell } from '../lib/sheetRead';
 import type { Page } from '../lib/profilePapers';
@@ -105,6 +106,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
   const [showLeft, setShowLeft] = useState(false);
+  const [mod, setMod] = useState<'hs' | 'tq' | 'sd' | 'the' | 'bc'>('hs');   // tab của module
   const canEdit = perms.has('staff.manage');
   const canView = perms.has('staff.view_all');   // không có: chỉ thấy hồ sơ của chính mình
 
@@ -159,8 +161,31 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
     if (!box || !on) return;
     if (on.offsetLeft < box.scrollLeft || on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = on.offsetLeft - 8;
   }, [cur]);
+  // Từ Tổng quan / Sơ đồ: bấm 1 người → về tab Hồ sơ, mở hồ sơ (chỉ người được mở: quản lý nhân sự hoặc chính mình)
+  const openFromTab = (id: string) => {
+    const x = staff.find((y) => y.id === id);
+    if (!x || !(canEdit || x.user_id === ctx.user_id)) return;
+    setMod('hs'); setTab(''); setOpen(id);
+  };
+  const MODS: { k: typeof mod; label: string; show: boolean }[] = [
+    { k: 'hs', label: 'Hồ sơ', show: true }, { k: 'tq', label: 'Tổng quan', show: true }, { k: 'sd', label: 'Sơ đồ tổ chức', show: true },
+    { k: 'the', label: 'In thẻ', show: canEdit }, { k: 'bc', label: 'Báo cáo nhân sự', show: true },
+  ];
+  const ov = { staff, priv, avas, onOpen: openFromTab };
   return (
     <>
+      {canView && (
+        <div className="nsx-mtabs" role="tablist" aria-label="Lái xe & nhân viên">
+          {MODS.filter((m) => m.show).map((m) => (
+            <button key={m.k} type="button" role="tab" aria-selected={mod === m.k} className={mod === m.k ? 'on' : ''} onClick={() => setMod(m.k)}>{m.label}</button>
+          ))}
+        </div>
+      )}
+      {canView && mod === 'tq' && <StaffDashboard {...ov} papers={papers} warnDays={warnDays} />}
+      {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} /></section>}
+      {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} /></section>}
+      {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
+      {(!canView || mod === 'hs') && <>
       <div className="staff-top">
         <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ" ref={chipsRef}>
           {/* chỉ xem được hồ sơ của mình (lái xe, nhân viên): 1 thẻ "Thông tin của tôi" */}
@@ -184,6 +209,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
       </div>
       <StaffList {...common} staff={staff} myUserId={ctx.user_id} open={open} setOpen={setOpen} cur={cur} showLeft={showLeft} setShowLeft={setShowLeft} avas={avas} selfOnly={!canView} />
       {canEdit && <StaffForm key="new" {...common} staff={staff} />}
+      </>}
     </>
   );
 }

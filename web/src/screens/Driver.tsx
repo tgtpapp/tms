@@ -2,7 +2,8 @@
 import { dirName } from '../lib/routes';
 import { NotifyBanner, NotifyBell } from '../components/NotifyBell';
 import { MonthPicker } from '../components/MonthPicker';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { meter } from '../lib/egress';
 import { fmtDate, today } from '../components/Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -275,11 +276,28 @@ function TripRun({ trip, stopName, reload, scanned, onScan }: { trip: MyTrip; st
   const [pay, setPay] = useState<Ticket | null>(null);
   const [hl, setHl] = useState<string | null>(null);
 
+  // Dấu thay đổi (số vé/hàng + lần sửa mới nhất): chỉ khi đổi mới tải lại cả chuyến – tiết kiệm băng thông
+  const sigRef = useRef<string | null>(null);
+  const tripSig = useCallback(async (): Promise<string | null> => {
+    const [a, b] = await Promise.all([
+      supabase.from('seat_inventory').select('updated_at', { count: 'exact' }).eq('trip_id', trip.trip_id).in('status', ['dat', 'da_tt'])
+        .order('updated_at', { ascending: false }).limit(1),
+      supabase.from('shipments').select('updated_at', { count: 'exact' }).eq('trip_id', trip.trip_id).neq('status', 'huy')
+        .order('updated_at', { ascending: false }).limit(1),
+    ]);
+    meter('Lái xe: kiểm tra chuyến có đổi', [a.data, b.data]);
+    if (a.error || b.error) return null;
+    const ta = (a.data ?? []) as { updated_at: string }[];
+    const tb = (b.data ?? []) as { updated_at: string }[];
+    return `${a.count ?? 0}|${ta[0]?.updated_at ?? ''}|${b.count ?? 0}|${tb[0]?.updated_at ?? ''}`;
+  }, [trip.trip_id]);
   const load = useCallback(async () => {
+    sigRef.current = null;
     const [ps, t] = await Promise.all([
       supabase.from('shipments').select(SHIP_COLS).eq('trip_id', trip.trip_id).neq('status', 'huy').order('created_at'),
       supabase.from('seat_inventory').select(TICKET_COLS).eq('trip_id', trip.trip_id).in('status', ['dat', 'da_tt']),
     ]);
+    meter('Lái xe: tải cả chuyến', [...(ps.data ?? []), ...(t.data ?? [])]);
     setParcels((ps.data ?? []) as Shipment[]);
     if (t.error) return toast('error', t.error.message);
     const list = (t.data ?? []) as Ticket[];
@@ -289,13 +307,21 @@ function TripRun({ trip, stopName, reload, scanned, onScan }: { trip: MyTrip; st
       const b = await supabase.from('bookings').select('id, code').in('id', ids);
       setCodes(Object.fromEntries(((b.data ?? []) as { id: string; code: string }[]).map((x) => [x.id, x.code])));
     }
-  }, [trip.trip_id, toast]);
+    if (!ps.error) sigRef.current = await tripSig().catch(() => null);
+  }, [trip.trip_id, toast, tripSig]);
+  const check = useCallback(async () => {
+    if (document.hidden || !navigator.onLine) return;
+    const s = await tripSig().catch(() => null);
+    if (s === null || s !== sigRef.current) await load();
+  }, [tripSig, load]);
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 20000);   // vé bán thêm / quầy đổi ở nơi khác
-    return () => clearInterval(t);
-  }, [load]);
+    const t = setInterval(() => void check(), 20000);   // vé bán thêm / quầy đổi ở nơi khác (tab ẩn thì nghỉ)
+    const vis = () => { if (!document.hidden) void check(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
+  }, [load, check]);
   useEffect(() => { void rpc<Layout | null>('my_trip_layout', { p_trip_id: trip.trip_id }).then(setLayout).catch(() => setLayout(null)); }, [trip.trip_id]);
   useEffect(() => { if (!hl) return; const t = window.setTimeout(() => setHl(null), 4000); return () => window.clearTimeout(t); }, [hl]);
 

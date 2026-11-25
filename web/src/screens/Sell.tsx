@@ -16,6 +16,7 @@ import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { zaloKick } from '../lib/zalo';
 import { loadUi } from '../lib/theme';
+import { meter } from '../lib/egress';
 
 type Dir = 'di' | 've';
 type SeatStatus = 'giu' | 'dat' | 'da_tt' | 'cho_xep' | 'het_han' | 'huy';
@@ -447,19 +448,31 @@ function CancelledTicket({ t, admin, stopName, routeName, onClose }: { t: Hit; a
 
 function CashToday({ userId, version }: { userId: string | null; version: number }) {
   const [sum, setSum] = useState<{ cash: number; bank: number } | null>(null);
-  const load = useCallback(async () => {
+  // Sổ cái chỉ thêm dòng: đếm số dòng hôm nay (không tải nội dung), số dòng đổi mới tải lại để cộng tiền
+  const seen = useRef<{ day: string; n: number } | null>(null);
+  const load = useCallback(async (force: boolean) => {
     if (!userId) return;
-    const start = new Date(`${today()}T00:00:00+07:00`).toISOString();
+    if (!force && (document.hidden || !navigator.onLine)) return;
+    const day = today();
+    const start = new Date(`${day}T00:00:00+07:00`).toISOString();
+    const c = await supabase.from('ledger_lines').select('id, ledger_transactions!inner(created_at)', { count: 'exact', head: true })
+      .in('account', ['tien_mat', 'ngan_hang']).eq('holder_id', userId).gte('ledger_transactions.created_at', start);
+    meter('Bán vé: kiểm tra tiền thu hôm nay', null);
+    if (!force && !c.error && c.count !== null && seen.current?.day === day && seen.current.n === c.count) return;
     const { data } = await supabase.from('ledger_lines').select('account, debit, credit, ledger_transactions!inner(created_at)')
       .in('account', ['tien_mat', 'ngan_hang']).eq('holder_id', userId).gte('ledger_transactions.created_at', start);
+    meter('Bán vé: tải tiền thu hôm nay', data);
     const rows = (data ?? []) as { account: string; debit: number; credit: number }[];
     const total = (acc: string) => rows.filter((x) => x.account === acc).reduce((a, x) => a + Number(x.debit) - Number(x.credit), 0);
+    seen.current = c.error || c.count === null ? null : { day, n: c.count };
     setSum({ cash: total('tien_mat'), bank: total('ngan_hang') });
   }, [userId]);
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 15000);
-    return () => clearInterval(t);
+    void load(true);
+    const t = setInterval(() => void load(false), 15000);
+    const vis = () => { if (!document.hidden) void load(false); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
   }, [load, version]);
   if (sum === null) return null;
   return <p className="cash-today">Tôi thu hôm nay: tiền mặt <b>{money(sum.cash)}</b> · chuyển khoản đã xác nhận <b>{money(sum.bank)}</b></p>;
@@ -527,9 +540,27 @@ function TripSell(props: TripSellProps) {
     const t = tickets.find((x) => x.id === props.focus);
     if (t) { setSelected(t); props.onFocused(); }
   }, [tickets, props]);
+  // Dấu thay đổi của chuyến (số vé + lần sửa mới nhất của vé và đơn): chỉ khi dấu đổi mới tải lại cả chuyến – tiết kiệm băng thông
+  const sigRef = useRef<string | null>(null);
+  const bidsRef = useRef<string[]>([]);
+  const tripSig = useCallback(async (): Promise<string | null> => {
+    const bids = bidsRef.current;
+    const [a, b] = await Promise.all([
+      supabase.from('seat_inventory').select('updated_at', { count: 'exact' }).eq('trip_id', trip.id).in('status', ['giu', 'dat', 'da_tt', 'cho_xep'])
+        .order('updated_at', { ascending: false }).limit(1),
+      bids.length ? supabase.from('bookings').select('updated_at').in('id', bids).order('updated_at', { ascending: false }).limit(1) : null,
+    ]);
+    meter('Bán vé: kiểm tra chuyến có đổi', [a.data, b?.data]);
+    if (a.error || b?.error) return null;
+    const ta = (a.data ?? []) as { updated_at: string }[];
+    const tb = (b?.data ?? []) as { updated_at: string }[];
+    return `${a.count ?? 0}|${ta[0]?.updated_at ?? ''}|${bids.length}|${tb[0]?.updated_at ?? ''}`;
+  }, [trip.id]);
   const load = useCallback(async () => {
     await rpc('refresh_trip_seats', { p_trip_id: trip.id }).catch(() => undefined);
+    sigRef.current = null;
     const t = await supabase.from('seat_inventory').select(TICKET_COLS).eq('trip_id', trip.id).in('status', ['giu', 'dat', 'da_tt', 'cho_xep']);
+    meter('Bán vé: tải cả chuyến', t.data);
     if (t.error) {
       const c = isNetworkError(t.error.message) ? cacheGet<{ tickets: Ticket[]; bookings: Booking[]; fares: Fare[] }>(cacheKey) : null;
       if (c) {
@@ -544,7 +575,9 @@ function TripSell(props: TripSellProps) {
     const ids = [...new Set(list.map((x) => x.booking_id))];
     const b = ids.length ? await supabase.from('bookings').select('id, code, customer_name, customer_phone, note').in('id', ids) : null;
     const bl = (b?.data ?? []) as Booking[];
+    meter('Bán vé: tải cả chuyến', bl);
     setBookings(bl);
+    bidsRef.current = [...ids].sort();
     const f = await rpc<Fare[]>('trip_fares', { p_trip_id: trip.id }).catch(() => null);
     if (f) setFares(f);
     cacheSet(cacheKey, { tickets: list, bookings: bl, fares: f ?? [] });
@@ -562,7 +595,22 @@ function TripSell(props: TripSellProps) {
         }
       }
     }
-  }, [trip.id, toast, cacheKey, ctx.user_id]);
+    // Ghi dấu sau khi tải: nếu trong lúc tải có quầy khác đổi vé thì lần kiểm tra sau thấy khác và tải lại
+    sigRef.current = await tripSig().catch(() => null);
+  }, [trip.id, toast, cacheKey, ctx.user_id, tripSig]);
+  const ticketsRef = useRef<Ticket[]>([]);
+  ticketsRef.current = tickets;
+  /** Kiểm tra nhẹ: ghế giữ hết hạn thì nhả; dấu đổi thì tải lại cả chuyến */
+  const check = useCallback(async () => {
+    if (document.hidden || !navigator.onLine) return;
+    const now = new Date().toISOString();
+    if (ticketsRef.current.some((x) => x.status === 'giu' && x.hold_until && x.hold_until < now)) {
+      const n = await rpc<number>('refresh_trip_seats', { p_trip_id: trip.id }).catch(() => 0);
+      if (n) return load();
+    }
+    const s = await tripSig().catch(() => null);
+    if (s === null || s !== sigRef.current) await load();
+  }, [trip.id, tripSig, load]);
 
   useEffect(() => {
     void (async () => {
@@ -583,9 +631,11 @@ function TripSell(props: TripSellProps) {
 
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 10000);   // cập nhật ghế các quầy khác bán
-    return () => clearInterval(t);
-  }, [load]);
+    const t = setInterval(() => void check(), 10000);   // cập nhật ghế các quầy khác bán (tab ẩn thì nghỉ)
+    const vis = () => { if (!document.hidden) void check(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
+  }, [load, check]);
 
   /** Tiền cọc của cả đơn (cọc tính theo đơn, không theo từng ghế) */
   const bookingDep = (bid: string) => tickets.reduce((a, x) => a + (x.booking_id === bid && x.status === 'dat' ? x.deposit ?? 0 : 0), 0);

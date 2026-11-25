@@ -279,7 +279,20 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: /^Cảnh báo: \d+ việc cần xử lý của 1 người$/ }).click();
   await expect(page.getByRole('button', { name: 'Mở hồ sơ Nguyễn Văn Tài' })).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
-  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  // Danh sách: tìm không dấu ra đúng người, chuyển Thẻ / Bảng
+  await page.getByLabel('Tìm lái xe, nhân viên').fill('van tai');
+  await expect(page.locator('.staff-card')).toHaveCount(1);
+  await page.getByLabel('Tìm lái xe, nhân viên').fill('khong co ai');
+  await expect(page.getByText('Không tìm thấy ai phù hợp.')).toBeVisible();
+  await page.getByLabel('Tìm lái xe, nhân viên').fill('');
+  await page.getByRole('button', { name: 'Bảng', exact: true }).click();
+  await expect(page.locator('.nsx-tbl').getByText('Nguyễn Văn Tài')).toBeVisible();
+  // Xem hồ sơ: chỉ xem (không mở form sửa)
+  await page.getByRole('button', { name: 'Xem hồ sơ Nguyễn Văn Tài' }).click();
+  await expect(page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' }).getByRole('button', { name: 'Sửa hồ sơ' })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
+  await page.getByRole('button', { name: 'Thẻ', exact: true }).click();
+  await page.getByRole('button', { name: 'Sửa Nguyễn Văn Tài', exact: true }).click();
   // Hồ sơ chia thẻ: Thông tin / Giấy tờ / Hợp đồng lao động / Lý lịch hành nghề
   await page.getByRole('tab', { name: /^Giấy tờ/ }).click();
   await expect(page.getByText('Số 079123456789')).toBeVisible();
@@ -538,7 +551,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await hd.getByRole('button', { name: 'Đóng', exact: true }).click();
   // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
-  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await page.getByRole('button', { name: 'Xem hồ sơ Nguyễn Văn Tài', exact: true }).click();
   await page.getByRole('tab', { name: /^Giấy tờ/ }).click();
   await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();
   await page.getByRole('button', { name: /^Xem HĐ 001\/\d{4}\/HĐLĐ/ }).click();
@@ -806,7 +819,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // chọn ảnh → (CI không có AI) nhập tay → gửi → Nhiên liệu thấy phiếu chờ duyệt → duyệt thành phiếu đổ ngoài
   await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ
-  await page.getByRole('button', { name: 'Hồ sơ Nguyễn Văn Tài' }).click();
+  await page.getByRole('button', { name: 'Sửa Nguyễn Văn Tài', exact: true }).click();
   const hsTai = page.getByRole('dialog', { name: 'Hồ sơ Nguyễn Văn Tài' });
   const acc = hsTai.getByLabel('Tài khoản đăng nhập (nếu có)');
   await acc.selectOption((await acc.locator('option', { hasText: '0901000001' }).getAttribute('value'))!);

@@ -1470,3 +1470,42 @@ html:not([data-mode='dark']) { --bg: color-mix(in srgb, var(--primary) 5%, #f6f7
 .qr-login ol { margin: 0; padding-left: 20px; }
 .qr-scan video { width: 100%; max-height: 60vh; border-radius: 12px; background: #000; object-fit: cover; aspect-ratio: 1; }
 @media (min-width: 900px) { .side-qr-m { display: none !important; } }
+
+/* ===== Lái xe & nhân viên: chip chức vụ, tìm kiếm, số liệu, Thẻ/Bảng (tiền tố nsx-) ===== */
+.nsx-chips { display: flex; gap: 6px; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding: 2px 0; flex: 1; min-width: 0; }
+.nsx-chips::-webkit-scrollbar { display: none; }
+.nsx-chips > button { flex: 0 0 auto; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; white-space: nowrap; cursor: pointer; }
+.nsx-chips > button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+.nsx-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.nsx-stats { display: flex; gap: 6px; flex-wrap: wrap; }
+.nsx-stat { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: .88rem; }
+.nsx-stat b { color: var(--text); font-size: 1rem; }
+button.nsx-stat { cursor: pointer; min-height: 44px; }
+button.nsx-stat.on { border-color: var(--primary); background: var(--primary-soft); }
+.nsx-tools { display: flex; gap: 8px; align-items: center; }
+.nsx-search { flex: 1; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--input-line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; }
+.nsx-seg { display: inline-flex; flex: 0 0 auto; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.nsx-seg > button { min-height: 38px; min-width: 52px; padding: 0 10px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+.nsx-seg > button.on { background: var(--surface); color: var(--primary); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.nsx-card .sc-top { padding-right: 0; }
+.nsx-foot { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--line); }
+.nsx-acts { display: flex; gap: 6px; margin-left: auto; }
+.nsx-foot .btn, .nsx-tbl .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.nsx-call { gap: 4px; text-decoration: none; }
+.nsx-tblw { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.nsx-tbl { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.nsx-tbl th { text-align: left; font-size: .78rem; color: var(--muted); font-weight: 600; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.nsx-tbl td { padding: 8px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.nsx-tbl tr { box-shadow: inset 4px 0 0 #2563eb; }
+.nsx-tbl tr.pos-lai_xe { box-shadow: inset 4px 0 0 #16a34a; } .nsx-tbl tr.pos-phu_xe { box-shadow: inset 4px 0 0 #f59e0b; }
+.nsx-tbl thead tr { box-shadow: none; }
+.nsx-tbl tr.off { opacity: .6; }
+.nsx-tbl .nsx-acts { margin-left: 0; flex-wrap: nowrap; }
+.nsx-who { display: flex; gap: 8px; align-items: center; min-width: 170px; }
+.nsx-who > div { display: flex; flex-direction: column; }
+.nsx-nw { white-space: nowrap; }
+@media (max-width: 480px) {
+  .nsx-num { display: none; }
+  .nsx-acts { flex: 1 1 auto; }
+  .nsx-acts .btn { flex: 1; }
+}

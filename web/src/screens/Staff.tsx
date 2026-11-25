@@ -150,7 +150,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   return (
     <>
       <div className="staff-top">
-        <div className="vx-tabs staff-tabs" role="tablist" aria-label="Nhóm">
+        <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ">
           {/* chỉ xem được hồ sơ của mình (lái xe, nhân viên): 1 thẻ "Thông tin của tôi" */}
           {(canView ? [{ key: '', label: 'Tất cả', n: shown.length }, ...tabs] : [{ key: '', label: 'Thông tin của tôi', n: -1 }]).map((t) => (
             <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
@@ -387,16 +387,49 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 
 /* ------------------------------------------------------------------ Danh sách */
 
+/** Bỏ dấu, chữ thường: tìm "nguyen van" ra "Nguyễn Văn" */
+const fold = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase();
+
 function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; open: string | null; setOpen: (id: string | null) => void;
   cur: string; showLeft: boolean; setShowLeft: (v: boolean) => void; avas: Record<string, string>; selfOnly?: boolean }) {
   const { staff, priv, papers, warnDays, canEdit, myUserId, open, setOpen, branches, cur, showLeft, setShowLeft, avas } = props;
+  const [q, setQ] = useState('');
+  const [view, setView] = useState<'the' | 'bang'>(() => { try { return localStorage.getItem('nsx-view') === 'bang' ? 'bang' : 'the'; } catch { return 'the'; } });
+  const [viewOnly, setViewOnly] = useState(false);   // mở bằng "Xem hồ sơ": chỉ xem, không vào sửa
+  const pickView = (v: 'the' | 'bang') => { setView(v); try { localStorage.setItem('nsx-view', v); } catch { /* bỏ qua */ } };
   const left = staff.filter((s) => !s.is_active).length;
+  const active = staff.filter((s) => s.is_active);
+  const trial = active.filter((s) => priv.find((x) => x.staff_id === s.id)?.contract_type === 'thu_viec').length;
 
   const shown = staff.filter((s) => showLeft || s.is_active);
+  const words = fold(q.trim()).split(/\s+/).filter(Boolean);
+  const list = shown.filter((s) => !cur || jobKey(s) === cur).filter((s) => {
+    if (!words.length) return true;
+    const text = fold([s.full_name, s.phone ?? '', jobLabel(s), s.department ?? ''].join(' '));
+    return words.every((w) => text.includes(w));
+  });
+  const openOne = (id: string, onlyView: boolean) => { setViewOnly(onlyView); setOpen(id); };
+  const cur1 = open ? staff.find((x) => x.id === open) : undefined;
+  const canOpenCur = cur1 && (canEdit || cur1.user_id === myUserId);
+  const info = (s: Staff) => {
+    const p = priv.find((x) => x.staff_id === s.id);
+    const gplx = papers.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
+    const bad = canEdit ? problems(s, p, papers, warnDays).length : 0;
+    return { p, gplx, bad, mine: s.user_id === myUserId, canOpen: canEdit || s.user_id === myUserId };
+  };
+  const call = (s: Staff) => s.phone
+    ? <a className="btn small nsx-call" href={`tel:${s.phone}`} aria-label={`Gọi ${s.full_name} ${s.phone}`}>📞 Gọi <span className="nsx-num">{s.phone}</span></a>
+    : null;
+  const acts = (s: Staff, canOpen: boolean) => canOpen && (
+    <div className="nsx-acts">
+      <button type="button" className="btn small" aria-label={`Xem hồ sơ ${s.full_name}`} onClick={() => openOne(s.id, true)}>Xem hồ sơ</button>
+      {canEdit && <button type="button" className="btn small primary" aria-label={`Sửa ${s.full_name}`} onClick={() => openOne(s.id, false)}>Sửa</button>}
+    </div>
+  );
   return (
     <section className="card">
       <div className="item-head">
-        <h2>{props.selfOnly ? 'Thông tin của tôi' : `Lái xe & nhân viên (${staff.filter((s) => s.is_active).length})`}</h2>
+        <h2>{props.selfOnly ? 'Thông tin của tôi' : `Lái xe & nhân viên (${active.length})`}</h2>
         {left > 0 && (
           <button className="btn small" onClick={() => setShowLeft(!showLeft)}>
             {showLeft ? 'Ẩn người đã nghỉ' : `Hiện người đã nghỉ (${left})`}
@@ -408,15 +441,33 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
       {props.selfOnly && shown.length === 1 && shown[0]!.user_id === myUserId ? (
         <StaffDetail {...props} s={shown[0]!} p={priv.find((x) => x.staff_id === shown[0]!.id)} mine />
       ) : (
+      <>
+      {staff.length > 0 && (
+        <div className="nsx-bar">
+          <div className="nsx-stats">
+            <span className="nsx-stat"><b>{active.length}</b> đang làm</span>
+            {canEdit && <span className="nsx-stat"><b>{trial}</b> thử việc</span>}
+            {left > 0 && (
+              <button type="button" className={`nsx-stat${showLeft ? ' on' : ''}`} aria-pressed={showLeft} onClick={() => setShowLeft(!showLeft)}><b>{left}</b> đã nghỉ</button>
+            )}
+          </div>
+          <div className="nsx-tools">
+            <input className="nsx-search" type="search" value={q} onChange={(e) => setQ(e.target.value)}
+                   placeholder="Tìm tên, điện thoại, chức vụ…" aria-label="Tìm lái xe, nhân viên" />
+            <div className="nsx-seg" role="group" aria-label="Kiểu xem">
+              <button type="button" className={view === 'the' ? 'on' : ''} aria-pressed={view === 'the'} onClick={() => pickView('the')}>Thẻ</button>
+              <button type="button" className={view === 'bang' ? 'on' : ''} aria-pressed={view === 'bang'} onClick={() => pickView('bang')}>Bảng</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {staff.length > 0 && list.length === 0 && <p className="muted">Không tìm thấy ai phù hợp.</p>}
+      {view === 'the' ? (
       <div className="staff-cards">
-        {shown.filter((s) => !cur || jobKey(s) === cur).map((s) => {
-          const mine = s.user_id === myUserId;
-          const canOpen = canEdit || mine;
-          const p = priv.find((x) => x.staff_id === s.id);
-          const gplx = papers.find((d) => d.staff_id === s.id && d.doc_type === 'gplx' && d.is_current);
-          const bad = canEdit ? problems(s, p, papers, warnDays).length : 0;
+        {list.map((s) => {
+          const { p, gplx, bad, mine, canOpen } = info(s);
           return (
-            <div key={s.id} id={`nv-${s.id}`} className={`staff-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
+            <div key={s.id} id={`nv-${s.id}`} className={`staff-card nsx-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
               <div className="sc-top">
                 <Avatar name={s.full_name} url={avas[s.id]} />
                 <div className="sc-name">
@@ -425,7 +476,6 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                 </div>
               </div>
               <div className="sc-info small">
-                {s.phone && <span>📞 <a href={`tel:${s.phone}`}>{s.phone}</a></span>}
                 {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
                 {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
                 {p?.current_address && <span>🏠 {p.current_address}</span>}
@@ -437,29 +487,58 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                 {mine && <span className="badge">Tôi</span>}
                 {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
               </div>
-              {canOpen && (
-                <button className="btn small sc-open" aria-label={`Hồ sơ ${s.full_name}`} onClick={() => setOpen(s.id)}>
-                  {canEdit ? 'Sửa' : 'Hồ sơ'}
-                </button>
-              )}
-              {open === s.id && canOpen && (
-                <Modal wide title={`Hồ sơ ${s.full_name}`} onClose={() => setOpen(null)}>
-                  <StaffDetail {...props} s={s} p={p} mine={mine} />
-                </Modal>
-              )}
+              <div className="nsx-foot">
+                {call(s)}
+                {acts(s, canOpen)}
+              </div>
             </div>
           );
         })}
       </div>
+      ) : (
+      <div className="nsx-tblw">
+        <table className="nsx-tbl">
+          <thead><tr><th>Họ tên</th><th>Bộ phận</th><th>Điện thoại</th><th>GPLX</th><th>Vào làm</th><th>Tình trạng</th><th /></tr></thead>
+          <tbody>
+            {list.map((s) => {
+              const { gplx, bad, mine, canOpen } = info(s);
+              return (
+                <tr key={s.id} id={`nv-${s.id}`} className={`pos-${s.position}${s.is_active ? '' : ' off'}`}>
+                  <td><div className="nsx-who"><Avatar name={s.full_name} url={avas[s.id]} size={36} /><div><b>{s.full_name}</b><span className="sc-job">{jobLabel(s)}</span></div></div></td>
+                  <td>{s.department ?? ''}</td>
+                  <td>{call(s)}</td>
+                  <td>{s.position === 'lai_xe' ? (gplx?.data?.hang ? `Hạng ${gplx.data.hang}` : 'Chưa có') : ''}</td>
+                  <td className="nsx-nw">{fmtDate(s.joined_on)}<br /><span className="muted small">{seniority(s.joined_on, s.left_on)}</span></td>
+                  <td>
+                    <div className="sc-badges">
+                      {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                      {mine && <span className="badge">Tôi</span>}
+                      {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+                    </div>
+                  </td>
+                  <td>{acts(s, canOpen)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      )}
+      {cur1 && canOpenCur && (
+        <Modal wide title={`Hồ sơ ${cur1.full_name}`} onClose={() => { setOpen(null); setViewOnly(false); }}>
+          <StaffDetail key={`${cur1.id}:${viewOnly}`} {...props} s={cur1} p={priv.find((x) => x.staff_id === cur1.id)} mine={cur1.user_id === myUserId} startEdit={!viewOnly} />
+        </Modal>
+      )}
+      </>
       )}
     </section>
   );
 }
 
-function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean }) {
+function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate | undefined; mine: boolean; startEdit?: boolean }) {
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
-  const [editing, setEditing] = useState(canEdit);
+  const [editing, setEditing] = useState(canEdit && props.startEdit !== false);
   const [tab, setTab] = useState<'tt' | 'gt' | 'll'>('tt');
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
   const age = ageCheck(p, s.position);

@@ -726,8 +726,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // ô Tuyến luôn có đủ tuyến (kể cả ngày chưa có chuyến)
   await expect(page.getByLabel('Tuyến', { exact: true }).locator('option', { hasText: 'Vũng Tàu – Hố Nai' })).toHaveCount(1);
   await pickDay(page, ngay(1));
+  // chọn tuyến là tự chọn chuyến sắp chạy của tuyến
   await page.getByLabel('Tuyến', { exact: true }).selectOption({ label: 'Hố Nai – Vũng Tàu' });
-  await page.getByRole('button', { name: 'Chuyến 07:00 Hố Nai – Vũng Tàu' }).click();
   await expect(page.locator('.gh-cur')).toContainText('07:00');
   // Kiểu chọn tuyến bằng thẻ (như app cũ), không có "Tất cả tuyến"
   await page.getByRole('button', { name: 'Thẻ tuyến' }).click();

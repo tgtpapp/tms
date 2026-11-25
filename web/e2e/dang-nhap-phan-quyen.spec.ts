@@ -271,7 +271,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu nhân viên' }).click();
   await expect(page.getByText('Đã thêm Nguyễn Văn Tài')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lái xe & nhân viên (1)' })).toBeVisible();
-  await expect(page.locator('.staff-card').getByText('GPLX: Chưa có', { exact: true })).toBeVisible();
+  await expect(page.locator('.nsx-emp').getByText('GPLX: Chưa có', { exact: true })).toBeVisible();
   // Thẻ chọn theo chức vụ tự sinh từ dữ liệu: Tất cả + Lái xe
   await page.getByRole('tab', { name: 'Lái xe (1)' }).click();
   await expect(page.getByRole('tab', { name: 'Lái xe (1)' })).toHaveAttribute('aria-selected', 'true');
@@ -281,7 +281,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   // Danh sách: tìm không dấu ra đúng người, chuyển Thẻ / Bảng
   await page.getByLabel('Tìm lái xe, nhân viên').fill('van tai');
-  await expect(page.locator('.staff-card')).toHaveCount(1);
+  await expect(page.locator('.nsx-emp')).toHaveCount(1);
   await page.getByLabel('Tìm lái xe, nhân viên').fill('khong co ai');
   await expect(page.getByText('Không tìm thấy ai phù hợp.')).toBeVisible();
   await page.getByLabel('Tìm lái xe, nhân viên').fill('');
@@ -294,9 +294,9 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Thẻ', exact: true }).click();
   // Tab module: Tổng quan · Sơ đồ tổ chức · In thẻ · Báo cáo nhân sự
   await page.getByRole('tab', { name: 'Tổng quan', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Số người cuối mỗi tháng' })).toBeVisible();
+  await expect(page.getByText('NHÂN SỰ ĐANG LÀM VIỆC')).toBeVisible();
   await page.getByRole('tab', { name: 'Sơ đồ tổ chức', exact: true }).click();
-  await expect(page.locator('.nsx-depts').getByText('Nguyễn Văn Tài')).toBeVisible();
+  await expect(page.locator('.nsx-tree').getByText('Nguyễn Văn Tài')).toBeVisible();
   await page.getByRole('tab', { name: 'In thẻ', exact: true }).click();
   await page.getByRole('button', { name: 'Chọn tất cả', exact: true }).click();
   await page.getByRole('button', { name: '🖨 In 1 thẻ' }).click();
@@ -367,7 +367,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Đã lưu ảnh đại diện', { exact: true })).toBeVisible();
   await expect(page.locator('.ava-field img.sc-ava')).toBeVisible();
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
-  await expect(page.locator('.staff-card').getByRole('img', { name: 'Ảnh Nguyễn Văn Tài' })).toBeVisible();
+  await expect(page.locator('.nsx-emp').getByRole('img', { name: 'Ảnh Nguyễn Văn Tài' })).toBeVisible();
 
   // 5j4. Văn bản: cấp số tự động 001 trở đi, mỗi loại 1 dãy; xem trước bản in
   await page.getByRole('button', { name: 'Văn bản', exact: true }).click();

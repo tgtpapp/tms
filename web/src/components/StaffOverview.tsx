@@ -7,7 +7,7 @@ import { fmtDate, today, type Doc } from './Documents';
 import { company, head, type Page } from '../lib/profilePapers';
 import { toDataUrl } from '../lib/pdfMaker';
 import { downloadXlsx } from '../lib/xlsxWrite';
-import { errMsg } from '../lib/supabase';
+import { errMsg, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 type Position = 'lai_xe' | 'phu_xe' | 'nhan_vien';
@@ -68,29 +68,89 @@ function Bars({ labels, series, height = 150 }: { labels: string[]; series: { na
     </svg>
   );
 }
-function HBars({ items }: { items: { label: string; value: number; color: string }[] }) {
-  const max = Math.max(1, ...items.map((x) => x.value));
+/** Vòng tròn % (khối đầu trang) */
+function Ring({ pct, big, small }: { pct: number; big: string; small: string }) {
+  const C = 2 * Math.PI * 50, p = Math.max(0, Math.min(100, pct));
   return (
-    <div className="nsx-hbars">
-      {items.map((x) => (
-        <div key={x.label} className="nsx-hb"><div className="nsx-hb-h"><span>{x.label}</span><b>{x.value}</b></div>
-          <div className="nsx-hb-bar"><i style={{ width: `${Math.max(3, (x.value / max) * 100)}%`, background: x.color }} /></div></div>
-      ))}
+    <svg viewBox="0 0 120 120" className="nsx-ring" role="img" aria-label={`${big} ${small}`}>
+      <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,.18)" strokeWidth="11" />
+      <circle cx="60" cy="60" r="50" fill="none" stroke="#fff" strokeWidth="11" strokeLinecap="round" strokeDasharray={`${(C * p) / 100} 400`} transform="rotate(-90 60 60)" />
+      <text x="60" y="60" textAnchor="middle" className="nsx-ring-b">{big}</text>
+      <text x="60" y="78" textAnchor="middle" className="nsx-ring-s">{small}</text>
+    </svg>
+  );
+}
+/** Đường số người theo tháng trên nền màu (khối đầu trang) */
+function HeroLine({ labels, data }: { labels: string[]; data: number[] }) {
+  const W = 440, H = 150, pl = 8, pr = 8, pt = 12, pb = 22, n = data.length;
+  const mx = Math.max(1, ...data), mn = Math.min(...data), span = mx - mn || mx || 1;
+  const x = (i: number) => pl + (i * (W - pl - pr)) / Math.max(1, n - 1);
+  const y = (v: number) => pt + (H - pt - pb) * (1 - (((v - mn) / span) * 0.85 + 0.08));
+  const line = data.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="nsx-chart" role="img" aria-label="Số người cuối mỗi tháng">
+      <path d={`${line}L${x(n - 1)},${H - pb}L${x(0)},${H - pb}Z`} fill="rgba(255,255,255,.16)" />
+      <path d={line} fill="none" stroke="#fff" strokeWidth="2.5" strokeLinejoin="round" />
+      {data.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r={i === n - 1 ? 5 : 3} fill="#fff"><title>{`${labels[i]}: ${v} người`}</title></circle>)}
+      {labels.map((l, i) => ((n - 1 - i) % 2 === 0 ? <text key={l + i} x={x(i)} y={H - 4} textAnchor="middle" className="nsx-hero-ax">{l}</text> : null))}
+    </svg>
+  );
+}
+function Spark({ data, color }: { data: number[]; color: string }) {
+  if (data.length < 2) return null;
+  const W = 240, H = 44, mx = Math.max(1, ...data);
+  const pts = data.map((v, i) => `${((i * W) / (data.length - 1)).toFixed(1)},${(H - 4 - (v / mx) * (H - 10)).toFixed(1)}`);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="nsx-spark" aria-hidden="true">
+      <path d={`M${pts.join('L')}L${W},${H}L0,${H}Z`} fill={color} opacity=".14" />
+      <path d={`M${pts.join('L')}`} fill="none" stroke={color} strokeWidth="2" />
+    </svg>
+  );
+}
+function Donut({ items, center }: { items: { label: string; value: number; color: string }[]; center: string }) {
+  const tot = items.reduce((a, x) => a + x.value, 0);
+  if (!tot) return <p className="muted">Chưa có số liệu</p>;
+  const R = 70, C = 2 * Math.PI * R;
+  let off = 0;
+  return (
+    <div className="nsx-donut">
+      <svg viewBox="0 0 200 200" role="img" aria-label={center}>
+        {items.map((it) => { const len = (it.value / tot) * C; const el = (
+          <circle key={it.label} cx="100" cy="100" r={R} fill="none" stroke={it.color} strokeWidth="26" strokeDasharray={`${Math.max(0, len - 2)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 100 100)">
+            <title>{`${it.label}: ${it.value} (${Math.round((it.value / tot) * 100)}%)`}</title></circle>); off += len; return el; })}
+        <text x="100" y="94" textAnchor="middle" className="nsx-ax" style={{ fontSize: 12 }}>{center}</text>
+        <text x="100" y="118" textAnchor="middle" className="nsx-donut-v">{tot}</text>
+      </svg>
+      <div className="nsx-dl">{items.map((it) => <div key={it.label}><i style={{ background: it.color }} />{it.label}<span>{it.value}</span><em>{Math.round((it.value / tot) * 100)}%</em></div>)}</div>
     </div>
   );
 }
 
-export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays }: Common & { papers: Doc[]; warnDays: number }) {
+interface Ctr { staff_id: string; salary: number | null; start_on: string; end_on: string | null; kind: string }
+
+export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, onAdd }: Common & { papers: Doc[]; warnDays: number; onAdd?: () => void }) {
   const td = today();
+  const [ctrs, setCtrs] = useState<Ctr[]>([]);
+  // Hợp đồng lao động đang hiệu lực (không có quyền xem thì database không trả → phần lương / hợp đồng tự ẩn)
+  useEffect(() => {
+    let live = true;
+    void supabase.from('labor_contracts').select('staff_id, salary, start_on, end_on, kind').eq('status', 'hieu_luc').lte('start_on', td).order('start_on')
+      .then(({ data }) => { if (live) setCtrs(((data ?? []) as Ctr[]).map((c) => ({ ...c, salary: c.salary == null ? null : Number(c.salary) }))); });
+    return () => { live = false; };
+  }, [td]);
   const act = staff.filter((s) => s.is_active);
   const ms = monthsBack(12);
   const hc = ms.map((k) => staff.filter((s) => workingAt(s, monthEnd(k))).length);
   const hire = ms.map((k) => staff.filter((s) => s.joined_on?.startsWith(k)).length);
   const left = ms.map((k) => staff.filter((s) => s.left_on?.startsWith(k)).length);
-  const byDept = Object.entries(act.reduce<Record<string, number>>((m, s) => { m[dept(s)] = (m[dept(s)] ?? 0) + 1; return m; }, {}))
-    .sort((a, b) => b[1] - a[1]).map(([label, value], i) => ({ label, value, color: COLORS[i % COLORS.length]! }));
+  const prevHc = hc[hc.length - 2] ?? 0;
+  const delta = prevHc ? ((act.length - prevHc) / prevHc) * 100 : 0;
+  const deptNames = [...new Set(act.map(dept))].sort((a, b) => act.filter((s) => dept(s) === b).length - act.filter((s) => dept(s) === a).length);
+  const dColor = (d: string) => COLORS[Math.max(0, deptNames.indexOf(d)) % COLORS.length]!;
+  const byDept = deptNames.map((d) => ({ label: d, value: act.filter((s) => dept(s) === d).length, color: dColor(d) }));
   const pv = new Map(priv.map((p) => [p.staff_id, p]));
   const ages = act.map((s) => pv.get(s.id)?.birth_date).filter((b): b is string => !!b).map((b) => years(b, td));
+  const nam = act.filter((s) => pv.get(s.id)?.gender === 'nam').length, nu = act.filter((s) => pv.get(s.id)?.gender === 'nu').length;
   const ageB: [string, number, number][] = [['Dưới 30', 0, 29], ['30–39', 30, 39], ['40–49', 40, 49], ['50–54', 50, 54], ['Từ 55', 55, 200]];
   const tenure = act.length ? act.reduce((a, s) => a + Math.max(0, (Date.parse(td) - Date.parse(s.joined_on)) / (365.25 * 864e5)), 0) / act.length : 0;
   const month = td.slice(5, 7);
@@ -99,36 +159,92 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays }: 
   const NEED: Record<Position, string[]> = { lai_xe: ['gplx', 'kham_suc_khoe', 'tap_huan', 'cccd'], phu_xe: ['cccd'], nhan_vien: ['cccd'] };
   const NAME: Record<string, string> = { gplx: 'GPLX', kham_suc_khoe: 'Khám sức khỏe', tap_huan: 'Tập huấn', cccd: 'CCCD' };
   const lim = new Date(Date.parse(td) + warnDays * 864e5).toISOString().slice(0, 10);
-  const exp = act.flatMap((s) => NEED[s.position].map((t) => ({ s, t, d: papers.find((x) => x.staff_id === s.id && x.doc_type === t && x.is_current) })))
+  const docOf = (s: OvStaff, t: string) => papers.find((x) => x.staff_id === s.id && x.doc_type === t && x.is_current);
+  const exp = act.flatMap((s) => NEED[s.position].map((t) => ({ s, t, d: docOf(s, t) })))
     .filter((x) => x.d?.expires_on && x.d.expires_on <= lim).sort((a, b) => a.d!.expires_on!.localeCompare(b.d!.expires_on!));
-  const kpi: [string, number | string, string][] = [
-    ['Đang làm', act.length, `${act.filter((s) => s.position === 'lai_xe').length} lái xe · ${act.filter((s) => s.position === 'phu_xe').length} phụ xe`],
-    ['Vào làm 12 tháng', hire.reduce((a, x) => a + x, 0), `${hire[11]} người tháng này`],
-    ['Nghỉ việc 12 tháng', left.reduce((a, x) => a + x, 0), `${left[11]} người tháng này`],
-    ['Thâm niên bình quân', `${tenure.toFixed(1).replace('.', ',')} năm`, ages.length ? `Tuổi bình quân ${(ages.reduce((a, x) => a + x, 0) / ages.length).toFixed(1).replace('.', ',')}` : ''],
-  ];
+  const full = act.filter((s) => NEED[s.position].every((t) => { const d = docOf(s, t); return d && (!d.expires_on || d.expires_on >= td); })).length;
+  const latest = new Map<string, Ctr>();
+  for (const c of ctrs) latest.set(c.staff_id, c);
+  const fund = act.reduce((a, s) => a + (latest.get(s.id)?.salary ?? 0), 0);
+  const ctLim = new Date(Date.parse(td) + 30 * 864e5).toISOString().slice(0, 10);
+  const ctWarn = [...latest.values()].filter((c) => c.end_on && c.end_on <= ctLim && act.some((s) => s.id === c.staff_id)).sort((a, b) => a.end_on!.localeCompare(b.end_on!));
+  const recent = [...act].sort((a, b) => b.joined_on.localeCompare(a.joined_on)).slice(0, 5);
+  const byId = new Map(staff.map((s) => [s.id, s]));
+  const short = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1).replace('.', ',')} tỷ` : n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} tr` : n.toLocaleString('vi-VN'));
+  const h12 = hire.reduce((a, x) => a + x, 0), l12 = left.reduce((a, x) => a + x, 0), avgHc = hc.reduce((a, x) => a + x, 0) / hc.length || 1;
+  if (!staff.length) return <section className="card"><p className="muted">Chưa có lái xe / nhân viên nào.</p></section>;
   return (
-    <div className="nsx-ov">
-      <div className="nsx-kpis">{kpi.map(([l, v, sub]) => <div key={l} className="nsx-kpi"><small>{l}</small><b>{v}</b>{sub && <span>{sub}</span>}</div>)}</div>
-      <section className="card"><h3>Số người cuối mỗi tháng</h3><Bars labels={ms.map(mLabel)} series={[{ name: 'Số người', color: 'var(--primary)', data: hc }]} /></section>
-      <section className="card"><h3>Vào làm / nghỉ việc 12 tháng</h3>
-        <Bars labels={ms.map(mLabel)} series={[{ name: 'Vào làm', color: '#16a34a', data: hire }, { name: 'Nghỉ việc', color: '#dc2626', data: left }]} />
-        <p className="nsx-legend"><span><i style={{ background: '#16a34a' }} />Vào làm</span><span><i style={{ background: '#dc2626' }} />Nghỉ việc</span></p></section>
-      <section className="card"><h3>Theo bộ phận</h3>{byDept.length ? <HBars items={byDept} /> : <p className="muted">Chưa có</p>}</section>
-      {ages.length > 0 && <section className="card"><h3>Độ tuổi</h3><HBars items={ageB.map(([l, a, b], i) => ({ label: l, value: ages.filter((x) => x >= a && x <= b).length, color: COLORS[i]! }))} /></section>}
-      <section className="card"><h3>Giấy tờ đã / sắp hết hạn ({exp.length})</h3>
-        {exp.length === 0 ? <p className="muted">Không có giấy nào hết hạn trong {warnDays} ngày tới.</p> : (
-          <div className="nsx-list">{exp.slice(0, 12).map((x) => (
-            <div key={x.s.id + x.t} className="nsx-li"><Who s={x.s} avas={avas} onOpen={onOpen} size={36} sub={`${NAME[x.t]} · ${fmtDate(x.d!.expires_on)}`} />
-              <span className={`badge ${x.d!.expires_on! < td ? 'locked' : 'warn-badge'}`}>{x.d!.expires_on! < td ? 'Đã hết hạn' : 'Sắp hết hạn'}</span></div>
-          ))}{exp.length > 12 && <p className="muted small">… và {exp.length - 12} giấy khác (xem chuông cảnh báo ở tab Hồ sơ)</p>}</div>
-        )}</section>
-      {priv.length > 0 && <section className="card"><h3>Sinh nhật tháng {Number(month)} ({bd.length})</h3>
-        {bd.length === 0 ? <p className="muted">Tháng này không có ai sinh nhật.</p> : (
-          <div className="nsx-list">{bd.map((s) => { const b = pv.get(s.id)!.birth_date!; const dd = b.slice(8);
-            return <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={36} sub={`${dept(s)} · tròn ${years(b, `${td.slice(0, 4)}-12-31`)} tuổi`} />
-              <span className={`badge${dd === td.slice(8) ? '' : ' muted-badge'}`}>{dd === td.slice(8) ? 'Hôm nay' : `${dd}/${month}`}</span></div>; })}</div>
-        )}</section>}
+    <div className="nsx-dash">
+      <div className="nsx-hero">
+        <div>
+          <div className="nsx-hero-k">NHÂN SỰ ĐANG LÀM VIỆC</div>
+          <div className="nsx-hero-v">{act.length} <small>người</small></div>
+          <div className="nsx-hero-sub"><span className={`nsx-pill ${delta >= 0 ? 'up' : 'down'}`}>{delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1).replace('.', ',')}%</span>so với cuối tháng trước</div>
+          <div className="nsx-hero-stats">
+            {(nam + nu) > 0 && <div><b>{nam} / {nu}</b><span>Nam / Nữ</span></div>}
+            {ages.length > 0 && <div><b>{(ages.reduce((a, x) => a + x, 0) / ages.length).toFixed(1).replace('.', ',')}</b><span>Tuổi bình quân</span></div>}
+            <div><b>{tenure.toFixed(1).replace('.', ',')} năm</b><span>Thâm niên bình quân</span></div>
+          </div>
+          {onAdd && <div className="nsx-hero-act"><button type="button" className="nsx-hbtn" onClick={onAdd}>Thêm nhân viên</button></div>}
+        </div>
+        <div className="nsx-hero-chart"><div className="nsx-hero-ct"><span>Số người cuối mỗi tháng</span><span>12 tháng gần nhất</span></div><HeroLine labels={ms.map(mLabel)} data={hc} /></div>
+        <div className="nsx-hero-ring"><Ring pct={act.length ? (full / act.length) * 100 : 0} big={`${act.length ? Math.round((full / act.length) * 100) : 0}%`} small="đủ giấy tờ" />
+          <b>{full} người đủ giấy tờ</b><span>{act.length - full} người thiếu / hết hạn</span></div>
+      </div>
+
+      <section className="card nsx-team">
+        <div className="nsx-card-h"><h3>Đội ngũ nhân sự</h3><span className="muted small">bấm vào ảnh để xem hồ sơ</span>
+          <div className="nsx-legend">{deptNames.map((d) => <span key={d}><i style={{ background: dColor(d) }} />{d}</span>)}</div></div>
+        <div className="nsx-wall">{deptNames.flatMap((d) => act.filter((s) => dept(s) === d)).map((s) => (
+          <button key={s.id} type="button" className="nsx-tw" style={{ ['--dc' as string]: dColor(dept(s)) }} title={`${s.full_name} · ${job(s)}`} onClick={() => onOpen?.(s.id)}>
+            <Avatar name={s.full_name} url={avas[s.id]} size={56} /><small>{s.full_name.trim().split(/\s+/).slice(-1)[0]}</small></button>
+        ))}</div>
+      </section>
+
+      <div className="nsx-kgrid">
+        {fund > 0 && <div className="card nsx-kc" style={{ ['--c' as string]: 'var(--primary)' }}><div className="nsx-kc-h"><span>Quỹ lương tháng</span></div><b>{short(fund)} <small>đ</small></b><small className="muted">Theo hợp đồng lao động đang hiệu lực</small></div>}
+        <div className="card nsx-kc" style={{ ['--c' as string]: '#16a34a' }}><div className="nsx-kc-h"><span>Tuyển mới</span><em className="nsx-pill up">+{hire[11]} tháng này</em></div><b>{h12} <small>người</small></b><small className="muted">12 tháng gần nhất</small><Spark data={hire} color="#16a34a" /></div>
+        <div className="card nsx-kc" style={{ ['--c' as string]: '#dc2626' }}><div className="nsx-kc-h"><span>Nghỉ việc</span><em className={`nsx-pill ${(l12 / avgHc) * 100 > 10 ? 'down' : 'na'}`}>{((l12 / avgHc) * 100).toFixed(1).replace('.', ',')}%</em></div><b>{l12} <small>người</small></b><small className="muted">12 tháng · tỷ lệ trên số người bình quân</small><Spark data={left} color="#dc2626" /></div>
+        <div className="card nsx-kc" style={{ ['--c' as string]: '#f59e0b' }}><div className="nsx-kc-h"><span>Giấy tờ cần xử lý</span><em className={`nsx-pill ${exp.length ? 'down' : 'up'}`}>{exp.length ? `${warnDays} ngày` : 'Ổn'}</em></div><b>{exp.length} <small>giấy</small></b><small className="muted">{exp.length ? 'Đã hết hạn hoặc sắp hết hạn' : 'Không có giấy sắp hết hạn'}</small></div>
+      </div>
+
+      <div className="nsx-g2">
+        <section className="card"><div className="nsx-card-h"><h3>Biến động nhân sự 12 tháng</h3>
+          <div className="nsx-legend"><span><i style={{ background: '#16a34a' }} />Tuyển mới</span><span><i style={{ background: '#dc2626' }} />Nghỉ việc</span></div></div>
+          <Bars labels={ms.map(mLabel)} series={[{ name: 'Tuyển mới', color: '#16a34a', data: hire }, { name: 'Nghỉ việc', color: '#dc2626', data: left }]} height={190} />
+          <div className="nsx-msum">{ms.slice(-4).map((k, i) => <div key={k}><small>{mName(k)}</small><b>{hc[8 + i]}</b> <span className="muted small">người</span></div>)}</div></section>
+        <section className="card"><div className="nsx-card-h"><h3>Cơ cấu theo bộ phận</h3></div><Donut items={byDept} center="Nhân sự" /></section>
+      </div>
+
+      <div className="nsx-g3">
+        <section className="card"><div className="nsx-card-h"><h3>🎂 Sinh nhật tháng {Number(month)}</h3>{bd.length > 0 && <span className="nsx-cnt">{bd.length}</span>}</div>
+          {priv.length === 0 ? <p className="muted">Chỉ người quản lý nhân sự xem được.</p> : bd.length === 0 ? <p className="muted">Tháng này không có ai sinh nhật</p> : (
+            <div className="nsx-list">{bd.map((s) => { const b = pv.get(s.id)!.birth_date!; const dd = b.slice(8);
+              return <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${dept(s)} · tròn ${years(b, `${td.slice(0, 4)}-12-31`)} tuổi`} />
+                <span className={`badge${dd === td.slice(8) ? '' : ' warn-badge'}`}>{dd === td.slice(8) ? 'Hôm nay' : `${dd}/${month}`}</span></div>; })}</div>
+          )}</section>
+        <section className="card"><div className="nsx-card-h"><h3>Hợp đồng sắp hết hạn</h3></div>
+          {ctWarn.length === 0 ? <p className="muted">{ctrs.length ? 'Không có hợp đồng nào sắp hết hạn' : 'Chưa có hợp đồng lao động (hoặc không có quyền xem)'}</p> : (
+            <div className="nsx-list">{ctWarn.slice(0, 6).map((c) => { const s = byId.get(c.staff_id)!;
+              return <div key={c.staff_id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`Hết hạn ${fmtDate(c.end_on)}`} />
+                <span className={`badge ${c.end_on! < td ? 'locked' : 'warn-badge'}`}>{c.end_on! < td ? 'Đã hết hạn' : 'Sắp hết hạn'}</span></div>; })}</div>
+          )}</section>
+        <section className="card"><div className="nsx-card-h"><h3>Mới vào làm gần đây</h3></div>
+          <div className="nsx-list">{recent.map((s) => <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${job(s)} · ${dept(s)}`} /><span className="muted small nsx-nw">{fmtDate(s.joined_on)}</span></div>)}</div></section>
+      </div>
+
+      <div className="nsx-g3">
+        {ages.length > 0 && <section className="card"><div className="nsx-card-h"><h3>Độ tuổi</h3></div>
+          <Bars labels={ageB.map((b) => b[0])} series={[{ name: 'Số người', color: 'var(--primary)', data: ageB.map(([, a, b]) => ages.filter((x) => x >= a && x <= b).length) }]} height={190} /></section>}
+        {(nam + nu) > 0 && <section className="card"><div className="nsx-card-h"><h3>Giới tính</h3></div><Donut items={[{ label: 'Nam', value: nam, color: 'var(--primary)' }, { label: 'Nữ', value: nu, color: '#db2777' }]} center="Nhân sự" /></section>}
+        <section className="card"><div className="nsx-card-h"><h3>Giấy tờ đã / sắp hết hạn</h3>{exp.length > 0 && <span className="nsx-cnt">{exp.length}</span>}</div>
+          {exp.length === 0 ? <p className="muted">Không có giấy nào hết hạn trong {warnDays} ngày tới.</p> : (
+            <div className="nsx-list">{exp.slice(0, 8).map((x) => (
+              <div key={x.s.id + x.t} className="nsx-li"><Who s={x.s} avas={avas} onOpen={onOpen} size={36} sub={`${NAME[x.t]} · ${fmtDate(x.d!.expires_on)}`} />
+                <span className={`badge ${x.d!.expires_on! < td ? 'locked' : 'warn-badge'}`}>{x.d!.expires_on! < td ? 'Đã hết hạn' : 'Sắp hết hạn'}</span></div>
+            ))}{exp.length > 8 && <p className="muted small">… và {exp.length - 8} giấy khác</p>}</div>
+          )}</section>
+      </div>
     </div>
   );
 }
@@ -165,15 +281,38 @@ export function StaffOrg({ staff, avas, onOpen }: Common) {
   return (
     <div className="nsx-org">
       <div className="nsx-org-bar"><span className="muted">{o.total} người · {o.depts.length} bộ phận</span><button type="button" className="btn small" onClick={() => void print()}>🖨 In sơ đồ</button></div>
-      {o.bosses.length > 0 && <div className="nsx-org-top">{o.bosses.map((s, i) => <div key={s.id} className={`nsx-onode${i === 0 ? ' ceo' : ''}`}><Who s={s} avas={avas} onOpen={onOpen} size={i === 0 ? 64 : 52} /></div>)}</div>}
-      <div className="nsx-depts">
-        {o.depts.map((d) => (
-          <div key={d.name} className="nsx-dcol" style={{ borderTopColor: d.color }}>
-            <div className="nsx-dh" style={{ color: d.color }}>{d.name} <small className="muted">({d.n})</small></div>
-            {d.heads.map((s) => <div key={s.id} className="nsx-dhead"><Who s={s} avas={avas} onOpen={onOpen} size={44} /></div>)}
-            {d.rest.map((s) => <div key={s.id} className="nsx-mem"><Who s={s} avas={avas} onOpen={onOpen} size={32} /></div>)}
+      <div className="nsx-org-scroll">
+        <div className="nsx-tree" style={{ ['--n' as string]: Math.max(1, o.depts.length) }}>
+          <div className="nsx-tree-top">
+            {o.bosses.length ? o.bosses.map((s, i) => (
+              <button key={s.id} type="button" className={`nsx-node${i === 0 ? ' ceo' : ''}`} onClick={() => onOpen?.(s.id)}>
+                <Avatar name={s.full_name} url={avas[s.id]} size={i === 0 ? 80 : 62} /><b>{s.full_name}</b><small>{job(s)}</small>
+              </button>
+            )) : <span className="muted">Chưa có Ban giám đốc (chức vụ có chữ "giám đốc")</span>}
           </div>
-        ))}
+          {o.depts.length > 0 && <div className="nsx-vline" />}
+          <div className="nsx-tree-depts">
+            {o.depts.map((d) => (
+              <div key={d.name} className="nsx-dwrap">
+                <div className="nsx-dcol2" style={{ ['--dc' as string]: d.color }}>
+                  <div className="nsx-dhd">
+                    <div className="nsx-dn">{d.name}</div><small className="muted">{d.n} người</small>
+                    {d.heads.map((h) => (
+                      <button key={h.id} type="button" className="nsx-dhead2" onClick={() => onOpen?.(h.id)}>
+                        <Avatar name={h.full_name} url={avas[h.id]} size={56} /><b>{h.full_name}</b><small>{job(h)}</small>
+                      </button>
+                    ))}
+                  </div>
+                  {d.rest.map((m) => (
+                    <button key={m.id} type="button" className="nsx-mem2" onClick={() => onOpen?.(m.id)}>
+                      <Avatar name={m.full_name} url={avas[m.id]} size={30} /><span><b>{m.full_name}</b><small>{job(m)}</small></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       {view && <PaperView title="Sơ đồ tổ chức" pages={view} onClose={() => setView(null)} />}
     </div>

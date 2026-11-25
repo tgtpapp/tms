@@ -184,7 +184,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           ))}
         </div>
       )}
-      {canView && mod === 'tq' && <StaffDashboard {...ov} papers={papers} warnDays={warnDays} />}
+      {canView && mod === 'tq' && <StaffDashboard {...ov} papers={papers} warnDays={warnDays}
+        onAdd={canEdit ? () => { setMod('hs'); setTimeout(() => document.getElementById('nv-moi')?.scrollIntoView({ behavior: 'smooth' }), 80); } : undefined} />}
       {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} /></section>}
       {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} /></section>}
       {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
@@ -341,7 +342,7 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
   const Wrap = editing ? 'div' : 'section';
 
   return (
-    <Wrap className={editing ? 'form' : 'card form'}>
+    <Wrap className={editing ? 'form' : 'card form'} id={editing ? undefined : 'nv-moi'}>
       {!editing && <h2>Thêm lái xe / nhân viên</h2>}
       {!editing && (
         <div className="sub">
@@ -474,6 +475,15 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   });
   const openOne = (id: string, onlyView: boolean) => { setViewOnly(onlyView); setOpen(id); };
   const [imp, setImp] = useState(false);
+  // Lương cơ bản theo hợp đồng lao động đang hiệu lực (không có quyền xem thì database không trả → thẻ hiện Ngày vào làm)
+  const [salary, setSalary] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    if (props.selfOnly) return;
+    let live = true;
+    void supabase.from('labor_contracts').select('staff_id, salary, start_on').eq('status', 'hieu_luc').lte('start_on', today()).order('start_on')
+      .then(({ data }) => { if (!live) return; const m = new Map<string, number>(); for (const c of (data ?? []) as { staff_id: string; salary: number | null }[]) if (c.salary) m.set(c.staff_id, Number(c.salary)); setSalary(m); });
+    return () => { live = false; };
+  }, [props.selfOnly]);
   /** Xuất danh sách đang xem (đã lọc chức vụ / tìm kiếm). Số CCCD, địa chỉ chỉ có khi người xuất quản lý nhân sự. */
   function exportXlsx() {
     const exp = (sid: string, code: string) => papers.find((d) => d.staff_id === sid && d.doc_type === code && d.is_current);
@@ -551,34 +561,38 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
       )}
       {staff.length > 0 && list.length === 0 && <p className="muted">Không tìm thấy ai phù hợp.</p>}
       {view === 'the' ? (
-      <div className="staff-cards">
+      <div className="nsx-emps">
         {list.map((s) => {
-          const { p, gplx, bad, mine, canOpen } = info(s);
+          const { gplx, bad, mine, canOpen } = info(s);
+          const pay = salary.get(s.id);
           return (
-            <div key={s.id} id={`nv-${s.id}`} className={`staff-card nsx-card pos-${s.position}${s.is_active ? '' : ' off'}`}>
-              <div className="sc-top">
-                <Avatar name={s.full_name} url={avas[s.id]} />
-                <div className="sc-name">
-                  <b>{s.full_name}</b>
-                  <span className="sc-job">{jobLabel(s)}</span>
-                </div>
+            <div key={s.id} id={`nv-${s.id}`} className={`nsx-emp pos-${s.position}${s.is_active ? '' : ' off'}`}>
+              {/* bấm vào thẻ = xem hồ sơ (như file mẫu); nút Xem hồ sơ / Sửa ở dưới cho bàn phím, trình đọc màn hình */}
+              <div className={`nsx-emp-main${canOpen ? ' can' : ''}`} onClick={canOpen ? () => openOne(s.id, true) : undefined}>
+                <span className="nsx-emp-cov">
+                  <span className="nsx-emp-pos">{POSITION[s.position]}</span>
+                  {bad > 0 && <span className="nsx-emp-warn" title={`${bad} việc cần xử lý`} aria-hidden="true">⚠</span>}
+                </span>
+                <span className="nsx-emp-ph"><Avatar name={s.full_name} url={avas[s.id]} size={88} /></span>
+                <b className="nsx-emp-nm">{s.full_name}</b>
+                <span className="nsx-emp-rl">{jobLabel(s)}</span>
+                <span className="nsx-emp-tags">
+                  {s.department && <span className="nsx-dtag">{s.department}</span>}
+                  {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
+                  {mine && <span className="badge">Tôi</span>}
+                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
+                </span>
+                <span className="nsx-emp-ct">
+                  {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
+                  {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
+                </span>
+                <span className="nsx-emp-ft">
+                  <span><small>Thâm niên</small>{seniority(s.joined_on, s.left_on)}</span>
+                  {pay ? <span><small>Lương cơ bản</small>{pay >= 1e6 ? `${(pay / 1e6).toFixed(1).replace('.', ',')} tr` : pay.toLocaleString('vi-VN')}</span>
+                    : <span><small>Ngày vào làm</small>{fmtDate(s.joined_on)}</span>}
+                </span>
               </div>
-              <div className="sc-info small">
-                {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
-                {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
-                {p?.current_address && <span>🏠 {p.current_address}</span>}
-                <span className="muted">Vào {fmtDate(s.joined_on)} · {seniority(s.joined_on, s.left_on)}</span>
-              </div>
-              <div className="sc-badges">
-                <span className="badge">{POSITION[s.position]}</span>
-                {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
-                {mine && <span className="badge">Tôi</span>}
-                {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
-              </div>
-              <div className="nsx-foot">
-                {call(s)}
-                {acts(s, canOpen)}
-              </div>
+              {(s.phone || canOpen) && <div className="nsx-emp-acts">{call(s)}{acts(s, canOpen)}</div>}
             </div>
           );
         })}
@@ -661,18 +675,20 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   return (
     <div className="sub prof">
       {cv && <PaperView title={`Sơ yếu lý lịch · ${s.full_name}`} pages={cv} onClose={() => setCv(null)} />}
-      <div className="prof-head">
+      <div className={`prof-head nsx-pf pos-${s.position}`}>
         <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
         <div className="prof-id">
-          <b>{s.full_name}</b>
-          <span className="muted">{jobLabel(s)}{s.joined_on ? ` · vào ${fmtDate(s.joined_on)} (${seniority(s.joined_on, s.left_on)})` : ''}</span>
-          {s.phone && <a href={`tel:${s.phone}`}>📞 {s.phone}</a>}
-          <button type="button" className="btn small nsx-cvbtn" disabled={cvBusy} onClick={() => void printCv()}>{cvBusy ? 'Đang lấy dữ liệu…' : '🖨 In sơ yếu lý lịch'}</button>
-          <span className="prof-chips">
-            {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
-            {warnDocs ? <span className="badge warn-badge">Giấy tờ thiếu / hết hạn: {warnDocs}</span> : <span className="badge">Giấy tờ đủ</span>}
-            {age && <span className={`badge ${age.state === 'het_han' ? 'locked' : 'warn-badge'}`}>{age.text}</span>}
+          <span className="nsx-pf-code">{POSITION[s.position]}{s.department ? ` · ${s.department}` : ''}</span>
+          <b className="nsx-pf-name">{s.full_name}</b>
+          <span className="nsx-pf-role">{jobLabel(s)}</span>
+          <span className="nsx-pf-chips">
+            <span className="nsx-pf-chip">{s.is_active ? 'Đang làm' : `Đã nghỉ ${s.left_on ? fmtDate(s.left_on) : ''}`}</span>
+            {s.joined_on && <span className="nsx-pf-chip">⏱ {seniority(s.joined_on, s.left_on)}</span>}
+            {s.phone && <a className="nsx-pf-chip" href={`tel:${s.phone}`}>📞 {s.phone}</a>}
+            {warnDocs ? <span className="nsx-pf-chip warn">Giấy tờ thiếu / hết hạn: {warnDocs}</span> : <span className="nsx-pf-chip">Giấy tờ đủ</span>}
+            {age && <span className="nsx-pf-chip warn">{age.text}</span>}
           </span>
+          <button type="button" className="btn small nsx-cvbtn" disabled={cvBusy} onClick={() => void printCv()}>{cvBusy ? 'Đang lấy dữ liệu…' : '🖨 In sơ yếu lý lịch'}</button>
         </div>
       </div>
       <div className="vx-tabs prof-tabs" role="tablist" aria-label="Hồ sơ">

@@ -602,6 +602,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
                 {p?.birth_date && <span>📅 {fmtDate(p.birth_date)}</span>}
                 {s.phone && <a href={`tel:${s.phone}`} aria-label={`Gọi ${s.full_name} ${s.phone}`} onClick={(e) => e.stopPropagation()}>{s.phone}</a>}
                 {s.position === 'lai_xe' && <span>GPLX: {gplx?.data?.hang ? `hạng ${gplx.data.hang}` : 'Chưa có'}</span>}
+                {s.branch_id && <span>{branches.find((b) => b.id === s.branch_id)?.label ?? ''}</span>}
               </span>
               <span className="nsx-emp-ft">
                 <span><small>Thâm niên</small>{seniority(s.joined_on, s.left_on)}</span>

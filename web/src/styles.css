@@ -1509,3 +1509,9 @@ button.nsx-stat.on { border-color: var(--primary); background: var(--primary-sof
   .nsx-acts { flex: 1 1 auto; }
   .nsx-acts .btn { flex: 1; }
 }
+/* Điện thoại: hàng chip chức vụ xuống dòng riêng, chiếm cả bề ngang (không bị nút Lưu lý lịch, chuông che) */
+.staff-top:has(.nsx-chips) { flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+@media (max-width: 720px) {
+  .staff-top .nsx-chips { order: 2; flex: 1 1 100%; }
+}
+.item-head + .nsx-bar { margin-top: 10px; }

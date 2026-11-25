@@ -6,7 +6,7 @@ import { BulkPaperSave, PaperActions, type Me } from '../components/ProfilePaper
 import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   DOC_COLS, DocFields, DocRow, docState, FilesButton, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
   type Values, valuesFromDoc,
@@ -147,13 +147,22 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
   const cur = tabs.some((t) => t.key === tab) ? tab : '';
+  // Chip đang chọn luôn nằm trong tầm nhìn (chỉ cuộn ngang hàng chip, không cuộn trang)
+  const chipsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = chipsRef.current;
+    const on = box?.querySelector<HTMLElement>('button.on');
+    if (!box || !on) return;
+    if (on.offsetLeft < box.scrollLeft || on.offsetLeft + on.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = on.offsetLeft - 8;
+  }, [cur]);
   return (
     <>
       <div className="staff-top">
-        <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ">
+        <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ" ref={chipsRef}>
           {/* chỉ xem được hồ sơ của mình (lái xe, nhân viên): 1 thẻ "Thông tin của tôi" */}
           {(canView ? [{ key: '', label: 'Tất cả', n: shown.length }, ...tabs] : [{ key: '', label: 'Thông tin của tôi', n: -1 }]).map((t) => (
-            <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''} onClick={() => { setTab(t.key); setOpen(null); }}>
+            <button key={t.key || '*'} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? 'on' : ''}
+                    onClick={() => { setTab(t.key); setOpen(null); }}>
               {t.label}{t.n >= 0 ? ` (${t.n})` : ''}
             </button>
           ))}

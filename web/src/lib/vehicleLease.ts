@@ -2,7 +2,7 @@
 // Mỗi chủ xe 1 hợp đồng, 1 hoặc nhiều xe (Điều 1 liệt kê). CCCD, chữ ký chủ xe có thể bổ sung sau (để trống thì in dòng chấm).
 // Lưu: PDF vào hồ sơ từng xe (giấy "Hợp đồng thuê xe") + Lưu trữ hồ sơ › Năm › 03. Phương tiện › Hợp đồng thuê xe.
 import { supabase, rpc } from './supabase';
-import { boss, bossCol, company, signCol, type Boss, type Company } from './profilePapers';
+import { boss, bossCol, company, signCol, type Boss, type Company, paperSig } from './profilePapers';
 import { numberToWords } from './vnWords';
 import { makePdf, pageImg, paginate } from './pdfMaker';
 import { savePdf } from './dispatchPapers';
@@ -134,6 +134,17 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
       ${bossCol(x.boss, 'ĐẠI DIỆN BÊN B', 50)}</tr></table>`,
   ];
   return paginate(blocks.map((b) => `<div style="font-size:12.5px;line-height:1.42;text-align:justify">${b}</div>`));
+}
+
+/** Tự cập nhật Lưu trữ hồ sơ (chỉ bản PDF trong cây thư mục, không thêm giấy vào hồ sơ xe): nội dung đổi thì lưu đè. */
+export async function archiveLeasePdf(k: Lease, x: LeaseCtx, sigs: Map<string, string>): Promise<boolean> {
+  const pages = leasePages(k, x).map((html) => ({ html, land: false }));
+  const sig = paperSig(pages);
+  if (sigs.get(`hdtx:${k.id}`) === sig) return false;
+  const so = k.number.replace(/[\\/:*?"<>|]+/g, '-'), who = k.lessor.name ?? '';
+  await savePdf([String(k.year), '03. Phương tiện', 'Hợp đồng thuê xe'], `Hợp đồng thuê xe ${so} · ${who} · ${k.items.map((i) => x.vehicles.get(i.vehicle_id)?.plate).filter(Boolean).join(', ')}`.slice(0, 200),
+    `HĐTX ${so} - ${who}.pdf`, pages, `Lập từ hồ sơ xe · sig:${sig}`, `hdtx:${k.id}`);
+  return true;
 }
 
 /** Lưu PDF: hồ sơ từng xe (giấy "Hợp đồng thuê xe", có hạn) + Lưu trữ hồ sơ. Gọi khi lập / sửa xong. */

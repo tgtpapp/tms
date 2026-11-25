@@ -3,7 +3,7 @@
 // Căn cứ pháp lý ghi trong mẫu: theo app cũ, cần xác minh.
 import { sanitizeHtml } from './sanitize';
 import { supabase } from './supabase';
-import { boss, bossCol, company, signCol, type Boss, type Company } from './profilePapers';
+import { boss, bossCol, company, signCol, type Boss, type Company, paperSig } from './profilePapers';
 import { loadSigns, type Sign } from './signatures';
 import { TV_LY_DO, tvBlank, tvDonHtml, tvQdHtml, type TvPerson } from './resignation';
 import { savePdf } from './dispatchPapers';
@@ -233,11 +233,15 @@ export function docHtml(t: Template, number: string, signed: string, title: stri
 
 const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[đĐ]/g, 'd').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
 /** Lưu PDF văn bản vào <năm ký> / Pháp lý công ty / <loại> (QĐ giao nhiệm vụ giám sát: <năm> / An toàn giao thông / Quyết định giao nhiệm vụ). */
-export async function saveDocPdf(d: OfficialDoc, x: DocCtx): Promise<void> {
+export async function saveDocPdf(d: OfficialDoc, x: DocCtx, sigs?: Map<string, string>): Promise<boolean> {
   const tp = tplOf(d.template);
+  const pages = docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false }));
+  const sig = paperSig(pages);
+  if (sigs && sigs.get(`vb:${d.id}`) === sig) return false;   // tự cập nhật: nội dung không đổi thì bỏ qua
   const who = (d.template === 'qd_bo_nhiem' || d.template === 'qd_giam_sat' || d.template === 'qd_thoi_viec') && x.person ? ` · ${x.person.name}` : '';
   await savePdf(d.template === 'qd_giam_sat' ? [String(d.year), '09. An toàn giao thông', tp.folder] : d.template === 'qd_thoi_viec' ? [String(d.year), 'Nhân sự', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
-    docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false })), 'Lưu từ Văn bản', `vb:${d.id}`);
+    pages, `Lưu từ Văn bản · sig:${sig}`, `vb:${d.id}`);
+  return true;
 }
 
 // ------------------------------------------------------------------ QĐ giao nhiệm vụ giám sát, quản lý ATGT (theo mẫu nhà xe cung cấp)

@@ -8,6 +8,7 @@ import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { boss, bossCol, company, head, signCol, signImg } from '../lib/profilePapers';
 import { resetFolders, savePdf } from '../lib/dispatchPapers';
+import { profileChanged } from '../lib/profileAutoArchive';
 
 interface Staff { id: string; full_name: string; is_active: boolean; left_on: string | null; joined_on: string }
 interface Row { has_bhxh: boolean; transfer_pay: number; bhxh_pay: number; fixed_pay: number }
@@ -51,6 +52,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
     try {
       await rpc('save_pay_month', { p_month: `${month}-01`, p_rows: ids.map((id) => ({ staff_id: id, ...(data[id] ?? { has_bhxh: false, transfer_pay: 0, bhxh_pay: 0, fixed_pay: 0 }) })) });
       setState('Đã lưu');
+      profileChanged();   // Lưu trữ hồ sơ tự cập nhật bảng tháng này
     } catch (e) { ids.forEach((id) => dirty.current.add(id)); setState(''); toast('error', errMsg(e)); }
   }, [month, toast]);
   function change(ids: string[], f: (r: Row) => Row) {

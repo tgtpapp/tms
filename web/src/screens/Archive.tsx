@@ -22,7 +22,31 @@ const ntDay = (h: { name: string; note: string | null }) => {
   const k = /\[ntat:(\d{4}-\d{2}-\d{2}):/.exec(h.note ?? ''); if (k) return k[1]!;
   const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(h.name); return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
 };
-const cmp = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' });
+const cmp0 = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' });
+/** Ngày / tháng ghi trong tên thư mục (Tháng 11-2026, 2026, dd/mm/yyyy…) để xếp mới nhất lên đầu */
+const folderDay = (name: string) => {
+  let m = /^(\d{4})$/.exec(name.trim()); if (m) return `${m[1]}`;
+  m = /tháng\s*(\d{1,2})[-/](\d{4})/i.exec(name); if (m) return `${m[2]}-${m[1]!.padStart(2, '0')}`;
+  m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(name); if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return '';
+};
+/** Thư mục có ngày: mới nhất lên đầu; thư mục thường (01. …, 02. …): theo tên */
+const cmp = (a: { name: string }, b: { name: string }) => {
+  const da = folderDay(a.name), db = folderDay(b.name);
+  if (da && db) return db.localeCompare(da);
+  if (da || db) return da ? -1 : 1;
+  return cmp0(a, b);
+};
+/** Ngày của 1 tệp: mã trong ghi chú ([atgt-ck:2026-11-25], [bhxh:2026-11]…), ngày / tháng / tuần trong tên; không có thì ngày lưu */
+const itemDay = (h: { name: string; file_name: string | null; note: string | null; created_at: string }) => {
+  const nt = ntDay(h); if (nt) return nt;
+  let m = /\[[a-z-]+:(\d{4}-\d{2}(?:-\d{2})?)/.exec(h.note ?? ''); if (m) return m[1]!;
+  const t = `${h.name} ${h.file_name ?? ''}`;
+  m = /(\d{4})-(\d{2})-(\d{2})/.exec(t); if (m) return m[0]!;
+  m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(t); if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  m = /tháng\s*(\d{1,2})[/-](\d{4})/i.exec(t); if (m) return `${m[2]}-${m[1]!.padStart(2, '0')}`;
+  return h.created_at.slice(0, 10);
+};
 const size = (n: number | null) => (!n ? '' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric', hour12: false });
 function icon(it: Item) {
@@ -123,11 +147,10 @@ export function ArchiveScreen({ perms }: { perms: Permissions }) {
 
   const cur = sel ? by(sel) : undefined;
   const subs = sel ? kids(sel) : yr === OTHERS ? others : [];
-  // Nghiệm thu an toàn: xếp theo ngày từ nhỏ đến lớn (cùng ngày theo số biên bản); thư mục khác: mới nhất lên đầu
-  const ntat = !!sel && ptxt(sel).includes('Nghiệm thu an toàn');
+  // Mọi thư mục: ngày lớn (mới nhất) trên đầu, ngày nhỏ ở dưới; cùng ngày thì bản lưu sau lên trước
   const list = items.filter((h) => (h.folder_id ?? '') === sel && (showOld || !h.is_old))
-    .sort(ntat ? (a, b) => ntDay(a).localeCompare(ntDay(b)) || (a.file_name ?? '').localeCompare(b.file_name ?? '', 'vi', { numeric: true })
-      : (a, b) => b.created_at.localeCompare(a.created_at));
+    .sort((a, b) => itemDay(b).localeCompare(itemDay(a)) || b.created_at.localeCompare(a.created_at)
+      || (b.file_name ?? '').localeCompare(a.file_name ?? '', 'vi', { numeric: true }));
   const oldCount = items.filter((h) => (h.folder_id ?? '') === sel && h.is_old).length;
   const ql = q.trim().toLowerCase();
   const found = ql ? items.filter((h) => (showOld || !h.is_old) && [h.name, h.file_name, h.note, h.url, ptxt(h.folder_id)].join(' ').toLowerCase().includes(ql)) : [];

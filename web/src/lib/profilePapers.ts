@@ -297,7 +297,7 @@ function hash(t: string): string {
   for (let i = 0; i < t.length; i++) { const c = t.charCodeAt(i); a = (Math.imul(a, 33) ^ c) >>> 0; b = (Math.imul(b, 31) + c) >>> 0; }
   return a.toString(36) + b.toString(36);
 }
-export const paperSig = (pages: Page[]) => hash(pages.map((p) => p.html).join('').replace(/ngày \d{1,2} tháng \d{1,2} năm \d{4}/g, ''));
+export const paperSig = (pages: Page[]) => hash(pages.map((p) => p.html).join('').replace(/ngày (<b>)?\d{1,2}(<\/b>)? tháng (<b>)?\d{1,2}(<\/b>)? năm (<b>)?\d{4}/gi, ''));
 export async function saveDriverPaper(x: DriverPaper, pages = driverPages(x)): Promise<void> {
   await savePdf(DRIVER_PATH(), `Lý lịch hành nghề · ${x.s.full_name}`, `LLHN_${slug(x.s.full_name)}.pdf`, pages, `Lý lịch hành nghề người lái xe · sig:${paperSig(pages)}`, `llhn:${x.s.id}`);
 }

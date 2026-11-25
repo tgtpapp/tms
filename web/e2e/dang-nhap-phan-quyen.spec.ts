@@ -72,6 +72,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('combobox', { name: /^Nhóm quyền/ }).selectOption({ label: 'Bán vé' });
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
   await expect(page.getByRole('heading', { name: 'Người dùng (2)' })).toBeVisible();
+  // Thẻ người dùng giống Lái xe & Nhân viên: bấm thẻ mở nhóm quyền và thao tác
+  await page.getByRole('button', { name: 'Xem tài khoản Nhân viên bán vé' }).click();
   await expect(page.getByText('Bán vé · Toàn nhà xe')).toBeVisible();
   // Quyền riêng từng người: ô có từ nhóm hiện tích mờ, tích thêm ô riêng rồi lưu (kiêm nhiệm cộng dồn)
   await page.getByRole('button', { name: 'Phân quyền Nhân viên bán vé' }).click();
@@ -81,6 +83,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu quyền Nhân viên bán vé' }).click();
   await expect(page.getByText('Đã lưu quyền của Nhân viên bán vé')).toBeVisible();
   await expect(page.getByText('Quyền riêng · Toàn nhà xe')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Đóng cửa sổ' }).click();
 
   // 5b. Cấu hình bán vé: mặc định 5 phút → đổi 7 phút
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();

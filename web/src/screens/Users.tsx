@@ -6,6 +6,7 @@ import { useToast } from '../lib/toast';
 import { PermMatrix } from '../components/PermMatrix';
 import { Avatar, useAvatars } from '../components/StaffAvatar';
 import { isPersonal } from './Roles';
+import { Modal } from '../components/Modal';
 
 interface UserRow { id: string; phone: string; full_name: string; status: 'active' | 'locked'; device_check: 'can' | 'khong' | null }
 interface RoleRow { id: string; code: string; name: string }
@@ -136,12 +137,12 @@ export function UsersScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           ))}
         </div>
         {view === 'the' ? (
-          <ul className="list">
+          <div className="nsx-emps">
             {shown.map((u) => (
-              <UserItem key={u.id} view="the" user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
+              <UserItem key={u.id} view="the" dept={branchOf(u.id) === '-' ? '' : branchName(branchOf(u.id))} user={u} avatar={avatars[staffOf[u.id]?.id ?? '']} data={data} isSelf={u.id === ctx.user_id} canManage={canManage} canPerm={canPerm}
                         allowed={(c) => perms.has(c)} scopeLabel={scopeLabel} onChanged={load} />
             ))}
-          </ul>
+          </div>
         ) : (
           <table className="plist users-tbl">
             <thead><tr><th>Họ tên</th><th>Chi nhánh</th><th>Nhóm quyền</th><th>Trạng thái</th>{canManage && <th>Thao tác</th>}</tr></thead>
@@ -240,6 +241,7 @@ function UserItem(props: {
   const [roleId, setRoleId] = useState('');
   const [scope, setScope] = useState('tenant');
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const myRoles = useMemo(() => data.userRoles.filter((r) => r.user_id === user.id), [data.userRoles, user.id]);
   const canEdit = canManage && !isSelf;
@@ -354,16 +356,38 @@ function UserItem(props: {
       {panel !== 'none' && <tr className="users-panel"><td colSpan={canManage ? 5 : 4}>{panels}</td></tr>}
     </>
   );
+  // Dạng thẻ giống Lái xe & Nhân viên: bấm thẻ mở cửa sổ nhóm quyền và thao tác
+  const groups = myRoles.map((ur) => data.roles.find((x) => x.id === ur.role_id)).filter((r): r is RoleRow => !!r && !isPersonal(r)).map((r) => r.name);
+  const dev = user.device_check === 'can' ? 'Luôn cần duyệt' : user.device_check === 'khong' ? 'Không cần duyệt' : 'Theo cài đặt nhà xe';
   return (
-    <li className="item">
-      <div className="item-head">
-        {name}
-        {badge}
+    <>
+      <div className={`nsx-emp can${user.status === 'active' ? '' : ' off'}`} onClick={() => setOpen(true)}>
+        <span className="nsx-emp-cov" />
+        <span className="nsx-emp-ph"><Avatar name={user.full_name} url={props.avatar} size={112} /></span>
+        <button type="button" className="nsx-emp-nm" aria-label={`Xem tài khoản ${user.full_name}`} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{user.full_name}</button>
+        <span className="nsx-emp-rl">{[...new Set(groups)].join(', ') || 'Chưa có nhóm quyền'}</span>
+        <span className="nsx-emp-tags">
+          {props.dept && <span className="nsx-dtag">{props.dept}</span>}
+          {user.status === 'active' ? <span className="nsx-stag ok">Hoạt động</span> : <span className="nsx-stag off">Đã khóa</span>}
+          {isSelf && <span className="nsx-stag">Tôi</span>}
+        </span>
+        <span className="nsx-emp-ct">
+          <a href={`tel:${user.phone}`} aria-label={`Gọi ${user.full_name} ${user.phone}`} onClick={(e) => e.stopPropagation()}>{user.phone}</a>
+        </span>
+        <span className="nsx-emp-ft">
+          <span><small>Nhóm quyền</small>{myRoles.length}</span>
+          <span><small>Thiết bị lạ</small>{dev}</span>
+        </span>
       </div>
-      {chips}
-      {actions}
-      {panels}
-    </li>
+      {open && (
+        <Modal title={user.full_name} onClose={() => { setOpen(false); setPanel('none'); }} wide>
+          <div className="item-head">{name}{badge}</div>
+          {chips}
+          {actions}
+          {panels}
+        </Modal>
+      )}
+    </>
   );
 }
 

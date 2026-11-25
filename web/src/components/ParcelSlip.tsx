@@ -1,5 +1,6 @@
 // Phiếu gửi hàng khổ K80 (như app cũ): xem trước ngay khi nhập, in máy in nhiệt 80mm (hoặc 58mm).
 import { printThermal } from '../lib/thermalPrint';
+import { ThermalInfo } from './ThermalInfo';
 import { useEffect, useRef, useState } from 'react';
 
 export interface SlipData {
@@ -81,6 +82,7 @@ export function ParcelPrint({ slips, onClose }: { slips: SlipData[]; onClose: ()
         <b>Phiếu gửi hàng{slips.length === 1 ? ` ${slips[0]!.code ?? ''}` : ` · ${slips.length} phiếu`}</b>
         <button className={width === '80' ? 'btn small primary' : 'btn small'} onClick={() => change('80')}>Khổ 80mm</button>
         <button className={width === '58' ? 'btn small primary' : 'btn small'} onClick={() => change('58')}>Khổ 58mm</button>
+        <ThermalInfo />
         <button className="btn small primary" onClick={() => printThermal()}>In lại</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>

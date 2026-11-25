@@ -187,10 +187,20 @@ input:focus, select:focus, textarea:focus { outline: 3px solid var(--primary-rin
 
 /* Vé nhiệt */
 .ve-list { display: flex; flex-direction: column; gap: 12px; align-items: center; }
-.ve { background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.4;
-      padding: 3mm; border: 1px dashed #999; }
+.ve { background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: var(--ve-fs, 12px); line-height: 1.4;
+      padding: var(--ve-pad, 3mm); border: 1px dashed #999; overflow-wrap: anywhere; }
 .ve-list.w80 .ve { width: 72mm; }
-.ve-list.w58 .ve { width: 48mm; font-size: 10.5px; }
+.ve-list.w58 .ve { width: 48mm; font-size: var(--ve-fs58, 10.5px); }
+/* không để chữ, bảng, ảnh vượt khỏi vùng in */
+.ve img { max-width: 100%; }
+.ve table { width: 100%; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
+.ve td, .ve th { overflow-wrap: anywhere; }
+.tp-len { font-size: .9rem; }
+.tp-cfg { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.tp-cfg label { display: flex; flex-direction: column; gap: 2px; font-size: .85rem; }
+.tp-cfg select, .tp-cfg input { min-height: 40px; }
+.tp-cfg input { width: 110px; }
+.tp-cfg p { flex-basis: 100%; margin: 0; }
 .ve .c { text-align: center; }
 .ve-title { font-size: 15px; font-weight: bold; margin: 2px 0; }
 .ve-qr { width: 28mm; height: 28mm; margin: 2px 0; }

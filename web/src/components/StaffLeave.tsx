@@ -95,8 +95,7 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
           </label>
           <label>Từ ngày<input type="date" value={f.from_on} onChange={(e) => dates(e.target.value, f.to_on)} /></label>
           <label>Đến ngày<input type="date" value={f.to_on} min={f.from_on} onChange={(e) => dates(f.from_on, e.target.value)} /></label>
-          <label>Số ngày nghỉ<input inputMode="decimal" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} />
-            <span className="muted small">Tự tính, bỏ Chủ nhật. Nghỉ nửa ngày thì sửa thành 0,5</span></label>
+          <label>Số ngày nghỉ<input inputMode="decimal" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} /></label>
           <label>Lý do<input aria-label="Lý do nghỉ" value={f.reason} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} /></label>
         </div>
         <div className="actions">
@@ -163,7 +162,7 @@ export function LeavePage({ staff, perms, myUserId, avas, onOpen }: { staff: LvS
         <div className="nsx-kpi lvx-k vio"><small>Phép năm còn lại</small><b>{num(quota - used)} <em>ngày</em></b><span>Bình quân {num(act.length ? (quota - used) / act.length : 0)} ngày mỗi người</span></div>
       </div>
       <section className="card lvx-card">
-        <div className="lvx-h"><h3>Số ngày phép năm {Y} còn lại</h3><span className="muted small">{base} ngày/năm, cứ đủ 5 năm làm việc cộng thêm 1 ngày</span></div>
+        <div className="lvx-h"><h3>Số ngày phép năm {Y} còn lại</h3></div>
         <div className="lvx-grid">
           {grid.map(({ s, q: qq, u }) => { const p = qq ? (u / qq) * 100 : 0;
             return (

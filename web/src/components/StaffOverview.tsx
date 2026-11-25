@@ -198,7 +198,7 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
       </div>
 
       <section className="card nsx-team">
-        <div className="nsx-card-h"><h3>Đội ngũ nhân sự</h3><span className="muted small">bấm vào ảnh để xem hồ sơ</span>
+        <div className="nsx-card-h"><h3>Đội ngũ nhân sự</h3>
           <div className="nsx-legend">{deptNames.map((d) => <span key={d}><i style={{ background: dColor(d) }} />{d}</span>)}</div></div>
         <div className="nsx-wall">{deptNames.flatMap((d) => act.filter((s) => dept(s) === d)).map((s) => (
           <button key={s.id} type="button" className="nsx-tw" style={{ ['--dc' as string]: dColor(dept(s)) }} title={`${s.full_name} · ${job(s)}`} onClick={() => onOpen?.(s.id)}>
@@ -222,14 +222,14 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
       </div>
 
       <div className="nsx-g3">
-        <section className="card"><div className="nsx-card-h"><h3>🎂 Sinh nhật tháng {Number(month)}</h3>{bd.length > 0 && <span className="nsx-cnt">{bd.length}</span>}</div>
-          {priv.length === 0 ? <p className="muted">Chỉ người quản lý nhân sự xem được.</p> : bd.length === 0 ? <p className="muted">Tháng này không có ai sinh nhật</p> : (
+        {priv.length > 0 && <section className="card"><div className="nsx-card-h"><h3>🎂 Sinh nhật tháng {Number(month)}</h3>{bd.length > 0 && <span className="nsx-cnt">{bd.length}</span>}</div>
+          {bd.length === 0 ? <p className="muted">Tháng này không có ai sinh nhật</p> : (
             <div className="nsx-list">{bd.map((s) => { const b = pv.get(s.id)!.birth_date!; const dd = b.slice(8);
               return <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${joinU([s.department, job(s)])} · tròn ${years(b, `${td.slice(0, 4)}-12-31`)} tuổi`} />
                 <span className={`badge${dd === td.slice(8) ? '' : ' warn-badge'}`}>{dd === td.slice(8) ? 'Hôm nay' : `${dd}/${month}`}</span></div>; })}</div>
-          )}</section>
+          )}</section>}
         <section className="card"><div className="nsx-card-h"><h3>Hợp đồng sắp hết hạn</h3></div>
-          {ctWarn.length === 0 ? <p className="muted">{ctrs.length ? 'Không có hợp đồng nào sắp hết hạn' : 'Chưa có hợp đồng lao động (hoặc không có quyền xem)'}</p> : (
+          {ctWarn.length === 0 ? <p className="muted">Không có hợp đồng nào sắp hết hạn</p> : (
             <div className="nsx-list">{ctWarn.slice(0, 6).map((c) => { const s = byId.get(c.staff_id)!;
               return <div key={c.staff_id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`Hết hạn ${fmtDate(c.end_on)}`} />
                 <span className={`badge ${c.end_on! < td ? 'locked' : 'warn-badge'}`}>{c.end_on! < td ? 'Đã hết hạn' : 'Sắp hết hạn'}</span></div>; })}</div>
@@ -310,7 +310,7 @@ function OrgConfig({ staff, cfg, setCfg, branches, onApply, onReset, onCancel, b
           ))}
         </div>
       </div>
-      <div className="nsx-ocfg-row"><b>Hàng trên cùng (Ban lãnh đạo)</b><span className="muted small">Chạm để chọn / bỏ. Người chọn trước đứng giữa, nổi bật.</span>
+      <div className="nsx-ocfg-row"><b>Hàng trên cùng (Ban lãnh đạo)</b>
         <div className="nsx-pick">{act.map((s) => (
           <label key={s.id} className={`nsx-tp${top.has(s.id) ? ' on' : ''}`}>
             <input type="checkbox" checked={top.has(s.id)} onChange={(e) => {
@@ -321,7 +321,7 @@ function OrgConfig({ staff, cfg, setCfg, branches, onApply, onReset, onCancel, b
           </label>
         ))}</div>
       </div>
-      <div className="nsx-ocfg-row"><b>Các nhóm</b><span className="muted small">Thứ tự từ trái sang phải, màu, trưởng nhóm</span>
+      <div className="nsx-ocfg-row"><b>Các nhóm</b>
         <div className="nsx-ocfg-groups">
           {o.depts.map((d, i) => (
             <div key={d.name} className="nsx-ocfg-g" style={{ borderLeftColor: d.color }}>
@@ -402,7 +402,7 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
               <button key={s.id} type="button" className={`nsx-node${i === 0 ? ' ceo' : ''}`} onClick={() => onOpen?.(s.id)}>
                 <Avatar name={s.full_name} url={avas[s.id]} size={i === 0 ? 80 : 62} /><b>{s.full_name}</b><small>{job(s)}</small>
               </button>
-            )) : <span className="muted">Chưa có hàng lãnh đạo – bấm "Chọn kiểu sơ đồ" để chọn người</span>}
+            )) : <span className="muted">Chưa có hàng lãnh đạo</span>}
           </div>
           {o.depts.length > 0 && <div className="nsx-vline" />}
           <div className="nsx-tree-depts">
@@ -477,7 +477,6 @@ export function StaffCards({ staff, avas }: Common) {
         <button type="button" className="btn small" onClick={() => setSel(new Set())}>Bỏ chọn</button>
         <button type="button" className="btn small primary" disabled={!chosen.length || busy} onClick={() => void print()}>{busy ? 'Đang chuẩn bị…' : `🖨 In ${chosen.length} thẻ`}</button>
       </div>
-      <p className="muted small">Khổ thẻ ATM 85,6 x 54 mm, 8 thẻ một trang A4, cắt theo đường viền.</p>
       <div className="nsx-pick">{list.map((s) => (
         <label key={s.id} className={`nsx-tp${sel.has(s.id) ? ' on' : ''}`}>
           <input type="checkbox" checked={sel.has(s.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(s.id); else n.delete(s.id); setSel(n); }} />

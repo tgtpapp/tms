@@ -83,15 +83,6 @@ function seniority(joined: string, left: string | null): string {
   const months = Math.max(0, (Number(end.slice(0, 4)) - Number(joined.slice(0, 4))) * 12 + Number(end.slice(5, 7)) - Number(joined.slice(5, 7)));
   return months >= 12 ? `${Math.floor(months / 12)} năm ${months % 12} tháng` : `${months} tháng`;
 }
-/** Tuổi tối đa lái xe chở người trên 29 chỗ, xe giường nằm: 57 (nam), 55 (nữ) – Luật TTATGT đường bộ 2024, Điều 59. */
-function ageCheck(p: StaffPrivate | undefined, position: Position): { text: string; state: 'het_han' | 'sap_het' } | null {
-  if (position !== 'lai_xe' || !p?.birth_date || !p.gender) return null;
-  const limit = p.gender === 'nam' ? 57 : 55;
-  const age = yearsBetween(p.birth_date, today());
-  if (age >= limit) return { text: `${age} tuổi – đã quá tuổi lái xe trên 29 chỗ / giường nằm (tối đa ${limit})`, state: 'het_han' };
-  if (age >= limit - 1) return { text: `${age} tuổi – sắp đến tuổi tối đa lái xe trên 29 chỗ / giường nằm (${limit})`, state: 'sap_het' };
-  return null;
-}
 
 /* ------------------------------------------------------------------ Màn hình */
 
@@ -670,7 +661,6 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   const [cvBusy, setCvBusy] = useState(false);
   const toast = useToast();
   const mine = useMemo(() => docs.filter((d) => d.staff_id === s.id), [docs, s.id]);
-  const age = ageCheck(p, s.position);
   const required = REQUIRED[s.position];
 
   // Giấy tờ bắt buộc còn thiếu / hết hạn (tính cả giấy khám SK, tập huấn ghi trong Lý lịch hành nghề)
@@ -710,7 +700,6 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
             {s.joined_on && <span className="nsx-pf-chip">⏱ {seniority(s.joined_on, s.left_on)}</span>}
             {s.phone && <a className="nsx-pf-chip" href={`tel:${s.phone}`}>📞 {s.phone}</a>}
             {warnDocs ? <span className="nsx-pf-chip warn">Giấy tờ thiếu / hết hạn: {warnDocs}</span> : <span className="nsx-pf-chip">Giấy tờ đủ</span>}
-            {age && <span className="nsx-pf-chip warn">{age.text}</span>}
           </span>
           <button type="button" className="btn small nsx-cvbtn" disabled={cvBusy} onClick={() => void printCv()}>{cvBusy ? 'Đang lấy dữ liệu…' : '🖨 In sơ yếu lý lịch'}</button>
         </div>
@@ -821,7 +810,6 @@ function NormalizeJobs({ staff, priv, onClose, reload }: { staff: Staff[]; priv:
     <Modal title="Chuẩn hóa chức vụ, phòng ban" onClose={onClose}>
       {plan.length === 0 ? <p className="muted">Không có chức vụ / phòng ban nào viết khác nhau, không cần chuẩn hóa.</p> : (
         <>
-          <p className="muted small">Gộp các cách viết chỉ khác chữ hoa / thường, lấy cách viết nhiều người dùng nhất. Chỉ đổi chức vụ, phòng ban; thông tin khác giữ nguyên.</p>
           <div className="nsx-tblw">
             <table className="nsx-tbl">
               <thead><tr><th>Họ tên</th><th>Chức vụ</th><th>Phòng ban</th></tr></thead>
@@ -945,7 +933,7 @@ function StaffImport({ staff, priv, onClose, reload }: { staff: Staff[]; priv: S
           <label className="btn primary upload-btn">⬆ Chọn file Excel<input type="file" hidden accept=".xlsx,.xls,.csv" aria-label="Chọn file Excel nhân viên" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} /></label>
           <button type="button" className="btn" onClick={sample}>⬇ Tải file mẫu</button>
         </div>
-        <p className="muted small">{note}. Cột bắt buộc: <b>Họ và tên</b>, <b>Ngày vào công ty</b> (người mới). Trùng <b>số điện thoại</b> với người đã có thì là cập nhật; ô để trống giữ nguyên thông tin cũ. Giấy tờ nhập ở hồ sơ từng người.</p>
+        <p className="muted small">{note}</p>
         {rows.some((r) => r.old) && (
           <div className="nsx-seg" role="group" aria-label="Người đã có">
             <button type="button" className={mode === 'update' ? 'on' : ''} onClick={() => setMode('update')}>Cập nhật người đã có</button>
@@ -1198,7 +1186,7 @@ function Records(props: Common & { s: Staff }) {
 
 /* ------------------------------------------------------------------ Cảnh báo */
 
-function problems(s: Staff, p: StaffPrivate | undefined, docs: Doc[], warnDays: number): { text: string; state: DocState }[] {
+function problems(s: Staff, _p: StaffPrivate | undefined, docs: Doc[], warnDays: number): { text: string; state: DocState }[] {
   const out: { text: string; state: DocState }[] = [];
   if (!s.is_active) return out;
   for (const def of STAFF_DOCS) {
@@ -1206,8 +1194,6 @@ function problems(s: Staff, p: StaffPrivate | undefined, docs: Doc[], warnDays: 
     const st = docState(def, docs.find((d) => d.staff_id === s.id && d.doc_type === def.code && d.is_current), warnDays, req);
     if (st.state === 'het_han' || st.state === 'sap_het' || (st.state === 'thieu' && req)) out.push({ text: `${SHORT[def.code]}: ${st.text}`, state: st.state });
   }
-  const age = ageCheck(p, s.position);
-  if (age) out.push({ text: age.text, state: age.state });
   return out;
 }
 

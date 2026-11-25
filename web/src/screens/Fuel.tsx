@@ -14,6 +14,7 @@ import { loadMarket, MK, mkChanges, mkKey, mkPrice, mkWhen, type Market } from '
 import type { Permissions } from '../lib/permissions';
 import { errMsg, fetchAll, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { meter } from '../lib/egress';
 
 interface Veh { id: string; plate: string; is_active: boolean; fuel_norm: number | null }
 interface Drv { id: string; full_name: string; position: string; is_active: boolean }
@@ -30,6 +31,25 @@ const num = (n: number, d = 0) => n.toLocaleString('vi-VN', { maximumFractionDig
 const money = (n: number) => `${num(Math.round(n))} đ`;
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`; };
+
+const FUEL_COLS = 'id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files, market_price';
+/** Lưu tạm toàn bộ phiếu nhiên liệu trong phiên (theo nhà xe + người dùng); mở lại mục chỉ tải lại khi dấu thay đổi khác */
+const fuelCache = new Map<string, { sig: string; data: FuelEntry[] }>();
+async function fuelSig(): Promise<string | null> {
+  const r = await supabase.from('fuel_entries').select('updated_at', { count: 'exact' }).order('updated_at', { ascending: false }).limit(1);
+  meter('Nhiên liệu: kiểm tra có đổi', r.data);
+  if (r.error) return null;
+  return `${r.count ?? 0}|${((r.data ?? []) as { updated_at: string }[])[0]?.updated_at ?? ''}`;
+}
+async function fuelEntries(key: string): Promise<FuelEntry[]> {
+  const sig = await fuelSig();
+  const c = fuelCache.get(key);
+  if (sig && c && c.sig === sig) return c.data;
+  const data = await fetchAll<FuelEntry>(() => supabase.from('fuel_entries').select(FUEL_COLS).order('id'));
+  meter('Nhiên liệu: tải toàn bộ phiếu', data);
+  if (sig) fuelCache.set(key, { sig, data }); else fuelCache.delete(key);
+  return data;
+}
 
 export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: AccountContext; perms: Permissions; shareFiles?: File[] | null; onShareDone?: () => void }) {
   const toast = useToast();
@@ -57,7 +77,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
 
   const load = useCallback(async () => {
     const [e, s, v, d] = await Promise.all([
-      fetchAll<FuelEntry>(() => supabase.from('fuel_entries').select('id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files, market_price').order('id'))
+      fuelEntries(`${ctx.tenant_id}:${ctx.user_id}`)
         .then((data) => ({ data, error: null }), (err: Error) => ({ data: null, error: err })),
       supabase.from('fuel_settings').select('tank_name, fuel_type, capacity_l, opening_l, opening_price, opening_on, alert_l, issue_price_mode').maybeSingle(),
       supabase.from('vehicles').select('id, plate, is_active, fuel_norm').order('plate'),
@@ -73,7 +93,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
     const rp = await supabase.from('fuel_reports').select(REPORT_COLS).eq('status', 'cho').order('created_at');
     setReports(((rp.data ?? []) as FuelReport[]).map((x) => ({ ...x, liters: Number(x.liters) })));
     return fresh;
-  }, [toast]);
+  }, [toast, ctx.tenant_id, ctx.user_id]);
   useEffect(() => { void load(); }, [load]);
   // Km GPS của tháng (Km xe): dùng tính tiêu hao khi không nhập km đồng hồ (như app cũ)
   useEffect(() => {

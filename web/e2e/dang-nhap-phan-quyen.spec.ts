@@ -307,8 +307,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   // Nghỉ phép: ghi đơn → Chờ duyệt → Duyệt ngay trong bảng
   await page.getByRole('tab', { name: 'Nghỉ phép', exact: true }).click();
   await page.getByRole('button', { name: '+ Thêm đơn nghỉ' }).click();
-  await page.getByLabel('Nhân viên', { exact: true }).selectOption({ label: 'Nguyễn Văn Tài' });
-  await page.getByLabel('Lý do', { exact: true }).fill('Về quê');
+  await page.getByLabel('Nhân viên nghỉ').selectOption({ label: 'Nguyễn Văn Tài' });
+  await page.getByLabel('Lý do nghỉ').fill('Về quê');
   await page.getByRole('button', { name: 'Gửi đơn nghỉ' }).click();
   await expect(page.getByText('Đã gửi đơn nghỉ')).toBeVisible();
   await page.locator('.lvx-tbl').getByRole('button', { name: 'Duyệt', exact: true }).click();

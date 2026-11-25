@@ -82,7 +82,7 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
         <div className="grid2">
           {!fixed && (
             <label>Nhân viên
-              <select value={f.staff_id} onChange={(e) => setF({ ...f, staff_id: e.target.value })}>
+              <select aria-label="Nhân viên nghỉ" value={f.staff_id} onChange={(e) => setF({ ...f, staff_id: e.target.value })}>
                 <option value="">-- Chọn nhân viên --</option>
                 {staff.filter((s) => s.is_active).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
               </select>
@@ -97,7 +97,7 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
           <label>Đến ngày<input type="date" value={f.to_on} min={f.from_on} onChange={(e) => dates(f.from_on, e.target.value)} /></label>
           <label>Số ngày nghỉ<input inputMode="decimal" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} />
             <span className="muted small">Tự tính, bỏ Chủ nhật. Nghỉ nửa ngày thì sửa thành 0,5</span></label>
-          <label>Lý do<input value={f.reason} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} /></label>
+          <label>Lý do<input aria-label="Lý do nghỉ" value={f.reason} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} /></label>
         </div>
         <div className="actions">
           <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : edit ? 'Lưu' : 'Gửi đơn nghỉ'}</button>

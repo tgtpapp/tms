@@ -461,7 +461,7 @@ function ChipInput({ label, value, onChange, options, placeholder }: { label: st
       {opts.length > 0 && (
         <div className="nsx-ci-chips" role="group" aria-label={`Chọn nhanh ${label.toLowerCase()}`}>
           {opts.map((o) => (
-            <button key={o} type="button" className={o.toLocaleLowerCase('vi') === cur ? 'on' : ''} aria-pressed={o.toLocaleLowerCase('vi') === cur} onClick={() => onChange(o)}>{o}</button>
+            <button key={o} type="button" className={o.toLocaleLowerCase('vi') === cur ? 'on' : ''} aria-pressed={o.toLocaleLowerCase('vi') === cur} aria-label={`${label}: ${o}`} onClick={() => onChange(o)}>{o}</button>
           ))}
         </div>
       )}

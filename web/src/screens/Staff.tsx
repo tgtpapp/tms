@@ -496,6 +496,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
   });
   const openOne = (id: string, onlyView: boolean) => { setViewOnly(onlyView); setOpen(id); };
   const [imp, setImp] = useState(false);
+  const [norm, setNorm] = useState(false);
   // Lương cơ bản theo hợp đồng lao động đang hiệu lực (không có quyền xem thì database không trả → thẻ hiện Ngày vào làm)
   const [salary, setSalary] = useState<Map<string, number>>(new Map());
   useEffect(() => {
@@ -551,10 +552,12 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           <div className="nsx-xl">
             {list.length > 0 && <button type="button" className="btn small" onClick={exportXlsx}>⬇ Xuất Excel</button>}
             {canEdit && <button type="button" className="btn small" onClick={() => setImp(true)}>⬆ Nhập Excel</button>}
+            {canEdit && <button type="button" className="btn small" onClick={() => setNorm(true)}>Aa Chuẩn hóa chức vụ</button>}
           </div>
         )}
       </div>
       {imp && <StaffImport staff={staff} priv={priv} onClose={() => setImp(false)} reload={props.reload} />}
+      {norm && <NormalizeJobs staff={staff} priv={priv} onClose={() => setNorm(false)} reload={props.reload} />}
       {staff.length === 0 && <p className="muted">Chưa có lái xe / nhân viên.</p>}
       {/* chỉ có hồ sơ của mình: hiện thẳng hồ sơ dạng thẻ, không cần bấm mở */}
       {props.selfOnly && shown.length === 1 && shown[0]!.user_id === myUserId ? (
@@ -769,6 +772,73 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       {tab === 'np' && <div className="prof-pane"><LeaveOfStaff s={s} perms={props.leave} myUserId={props.myUserId} /></div>}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Chuẩn hóa chức vụ / phòng ban */
+
+/** Gộp chức vụ, phòng ban chỉ khác chữ hoa / thường / khoảng trắng ("Lái Xe", "lái  xe" → "Lái xe"): lấy cách viết nhiều người dùng nhất. */
+function NormalizeJobs({ staff, priv, onClose, reload }: { staff: Staff[]; priv: StaffPrivate[]; onClose: () => void; reload: () => Promise<void> }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const plan = useMemo(() => {
+    const clean = (x: string) => x.trim().replace(/\s+/g, ' ');
+    const pick = (vals: string[]) => {
+      const n = new Map<string, number>();
+      for (const v of vals) n.set(v, (n.get(v) ?? 0) + 1);
+      // nhiều người dùng nhất; bằng nhau thì ưu tiên chỉ viết hoa chữ đầu ("Lái xe")
+      const sentence = (v: string) => v === v.charAt(0).toLocaleUpperCase('vi') + v.slice(1).toLocaleLowerCase('vi');
+      return [...n.entries()].sort((a, b) => b[1] - a[1] || Number(sentence(b[0])) - Number(sentence(a[0])))[0]![0];
+    };
+    const canon = (field: 'job_title' | 'department') => {
+      const g = new Map<string, string[]>();
+      for (const x of staff) { const v = x[field]; if (!v?.trim()) continue; const k = clean(v).toLocaleLowerCase('vi'); g.set(k, [...(g.get(k) ?? []), clean(v)]); }
+      return new Map([...g.entries()].map(([k, vals]) => [k, pick(vals)]));
+    };
+    const cj = canon('job_title'), cd = canon('department');
+    return staff.map((x) => {
+      const j = x.job_title?.trim() ? cj.get(clean(x.job_title).toLocaleLowerCase('vi'))! : x.job_title;
+      const d = x.department?.trim() ? cd.get(clean(x.department).toLocaleLowerCase('vi'))! : x.department;
+      return { s: x, j, d, change: (j ?? '') !== (x.job_title ?? '') || (d ?? '') !== (x.department ?? '') };
+    }).filter((x) => x.change);
+  }, [staff]);
+  async function run() {
+    setBusy(true);
+    let ok = 0;
+    for (const x of plan) {
+      try {
+        const f = formOf(x.s, priv.find((p) => p.staff_id === x.s.id));
+        await rpc('save_staff', { p_id: x.s.id, p: { ...f, job_title: x.j ?? '', department: x.d ?? '', is_active: !f.left_on } });
+        ok++;
+      } catch (e) { toast('error', `${x.s.full_name}: ${errMsg(e)}`); }
+    }
+    setBusy(false);
+    await reload();
+    toast('ok', `Đã chuẩn hóa ${ok} hồ sơ`);
+    onClose();
+  }
+  return (
+    <Modal title="Chuẩn hóa chức vụ, phòng ban" onClose={onClose}>
+      {plan.length === 0 ? <p className="muted">Không có chức vụ / phòng ban nào viết khác nhau, không cần chuẩn hóa.</p> : (
+        <>
+          <p className="muted small">Gộp các cách viết chỉ khác chữ hoa / thường, lấy cách viết nhiều người dùng nhất. Chỉ đổi chức vụ, phòng ban; thông tin khác giữ nguyên.</p>
+          <div className="nsx-tblw">
+            <table className="nsx-tbl">
+              <thead><tr><th>Họ tên</th><th>Chức vụ</th><th>Phòng ban</th></tr></thead>
+              <tbody>{plan.map((x) => (
+                <tr key={x.s.id}><td>{x.s.full_name}</td>
+                  <td>{(x.j ?? '') !== (x.s.job_title ?? '') ? <>{x.s.job_title} → <b>{x.j}</b></> : x.s.job_title}</td>
+                  <td>{(x.d ?? '') !== (x.s.department ?? '') ? <>{x.s.department} → <b>{x.d}</b></> : x.s.department}</td></tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+      <div className="actions">
+        {plan.length > 0 && <button type="button" className="btn primary" disabled={busy} onClick={() => void run()}>{busy ? 'Đang chuẩn hóa…' : `Chuẩn hóa ${plan.length} hồ sơ`}</button>}
+        <button type="button" className="btn link" onClick={onClose}>Đóng</button>
+      </div>
+    </Modal>
   );
 }
 

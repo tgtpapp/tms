@@ -46,6 +46,8 @@ const POSITION: Record<Position, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ x
 /** Chức vụ hiển thị: chức vụ tự đặt, chưa có thì theo vị trí (Lái xe / Phụ xe / Nhân viên). */
 const jobLabel = (s: { job_title: string | null; position: Position }) => s.job_title?.trim() || POSITION[s.position];
 const jobKey = (s: { job_title: string | null; position: Position }) => jobLabel(s).toLocaleLowerCase('vi').replace(/\s+/g, ' ');
+/** Chức vụ trùng tên nhóm (vd "Lái Xe" – nhóm Lái xe): không hiện tên nhóm lần nữa */
+const sameAsGroup = (s: { job_title: string | null; position: Position }) => jobKey(s) === POSITION[s.position].toLocaleLowerCase('vi');
 /** Thẻ chọn theo chức vụ đang có (không cố định): Giám đốc, Kế toán, Lái xe… — thêm chức vụ mới là có thẻ mới. */
 function jobTabs(list: { job_title: string | null; position: Position }[]): { key: string; label: string; n: number }[] {
   const m = new Map<string, { key: string; label: string; n: number; rank: number }>();
@@ -589,14 +591,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
               {/* bấm vào thẻ = xem hồ sơ (như file mẫu); nút Xem hồ sơ / Sửa ở dưới cho bàn phím, trình đọc màn hình */}
               <div className={`nsx-emp-main${canOpen ? ' can' : ''}`} onClick={canOpen ? () => openOne(s.id, true) : undefined}>
                 <span className="nsx-emp-cov">
-                  <span className="nsx-emp-pos">{POSITION[s.position]}</span>
+                  {!sameAsGroup(s) && <span className="nsx-emp-pos">{POSITION[s.position]}</span>}
                   {bad > 0 && <span className="nsx-emp-warn" title={`${bad} việc cần xử lý`} aria-hidden="true">⚠</span>}
                 </span>
                 <span className="nsx-emp-ph"><Avatar name={s.full_name} url={avas[s.id]} size={88} /></span>
                 <b className="nsx-emp-nm">{s.full_name}</b>
                 <span className="nsx-emp-rl">{jobLabel(s)}</span>
                 <span className="nsx-emp-tags">
-                  {s.department && <span className="nsx-dtag">{s.department}</span>}
+                  {s.department?.trim() && s.department.trim().toLocaleLowerCase('vi') !== jobKey(s) && <span className="nsx-dtag">{s.department}</span>}
                   {!s.is_active && <span className="badge locked">Đã nghỉ {s.left_on ? fmtDate(s.left_on) : ''}</span>}
                   {mine && <span className="badge">Tôi</span>}
                   {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
@@ -697,7 +699,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
       <div className={`prof-head nsx-pf pos-${s.position}`}>
         <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
         <div className="prof-id">
-          <span className="nsx-pf-code">{POSITION[s.position]}{s.department ? ` · ${s.department}` : ''}</span>
+          <span className="nsx-pf-code">{[sameAsGroup(s) ? '' : POSITION[s.position], s.department?.trim().toLocaleLowerCase('vi') === jobKey(s) ? '' : s.department?.trim() ?? ''].filter(Boolean).join(' · ')}</span>
           <b className="nsx-pf-name">{s.full_name}</b>
           <span className="nsx-pf-role">{jobLabel(s)}</span>
           <span className="nsx-pf-chips">
@@ -927,7 +929,7 @@ function WorkPay({ s, p, branches, papers }: { s: Staff; p: StaffPrivate | undef
   return (
     <dl className="info">
       <dt>Chức vụ</dt><dd>{jobLabel(s)}</dd>
-      <dt>Vị trí</dt><dd>{POSITION[s.position]}</dd>
+      {!sameAsGroup(s) && <><dt>Nhóm</dt><dd>{POSITION[s.position]}</dd></>}
       <dt>Bộ phận</dt><dd>{s.department || '—'}</dd>
       {s.branch_id && <><dt>Chi nhánh</dt><dd>{branches.find((b) => b.id === s.branch_id)?.label ?? '—'}</dd></>}
       <dt>Ngày vào làm</dt><dd>{s.joined_on ? `${fmtDate(s.joined_on)} (${seniority(s.joined_on, s.left_on)})` : '—'}</dd>

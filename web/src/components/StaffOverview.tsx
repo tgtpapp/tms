@@ -23,6 +23,11 @@ const COLORS = ['#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2', '#db2777'
 const fold = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();
 const job = (s: OvStaff) => s.job_title?.trim() || POS[s.position];
 const dept = (s: OvStaff) => s.department?.trim() || POS[s.position];
+/** Nối các phần chữ, bỏ ô trống và phần trùng (vd chức vụ "Lái Xe" với nhóm "Lái xe" chỉ hiện 1 lần) */
+const joinU = (parts: (string | null | undefined)[], sep = ' · ') => {
+  const seen = new Set<string>();
+  return parts.map((x) => (x ?? '').trim()).filter((x) => { const k = fold(x); if (!x || seen.has(k)) return false; seen.add(k); return true; }).join(sep);
+};
 const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const years = (from: string, to: string) => { const [a, b, c] = from.split('-').map(Number); const [x, y, z] = to.split('-').map(Number); return x! - a! - (y! < b! || (y === b && z! < c!) ? 1 : 0); };
 /** Còn làm tại ngày d */
@@ -220,7 +225,7 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
         <section className="card"><div className="nsx-card-h"><h3>🎂 Sinh nhật tháng {Number(month)}</h3>{bd.length > 0 && <span className="nsx-cnt">{bd.length}</span>}</div>
           {priv.length === 0 ? <p className="muted">Chỉ người quản lý nhân sự xem được.</p> : bd.length === 0 ? <p className="muted">Tháng này không có ai sinh nhật</p> : (
             <div className="nsx-list">{bd.map((s) => { const b = pv.get(s.id)!.birth_date!; const dd = b.slice(8);
-              return <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${dept(s)} · tròn ${years(b, `${td.slice(0, 4)}-12-31`)} tuổi`} />
+              return <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${joinU([s.department, job(s)])} · tròn ${years(b, `${td.slice(0, 4)}-12-31`)} tuổi`} />
                 <span className={`badge${dd === td.slice(8) ? '' : ' warn-badge'}`}>{dd === td.slice(8) ? 'Hôm nay' : `${dd}/${month}`}</span></div>; })}</div>
           )}</section>
         <section className="card"><div className="nsx-card-h"><h3>Hợp đồng sắp hết hạn</h3></div>
@@ -230,7 +235,7 @@ export function StaffDashboard({ staff, priv, avas, onOpen, papers, warnDays, on
                 <span className={`badge ${c.end_on! < td ? 'locked' : 'warn-badge'}`}>{c.end_on! < td ? 'Đã hết hạn' : 'Sắp hết hạn'}</span></div>; })}</div>
           )}</section>
         <section className="card"><div className="nsx-card-h"><h3>Mới vào làm gần đây</h3></div>
-          <div className="nsx-list">{recent.map((s) => <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={`${job(s)} · ${dept(s)}`} /><span className="muted small nsx-nw">{fmtDate(s.joined_on)}</span></div>)}</div></section>
+          <div className="nsx-list">{recent.map((s) => <div key={s.id} className="nsx-li"><Who s={s} avas={avas} onOpen={onOpen} size={40} sub={joinU([job(s), s.department])} /><span className="muted small nsx-nw">{fmtDate(s.joined_on)}</span></div>)}</div></section>
       </div>
 
       <div className="nsx-g3">
@@ -446,12 +451,12 @@ export function StaffCards({ staff, avas }: Common) {
   const card = (s: OvStaff, photo: string | null) => `<div style="width:85.6mm;height:54mm;border:1px dashed #9aa3b5;border-radius:3mm;overflow:hidden;display:flex;font-family:Arial,sans-serif;color:#111;break-inside:avoid">
     <div style="flex:0 0 30mm;width:30mm;background:${color(s)};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       ${photo ? `<img src="${photo}" alt="" style="width:23mm;height:23mm;border-radius:2mm;object-fit:cover;border:0.8mm solid #fff">` : `<div style="width:23mm;height:23mm;border-radius:2mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
-      <div style="font-size:7pt;font-weight:bold;letter-spacing:.5px">${esc(POS[s.position].toUpperCase())}</div></div>
+      ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-size:7pt;font-weight:bold;letter-spacing:.5px">${esc(POS[s.position].toUpperCase())}</div>`}</div>
     <div style="flex:1 1 auto;min-width:0;padding:3mm 3.5mm;display:flex;flex-direction:column;overflow:hidden">
       <div style="font-size:6pt;font-weight:bold;color:#555;line-height:1.25;max-height:2.5em;overflow:hidden">${esc(co.toUpperCase())}</div>
       <div style="font-size:7pt;font-weight:bold;color:${color(s)};letter-spacing:1.5px;margin-top:1.5mm">THẺ NHÂN VIÊN</div>
       <div style="font-size:12pt;font-weight:bold;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
-      <div style="font-size:7.5pt;color:${color(s)};font-weight:bold;margin-top:1mm">${esc(dept(s))}</div>
+      ${s.department?.trim() && fold(s.department) !== fold(job(s)) ? `<div style="font-size:7.5pt;color:${color(s)};font-weight:bold;margin-top:1mm">${esc(s.department.trim())}</div>` : ''}
       <div style="font-size:8pt">${esc(job(s))}</div>
       <div style="margin-top:auto;font-size:7pt"><span style="color:#666">Ngày vào làm</span> <b>${fmtDate(s.joined_on)}</b>${s.phone ? `<br><span style="color:#666">ĐT</span> <b>${esc(s.phone)}</b>` : ''}</div></div></div>`;
   async function print() {

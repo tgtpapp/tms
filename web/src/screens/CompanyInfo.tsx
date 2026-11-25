@@ -10,7 +10,7 @@ import { SignNameToggle } from '../components/SignNameToggle';
 import { Cropper } from '../components/Cropper';
 
 const EMPTY = {
-  name: '', legal_name: '', tax_code: '', address: '', phone: '',
+  name: '', legal_name: '', tax_code: '', address: '', phone: '', email: '',
   transport_license_no: '', transport_license_date: '', transport_license_issuer: '', director_id_no: '', director_id_date: '', director_id_place: '',
 };
 type Info = typeof EMPTY;
@@ -47,13 +47,14 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     const [t, p, s] = await Promise.all([
       supabase.from('tenants').select('name, legal_name, tax_code, address, phone, transport_license_no, transport_license_date, transport_license_issuer').maybeSingle(),
       supabase.from('tenant_private').select('director_id_no, director_id_date, director_id_place').maybeSingle(),
-      supabase.from('tenant_settings').select('key, value').in('key', ['in.chu_ky_giam_doc', 'in.con_dau']),
+      supabase.from('tenant_settings').select('key, value').in('key', ['in.chu_ky_giam_doc', 'in.con_dau', 'cong_ty.email']),
     ]);
     if (t.error) return toast('error', t.error.message);
     const r = (t.data ?? {}) as Partial<Record<keyof Info, string | null>>;
     const v = (k: keyof Info) => r[k] ?? '';
     setF({
       name: v('name'), legal_name: v('legal_name'), tax_code: v('tax_code'), address: v('address'), phone: v('phone'),
+      email: String(((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === 'cong_ty.email')?.value ?? ''),
       transport_license_no: v('transport_license_no'), transport_license_date: v('transport_license_date'),
       transport_license_issuer: v('transport_license_issuer'),
       director_id_no: ((p.data ?? {}) as { director_id_no?: string | null }).director_id_no ?? '',
@@ -81,7 +82,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       });
       await rpc('set_director_id_info', { p_date: f.director_id_date || null, p_place: f.director_id_place });
       const { error } = await supabase.from('tenant_settings').upsert([
-        { key: 'in.chu_ky_giam_doc', value: flags.sign }, { key: 'in.con_dau', value: flags.seal },
+        { key: 'in.chu_ky_giam_doc', value: flags.sign }, { key: 'in.con_dau', value: flags.seal }, { key: 'cong_ty.email', value: f.email.trim() },
       ], { onConflict: 'tenant_id,key' });
       if (error) throw new Error(error.message);
       toast('ok', 'Đã lưu thông tin công ty');
@@ -192,6 +193,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
         <label>Tên pháp lý (theo đăng ký kinh doanh)<input value={f.legal_name} onChange={set('legal_name')} /></label>
         <label>Mã số thuế<input value={f.tax_code} onChange={set('tax_code')} inputMode="numeric" /></label>
         <label>Số điện thoại<input value={f.phone} onChange={set('phone')} inputMode="tel" /></label>
+        <label>Email<input type="email" value={f.email} onChange={set('email')} inputMode="email" /></label>
         <label>Địa chỉ<input value={f.address} onChange={set('address')} /></label>
       </div>
 

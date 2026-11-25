@@ -20,9 +20,9 @@ export interface Terms { payDay: number; hours: number; off: 'CN' | 'T7CN' }
 export const TERMS_KEYS = ['hdld.ngay_tra_luong', 'hdld.gio_ngay', 'hdld.ngay_nghi'];
 
 interface Person { name: string; gender: string | null; birth: string | null; nation: string | null; cccd: string | null; cccdOn: string | null; cccdBy: string | null;
-  address: string | null; current: string | null; phone: string | null; sign: Sign }
+  address: string | null; current: string | null; phone: string | null; bhxh: string | null; sign: Sign }
 export interface LaborCtx {
-  company: Company & { tax: string; phone: string; bank: string; bankNo: string }; boss: Boss; director: string; title: string; terms: Terms; person: Person;
+  company: Company & { tax: string; phone: string; bank: string; bankNo: string; email: string; dkkd: string }; boss: Boss; director: string; title: string; terms: Terms; person: Person;
 }
 
 export async function loadTerms(): Promise<Terms> {
@@ -33,11 +33,11 @@ export async function loadTerms(): Promise<Terms> {
 
 export async function loadLaborCtx(tenantId: string, me: { id: string | null; name: string }, staffId: string): Promise<LaborCtx> {
   const [c, t, ss, terms, sm, pv, cd] = await Promise.all([
-    company(), supabase.from('tenants').select('tax_code, phone').maybeSingle(),
-    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'tt.so_tai_khoan', 'tt.ngan_hang_bin']),
+    company(), supabase.from('tenants').select('tax_code, phone, transport_license_no').maybeSingle(),
+    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'tt.so_tai_khoan', 'tt.ngan_hang_bin', 'cong_ty.email']),
     loadTerms(),
     supabase.from('staff_members').select('full_name, phone, user_id').eq('id', staffId).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, gender, address, current_address').eq('staff_id', staffId).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, gender, address, current_address, bhxh_no').eq('staff_id', staffId).maybeSingle(),
     supabase.from('documents').select('doc_no, issued_on, issuer, data').eq('staff_id', staffId).eq('doc_type', 'cccd').eq('is_current', true).maybeSingle(),
   ]);
   if (!sm.data) throw new Error('Không tìm thấy nhân viên');
@@ -46,15 +46,15 @@ export async function loadLaborCtx(tenantId: string, me: { id: string | null; na
   const who = `nv_${staffId}`;
   const [{ b }, signs] = await Promise.all([boss(tenantId, me), loadSigns(tenantId, [who, s.user_id], true)]);
   const own = signs.get(who);
-  const p = pv.data as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null } | null;
+  const p = pv.data as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null; bhxh_no: string | null } | null;
   const d = cd.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
-  const tt = t.data as { tax_code: string | null; phone: string | null } | null;
+  const tt = t.data as { tax_code: string | null; phone: string | null; transport_license_no: string | null } | null;
   return {
-    company: { ...c, tax: tt?.tax_code ?? '', phone: tt?.phone ?? '', bankNo: set('tt.so_tai_khoan'), bank: BANKS.find((x) => x.bin === set('tt.ngan_hang_bin'))?.name ?? '' },
+    company: { ...c, tax: tt?.tax_code ?? '', phone: tt?.phone ?? '', email: set('cong_ty.email'), dkkd: tt?.transport_license_no || tt?.tax_code || '', bankNo: set('tt.so_tai_khoan'), bank: BANKS.find((x) => x.bin === set('tt.ngan_hang_bin'))?.name ?? '' },
     boss: b, director: set('cong_ty.giam_doc'), title: set('cong_ty.chuc_danh_ky') || 'Giám đốc', terms,
     person: { name: s.full_name, gender: p?.gender === 'nu' ? 'Nữ' : p?.gender === 'nam' ? 'Nam' : null, birth: p?.birth_date ?? null,
       nation: String(d?.data?.quoc_tich ?? '') || null, cccd: d?.doc_no ?? null, cccdOn: d?.issued_on ?? null, cccdBy: d?.issuer ?? null,
-      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || p?.address || null, phone: s.phone,   // chỗ ở trống: lấy nơi cư trú trên CCCD
+      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || p?.address || null, phone: s.phone, bhxh: p?.bhxh_no ?? null,   // chỗ ở trống: lấy nơi cư trú trên CCCD
       sign: own?.img ? own : (s.user_id && signs.get(s.user_id)) || { img: null, hasName: false } },
   };
 }
@@ -91,12 +91,12 @@ export function contractPages(k: Contract, x: LaborCtx): string[] {
     `<div style="margin-top:4px">${HD_CANCU.map((t) => `<p style="margin:3px 0">- ${t}</p>`).join('')}</div>`,
     `<p style="margin:3px 0">Chúng tôi, một bên là:</p><p style="margin:3px 0"><b>NGƯỜI SỬ DỤNG LAO ĐỘNG (BÊN A):</b></p><p style="margin:3px 0"><b>${esc(co.name)}</b></p>
      <p style="margin:3px 0">Người đại diện: Ông ${hv(x.director)} &nbsp; Chức vụ: ${hv(x.title)}</p><p style="margin:3px 0">Địa chỉ: ${hv(co.address)}</p><p style="margin:3px 0">MST: ${hv(co.tax)}</p>
-     <p style="margin:3px 0">Số điện thoại: ${hv(co.phone)} &nbsp; Email: ............</p><p style="margin:3px 0">Số tài khoản: ${hv(co.bankNo)} &nbsp; Tại: ${hv(co.bank)}</p><p style="margin:3px 0">ĐKKD số: ............</p>`,
+     <p style="margin:3px 0">Số điện thoại: ${hv(co.phone)} &nbsp; Email: ${hv(co.email)}</p><p style="margin:3px 0">Số tài khoản: ${hv(co.bankNo)} &nbsp; Tại: ${hv(co.bank)}</p><p style="margin:3px 0">ĐKKD số: ${hv(co.dkkd)}</p>`,
     `<p style="margin:3px 0"><b>NGƯỜI LAO ĐỘNG (BÊN B):</b></p>
      <p style="margin:3px 0">Ông/Bà: <b>${ten}</b> &nbsp; Giới tính: ${up(e.gender)}</p><p style="margin:3px 0">Sinh ngày: ${hd8(e.birth)} &nbsp; Quốc tịch: ${hv(e.nation || 'Việt Nam')}</p>
      <p style="margin:3px 0">CMND/CCCD số: ${hv(e.cccd)} &nbsp; Ngày cấp: ${hd8(e.cccdOn)} &nbsp; Nơi cấp: ${hv(e.cccdBy)}</p>
      <p style="margin:3px 0">Địa chỉ thường trú: ${hv(e.address)}</p><p style="margin:3px 0">Chỗ ở hiện nay: ${hv(e.current)}</p><p style="margin:3px 0">Số điện thoại: ${hv(e.phone)}</p>
-     <p style="margin:3px 0">Số sổ lao động/Sổ BHXH (nếu có): cấp ngày: ${hd8(null)}</p>
+     <p style="margin:3px 0">Số sổ lao động/Sổ BHXH (nếu có): ${hv(e.bhxh)}</p>
      <p style="margin:3px 0">Sau khi trao đổi, hai bên đồng ý ký kết Hợp đồng lao động (“HĐLĐ”) và cam kết thực hiện đúng các điều khoản cụ thể sau đây:</p>`,
     `${H('ĐIỀU 1. ĐIỀU KHOẢN CHUNG')}<p style="margin:3px 0">1.1. Loại HĐLĐ: ${l11}.</p>
      <p style="margin:3px 0">1.2. Thời hạn HĐLĐ: kể từ ngày ${hd8(k.start_on)}${k.kind === 'khong_xac_dinh' ? '' : ` đến hết ngày ${hd8(k.end_on)}`}.</p>

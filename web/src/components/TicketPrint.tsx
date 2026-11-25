@@ -1,4 +1,5 @@
 // Vé xe in máy in nhiệt khổ 80mm (mặc định) hoặc 58mm (máy in cầm tay). Mỗi ghế 1 vé.
+import { PrintHead } from './PrintHead';
 import { printThermal } from '../lib/thermalPrint';
 import { ThermalInfo } from './ThermalInfo';
 import QRCode from 'qrcode';
@@ -34,10 +35,7 @@ export function TicketSlip({ data, i, qr }: { data: TicketPrintData; i: number; 
   const row = (k: string, v: string | null | undefined) => (v ? <div className="t8r"><span>{k}</span><b>{v}</b></div> : null);
   return (
     <div className="ve gh8 vx8">
-      <div className="gh8-top">
-        {data.logo && <img src={data.logo} alt="" />}
-        <b className="gh8-co">{data.tenant.toUpperCase()}</b>
-      </div>
+      <PrintHead k80 fallback={{ name: data.tenant, logo: data.logo }} />
       <div className="c ve-title">VÉ XE KHÁCH{n > 1 ? ` (${i + 1}/${n})` : ''}</div>
       <div className="c">Mã vé <b>{data.code}</b></div>
       <div className="ve-line" />

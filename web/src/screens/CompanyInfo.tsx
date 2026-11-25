@@ -1,5 +1,6 @@
 // Thông tin công ty (Cấu hình): logo, thông tin doanh nghiệp, giấy phép kinh doanh vận tải,
 // hồ sơ pháp lý & chữ ký (chỉ quản trị xem). Giấy tờ tải lên → AI đọc, điền sẵn để kiểm tra rồi lưu.
+import { brandChanged } from '../lib/brand';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   companyFileUrl, loadStoredFiles, prepareFile, readByAI, removeFile, signatureUrl, uploadCompanyFile, uploadLogo, uploadSignature, type PreparedFile,
@@ -10,7 +11,7 @@ import { SignNameToggle } from '../components/SignNameToggle';
 import { Cropper } from '../components/Cropper';
 
 const EMPTY = {
-  name: '', legal_name: '', tax_code: '', address: '', phone: '', email: '',
+  name: '', legal_name: '', tax_code: '', address: '', phone: '', email: '', hotline: '', website: '',
   transport_license_no: '', transport_license_date: '', transport_license_issuer: '', director_id_no: '', director_id_date: '', director_id_place: '',
 };
 type Info = typeof EMPTY;
@@ -47,7 +48,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     const [t, p, s] = await Promise.all([
       supabase.from('tenants').select('name, legal_name, tax_code, address, phone, transport_license_no, transport_license_date, transport_license_issuer').maybeSingle(),
       supabase.from('tenant_private').select('director_id_no, director_id_date, director_id_place').maybeSingle(),
-      supabase.from('tenant_settings').select('key, value').in('key', ['in.chu_ky_giam_doc', 'in.con_dau', 'cong_ty.email']),
+      supabase.from('tenant_settings').select('key, value').in('key', ['in.chu_ky_giam_doc', 'in.con_dau', 'cong_ty.email', 'cong_ty.hotline', 'cong_ty.website']),
     ]);
     if (t.error) return toast('error', t.error.message);
     const r = (t.data ?? {}) as Partial<Record<keyof Info, string | null>>;
@@ -55,6 +56,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     setF({
       name: v('name'), legal_name: v('legal_name'), tax_code: v('tax_code'), address: v('address'), phone: v('phone'),
       email: String(((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === 'cong_ty.email')?.value ?? ''),
+      hotline: String(((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === 'cong_ty.hotline')?.value ?? ''),
+      website: String(((s.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === 'cong_ty.website')?.value ?? ''),
       transport_license_no: v('transport_license_no'), transport_license_date: v('transport_license_date'),
       transport_license_issuer: v('transport_license_issuer'),
       director_id_no: ((p.data ?? {}) as { director_id_no?: string | null }).director_id_no ?? '',
@@ -82,10 +85,11 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       });
       await rpc('set_director_id_info', { p_date: f.director_id_date || null, p_place: f.director_id_place });
       const { error } = await supabase.from('tenant_settings').upsert([
-        { key: 'in.chu_ky_giam_doc', value: flags.sign }, { key: 'in.con_dau', value: flags.seal }, { key: 'cong_ty.email', value: f.email.trim() },
+        { key: 'in.chu_ky_giam_doc', value: flags.sign }, { key: 'in.con_dau', value: flags.seal }, { key: 'cong_ty.email', value: f.email.trim() }, { key: 'cong_ty.hotline', value: f.hotline.trim() }, { key: 'cong_ty.website', value: f.website.trim() },
       ], { onConflict: 'tenant_id,key' });
       if (error) throw new Error(error.message);
       toast('ok', 'Đã lưu thông tin công ty');
+      brandChanged();
       await load();
     } catch (err) {
       toast('error', errMsg(err));
@@ -159,6 +163,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
       if (slot === 'logo') await uploadLogo(tenantId, file);
       else await uploadSignature(tenantId, slot === 'chu_ky' ? 'giam_doc' : 'con_dau', file);
       toast('ok', 'Đã lưu ảnh');
+      brandChanged();
       await loadUrls();
     } catch (err) {
       toast('error', errMsg(err));
@@ -169,6 +174,7 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
     try {
       await removeFile(PATH[slot](tenantId));
       toast('ok', 'Đã bỏ ảnh');
+      brandChanged();
       await loadUrls();
     } catch (err) {
       toast('error', errMsg(err));
@@ -194,6 +200,8 @@ export function CompanyInfo({ tenantId }: { tenantId: string }) {
         <label>Mã số thuế<input value={f.tax_code} onChange={set('tax_code')} inputMode="numeric" /></label>
         <label>Số điện thoại<input value={f.phone} onChange={set('phone')} inputMode="tel" /></label>
         <label>Email<input type="email" value={f.email} onChange={set('email')} inputMode="email" /></label>
+        <label>Hotline<input value={f.hotline} onChange={set('hotline')} inputMode="tel" /></label>
+        <label>Website<input value={f.website} onChange={set('website')} inputMode="url" /></label>
         <label>Địa chỉ<input value={f.address} onChange={set('address')} /></label>
       </div>
 

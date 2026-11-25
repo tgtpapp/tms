@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { PrintHead } from '../components/PrintHead';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
 import { OrderIssue } from '../components/OrderIssue';
 import { MiniCal } from '../components/MiniCal';
@@ -958,8 +959,9 @@ function PhoiPrint(p: { company: string; route: string; time: string; day: strin
   const d1 = p.crew.find((c) => c.role === 'lai_xe_1'), d2 = p.crew.find((c) => c.role === 'lai_xe_2'), px = p.crew.find((c) => c.role === 'phu_xe');
   return (
     <div className="print-area phoi-a4" style={{ fontSize: fs }}>
+      <PrintHead fallback={{ name: p.company }} />
       <div className="phoi-head">
-        <div><b>{p.company.toUpperCase()}</b><div>PHƠI XE · SƠ ĐỒ GHẾ</div></div>
+        <div><b>PHƠI XE · SƠ ĐỒ GHẾ</b></div>
         <div className="phoi-title"><b>{p.route}</b><div>Giờ chạy <b>{p.time}</b> · ngày <b>{p.day}</b></div></div>
         <div className="phoi-r">Xe <b>{p.plate ?? '……………'}</b> · {type.name}<div>Lái xe: <b>{d1?.name ?? '……………'}</b>{d2 ? ` · ${d2.name}` : ''}{px ? ` · Phụ xe: ${px.name}` : ''}</div></div>
       </div>

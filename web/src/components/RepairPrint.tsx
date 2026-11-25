@@ -1,12 +1,13 @@
 // In phiếu sửa chữa phương tiện khổ A4 (như app cũ): đầu trang công ty, số xe, lái xe, bảng hạng mục có ĐVT,
 // tổng tiền + bằng chữ, chữ ký Người lập phiếu (ảnh chữ ký nếu có) · Lái xe · Giám đốc.
+import { PrintHead } from './PrintHead';
+import { letterhead, loadBrand } from '../lib/brand';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { companyFileUrl } from '../lib/documents';
 import { loadSigns, showName, type Sign } from '../lib/signatures';
 import { supabase } from '../lib/supabase';
 import { moneyWords } from '../lib/vnWords';
-import { toDataUrl } from '../lib/pdfMaker';
 
 export interface RepairPrintOrder {
   id: string; code: string; vehicle_id: string; driver_id?: string | null; plate: string; repaired_on: string; odo_km: number | null; workshop: string | null; note: string | null; created_by: string | null;
@@ -58,12 +59,10 @@ const esc = (t: unknown) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&
 /** Phiếu sửa chữa dạng HTML (ảnh logo, chữ ký nhúng sẵn) để lưu PDF vào Lưu trữ hồ sơ – cùng nội dung bản in */
 export async function repairPaperHtml(o: RepairPrintOrder, tenantId: string, me: { id: string | null; name: string }): Promise<string> {
   const info = await loadInfo(o, tenantId, me, true);
-  const logo = await toDataUrl(info.logo).catch(() => null);
   const total = o.items.reduce((a, i) => a + Number(i.qty) * Number(i.unit_price), 0);
   const now = new Date();
   const td = 'border:1px solid #333;padding:6px';
-  return `<div style="display:flex;gap:12px;align-items:center">${logo ? `<img src="${logo}" alt="" style="max-height:60px;max-width:120px">` : ''}
-    <div><b>${esc(info.co.name.toUpperCase())}</b>${info.co.address ? `<div>${esc(info.co.address)}</div>` : ''}<div>${esc([info.co.phone && `ĐT: ${info.co.phone}`, info.co.tax && `MST: ${info.co.tax}`].filter(Boolean).join(' · '))}</div></div></div>
+  return `${letterhead(await loadBrand())}
     <h2 style="text-align:center;margin:14px 0 2px;font-size:20px">PHIẾU SỬA CHỮA PHƯƠNG TIỆN</h2>
     <div style="text-align:center">Số phiếu: <b>${esc(o.code)}</b> · Ngày: <b>${dmy(o.repaired_on)}</b></div>
     <div style="margin:10px 0;font-size:14px">Số xe: <b>${esc(o.plate)}</b> &nbsp;·&nbsp; Lái xe: <b>${esc(info.driver) || '..............................'}</b>${o.odo_km ? ` &nbsp;·&nbsp; Số km: <b>${money(o.odo_km)}</b>` : ''}${o.workshop ? ` &nbsp;·&nbsp; Gara: <b>${esc(o.workshop)}</b>` : ''}</div>
@@ -91,14 +90,7 @@ export function RepairPrint({ order, tenantId, me, onClose }: { order: RepairPri
       </div>
       {!info ? <p className="muted">Đang chuẩn bị phiếu…</p> : (
         <div className="lenh rp-print">
-          <div className="rp-head">
-            {info.logo && <img src={info.logo} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
-            <div className="rp-co">
-              <b>{info.co.name.toUpperCase()}</b>
-              {info.co.address && <div>{info.co.address}</div>}
-              <div>{[info.co.phone && `ĐT: ${info.co.phone}`, info.co.tax && `MST: ${info.co.tax}`].filter(Boolean).join(' · ')}</div>
-            </div>
-          </div>
+          <PrintHead fallback={{ name: info.co.name, logo: info.logo }} />
           <h2 className="c" style={{ margin: '14px 0 2px', fontSize: 20 }}>PHIẾU SỬA CHỮA PHƯƠNG TIỆN</h2>
           <div className="c">Số phiếu: <b>{order.code}</b> · Ngày: <b>{dmy(order.repaired_on)}</b></div>
           <div style={{ margin: '10px 0', fontSize: 14 }}>

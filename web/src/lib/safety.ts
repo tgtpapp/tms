@@ -4,6 +4,7 @@
 // - Phụ lục 3 + 5: Báo cáo tuần / tháng / năm kèm bảng tổng hợp vi phạm – tự tính từ chuyến đã chạy và sổ giám sát.
 // - Phụ lục 4: Biên bản xác minh (sự việc mức 2, 3 đã đóng). Phụ lục 6: Báo cáo sự cố khẩn cấp (sự cố hoặc mức 3).
 // Tất cả tự lưu PDF vào Lưu trữ hồ sơ › Năm › An toàn giao thông; nội dung không đổi thì không lưu lại.
+import { letterhead, loadBrand, type Brand } from './brand';
 import { savePdf, resetFolders } from './dispatchPapers';
 import { drive } from './drive';
 import { paginate } from './pdfMaker';
@@ -41,7 +42,7 @@ const dir = (r: { name: string; name_ve: string | null } | undefined, d: string)
 // ------------------------------------------------------------------ Dữ liệu dùng chung 1 lượt
 interface Doc { vehicle_id: string | null; staff_id: string | null; doc_type: string; expires_on: string | null }
 export interface Base {
-  company: Company; vehicles: Map<string, { plate: string; gsht: string | null; camera: string | null }>; staff: Map<string, string>;
+  company: Company; brand: Brand; vehicles: Map<string, { plate: string; gsht: string | null; camera: string | null }>; staff: Map<string, string>;
   routes: Map<string, { name: string; name_ve: string | null }>; docs: Doc[]; events: SEvent[];
   supervisor: { name: string; since: string } | null;
 }
@@ -61,7 +62,7 @@ export async function loadBase(): Promise<Base> {
   const staff = new Map(((sm.data ?? []) as { id: string; full_name: string }[]).map((s) => [s.id, s.full_name]));
   const q = ((qd.data ?? []) as { staff_id: string | null; signed_on: string; content: Record<string, string> }[])[0];
   return {
-    company: c, staff,
+    company: c, brand: await loadBrand(), staff,
     vehicles: new Map(((vh.data ?? []) as { id: string; plate: string; gsht_provider: string | null; camera_provider: string | null }[]).map((v) => [v.id, { plate: v.plate, gsht: v.gsht_provider, camera: v.camera_provider }])),
     routes: new Map(((rt.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((r) => [r.id, r])),
     docs: mergeRecordPapers((dc.data ?? []) as Doc[], (rc.data ?? []) as { staff_id: string; kind: string; data: Record<string, unknown> | null }[],
@@ -117,7 +118,7 @@ export async function checklistDay(b: Base, day: string): Promise<{ pages: strin
   const per = 18, pages: string[] = [];
   for (let i = 0; i < body.length; i += per) {
     const first = i === 0, last = i + per >= body.length;
-    pages.push(`<div style="font-size:12px">${first ? `${head(b.company)}${title('CHECKLIST KIỂM TRA TRƯỚC KHI GIAO CHUYẾN', `Ngày ${dmy(day)} · ${body.length} chuyến · (Phụ lục 1 – QĐ giao nhiệm vụ giám sát ATGT)`)}` : ''}
+    pages.push(`<div style="font-size:12px">${first ? `${letterhead(b.brand)}${title('CHECKLIST KIỂM TRA TRƯỚC KHI GIAO CHUYẾN', `Ngày ${dmy(day)} · ${body.length} chuyến · (Phụ lục 1 – QĐ giao nhiệm vụ giám sát ATGT)`)}` : ''}
       ${table(hdr, body.slice(i, i + per), [0, 1, ...CHECK_ITEMS.map((_, k) => 5 + k)])}
       ${last ? `<div style="font-size:10.5px;margin-top:4px"><b>Nội dung kiểm tra:</b> ${CHECK_ITEMS.map((x, k) => `<b>${k + 1}</b>. ${esc(x)}`).join(' · ')}</div>
       <div style="font-size:10.5px">Đ = Đạt · K = Không đạt · N.A. = Không áp dụng · BNT = theo Bảng kiểm tra an toàn, nghiệm thu xe trước khi khởi hành của lái xe. Mục 1–9, 11 do phần mềm tự đối chiếu hồ sơ xe, lái xe, lịch xếp xe và sổ giám sát.</div>
@@ -143,7 +144,7 @@ export async function soNgay(b: Base, day: string): Promise<string[] | null> {
   const L = b.events.filter((e) => vnDay(e.occurred_at) === day);
   if (!L.length) return null;
   await loadTrips(L.map((e) => e.trip_id ?? ''));
-  return paginate([`${head(b.company)}${title('SỔ THEO DÕI GIÁM SÁT AN TOÀN HẰNG NGÀY', `Ngày ${dmy(day)} · (Phụ lục 2)`)}`,
+  return paginate([`${letterhead(b.brand)}${title('SỔ THEO DÕI GIÁM SÁT AN TOÀN HẰNG NGÀY', `Ngày ${dmy(day)} · (Phụ lục 2)`)}`,
     table(['Ngày/giờ', 'Xe / lái xe', 'Chuyến / tuyến', 'Cảnh báo/vi phạm/sự cố', 'Thông báo/biện pháp', 'Kết quả/đóng'], L.map((e) => evRow2(b, e))),
     '<p style="font-size:11px;margin:4px 0">Ghi rõ thời điểm, dữ liệu/căn cứ, nội dung cảnh báo, người được thông báo, thời hạn khắc phục và kết quả xác minh.</p>',
     signRow([['NGƯỜI GIÁM SÁT', b.supervisor?.name ?? ''], ['XÁC NHẬN ĐIỀU HÀNH', '']])].map((x) => `<div style="font-size:12px">${x}</div>`), true);
@@ -170,7 +171,7 @@ export function bienBan(b: Base, e: SEvent): string[] {
 // ------------------------------------------------------------------ Phụ lục 6: Báo cáo sự cố khẩn cấp
 export function suCo(b: Base, e: SEvent): string[] {
   const f = (t: string, v: string) => `<p style="margin:5px 0"><b>${t}:</b> ${v || '…………………………'}</p>`;
-  return paginate([`${head(b.company)}${title('BÁO CÁO SỰ CỐ KHẨN CẤP (TÓM TẮT)', '(Phụ lục 6 – QĐ giao nhiệm vụ giám sát ATGT)')}`,
+  return paginate([`${letterhead(b.brand)}${title('BÁO CÁO SỰ CỐ KHẨN CẤP (TÓM TẮT)', '(Phụ lục 6 – QĐ giao nhiệm vụ giám sát ATGT)')}`,
     f('Thời điểm/địa điểm', esc(`${vnTime(e.occurred_at)} ngày ${dmy(vnDay(e.occurred_at))}${e.place ? ` · ${e.place}` : ''}`)), f('Xe/lái xe', esc(who(b, e))),
     f('Loại sự cố', esc(`${KIND[e.kind] ?? e.kind} · ${LEVEL[e.level]}`)), f('Hành động ban đầu', esc(e.action ?? '')), f('Người tiếp nhận/đầu mối', esc(e.notified ?? '')),
     f('Thời điểm ghi nhận vào sổ', esc(`${vnTime(e.created_at)} ngày ${dmy(vnDay(e.created_at))}`)),
@@ -214,7 +215,7 @@ export async function baoCao(b: Base, label: string, from: string, to: string): 
   ];
   const general = L.length ? `Trong kỳ có ${st.trips} chuyến được theo dõi, ghi nhận ${L.length} cảnh báo/vi phạm/sự cố (${closed} đã xử lý, ${open} còn theo dõi).`
     : `Trong kỳ có ${st.trips} chuyến được theo dõi, không ghi nhận cảnh báo/vi phạm/sự cố.`;
-  const blocks = [`${head(b.company)}${title(`BÁO CÁO GIÁM SÁT AN TOÀN ${label.toUpperCase()}`, `Kỳ báo cáo: từ ${dmy(from)} đến ${dmy(to)} · Người báo cáo: ${esc(b.supervisor?.name ?? '……………')} · (Phụ lục 5)`)}`,
+  const blocks = [`${letterhead(b.brand)}${title(`BÁO CÁO GIÁM SÁT AN TOÀN ${label.toUpperCase()}`, `Kỳ báo cáo: từ ${dmy(from)} đến ${dmy(to)} · Người báo cáo: ${esc(b.supervisor?.name ?? '……………')} · (Phụ lục 5)`)}`,
     table(['Nội dung', 'Số liệu / ghi nhận', 'Đánh giá / đề xuất'], rows.map((r) => [esc(r[0]), esc(r[1]), r[2]!])),
     `<p style="margin:6px 0"><b>Nhận xét chung và đề xuất:</b> ${esc(general)} ${esc(advice.join('; '))}.</p>`];
   if (L.length) {

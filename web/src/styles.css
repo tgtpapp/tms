@@ -1853,3 +1853,17 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .vx-rc span { font-size: 14px; color: var(--muted); }
 .vx-rc.on { border-color: var(--rc); background: color-mix(in srgb, var(--rc) 10%, var(--surface)); box-shadow: var(--shadow); }
 .vx-rc.on b { color: var(--rc); }
+
+/* Đầu trang in dùng chung: logo trái (ô cố định, chữ không chồng lên logo), tên + địa chỉ + liên hệ phải, kẻ ngang đen */
+.k8h { display: flex; gap: 2.5mm; align-items: center; }
+.k8h img { flex: none; width: 14mm; max-height: 16mm; object-fit: contain; }
+.k8h > div { flex: 1; min-width: 0; font-size: 10.5px; line-height: 1.3; }
+.k8h > div b { display: block; font-size: 13px; line-height: 1.2; }
+.ve-list.w58 .k8h img { width: 10mm; }
+.ve-list.w58 .k8h > div { font-size: 9.5px; } .ve-list.w58 .k8h > div b { font-size: 11.5px; }
+.k8h-line { border-top: 1.2px solid #000; margin: 1.5mm 0; }
+.a4h { display: flex; gap: 4mm; align-items: center; }
+.a4h img { flex: none; width: 28mm; max-height: 22mm; object-fit: contain; }
+.a4h > div { flex: 1; min-width: 0; font-size: 12px; line-height: 1.4; }
+.a4h > div b { display: block; font-size: 15px; }
+.a4h-line { border-top: 1.5px solid #000; margin: 5px 0 8px; }

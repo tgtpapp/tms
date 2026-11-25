@@ -1,4 +1,5 @@
 // Phiếu gửi hàng khổ K80 (như app cũ): xem trước ngay khi nhập, in máy in nhiệt 80mm (hoặc 58mm).
+import { PrintHead } from './PrintHead';
 import { printThermal } from '../lib/thermalPrint';
 import { ThermalInfo } from './ThermalInfo';
 import { useEffect, useRef, useState } from 'react';
@@ -24,12 +25,7 @@ export function ParcelSlip({ d, i = 0, n = 1 }: { d: SlipData; i?: number; n?: n
   const paid = d.payer === 'nguoi_gui';
   return (
     <div className="ve gh8">
-      <div className="gh8-top">
-        {d.company.logo && <img src={d.company.logo} alt="" />}
-        <b className="gh8-co">{d.company.name.toUpperCase()}</b>
-      </div>
-      {d.company.address && <div className="gh8-s">Địa chỉ: {d.company.address}</div>}
-      {(d.company.phone || d.company.tax) && <div className="gh8-s">{d.company.phone && <>Hotline: <b>{d.company.phone}</b></>}{d.company.phone && d.company.tax ? ' · ' : ''}{d.company.tax && `MST: ${d.company.tax}`}</div>}
+      <PrintHead k80 fallback={{ name: d.company.name, logo: d.company.logo }} />
       <div className="c ve-title">PHIẾU GỬI HÀNG{n > 1 ? ` (${i + 1}/${n})` : ''}</div>
       <div className="c">Số phiếu <b>{d.code ?? '(cấp khi lưu)'}</b></div>
       <div className="ve-line" />

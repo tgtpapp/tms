@@ -1,12 +1,13 @@
 // Đóng BHXH & lương chuyển khoản theo tháng (như Cài đặt của app cũ): chọn tháng, tick người đóng BHXH, nhập lương chuyển khoản
 // và mức lương đóng BHXH; sửa xong tự lưu. Lưu bảng thành PDF vào Năm › Tài chính - Kế toán › BHXH & lương chuyển khoản.
+import { letterhead, loadBrand } from '../lib/brand';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MonthPicker } from './MonthPicker';
 import { today } from './Documents';
 import { PaperView, type Me } from './ProfilePapers';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
-import { boss, bossCol, company, head, signCol, signImg } from '../lib/profilePapers';
+import { boss, bossCol, company, signCol, signImg } from '../lib/profilePapers';
 import { resetFolders, savePdf } from '../lib/dispatchPapers';
 import { profileChanged } from '../lib/profileAutoArchive';
 
@@ -84,7 +85,7 @@ export function PayMonths({ tenantId, me, canArchive }: { tenantId: string; me: 
     const [c, b] = await Promise.all([company(), boss(tenantId, me)]);
     const td = (v: string, al = '') => `<td style="border:1px solid #000;padding:3px 6px;${al ? `text-align:${al}` : ''}">${v}</td>`;
     const th = (v: string) => `<th style="border:1px solid #000;padding:4px 6px;background:#e2e8f0">${v}</th>`;
-    return `<div style="font-size:13px">${head(c)}<h2 style="text-align:center;margin:12px 0 2px;font-size:18px">BẢNG ĐÓNG BHXH VÀ LƯƠNG CHUYỂN KHOẢN</h2>
+    return `<div style="font-size:13px">${letterhead(await loadBrand())}<h2 style="text-align:center;margin:12px 0 2px;font-size:18px">BẢNG ĐÓNG BHXH VÀ LƯƠNG CHUYỂN KHOẢN</h2>
       <div style="text-align:center;margin-bottom:8px">Tháng <b>${mo}/${y}</b> · ${esc(c.name)}</div>
       <table style="width:100%;border-collapse:collapse"><tr>${th('STT')}${th('Tháng')}${th('Tên nhân viên')}${th('Đóng BHXH')}${th('Lương chuyển khoản')}${th('Bảo hiểm xã hội')}</tr>
       ${list.map((s, i) => { const v = val(s.id); return `<tr>${td(String(i + 1), 'center')}${td(`${mo}/${y}`, 'center')}${td(esc(s.full_name))}${td(v.has_bhxh ? '☒ Có' : '☐ Không', 'center')}${td(num(v.transfer_pay), 'right')}${td(num(v.bhxh_pay), 'right')}</tr>`; }).join('')}

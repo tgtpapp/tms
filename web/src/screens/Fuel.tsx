@@ -1,4 +1,5 @@
 // Nhiên liệu (như app cũ): nhập dầu vào bồn, cấp dầu từ bồn cho xe, đổ ngoài cây xăng; tồn bồn, giá bình quân, tiêu hao theo xe.
+import { letterhead, loadBrand } from '../lib/brand';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MonthPicker } from '../components/MonthPicker';
 import { Modal } from '../components/Modal';
@@ -8,7 +9,7 @@ import { prepareFile, uploadFiles } from '../lib/documents';
 import { matchPlate, readFuelPhotos } from '../lib/fuelPhoto';
 import { FuelSlip, type FuelSlipData } from '../components/FuelSlip';
 import { PaperView } from '../components/ProfilePapers';
-import { company, head, signCol } from '../lib/profilePapers';
+import { company, signCol } from '../lib/profilePapers';
 import { DEFAULT_FUEL, FUEL_KIND, fuelLedger, fuelSort, normLevel, type FuelEntry, type FuelKind, type FuelSettings } from '../lib/fuel';
 import { loadMarket, MK, mkChanges, mkKey, mkPrice, mkWhen, type Market } from '../lib/fuelMarket';
 import type { Permissions } from '../lib/permissions';
@@ -249,11 +250,11 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
     URL.revokeObjectURL(a.href);
   }
   async function printBook() {
-    const c = await company(), R = bookRows(), keep = bookCols.map((_, i) => i).filter((i) => i !== 2 && i !== 6);
+    const R = bookRows(), keep = bookCols.map((_, i) => i).filter((i) => i !== 2 && i !== 6);
     const B = 'border:1px solid #000;padding:3px 4px;font-size:10.5px';
     const fmt = (v: string | number, i: number) => (typeof v === 'number' ? (i === 8 || i === 13 ? num(v, 2) : i === 12 ? num(v, 1) : num(v)) : v);
     const tot = (i: number) => R.reduce((a, r) => a + (Number(r[i]) || 0), 0);
-    setBook(`<div style="font-size:12px">${head(c)}<h2 style="text-align:center;margin:8px 0 2px;font-size:16px">SỔ NHẬP XUẤT NHIÊN LIỆU</h2>
+    setBook(`<div style="font-size:12px">${letterhead(await loadBrand())}<h2 style="text-align:center;margin:8px 0 2px;font-size:16px">SỔ NHẬP XUẤT NHIÊN LIỆU</h2>
       <div style="text-align:center;margin-bottom:6px">${monthTxt.charAt(0).toUpperCase() + monthTxt.slice(1)} · Tồn bồn hiện tại: ${num(led.tank, 2)} lít</div>
       <table style="width:100%;border-collapse:collapse"><tr>${keep.map((i) => `<th style="${B};background:#e2e8f0">${bookCols[i]}</th>`).join('')}</tr>
       ${R.map((r) => `<tr>${keep.map((i) => `<td style="${B};${i >= 7 ? 'text-align:right' : ''}">${fmt(r[i] as string | number, i)}</td>`).join('')}</tr>`).join('')}

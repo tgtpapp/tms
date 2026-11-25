@@ -1,4 +1,5 @@
 // Phiếu nhiên liệu in máy in nhiệt khổ 80mm (như app cũ): phiếu nhập dầu / xuất dầu / đổ dầu ngoài.
+import { PrintHead } from './PrintHead';
 import { printThermal } from '../lib/thermalPrint';
 import { ThermalInfo } from './ThermalInfo';
 import { useEffect, useRef, type ReactNode } from 'react';
@@ -31,9 +32,7 @@ export function FuelSlip({ list, onClose }: { list: FuelSlipData[]; onClose: () 
           const kv = (l: string, v: ReactNode) => (v === '' || v == null ? null : <div className="nl80-kv"><span>{l}</span><b>{v}</b></div>);
           return (
             <div key={r.code} className="ve nl80">
-              <div className="c"><b>{r.company.toUpperCase()}</b></div>
-              {r.address && <div className="c small">{r.address}</div>}
-              <div className="ve-line" />
+              <PrintHead k80 fallback={{ name: r.company }} />
               <div className="c ve-title">{TITLE[r.kind]}</div>
               <div className="c">Số: <b>{r.code}</b></div>
               <div className="c small">{r.date.split('-').reverse().join('/')}{r.time ? ` · ${r.time}` : ''}</div>

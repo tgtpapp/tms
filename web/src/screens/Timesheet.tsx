@@ -1,10 +1,11 @@
 // Bảng chấm công (như app cũ): lái xe tự tính công từ chuyến đã chạy, văn phòng tự điền X ngày làm việc.
 // Lọc theo phòng ban, nhóm tuyến, lái xe chạy chéo; công/chuyến theo từng tuyến; quy tắc trừ tiền khi không đủ;
 // in / tải Excel bảng chấm công và bảng lái xe theo nhóm tuyến.
+import { letterhead, loadBrand } from '../lib/brand';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MonthPicker } from '../components/MonthPicker';
 import { PaperView, type Me } from '../components/ProfilePapers';
-import { boss, bossCol, company, head, signCol, signImg } from '../lib/profilePapers';
+import { boss, bossCol, signCol, signImg } from '../lib/profilePapers';
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -212,9 +213,9 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
   async function printMain() {
     setBusy('Đang dựng bảng…');
     try {
-      const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me)]);
+      const b = await boss(ctx.tenant_id ?? '', me);
       const rows = found.map((x) => rowOf(x.e));
-      setView({ title: `Bảng chấm công ${monthTxt}`, html: `<div style="font-size:12px">${head(c)}<h2 style="text-align:center;margin:10px 0 6px;font-size:17px">BẢNG CHẤM CÔNG ${monthTxt.toUpperCase()}</h2>
+      setView({ title: `Bảng chấm công ${monthTxt}`, html: `<div style="font-size:12px">${letterhead(await loadBrand())}<h2 style="text-align:center;margin:10px 0 6px;font-size:17px">BẢNG CHẤM CÔNG ${monthTxt.toUpperCase()}</h2>
         ${tableHtml(cols, rows, 2, money_)}<p style="font-size:10px;margin:4px 0">${esc(legend)}</p>
         <table style="width:100%;border-collapse:collapse;margin-top:8px"><tr>${signCol('NGƯỜI CHẤM CÔNG', '(Ký, họ tên)', '', '', null, 33)}${signCol('PHỤ TRÁCH BỘ PHẬN', '(Ký, họ tên)', '', '', null, 33)}${bossCol(b.b, 'GIÁM ĐỐC', 34)}</tr></table></div>` });
     } catch (x) { toast('error', errMsg(x)); } finally { setBusy(''); }
@@ -242,12 +243,12 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
   async function printRtp() {
     setBusy('Đang dựng bảng…');
     try {
-      const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me)]);
+      const b = await boss(ctx.tenant_id ?? '', me);
       const L = rtpPick();
       const sec = (m: Group) => { const R = rtpRows(m);
         return R.length ? `<h3 style="margin:14px 0 6px;font-size:14px">${esc(m.n)} <small style="font-weight:500">(${R.length} lái xe)</small></h3>${tableHtml(rtpCols, R, 1, true, true)}`
           : `<h3 style="margin:14px 0 6px;font-size:14px">${esc(m.n)}</h3><p>Không có lái xe nào chạy tuyến này trong ${monthTxt}.</p>`; };
-      setView({ title: `Bảng chấm công lái xe theo tuyến ${monthTxt}`, html: `<div style="font-size:12px">${head(c)}<h2 style="text-align:center;margin:10px 0 2px;font-size:17px">BẢNG CHẤM CÔNG LÁI XE THEO TUYẾN ${monthTxt.toUpperCase()}</h2>
+      setView({ title: `Bảng chấm công lái xe theo tuyến ${monthTxt}`, html: `<div style="font-size:12px">${letterhead(await loadBrand())}<h2 style="text-align:center;margin:10px 0 2px;font-size:17px">BẢNG CHẤM CÔNG LÁI XE THEO TUYẾN ${monthTxt.toUpperCase()}</h2>
         <div style="text-align:center">${L.map((m) => esc(m.n)).join(' · ')}</div>${L.map(sec).join('')}
         <p style="font-size:10px;margin:6px 0">Ô ngày ghi số công của lái xe trong ngày. Mỗi nhóm tuyến gồm cả chiều đi và chiều về.</p>
         <table style="width:100%;border-collapse:collapse;margin-top:8px"><tr>${signCol('NGƯỜI CHẤM CÔNG', '(Ký, họ tên)', '', '', null, 33)}${signCol('ĐỘI TRƯỞNG ĐIỀU HÀNH', '(Ký, họ tên)', '', '', null, 33)}${bossCol(b.b, 'GIÁM ĐỐC', 34)}</tr></table></div>` });
@@ -262,11 +263,11 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
     const s = T!.summarize(e), o = T!.payOf(e);
     // Chữ ký người nhận: chữ ký trong hồ sơ nhân viên, không có thì chữ ký của tài khoản (như lý lịch hành nghề)
     const who = `nv_${e.id}`;
-    const [c, b] = await Promise.all([company(), boss(ctx.tenant_id ?? '', me, [who, e.user_id ?? ''])]);
+    const b = await boss(ctx.tenant_id ?? '', me, [who, e.user_id ?? '']);
     const own = b.m.get(who), es = own?.img ? own : (e.user_id && b.m.get(e.user_id)) || null;
     const B = 'border:1px solid #000;padding:5px 8px;font-size:13px';
     const r = (n: string, l: string, g: string, v: number | string) => `<tr><td style="${B};text-align:center">${n}</td><td style="${B}">${l}</td><td style="${B}">${esc(g)}</td><td style="${B};text-align:right">${typeof v === 'number' ? money(v) : v}</td></tr>`;
-    setView({ title: `Phiếu lương ${e.full_name} ${monthTxt}`, land: false, html: `<div style="font-size:13px">${head(c)}
+    setView({ title: `Phiếu lương ${e.full_name} ${monthTxt}`, land: false, html: `<div style="font-size:13px">${letterhead(await loadBrand())}
       <h2 style="text-align:center;margin:12px 0 2px;font-size:18px">PHIẾU LƯƠNG</h2><div style="text-align:center;margin-bottom:10px">Kỳ lương ${esc(monthTxt)}</div>
       <p>Họ và tên: <b>${esc(e.full_name)}</b>${e.job_title ? ` · ${esc(e.job_title)}` : ''}${e.department ? ` · ${esc(e.department)}` : ''}</p>
       <table style="width:100%;border-collapse:collapse;margin:6px 0"><tr style="background:#e2e8f0"><th style="${B}">STT</th><th style="${B}">Khoản mục</th><th style="${B}">Diễn giải</th><th style="${B}">Số tiền (đ)</th></tr>

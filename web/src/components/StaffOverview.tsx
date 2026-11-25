@@ -1,10 +1,11 @@
 // Lái xe & nhân viên: Tổng quan · Sơ đồ tổ chức · In thẻ nhân viên · Báo cáo nhân sự theo tháng.
 // Chỉ đọc dữ liệu đang có (hồ sơ, giấy tờ); không thêm bảng. Tuổi, sinh nhật chỉ có với người được xem hồ sơ riêng.
+import { letterhead, loadBrand } from '../lib/brand';
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from './StaffAvatar';
 import { PaperView } from './ProfilePapers';
 import { fmtDate, today, type Doc } from './Documents';
-import { company, head, type Page } from '../lib/profilePapers';
+import { company, type Page } from '../lib/profilePapers';
 import { toDataUrl } from '../lib/pdfMaker';
 import { downloadXlsx } from '../lib/xlsxWrite';
 import { errMsg, supabase } from '../lib/supabase';
@@ -412,9 +413,8 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
   const [view, setView] = useState<Page[] | null>(null);
   async function print() {
     try {
-      const co = await company();
       const img = (s: OvStaff, px: number) => avas[s.id] ? `<img src="${avas[s.id]}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover">` : '';
-      const html = `${head(co)}<h2 style="text-align:center;margin:12px 0">SƠ ĐỒ TỔ CHỨC</h2>
+      const html = `${letterhead(await loadBrand())}<h2 style="text-align:center;margin:12px 0">SƠ ĐỒ TỔ CHỨC</h2>
         <div style="text-align:center;margin-bottom:10px">${o.bosses.map((s) => `<div style="display:inline-block;margin:0 10px;text-align:center">${img(s, 56)}<br><b>${esc(s.full_name)}</b><br><i style="font-size:12px">${esc(job(s))}</i></div>`).join('')}</div>
         <table style="width:100%;border-collapse:collapse"><tr>${o.depts.map((d) => `<td style="vertical-align:top;border:1px solid #333;border-top:4px solid ${d.color};padding:6px;font-size:12px">
           <div style="text-align:center;font-weight:bold;font-size:13px">${esc(d.name)} (${d.n})</div>
@@ -563,11 +563,10 @@ export function StaffReport({ staff, avas }: Common) {
   const cells = (r: (typeof rows)[number]) => [r.d, r.beg, r.hire, r.left, r.end, r.lx, r.px, r.nv];
   async function print() {
     try {
-      const co = await company();
       const TH = 'border:1px solid #333;padding:5px;font-size:12.5px;background:#e2e8f0';
       const TD = 'border:1px solid #333;padding:5px;font-size:12.5px';
       const tbl = (h: string[], rs: (string | number)[][]) => `<table style="width:100%;border-collapse:collapse;margin:4px 0 10px"><tr>${h.map((x) => `<th style="${TH}">${x}</th>`).join('')}</tr>${rs.map((r) => `<tr>${r.map((c, i) => `<td style="${TD};text-align:${i ? 'center' : 'left'}">${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`;
-      const html = `${head(co)}<h2 style="text-align:center;margin:14px 0 2px">BÁO CÁO TÌNH HÌNH NHÂN SỰ ${mName(k).toUpperCase()}</h2>
+      const html = `${letterhead(await loadBrand())}<h2 style="text-align:center;margin:14px 0 2px">BÁO CÁO TÌNH HÌNH NHÂN SỰ ${mName(k).toUpperCase()}</h2>
         <p style="text-align:center;margin:0 0 10px;font-size:13px">Đầu kỳ ${sum('beg')} người · vào làm ${sum('hire')} · nghỉ việc ${sum('left')} · cuối kỳ ${sum('end')} · tỷ lệ nghỉ việc ${rate.toFixed(1).replace('.', ',')}%</p>
         <b>1. Nhân sự theo bộ phận</b>${tbl(H, [...rows.map(cells), ['TỔNG CỘNG', sum('beg'), sum('hire'), sum('left'), sum('end'), sum('lx'), sum('px'), sum('nv')]])}
         <b>2. Người vào làm trong tháng</b>${hires.length ? tbl(['Họ tên', 'Chức vụ', 'Bộ phận', 'Ngày vào'], hires.map((s) => [s.full_name, job(s), dept(s), fmtDate(s.joined_on)])) : '<p><i>Không có</i></p>'}

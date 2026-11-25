@@ -10,6 +10,7 @@
 //   <năm> / 03. Phương tiện / Sửa chữa / Tháng mm-yyyy – mỗi phiếu sửa chữa             [psc:<id>]
 // Nội dung không đổi (so mã nội dung "sig" ghi trong ghi chú tệp) thì bỏ qua, không tải lên lại.
 // PDF phải vẽ trên trình duyệt nên chạy ngầm trên máy người có quyền: sau khi mở app, khi vừa sửa dữ liệu, và định kỳ.
+import { letterhead, loadBrand } from './brand';
 import { drive } from './drive';
 import { avatarUrls } from './documents';
 import { staffCvPages } from './staffCv';
@@ -17,7 +18,7 @@ import { repairPaperHtml } from '../components/RepairPrint';
 import { loadDocCtx, saveDocPdf, type OfficialDoc } from './officialDocs';
 import { archiveLeasePdf, LEASE_COLS, loadLeaseCtx, type Lease } from './vehicleLease';
 import { resetFolders, savePdf } from './dispatchPapers';
-import { boss, bossCol, company, driverPages, head, loadDriverPaper, loadVehiclePaper, paperSig, saveDriverPaper, saveVehiclePaper, sharedBase, signCol, signImg, vehiclePages } from './profilePapers';
+import { boss, bossCol, company, driverPages, loadDriverPaper, loadVehiclePaper, paperSig, saveDriverPaper, saveVehiclePaper, sharedBase, signCol, signImg, vehiclePages } from './profilePapers';
 import { loadLaborCtx, saveContractPdf, type Contract } from './laborContract';
 import { CONTRACT_COLS } from '../components/ContractEditor';
 import { fetchAll, supabase } from './supabase';
@@ -164,7 +165,7 @@ async function payMonthHtml(tenantId: string, me: { id: string | null; name: str
   const td = (v: string, al = '') => `<td style="border:1px solid #000;padding:3px 6px;${al ? `text-align:${al}` : ''}">${v}</td>`;
   const th = (v: string) => `<th style="border:1px solid #000;padding:4px 6px;background:#e2e8f0">${v}</th>`;
   const t = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
-  return `<div style="font-size:13px">${head(c)}<h2 style="text-align:center;margin:12px 0 2px;font-size:18px">BẢNG ĐÓNG BHXH VÀ LƯƠNG CHUYỂN KHOẢN</h2>
+  return `<div style="font-size:13px">${letterhead(await loadBrand())}<h2 style="text-align:center;margin:12px 0 2px;font-size:18px">BẢNG ĐÓNG BHXH VÀ LƯƠNG CHUYỂN KHOẢN</h2>
     <div style="text-align:center;margin-bottom:8px">Tháng <b>${mo}/${y}</b> · ${esc(c.name)}</div>
     <table style="width:100%;border-collapse:collapse"><tr>${th('STT')}${th('Tháng')}${th('Tên nhân viên')}${th('Đóng BHXH')}${th('Lương chuyển khoản')}${th('Bảo hiểm xã hội')}</tr>
     ${list.map((x, i) => { const v = val(x.id); return `<tr>${td(String(i + 1), 'center')}${td(`${mo}/${y}`, 'center')}${td(esc(x.full_name))}${td(v.has_bhxh ? '☒ Có' : '☐ Không', 'center')}${td(num(v.transfer_pay), 'right')}${td(num(v.bhxh_pay), 'right')}</tr>`; }).join('')}

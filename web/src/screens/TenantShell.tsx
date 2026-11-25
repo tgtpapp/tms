@@ -1,4 +1,5 @@
 import { Avatar, useAvatars } from '../components/StaffAvatar';
+import { loadBrand } from '../lib/brand';
 import { NotifyBell } from '../components/NotifyBell';
 import { useCallback, useEffect, useState } from 'react';
 import { Centered } from '../components/Centered';
@@ -83,6 +84,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     if (!ctx.tenant_id) return;
     brandApp(ctx.tenant_name ?? config.appName, ctx.tenant_id, myStaff, myAva ? decodeURIComponent(/#v=([^#]*)$/.exec(myAva)?.[1] ?? '') : '');
   }, [ctx.tenant_id, ctx.tenant_name, myStaff, myAva]);
+  // tải sẵn đầu trang in (logo, tên, địa chỉ, liên hệ) để bản in đầu tiên đã đủ thông tin
+  useEffect(() => { if (ctx.tenant_id) void loadBrand().catch(() => undefined); }, [ctx.tenant_id]);
   useEffect(() => { if (!shareMsg) return; const t = window.setTimeout(() => setShareMsg(''), 12_000); return () => window.clearTimeout(t); }, [shareMsg]);
 
   const load = useCallback(async () => {

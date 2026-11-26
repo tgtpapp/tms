@@ -13,6 +13,7 @@ import type { Page } from '../lib/profilePapers';
 import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
+import { MyCarPapers } from '../components/MyCarPapers';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   DeleteDupButton, DOC_COLS, DocFields, DocRow, docState, FilesButton, isDupDoc, paperNo, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
@@ -670,7 +671,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
   const [editing, setEditing] = useState(canEdit && props.startEdit !== false);
-  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'hd' | 'np' | 'll'>('tt');
+  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'xe' | 'hd' | 'np' | 'll'>('tt');
   const [cv, setCv] = useState<Page[] | null>(null);
   const [cvBusy, setCvBusy] = useState(false);
   const toast = useToast();
@@ -688,6 +689,8 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
     { key: 'tt', label: 'Thông tin cá nhân' },
     { key: 'cv', label: 'Công việc & lương' },
     { key: 'gt', label: `${s.position === 'lai_xe' ? 'Giấy tờ lái xe' : 'Giấy tờ'}${warnDocs ? ` (thiếu ${warnDocs})` : ''}`, warn: warnDocs > 0 },
+    // hồ sơ của chính mình (lái xe / phụ xe): giấy tờ xe mình chạy (trước ở Việc của tôi)
+    ...(s.user_id && s.user_id === props.myUserId && (s.position === 'lai_xe' || s.position === 'phu_xe') ? [{ key: 'xe' as const, label: 'Giấy tờ xe tôi chạy' }] : []),
     ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng' }] : []),
     { key: 'np' as const, label: 'Nghỉ phép' },
     ...(canEdit || s.position === 'lai_xe' ? [{ key: 'll' as const, label: canEdit ? `Lý lịch hành nghề (${nRec})` : 'Lý lịch hành nghề' }] : []),
@@ -761,6 +764,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
         </div>
       )}
+      {tab === 'xe' && <div className="prof-pane"><MyCarPapers tenantId={tenantId} warnDays={warnDays} /></div>}
       {tab === 'cv' && <div className="prof-pane"><WorkPay s={s} p={p} branches={props.branches} papers={props.papers} /></div>}
       {tab === 'hd' && props.labor.view && (
         <div className="prof-pane">

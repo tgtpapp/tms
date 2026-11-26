@@ -1878,3 +1878,9 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .mc-n { min-height: 15px; margin-top: 1px; font-size: .68rem; font-weight: 700; line-height: 15px; }
 .mc-n.on { min-width: 16px; padding: 0 4px; border-radius: 999px; background: #38a3e8; color: #fff; }
 .mc-day.on .mc-n.on { background: #fff; color: var(--primary); }
+
+/* Xem / in giấy A4 (PaperView): trang giữ đúng khổ, màn hình hẹp thì thu cả trang vừa màn hình (JS đặt zoom); in luôn cỡ thật */
+.lenh-overlay > .print-stack.pv-fit { max-width: none; width: max-content; }
+.print-stack.pv-fit > .lenh { max-width: none; }
+.print-stack.pv-fit > .lenh > .dp-fit { width: 100%; }
+@media print { .print-stack.pv-fit { zoom: 1 !important; width: 100% !important; } }

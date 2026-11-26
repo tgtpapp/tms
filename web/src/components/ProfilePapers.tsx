@@ -1,6 +1,6 @@
 // Nút xem / in / lưu vào hồ sơ cho Lý lịch hành nghề người lái xe và Lý lịch phương tiện; lưu cả đội / cả đoàn xe một lượt.
 import { sanitizeHtml } from '../lib/sanitize';
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Modal } from './Modal';
 import { errMsg } from '../lib/supabase';
@@ -15,6 +15,29 @@ type Kind = 'driver' | 'vehicle';
 
 /** Xem trước các trang A4, bấm In. */
 export function PaperView({ title, pages, onClose, onPrint }: { title: string; pages: Page[]; onClose: () => void; onPrint?: () => void }) {
+  const stack = useRef<HTMLDivElement>(null);
+  // 1) Nội dung rộng hơn trang (bảng nhiều cột): thu nhỏ vừa khổ giấy – in ra không bị cắt.
+  // 2) Màn hình hẹp (điện thoại): thu cả trang vừa bề ngang màn hình, giữ đúng khổ A4 (in vẫn đúng cỡ thật).
+  useLayoutEffect(() => {
+    const el = stack.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.zoom = '1';
+      el.querySelectorAll<HTMLElement>(':scope > .lenh > .dp-fit').forEach((x) => {
+        x.style.zoom = '1';
+        const w = x.clientWidth, sw = x.scrollWidth;
+        if (sw > w + 1) x.style.zoom = String(Math.max(0.45, w / sw));
+      });
+      const page = Math.max(...[...el.querySelectorAll<HTMLElement>(':scope > .lenh')].map((x) => x.offsetWidth), 1);
+      const room = (el.parentElement?.clientWidth ?? window.innerWidth) - 8;
+      el.style.zoom = String(Math.min(1, room / page));
+    };
+    fit();
+    const imgs = [...el.querySelectorAll('img')];
+    imgs.forEach((i) => i.addEventListener('load', fit));
+    window.addEventListener('resize', fit);
+    return () => { window.removeEventListener('resize', fit); imgs.forEach((i) => i.removeEventListener('load', fit)); };
+  }, [pages]);
   return createPortal(
     <div className="lenh-overlay paper-top">
       <div className="lenh-bar no-print">
@@ -22,7 +45,9 @@ export function PaperView({ title, pages, onClose, onPrint }: { title: string; p
         <button className="btn small primary" onClick={() => { onPrint?.(); window.print(); }}>In</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
-      <div className="print-stack">{pages.map((p, i) => <div key={i} className={`lenh dp${p.land ? ' land' : ''}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} />)}</div>
+      <div className="print-stack pv-fit" ref={stack}>{pages.map((p, i) => (
+        <div key={i} className={`lenh dp${p.land ? ' land' : ''}`}><div className="dp-fit" dangerouslySetInnerHTML={{ __html: sanitizeHtml(p.html) }} /></div>
+      ))}</div>
     </div>, document.body);
 }
 

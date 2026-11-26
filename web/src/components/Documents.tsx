@@ -258,6 +258,16 @@ export function DocRow(props: {
     }
   }
 
+  /** Bản mới / tải ảnh cho giấy đang có: giữ sẵn thông tin đang có, AI đọc được ô nào thì thay ô đó (ô AI không đọc được không bị xóa trắng).
+   *  Giấy đã hết hạn (cập nhật giấy mới): không giữ ngày cấp / hiệu lực / hết hạn của giấy cũ. */
+  function carry(): Values {
+    const v = valuesFromAi(def, {});
+    if (!doc) return v;
+    const old = valuesFromDoc(def, doc);
+    for (const k of Object.keys(old)) if (old[k] && !(expired && ['ngay_cap', 'hieu_luc_tu', 'het_han'].includes(k))) v[k] = old[k];
+    return v;
+  }
+
   async function saveNew() {
     if (!scanned || scanned.files.length === 0) return toast('error', 'Hãy tải lên ảnh giấy tờ');
     setBusy(true);
@@ -309,8 +319,8 @@ export function DocRow(props: {
               {((doc && doc.files.length > 0) || (!doc?.files.length && !!props.extraFiles?.length)) && (
                 <button className="btn small" aria-label={`Đọc lại ${short}`} onClick={() => void rereadSaved()}>Đọc lại</button>
               )}
-              <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(valuesFromAi(def, {})); setMode('add'); }}>
-                {expired ? 'Cập nhật giấy mới' : doc ? 'Thêm bản mới' : 'Thêm'}
+              <button className="btn small" aria-label={`Thêm ${short}`} onClick={() => { setScanned(null); setValues(carry()); setMode('add'); }}>
+                {expired ? 'Cập nhật giấy mới' : doc && !doc.files.length && !props.extraFiles?.length ? 'Tải ảnh' : doc ? 'Thêm bản mới' : 'Thêm'}
               </button>
             </>
           )}

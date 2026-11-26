@@ -274,7 +274,12 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
 
   function onScanned(def: DocTypeDef, s: Scanned) {
     if (s.files.length === 0) return toast('error', s.aiNote);
-    setPending((p) => [...p.filter((x) => x.def.code !== def.code), { key: crypto.randomUUID(), def, scanned: s }]);
+    // giữ thông tin giấy đang có, AI đọc được ô nào thì thay ô đó (ô AI không đọc được không bị xóa trắng); giấy hết hạn không giữ ngày cấp / hết hạn cũ
+    const d = curDoc(def.code), expired = !!d?.expires_on && d.expires_on < today();
+    const old = d ? valuesFromDoc(def, d) : {};
+    const vals: Values = { ...s.values };
+    for (const [k, v] of Object.entries(old)) if (v && !(vals[k] ?? '').trim() && !(expired && ['ngay_cap', 'hieu_luc_tu', 'het_han'].includes(k))) vals[k] = v;
+    setPending((p) => [...p.filter((x) => x.def.code !== def.code), { key: crypto.randomUUID(), def, scanned: { ...s, values: vals } }]);
     setF((cur) => applyToForm(cur, s.values));
   }
 

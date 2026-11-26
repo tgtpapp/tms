@@ -7,6 +7,12 @@ const emit = () => subs.forEach((f) => f());
 
 /** Gọi 1 lần khi mở app */
 export function initPwa() {
+  // iPhone / iPad lấy biểu tượng đúng lúc bấm "Thêm vào MH chính" và không đổi được sau khi cài. Người dùng hay cài ngay ở
+  // màn đăng nhập (chưa biết là ai) nên ra biểu tượng chung → dùng sẵn biểu tượng của người đăng nhập lần trước trên máy này.
+  try {
+    const m = JSON.parse(localStorage.getItem(ICON_KEY) ?? 'null') as { n: string; t: string; s: string | null; v: string } | null;
+    if (m?.t) brandApp(m.n, m.t, m.s, m.v);
+  } catch { /* bỏ qua */ }
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); ev = e as InstallEvent; emit(); });
   window.addEventListener('appinstalled', () => { ev = null; emit(); });
 }
@@ -30,6 +36,9 @@ export async function promptInstall(): Promise<boolean> {
 export const shortName = (name: string) => name.replace(/^\s*nhà\s*xe\s+/i, '').trim().slice(0, 24) || name;
 
 let lastKey = '';
+const ICON_KEY = 'tms.app_icon';
+/** Máy này đã biết người dùng (đã đăng nhập ít nhất 1 lần) → biểu tượng cài app là ảnh của người đó */
+export const knowsUser = () => { try { return !!localStorage.getItem(ICON_KEY); } catch { return false; } };
 /** Đổi tên + biểu tượng app trên máy này theo nhà xe và ảnh đại diện của người đăng nhập (chưa có ảnh: logo nhà xe, không có nữa: biểu tượng chung).
     Tệp cài app và biểu tượng lấy từ hàm app-install (địa chỉ mở công khai): Chrome trên Android dựng app trên máy chủ Google nên
     không dùng được tệp tạo tạm trên máy. Biểu tượng được lấy lúc cài app; đổi ảnh sau khi cài thì máy có thể vài ngày sau mới đổi (cần xác minh). */
@@ -37,6 +46,7 @@ export function brandApp(name: string, tenantId: string, staffId: string | null,
   const key = `${name}|${tenantId}|${staffId ?? ''}|${version}`;
   if (key === lastKey) return;
   lastKey = key;
+  try { localStorage.setItem(ICON_KEY, JSON.stringify({ n: name, t: tenantId, s: staffId, v: version })); } catch { /* bỏ qua */ }
   const fn = `${config.supabaseUrl}/functions/v1/app-install`;
   const qs = new URLSearchParams({ t: tenantId, ...(staffId ? { s: staffId } : {}), ...(version ? { v: version } : {}) });
   const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -45,5 +55,6 @@ export function brandApp(name: string, tenantId: string, staffId: string | null,
   if (t) t.content = shortName(name);
   let l = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
   if (!l) { l = document.createElement('link'); l.rel = 'apple-touch-icon'; document.head.appendChild(l); }
+  l.setAttribute('sizes', '180x180');
   l.href = `${fn}?${qs}&z=192`;
 }

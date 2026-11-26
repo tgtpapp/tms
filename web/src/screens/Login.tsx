@@ -1,4 +1,5 @@
 import { InstallApp } from '../components/InstallApp';
+import { isIOS, knowsUser } from '../lib/pwa';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
 import { deviceName, setQrJustUsed } from '../lib/device';
@@ -107,7 +108,8 @@ export function LoginScreen() {
         <button type="button" className="btn" onClick={() => setQr(true)}>Đăng nhập bằng mã QR</button>
         <p className="muted small">Quên mật khẩu: liên hệ quản trị nhà xe để đặt lại.</p>
         <button type="button" className="btn link" onClick={() => setReport(true)}>Báo sự cố</button>
-        <InstallApp name={config.appName} />
+        {/* iPhone chỉ lấy biểu tượng lúc cài: chưa đăng nhập lần nào trên máy thì cài ở Tài khoản sau khi đăng nhập (biểu tượng = ảnh của mình) */}
+        {!(isIOS() && !knowsUser()) && <InstallApp name={config.appName} />}
       </form>
       {report && <LoginReport code={otherTenant ? tenantCode.trim().toLowerCase() : config.tenantCode} askCode={otherTenant}
                               phone={account.replace(/\s+/g, '')} onClose={() => setReport(false)} />}

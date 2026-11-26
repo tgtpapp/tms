@@ -15,7 +15,7 @@ import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
 interface V { id: string; plate: string; ownership: string; is_active: boolean; owner_name: string | null }
-type P = Required<Pick<Person, 'name' | 'birth_year' | 'cccd' | 'cccd_on' | 'cccd_by' | 'address' | 'phone'>>;
+type P = Required<Pick<Person, 'name' | 'birth_year' | 'cccd' | 'cccd_on' | 'cccd_by' | 'hometown' | 'address' | 'phone'>>;
 interface Form {
   id: string | null; req: string; signed_on: string; start_on: string; end_on: string; pay_day: string; late_days: string; tax_party: '' | 'A' | 'B';
   a: P; joint: boolean; s: P; bank: { holder: string; account: string; bank: string }; dir: { cccd_on: string; cccd_by: string; phone: string; bank_holder: string; bank_account: string; bank_name: string };
@@ -28,7 +28,7 @@ interface Form {
 interface Pend { scan: Record<'a' | 'b', Scanned | null>; sign: Record<'a' | 'b', File | null>; crop: { who: 'a' | 'b'; file: File } | null; old: Record<'a' | 'b', string | null> }
 const noPend = (): Pend => ({ scan: { a: null, b: null }, sign: { a: null, b: null }, crop: null, old: { a: null, b: null } });
 const CCCD = docTypeOf('cccd')!;
-const emptyP = (name = ''): P => ({ name, birth_year: '', cccd: '', cccd_on: '', cccd_by: '', address: '', phone: '' });
+const emptyP = (name = ''): P => ({ name, birth_year: '', cccd: '', cccd_on: '', cccd_by: '', hometown: '', address: '', phone: '' });
 const addYear = (d: string) => { const [y, m, dd] = d.split('-').map(Number); const x = new Date(Date.UTC(y! + 1, m! - 1, dd!)); x.setUTCDate(x.getUTCDate() - 1); return x.toISOString().slice(0, 10); };
 const digits = (s: string) => s.replace(/\D/g, '');
 
@@ -127,7 +127,7 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
   const fromScan = (sc: Scanned, cur: P): P => {
     const g = (k: string) => String(sc.values[k] ?? '').trim();
     return { ...cur, name: g('nv.ho_ten') || cur.name, birth_year: g('nv.ngay_sinh').slice(0, 4) || cur.birth_year, cccd: g('so_giay').replace(/\D/g, '') || cur.cccd,
-      cccd_on: g('ngay_cap') || cur.cccd_on, cccd_by: g('noi_cap') || cur.cccd_by, address: g('nv.noi_thuong_tru') || cur.address };
+      cccd_on: g('ngay_cap') || cur.cccd_on, cccd_by: g('noi_cap') || cur.cccd_by, hometown: g('que_quan') || cur.hometown, address: g('nv.noi_thuong_tru') || cur.address };
   };
   const signBox = (w: 'a' | 'b', label: string) => {
     const nf = pend.sign[w], url = nf ? URL.createObjectURL(nf) : pend.old[w];
@@ -150,7 +150,8 @@ export function VehicleLeases({ v, vehicles, tenantId, me, canEdit, onSaved }: {
       <label>Số CCCD (bổ sung sau được)<input inputMode="numeric" maxLength={12} value={x.cccd} onChange={(e) => set({ ...x, cccd: digits(e.target.value) })} /></label>
       <label>Ngày cấp<input type="date" value={x.cccd_on} onChange={(e) => set({ ...x, cccd_on: e.target.value })} /></label>
       <label>Nơi cấp<input value={x.cccd_by} onChange={(e) => set({ ...x, cccd_by: e.target.value })} /></label>
-      <label>Địa chỉ thường trú<input value={x.address} onChange={(e) => set({ ...x, address: e.target.value })} /></label>
+      <label>Quê quán<input value={x.hometown} onChange={(e) => set({ ...x, hometown: e.target.value })} /></label>
+      <label>Nơi thường trú<input value={x.address} onChange={(e) => set({ ...x, address: e.target.value })} /></label>
       <label>Số điện thoại<input inputMode="tel" value={x.phone} onChange={(e) => set({ ...x, phone: e.target.value })} /></label>
     </div>
     {signBox(w, who)}

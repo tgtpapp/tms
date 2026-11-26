@@ -20,7 +20,7 @@ export interface Terms { payDay: number; hours: number; off: 'CN' | 'T7CN' }
 export const TERMS_KEYS = ['hdld.ngay_tra_luong', 'hdld.gio_ngay', 'hdld.ngay_nghi'];
 
 interface Person { name: string; gender: string | null; birth: string | null; nation: string | null; cccd: string | null; cccdOn: string | null; cccdBy: string | null;
-  address: string | null; current: string | null; phone: string | null; bhxh: string | null; sign: Sign }
+  address: string | null; current: string | null; hometown?: string | null; phone: string | null; bhxh: string | null; sign: Sign }
 export interface LaborCtx {
   company: Company & { tax: string; phone: string; bank: string; bankNo: string; email: string; dkkd: string }; boss: Boss; director: string; title: string; terms: Terms; person: Person;
 }
@@ -37,7 +37,7 @@ export async function loadLaborCtx(tenantId: string, me: { id: string | null; na
     supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'tt.so_tai_khoan', 'tt.ngan_hang_bin', 'cong_ty.email']),
     loadTerms(),
     supabase.from('staff_members').select('full_name, phone, user_id').eq('id', staffId).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, gender, address, current_address, bhxh_no').eq('staff_id', staffId).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, gender, address, current_address, hometown, bhxh_no').eq('staff_id', staffId).maybeSingle(),
     supabase.from('documents').select('doc_no, issued_on, issuer, data').eq('staff_id', staffId).eq('doc_type', 'cccd').eq('is_current', true).maybeSingle(),
   ]);
   if (!sm.data) throw new Error('Không tìm thấy nhân viên');
@@ -46,7 +46,7 @@ export async function loadLaborCtx(tenantId: string, me: { id: string | null; na
   const who = `nv_${staffId}`;
   const [{ b }, signs] = await Promise.all([boss(tenantId, me), loadSigns(tenantId, [who, s.user_id], true)]);
   const own = signs.get(who);
-  const p = pv.data as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null; bhxh_no: string | null } | null;
+  const p = pv.data as { birth_date: string | null; gender: string | null; address: string | null; current_address: string | null; hometown: string | null; bhxh_no: string | null } | null;
   const d = cd.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
   const tt = t.data as { tax_code: string | null; phone: string | null; transport_license_no: string | null } | null;
   return {
@@ -54,7 +54,7 @@ export async function loadLaborCtx(tenantId: string, me: { id: string | null; na
     boss: b, director: set('cong_ty.giam_doc'), title: set('cong_ty.chuc_danh_ky') || 'Giám đốc', terms,
     person: { name: s.full_name, gender: p?.gender === 'nu' ? 'Nữ' : p?.gender === 'nam' ? 'Nam' : null, birth: p?.birth_date ?? null,
       nation: String(d?.data?.quoc_tich ?? '') || null, cccd: d?.doc_no ?? null, cccdOn: d?.issued_on ?? null, cccdBy: d?.issuer ?? null,
-      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || p?.address || null, phone: s.phone, bhxh: p?.bhxh_no ?? null,   // chỗ ở trống: lấy nơi cư trú trên CCCD
+      address: p?.address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || null, current: p?.current_address || String(d?.data?.['nv.noi_thuong_tru'] ?? '') || p?.address || null, hometown: p?.hometown || String(d?.data?.que_quan ?? '') || null, phone: s.phone, bhxh: p?.bhxh_no ?? null,   // chỗ ở trống: lấy nơi cư trú trên CCCD
       sign: own?.img ? own : (s.user_id && signs.get(s.user_id)) || { img: null, hasName: false } },
   };
 }
@@ -95,7 +95,7 @@ export function contractPages(k: Contract, x: LaborCtx): string[] {
     `<p style="margin:3px 0"><b>NGƯỜI LAO ĐỘNG (BÊN B):</b></p>
      <p style="margin:3px 0">Ông/Bà: <b>${ten}</b> &nbsp; Giới tính: ${up(e.gender)}</p><p style="margin:3px 0">Sinh ngày: ${hd8(e.birth)} &nbsp; Quốc tịch: ${hv(e.nation || 'Việt Nam')}</p>
      <p style="margin:3px 0">CMND/CCCD số: ${hv(e.cccd)} &nbsp; Ngày cấp: ${hd8(e.cccdOn)} &nbsp; Nơi cấp: ${hv(e.cccdBy)}</p>
-     <p style="margin:3px 0">Địa chỉ thường trú: ${hv(e.address)}</p><p style="margin:3px 0">Chỗ ở hiện nay: ${hv(e.current)}</p><p style="margin:3px 0">Số điện thoại: ${hv(e.phone)}</p>
+     <p style="margin:3px 0">Quê quán: ${hv(e.hometown)}</p><p style="margin:3px 0">Nơi thường trú: ${hv(e.address)}</p><p style="margin:3px 0">Số điện thoại: ${hv(e.phone)}</p>
      <p style="margin:3px 0">Số sổ lao động/Sổ BHXH (nếu có): ${hv(e.bhxh)}</p>
      <p style="margin:3px 0">Sau khi trao đổi, hai bên đồng ý ký kết Hợp đồng lao động (“HĐLĐ”) và cam kết thực hiện đúng các điều khoản cụ thể sau đây:</p>`,
     `${H('ĐIỀU 1. ĐIỀU KHOẢN CHUNG')}<p style="margin:3px 0">1.1. Loại HĐLĐ: ${l11}.</p>

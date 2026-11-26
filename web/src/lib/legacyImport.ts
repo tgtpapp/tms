@@ -112,7 +112,7 @@ export function mapEmployee(r: Raw, today: string): StaffRow | null {
   if (str(r, 'sdt') && !phone) notes.push(`SĐT cũ: ${str(r, 'sdt')}`);
   const staff = {
     full_name: name, job_title: str(r, 'chucVu') || null, position, phone, joined_on: day(str(r, 'ngayVao')) ?? today, is_active: str(r, 'trangThai') !== 'Nghỉ việc',
-    birth_date: day(str(r, 'ngaySinh')), gender: gt === 'Nam' ? 'nam' : gt === 'Nữ' ? 'nu' : null, address: str(r, 'diaChiTT') || null, current_address: str(r, 'diaChiHN') || null,
+    birth_date: day(str(r, 'ngaySinh')), gender: gt === 'Nam' ? 'nam' : gt === 'Nữ' ? 'nu' : null, address: str(r, 'diaChiTT') || null, current_address: str(r, 'diaChiHN') || null, hometown: str(r, 'cccdQueQuan') || null,
     contract_type: CONTRACT[str(r, 'loaiHD')] ?? (str(r, 'trangThai') === 'Thử việc' ? 'thu_viec' : null), note: notes.join('\n'),
   };
   const docs = [

@@ -63,7 +63,7 @@ interface Rec { kind: string; occurred_on: string; doc_no: string | null; title:
 export interface DriverPaper {
   company: Company; boss: Boss; driverSign: Sign;
   s: { id: string; full_name: string; job_title: string | null; phone: string | null; joined_on: string };
-  p: { birth_date: string | null; address: string | null; current_address: string | null; contract_type: string | null } | null;
+  p: { birth_date: string | null; address: string | null; current_address: string | null; hometown?: string | null; contract_type: string | null } | null;
   docs: DocRow[]; recs: Rec[]; plates: Map<string, string>; work: { types: string[]; seats: string[]; first: string | null; last: string | null; trips: number };
 }
 const CONTRACT: Record<string, string> = {
@@ -74,7 +74,7 @@ export async function loadDriverPaper(tenantId: string, staffId: string, me: { i
   const base = await (shared ?? sharedBase());
   const [sm, pv, dc, rc, crew, ch] = await Promise.all([
     supabase.from('staff_members').select('id, full_name, job_title, phone, joined_on, user_id').eq('id', staffId).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, address, current_address, contract_type').eq('staff_id', staffId).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, address, current_address, hometown, contract_type').eq('staff_id', staffId).maybeSingle(),
     supabase.from('documents').select('doc_type, doc_no, issuer, issued_on, valid_from, expires_on, is_current, data').eq('staff_id', staffId),
     supabase.from('staff_records').select('kind, occurred_on, doc_no, title, data, vehicle_id').eq('staff_id', staffId).order('occurred_on'),
     fetchAll<{ trip_id: string }>(() => supabase.from('trip_crew').select('trip_id').eq('staff_id', staffId).eq('active', true).in('role', ['lai_xe_1', 'lai_xe_2']).order('trip_id')),
@@ -153,8 +153,8 @@ export function driverPages(x: DriverPaper): Page[] {
       <tr>${kv('Số CCCD', cccd?.doc_no ?? '')}${kv('Điện thoại', x.s.phone ?? '')}</tr>
       <tr>${kv('Giấy phép lái xe số', gplx?.doc_no ?? '')}${kv('Hạng', [dt(gplx, 'hang'), gplx?.expires_on ? `hết hạn ${d(gplx.expires_on)}` : ''].filter(Boolean).join(' · '))}</tr>
       ${one('Cơ quan cấp GPLX', [gplx?.issuer, gplx?.issued_on ? `ngày cấp ${d(gplx.issued_on)}` : ''].filter(Boolean).join(' · '))}
+      ${one('Quê quán', x.p?.hometown || dt(cccd, 'que_quan'))}
       ${one('Nơi thường trú', x.p?.address || dt(cccd, 'nv.noi_thuong_tru'))}
-      ${one('Chỗ ở hiện nay', x.p?.current_address ?? '')}
       <tr>${kv('Chức vụ', x.s.job_title || 'Lái xe')}${kv('Ngày vào công ty', d(x.s.joined_on))}</tr>
     </table>
     ${sec('2. Quá trình hành nghề lái xe')}

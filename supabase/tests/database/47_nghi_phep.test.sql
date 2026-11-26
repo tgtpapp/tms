@@ -74,5 +74,19 @@ select throws_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d00
 select throws_ok($$ select public.cancel_leave('00000000-0000-0000-0000-0000000d0001') $$, '42501', null, 'Lái xe không tự hủy đơn đã duyệt');
 reset role;
 
+-- Quê quán, Nơi thường trú đồng bộ theo CCCD đang dùng
+reset role;
+update public.staff_private set address = 'Nhập tay' where staff_id = '00000000-0000-0000-0000-00000000aa01';
+insert into public.documents (tenant_id, owner_kind, staff_id, doc_type, doc_no, is_current, data)
+values ((select id from public.tenants where code = 'nha-xe-a'), 'nhan_su', '00000000-0000-0000-0000-00000000aa01', 'cccd', '031073016950', true,
+        '{"que_quan": "Vĩnh Bảo, Hải Phòng", "nv.noi_thuong_tru": "Thôn 2, Tam Cường, Vĩnh Bảo, Hải Phòng"}');
+select is((select hometown || ' | ' || address from public.staff_private where staff_id = '00000000-0000-0000-0000-00000000aa01'),
+  'Vĩnh Bảo, Hải Phòng | Thôn 2, Tam Cường, Vĩnh Bảo, Hải Phòng', 'Lưu CCCD: Quê quán + Nơi thường trú lấy theo CCCD');
+select is((select bhxh_no from public.staff_private where staff_id = '00000000-0000-0000-0000-00000000aa01'), '7912345678', 'Đồng bộ CCCD không đụng thông tin khác');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000aa01', '{"full_name":"Lái Một","joined_on":"2020-01-01","position":"lai_xe","hometown":"Hải Phòng"}') $$, 'Sửa Quê quán trong hồ sơ');
+select is((select hometown from public.staff_private where staff_id = '00000000-0000-0000-0000-00000000aa01'), 'Hải Phòng', 'Lưu Quê quán');
+reset role;
 select * from finish();
 rollback;

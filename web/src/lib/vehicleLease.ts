@@ -11,7 +11,7 @@ import { putFile } from './fileStore';
 import { loadSigns, showName, type Sign } from './signatures';
 import { bankName } from './vietqr';
 
-export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; address?: string; phone?: string; files?: string[] }
+export interface Person { name?: string; birth_year?: string; cccd?: string; cccd_on?: string; cccd_by?: string; hometown?: string; address?: string; phone?: string; files?: string[] }
 export interface Lease {
   id: string; number: string; year: number; signed_on: string; start_on: string; end_on: string; pay_day: number | null; late_days: number | null;
   tax_party: 'A' | 'B' | null; lessor: Person & { spouse?: Person | null }; bank: { holder?: string; account?: string; bank?: string };
@@ -72,7 +72,7 @@ export function leasePages(k: Lease, x: LeaseCtx): string[] {
   const [sy, sm, sd] = (k.signed_on || '').split('-');
   const person = (p: Person | null | undefined) => [P(`Ông/Bà: <b>${hv(p?.name?.toUpperCase())}</b> &nbsp; Sinh năm: ${hv(p?.birth_year, '……………')}`),
     P(`Số CCCD: ${hv(p?.cccd)} &nbsp; Cấp ngày: ${p?.cccd_on ? dmy(p.cccd_on) : '……………'} &nbsp; Nơi cấp: ${hv(p?.cccd_by)}`),
-    P(`Địa chỉ thường trú: ${hv(p?.address, '………………………………………………………………')}`)].join('');
+    P(`Quê quán: ${hv(p?.hometown, '………………………………………………………………')}`), P(`Nơi thường trú: ${hv(p?.address, '………………………………………………………………')}`)].join('');
   const total = V.reduce((a, r) => a + r.i.price, 0);
   const words = (n: number) => { const w = numberToWords(n); return w.charAt(0).toLowerCase() + w.slice(1); };
   const priceTxt = (n: number) => n ? `${money(n)} VNĐ/tháng (Bằng chữ: ${esc(words(n))} đồng trên một tháng)` : '………………… VNĐ/tháng (Bằng chữ: ……………………………………… đồng trên một tháng)';

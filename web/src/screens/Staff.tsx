@@ -34,7 +34,7 @@ interface Staff {
   id: string; user_id: string | null; full_name: string; position: Position; phone: string | null; branch_id: string | null;
   joined_on: string; left_on: string | null; is_active: boolean; job_title: string | null; department: string | null;
 }
-interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; contract_type: Contract | null; note: string | null; bhxh_no: string | null; bank_account: string | null }
+interface StaffPrivate { staff_id: string; birth_date: string | null; gender: Gender | null; address: string | null; current_address: string | null; hometown: string | null; contract_type: Contract | null; note: string | null; bhxh_no: string | null; bank_account: string | null }
 interface Option { id: string; label: string }
 type RecordKind = 'suc_khoe' | 'vi_pham' | 'tai_nan' | 'khen_thuong' | 'ky_luat' | 'dao_tao';
 interface StaffRecord {
@@ -108,7 +108,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const load = useCallback(async () => {
     const [s, p, d, u, b, w, r, vt, lm] = await Promise.all([
       supabase.from('staff_members').select('id, user_id, full_name, position, phone, branch_id, joined_on, left_on, is_active, job_title, department').order('full_name'),
-      supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, contract_type, note, bhxh_no, bank_account'),
+      supabase.from('staff_private').select('staff_id, birth_date, gender, address, current_address, hometown, contract_type, note, bhxh_no, bank_account'),
       cachedRows(`${ctx.tenant_id}:${ctx.user_id}:giay_to_nv`, 'documents', DOC_COLS, (q) => q.eq('owner_kind', 'nhan_su')),
       supabase.from('app_users').select('id, full_name, phone').order('full_name'),
       supabase.from('branches').select('id, name').order('name'),
@@ -219,7 +219,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
 
 const EMPTY = {
   full_name: '', job_title: '', department: '', position: 'lai_xe' as Position, phone: '', branch_id: '', joined_on: '', left_on: '', is_active: true,
-  user_id: '', birth_date: '', gender: '' as Gender | '', address: '', current_address: '', contract_type: '' as Contract | '', note: '',
+  user_id: '', birth_date: '', gender: '' as Gender | '', address: '', current_address: '', hometown: '', contract_type: '' as Contract | '', note: '',
   bhxh_no: '', bank_account: '',
 };
 type Form = typeof EMPTY;
@@ -228,7 +228,7 @@ function formOf(s: Staff, p: StaffPrivate | undefined): Form {
   return {
     full_name: s.full_name, job_title: s.job_title ?? '', department: s.department ?? '', position: s.position, phone: s.phone ?? '', branch_id: s.branch_id ?? '', joined_on: s.joined_on,
     left_on: s.left_on ?? '', is_active: s.is_active, user_id: s.user_id ?? '', birth_date: p?.birth_date ?? '',
-    gender: p?.gender ?? '', address: p?.address ?? '', current_address: p?.current_address ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
+    gender: p?.gender ?? '', address: p?.address ?? '', current_address: p?.current_address ?? '', hometown: p?.hometown ?? '', contract_type: p?.contract_type ?? '', note: p?.note ?? '',
     bhxh_no: p?.bhxh_no ?? '', bank_account: p?.bank_account ?? '',
   };
 }
@@ -240,6 +240,7 @@ function applyToForm(f: Form, v: Values): Form {
   if (pick('nv.ho_ten')) next.full_name = pick('nv.ho_ten');
   if (pick('nv.ngay_sinh')) next.birth_date = pick('nv.ngay_sinh');
   if (pick('nv.noi_thuong_tru')) next.address = pick('nv.noi_thuong_tru');
+  if (pick('que_quan')) next.hometown = pick('que_quan');
   const g = pick('nv.gioi_tinh').toLowerCase();
   if (g.startsWith('nam') || g === 'male') next.gender = 'nam';
   else if (g.startsWith('nữ') || g.startsWith('nu') || g === 'female') next.gender = 'nu';
@@ -390,8 +391,8 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
               <option value="nu">Nữ</option>
             </select>
           </label>
+          <label>Quê quán<input value={f.hometown} onChange={set('hometown')} maxLength={300} /></label>
           <label>Nơi thường trú<input value={f.address} onChange={set('address')} /></label>
-          <label>Chỗ ở hiện nay<input value={f.current_address} onChange={set('current_address')} maxLength={300} placeholder="Nơi đang ở thực tế (nếu khác thường trú)" /></label>
           <label>Hình thức hợp đồng lao động
             <select value={f.contract_type} onChange={set('contract_type')}>
               <option value="">—</option>
@@ -509,14 +510,14 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
     const exp = (sid: string, code: string) => papers.find((d) => d.staff_id === sid && d.doc_type === code && d.is_current);
     const dd = (x: string | null | undefined) => (x ? fmtDate(x) : '');
     const head = ['Họ và tên', 'Chức vụ', 'Nhóm', 'Bộ phận', 'Điện thoại', 'Ngày sinh', 'Giới tính', 'Ngày vào công ty', 'Thâm niên', 'Ngày nghỉ việc',
-      'Hạng GPLX', 'GPLX hết hạn', 'Khám sức khỏe hết hạn', 'Tập huấn hết hạn', ...(canEdit ? ['Số CCCD', 'Nơi thường trú', 'Chỗ ở hiện nay', 'Loại hợp đồng', 'Số sổ BHXH', 'Tài khoản ngân hàng'] : [])];
+      'Hạng GPLX', 'GPLX hết hạn', 'Khám sức khỏe hết hạn', 'Tập huấn hết hạn', ...(canEdit ? ['Số CCCD', 'Quê quán', 'Nơi thường trú', 'Loại hợp đồng', 'Số sổ BHXH', 'Tài khoản ngân hàng'] : [])];
     const rows: XCell[][] = list.map((s) => {
       const p = priv.find((x) => x.staff_id === s.id);
       const g = exp(s.id, 'gplx');
       return [s.full_name, jobLabel(s), POSITION[s.position], s.department ?? '', s.phone ?? '', dd(p?.birth_date), p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : '',
         dd(s.joined_on), seniority(s.joined_on, s.left_on), dd(s.left_on), g?.data?.hang ? String(g.data.hang) : '', dd(g?.expires_on),
         dd(exp(s.id, 'kham_suc_khoe')?.expires_on), dd(exp(s.id, 'tap_huan')?.expires_on),
-        ...(canEdit ? [exp(s.id, 'cccd')?.doc_no ?? '', p?.address ?? '', p?.current_address ?? '', p?.contract_type ? CONTRACT[p.contract_type] : '', p?.bhxh_no ?? '', p?.bank_account ?? ''] : [])];
+        ...(canEdit ? [exp(s.id, 'cccd')?.doc_no ?? '', p?.hometown ?? '', p?.address ?? '', p?.contract_type ? CONTRACT[p.contract_type] : '', p?.bhxh_no ?? '', p?.bank_account ?? ''] : [])];
     });
     downloadXlsx(`Lai xe va nhan vien ${today()}`, 'Lái xe & nhân viên', head, rows, [24, 18, 11, 16, 13, 12, 9, 13, 14, 12, 9, 13, 13, 13, 15, 36, 36, 20]);
   }
@@ -731,8 +732,8 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
             <dt>Điện thoại</dt><dd>{s.phone ? <a href={`tel:${s.phone}`}>{s.phone}</a> : '—'}</dd>
             <dt>Số CCCD</dt><dd>{cccd?.doc_no ?? '—'}</dd>
             {cccd && (cccd.issued_on || cccd.issuer) && <><dt>Ngày cấp, nơi cấp</dt><dd>{[cccd.issued_on ? fmtDate(cccd.issued_on) : '', cccd.issuer ?? ''].filter(Boolean).join(', ')}</dd></>}
+            <dt>Quê quán</dt><dd>{p?.hometown ?? '—'}</dd>
             <dt>Nơi thường trú</dt><dd>{p?.address ?? '—'}</dd>
-            <dt>Chỗ ở hiện nay</dt><dd>{p?.current_address ?? '—'}</dd>
             {p?.note && <><dt>Ghi chú</dt><dd>{p.note}</dd></>}
           </dl>
           {canEdit && <div className="actions"><button className="btn small" onClick={() => setEditing(true)}>Sửa hồ sơ</button>
@@ -850,7 +851,7 @@ const IMP_COLS: { key: keyof Form; label: string; alias: string[] }[] = [
   { key: 'birth_date', label: 'Ngày sinh', alias: ['ngaysinh'] },
   { key: 'gender', label: 'Giới tính', alias: ['gioitinh'] },
   { key: 'address', label: 'Nơi thường trú', alias: ['noithuongtru', 'thuongtru', 'diachi'] },
-  { key: 'current_address', label: 'Chỗ ở hiện nay', alias: ['choohiennay', 'noio', 'choo'] },
+  { key: 'hometown', label: 'Quê quán', alias: ['quequan', 'que', 'noidangkykhaisinh'] },
   { key: 'bhxh_no', label: 'Số sổ BHXH', alias: ['sosobhxh', 'sobhxh', 'bhxh'] },
   { key: 'bank_account', label: 'Tài khoản ngân hàng', alias: ['taikhoannganhang', 'taikhoan', 'stk', 'sotaikhoan'] },
   { key: 'note', label: 'Ghi chú', alias: ['ghichu'] },
@@ -897,7 +898,7 @@ function StaffImport({ staff, priv, onClose, reload }: { staff: Staff[]; priv: S
       const f: Form = { ...base, full_name: name };
       const txt = (key: keyof Form) => { const v = get(key); return v == null ? '' : String(v).trim(); };
       if (phone) f.phone = phone;
-      for (const key of ['job_title', 'department', 'address', 'current_address', 'note', 'bhxh_no', 'bank_account'] as const) if (txt(key)) f[key] = txt(key);
+      for (const key of ['job_title', 'department', 'address', 'hometown', 'note', 'bhxh_no', 'bank_account'] as const) if (txt(key)) f[key] = txt(key);
       const pos = keyOf(txt('position') || txt('job_title'));
       if (txt('position') || !old) f.position = pos.includes('phuxe') ? 'phu_xe' : pos.includes('laixe') || pos.includes('taixe') ? 'lai_xe' : txt('position') ? 'nhan_vien' : f.position;
       const g = keyOf(txt('gender'));

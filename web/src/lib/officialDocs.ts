@@ -36,8 +36,8 @@ export const FIELDS: [string, string][] = [
   ['{Trích yếu}', 'Trích yếu'], ['{Công ty}', 'Tên công ty (in hoa)'], ['{Tên công ty}', 'Tên công ty'], ['{Địa chỉ công ty}', 'Địa chỉ công ty'],
   ['{Giám đốc}', 'Họ tên giám đốc'], ['{Chữ ký giám đốc}', 'Khối ký: chức danh, chữ ký, con dấu, họ tên'],
   ['{Ông/Bà}', 'Ông / Bà'], ['{Họ tên}', 'Họ tên người được chọn'], ['{HỌ TÊN}', 'HỌ TÊN in hoa'], ['{Ngày sinh}', 'Ngày sinh'], ['{Giới tính}', 'Giới tính'],
-  ['{Số CCCD}', 'Số CCCD'], ['{Ngày cấp CCCD}', 'Ngày cấp CCCD'], ['{Nơi cấp CCCD}', 'Nơi cấp CCCD'], ['{Địa chỉ thường trú}', 'Nơi thường trú'],
-  ['{Chỗ ở hiện nay}', 'Chỗ ở hiện nay'], ['{Điện thoại}', 'Điện thoại'], ['{Chức vụ}', 'Chức vụ'], ['{Ngày vào làm}', 'Ngày vào công ty'],
+  ['{Số CCCD}', 'Số CCCD'], ['{Ngày cấp CCCD}', 'Ngày cấp CCCD'], ['{Nơi cấp CCCD}', 'Nơi cấp CCCD'], ['{Quê quán}', 'Quê quán'],
+  ['{Địa chỉ thường trú}', 'Nơi thường trú'], ['{Điện thoại}', 'Điện thoại'], ['{Chức vụ}', 'Chức vụ'], ['{Ngày vào làm}', 'Ngày vào công ty'],
   ['{Chữ ký và dấu}', 'Chữ ký giám đốc + con dấu (đặt trong ô ký)'], ['{Chữ ký người làm đơn}', 'Chữ ký của người được chọn'],
 ];
 export const tplOf = (k: Template) => TEMPLATES.find((t) => t.key === k)!;
@@ -79,7 +79,7 @@ const dots = (v: string | null | undefined, n = 30) => (v ? `<b>${esc(v)}</b>` :
 const money = (n: number) => n.toLocaleString('vi-VN');
 
 export interface DocCtx { company: Company; boss: Boss; title: string; person: Person | null; offSat: boolean }
-export interface Person extends TvPerson { address: string | null; current: string | null }
+export interface Person extends TvPerson { address: string | null; current: string | null; hometown?: string | null }
 
 /** Lấy dữ liệu để in: công ty, chữ ký giám đốc + con dấu, người liên quan. */
 export async function loadDocCtx(tenantId: string, me: { id: string | null; name: string }, staffId: string | null): Promise<DocCtx> {
@@ -94,7 +94,7 @@ export async function loadDocCtx(tenantId: string, me: { id: string | null; name
 async function loadPerson(tenantId: string, id: string): Promise<Person | null> {
   const [s, p, d, k, sg] = await Promise.all([
     supabase.from('staff_members').select('full_name, phone, job_title, position, joined_on, department, user_id').eq('id', id).maybeSingle(),
-    supabase.from('staff_private').select('birth_date, gender, address, current_address').eq('staff_id', id).maybeSingle(),
+    supabase.from('staff_private').select('birth_date, gender, address, current_address, hometown').eq('staff_id', id).maybeSingle(),
     supabase.from('documents').select('doc_no, issued_on, issuer, data').eq('staff_id', id).eq('doc_type', 'cccd').eq('is_current', true).maybeSingle(),
     supabase.from('labor_contracts').select('number, kind, start_on, end_on').eq('staff_id', id).eq('status', 'hieu_luc').order('start_on', { ascending: false }).limit(1).maybeSingle(),
     loadSigns(tenantId, [`nv_${id}`], true).catch(() => new Map<string, Sign>()),
@@ -102,10 +102,10 @@ async function loadPerson(tenantId: string, id: string): Promise<Person | null> 
   if (!s.data) return null;
   const hd = k.data as { number: string; kind: string; start_on: string; end_on: string | null } | null;
   const own = sg.get(`nv_${id}`);
-  const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null; current_address?: string | null } | null;
+  const pv = p.data as { birth_date: string | null; gender: string | null; address: string | null; current_address?: string | null; hometown?: string | null } | null;
   const sm = s.data as { full_name: string; phone: string | null; job_title: string | null; position: string; joined_on: string; department: string | null };
   const cd = d.data as { doc_no: string | null; issued_on: string | null; issuer: string | null; data: Record<string, unknown> | null } | null;
-  return { current: pv?.current_address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || pv?.address || null,   // trống: lấy nơi cư trú trên CCCD
+  return { hometown: pv?.hometown || String(cd?.data?.que_quan ?? '') || null, current: pv?.current_address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || pv?.address || null,   // trống: lấy nơi cư trú trên CCCD
     phone: sm.phone, job: sm.job_title || ({ lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' } as Record<string, string>)[sm.position] || null,
     joined: sm.joined_on, dept: sm.department, name: sm.full_name, birth: pv?.birth_date ?? null, gender: pv?.gender === 'nu' ? 'Nữ' : pv?.gender === 'nam' ? 'Nam' : null,
     cccd: cd?.doc_no ?? null, cccdOn: cd?.issued_on ?? null, cccdBy: cd?.issuer ?? null, address: pv?.address || String(cd?.data?.['nv.noi_thuong_tru'] ?? '') || null,
@@ -131,7 +131,7 @@ export function fillFields(html: string, number: string, signed: string, title: 
     '{Giám đốc}': esc(x.boss.gdName), '{Chữ ký giám đốc}': sign,
     '{Ông/Bà}': e?.gender === 'Nữ' ? 'Bà' : 'Ông', '{Họ tên}': dots(e?.name), '{HỌ TÊN}': dots(e?.name.toUpperCase()), '{Ngày sinh}': dd(e?.birth),
     '{Giới tính}': dots(e?.gender, 8), '{Số CCCD}': dots(e?.cccd, 14), '{Ngày cấp CCCD}': dd(e?.cccdOn), '{Nơi cấp CCCD}': dots(e?.cccdBy, 14),
-    '{Địa chỉ thường trú}': dots(e?.address, 30), '{Chỗ ở hiện nay}': dots(e?.current, 30), '{Điện thoại}': dots(e?.phone, 12), '{Chức vụ}': dots(e?.job, 14),
+    '{Quê quán}': dots(e?.hometown, 30), '{Nơi thường trú}': dots(e?.address, 30), '{Địa chỉ thường trú}': dots(e?.address, 30), '{Chỗ ở hiện nay}': dots(e?.current, 30), '{Điện thoại}': dots(e?.phone, 12), '{Chức vụ}': dots(e?.job, 14),
     '{Ngày vào làm}': dd(e?.joined),
     '{Chữ ký và dấu}': bossInner(x.boss), '{Chữ ký người làm đơn}': e?.sign?.img ? `<img src="${e.sign.img}" alt="" style="max-height:64px;max-width:190px">` : '',
   };
@@ -183,7 +183,7 @@ export function docHtml(t: Template, number: string, signed: string, title: stri
       <div style="text-align:center;font-weight:bold;margin:12px 0 6px">QUYẾT ĐỊNH:</div>
       <p style="margin:4px 0"><b>Điều 1.</b> Bổ nhiệm ${ong} có tên dưới đây giữ chức vụ <b>${esc(cd)}</b> của ${esc(co)}, kể từ ${dm(hl)}:</p>
       <ul style="margin:4px 0 4px 18px;padding-left:18px">${li('Họ và tên (viết in hoa)', dots(e?.name.toUpperCase()))}${li('Ngày, tháng, năm sinh', `${dd(e?.birth)} &nbsp; <b>Giới tính:</b> ${dots(e?.gender, 10)}`)}
-        ${li('Số CCCD/CMND/Hộ chiếu', `${dots(e?.cccd, 14)} &nbsp; <b>Ngày cấp:</b> ${dd(e?.cccdOn)} &nbsp; <b>Nơi cấp:</b> ${dots(e?.cccdBy, 14)}`)}${li('Địa chỉ thường trú', dots(e?.address, 40))}
+        ${li('Số CCCD/CMND/Hộ chiếu', `${dots(e?.cccd, 14)} &nbsp; <b>Ngày cấp:</b> ${dd(e?.cccdOn)} &nbsp; <b>Nơi cấp:</b> ${dots(e?.cccdBy, 14)}`)}${li('Quê quán', dots(e?.hometown, 40))}${li('Nơi thường trú', dots(e?.address, 40))}
         ${li('Trình độ chuyên môn / Chuyên ngành đào tạo', dots(c.trinh_do))}${li('Thâm niên / Kinh nghiệm công tác trong lĩnh vực vận tải', c.tham_nien ? `<b>${esc(c.tham_nien)}</b> năm` : '....... năm')}</ul>
       <p style="margin:6px 0 2px"><b>Điều 2. Trách nhiệm và Quyền hạn:</b> ${ong} ${dots(e?.name, 20)} có trách nhiệm giúp Giám đốc thực hiện các nhiệm vụ sau:</p>
       <ol style="margin:2px 0;padding-left:34px">${tasks.map((r) => `<li style="margin:2px 0">${r}</li>`).join('')}</ol>

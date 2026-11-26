@@ -14,6 +14,7 @@ import { StaffContracts } from '../components/StaffContracts';
 import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { MyCarPapers } from '../components/MyCarPapers';
+import { TimesheetScreen } from './Timesheet';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   DeleteDupButton, DOC_COLS, DocFields, DocRow, docState, FilesButton, isDupDoc, paperNo, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
@@ -147,7 +148,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   // sửa xong (hồ sơ, giấy tờ, lý lịch, hợp đồng…) → báo để Lưu trữ hồ sơ tự cập nhật bản PDF
   const reload = useCallback(async () => { await load(); profileChanged(); }, [load]);
   const common = { tenantId, priv, docs, papers, users, branches, warnDays, canEdit, records, types, licenses, reload, canArchive, me, labor: { view: perms.has('labor.view'), add: perms.has('labor.add'), edit: perms.has('labor.edit') },
-    leave: { add: perms.has('leave.add'), edit: perms.has('leave.edit'), viewAll: perms.has('leave.view_all') }, myUserId: ctx.user_id };
+    leave: { add: perms.has('leave.add'), edit: perms.has('leave.edit'), viewAll: perms.has('leave.view_all') }, myUserId: ctx.user_id,
+    mySheet: perms.has('timesheet.view') && !perms.has('timesheet.view_all') ? { ctx, perms } : null };
   const avas = useAvatars(tenantId || null);
   const shown = staff.filter((s) => showLeft || s.is_active);
   const tabs = jobTabs(shown);
@@ -254,6 +256,8 @@ interface Common {
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
   canArchive: boolean; me: Me; labor: { view: boolean; add: boolean; edit: boolean };
   leave: { add: boolean; edit: boolean; viewAll: boolean }; myUserId: string | null;
+  /** Bảng chấm công của tôi (người chỉ xem của mình): hiện thành tab trong Thông tin của tôi */
+  mySheet: { ctx: AccountContext; perms: Permissions } | null;
 }
 
 function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: () => void }) {
@@ -671,7 +675,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   const { s, p, docs, tenantId, warnDays, canEdit, reload } = props;
   // Bấm "Sửa" là vào sửa luôn toàn bộ hồ sơ (vẫn chuyển được sang tab Giấy tờ / Lý lịch)
   const [editing, setEditing] = useState(canEdit && props.startEdit !== false);
-  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'xe' | 'hd' | 'np' | 'll'>('tt');
+  const [tab, setTab] = useState<'tt' | 'cv' | 'gt' | 'xe' | 'hd' | 'cc' | 'np' | 'll'>('tt');
   const [cv, setCv] = useState<Page[] | null>(null);
   const [cvBusy, setCvBusy] = useState(false);
   const toast = useToast();
@@ -692,6 +696,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
     // hồ sơ của chính mình (lái xe / phụ xe): giấy tờ xe mình chạy (trước ở Việc của tôi)
     ...(s.user_id && s.user_id === props.myUserId && (s.position === 'lai_xe' || s.position === 'phu_xe') ? [{ key: 'xe' as const, label: 'Giấy tờ xe tôi chạy' }] : []),
     ...(props.labor.view ? [{ key: 'hd' as const, label: 'Hợp đồng' }] : []),
+    ...(props.mySheet && s.user_id && s.user_id === props.myUserId ? [{ key: 'cc' as const, label: 'Bảng chấm công' }] : []),
     { key: 'np' as const, label: 'Nghỉ phép' },
     ...(canEdit || s.position === 'lai_xe' ? [{ key: 'll' as const, label: canEdit ? `Lý lịch hành nghề (${nRec})` : 'Lý lịch hành nghề' }] : []),
   ];
@@ -764,6 +769,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
         </div>
       )}
+      {tab === 'cc' && props.mySheet && <div className="prof-pane"><TimesheetScreen ctx={props.mySheet.ctx} perms={props.mySheet.perms} /></div>}
       {tab === 'xe' && <div className="prof-pane"><MyCarPapers tenantId={tenantId} warnDays={warnDays} /></div>}
       {tab === 'cv' && <div className="prof-pane"><WorkPay s={s} p={p} branches={props.branches} papers={props.papers} /></div>}
       {tab === 'hd' && props.labor.view && (

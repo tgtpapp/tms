@@ -164,6 +164,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   if (error) return <Centered><p className="error-text">{error}</p></Centered>;
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;
 
+  const mySelf = !perms.has('staff.view_all') && (perms.has('staff.view') || isCrew);   // có mục Thông tin của tôi
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
     { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
@@ -178,8 +179,9 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'km', label: 'Km xe', icon: 'road', group: 'Danh mục', show: perms.has('km.view') },
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: perms.has('vehicle.view') },
     { key: 'staff', label: perms.has('staff.view_all') ? 'Lái xe & nhân viên' : 'Thông tin của tôi', icon: 'id-badge', group: 'Danh mục', show: perms.has('staff.view') || isCrew },
-    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('labor.view') },
-    { key: 'timesheet', label: 'Bảng chấm công', icon: 'calendar-check', group: 'Danh mục', show: perms.has('timesheet.view') },
+    // người chỉ xem của mình (Thông tin của tôi): hợp đồng lao động + bảng chấm công nằm thành tab trong Thông tin của tôi
+    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('labor.view') && (perms.has('labor.view_all') || !mySelf) },
+    { key: 'timesheet', label: 'Bảng chấm công', icon: 'calendar-check', group: 'Danh mục', show: perms.has('timesheet.view') && (perms.has('timesheet.view_all') || !mySelf) },
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: perms.hasAnywhere('branch.view') || perms.hasAnywhere('office.view') },
     { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.view') },
     { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') },

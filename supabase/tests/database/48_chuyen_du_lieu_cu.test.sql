@@ -49,11 +49,11 @@ select lives_ok($$ select public.svc_archive_saved((select id from public.tenant
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select row_count from public.data_archives), 3, 'Chủ A thấy bản đã sao lưu (3 dòng)');
-select is((select count(*)::int from public.notifications), 2, 'Bước 1 chưa xóa gì khỏi database');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*)::int from public.data_archives), 0, 'Chủ B không thấy bản của nhà xe A');
 select is((public.archive_preview((select from_on from r), (select to_on from r)) ->> 'audit_logs')::int, 0, 'Chủ B không đếm được nhật ký nhà xe A');
 select ok(public.archive_page('notifications', (select from_on from r), (select to_on from r), null, 100) ->> 'rows' not like '%Cũ A%', 'Chủ B không xuất được dữ liệu nhà xe A');
 reset role;
+select is((select count(*)::int from public.notifications), 3, 'Bước 1 chưa xóa gì khỏi database');
 select * from finish();
 rollback;

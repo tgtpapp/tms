@@ -31,6 +31,7 @@ create index data_archives_tenant_idx on public.data_archives (tenant_id, create
 alter table public.data_archives enable row level security;
 create policy data_archives_select on public.data_archives for select to authenticated
   using (tenant_id = app.current_tenant_id() and app.is_tenant_owner());
+revoke all on public.data_archives from public, anon, authenticated;
 grant select on public.data_archives to authenticated;
 grant select, insert, update on public.data_archives to service_role;
 

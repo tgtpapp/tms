@@ -14,9 +14,12 @@ export const ACC = [
   { id: 'rose', name: 'Hồng', c: '#e11d48' }, { id: 'amber', name: 'Hổ phách', c: '#d97706' }, { id: 'gold', name: 'Vàng kim', c: '#b8892e' }, { id: 'slate', name: 'Than chì', c: '#475569' },
   { id: 'nhansu', name: 'Xanh đậm', c: '#2f5bea' },
 ];
-export const FONTS = [
+/** gf: font tải từ Google Fonts (mặc định = name); stack: thứ tự font khi hiện. Times New Roman có sẵn trên Windows / iPhone / Mac;
+ *  máy không có (Android) dùng Tinos – font cùng kích thước chữ với Times New Roman. */
+export const FONTS: { id: string; name: string; gf?: string; stack?: string }[] = [
   { id: 'bvp', name: 'Be Vietnam Pro' }, { id: 'inter', name: 'Inter' }, { id: 'roboto', name: 'Roboto' }, { id: 'nunito', name: 'Nunito' },
   { id: 'lexend', name: 'Lexend' }, { id: 'montserrat', name: 'Montserrat' }, { id: 'noto', name: 'Noto Sans' },
+  { id: 'times', name: 'Times New Roman', gf: 'Tinos', stack: "'Times New Roman', Tinos, Times, serif" },
 ];
 export const PRESETS: { id: string; name: string; d: string; v: Partial<UiCfg> }[] = [
   { id: 'saas', name: 'Premium SaaS', d: 'Mặc định, sáng sủa', v: { acc: 'goc', font: 'bvp', rad: 'md', den: 'std' } },
@@ -71,14 +74,15 @@ export const accHex = (c: UiCfg) => (c.acc === 'custom' && /^#[0-9a-f]{6}$/i.tes
 
 function loadFont(id: string): string {
   const f = FONTS.find((x) => x.id === id) ?? FONTS[0]!;
+  const gf = f.gf ?? f.name;
   if (!document.getElementById(`uxf-${f.id}`)) {
     const l = document.createElement('link');
     l.id = `uxf-${f.id}`;
     l.rel = 'stylesheet';
-    l.href = `https://fonts.googleapis.com/css2?family=${f.name.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`;
+    l.href = `https://fonts.googleapis.com/css2?family=${gf.replace(/ /g, '+')}:${f.gf === 'Tinos' ? 'wght@400;700' : 'wght@400;500;600;700'}&display=swap`;
     document.head.appendChild(l);
   }
-  return `'${f.name}'`;
+  return f.stack ?? `'${f.name}'`;
 }
 
 export function applyUi(c: UiCfg) {

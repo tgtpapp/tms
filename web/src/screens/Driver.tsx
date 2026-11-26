@@ -1,4 +1,5 @@
 // App lái xe (như app cũ): chuyến của tôi; mỗi chuyến có Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả & hàng; gọi khách ghi trạng thái báo về quầy; thu tiền mặt / chuyển khoản; xuất bến / đến bến.
+import { MiniCal } from '../components/MiniCal';
 import { dirName } from '../lib/routes';
 import { NotifyBanner, NotifyBell } from '../components/NotifyBell';
 import { MonthPicker } from '../components/MonthPicker';
@@ -101,6 +102,17 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
     document.addEventListener('visibilitychange', vis);
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
   }, [day, load]);
+  // Lịch như app cũ: chấm dưới các ngày có chuyến của tôi trong tháng đang xem
+  const [marks, setMarks] = useState<Map<string, number>>(new Map());
+  const loadMarks = useCallback((ym: string) => {
+    const [y, m] = ym.split('-').map(Number);
+    const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+    void rpc<MyTrip[]>('my_trips', { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).then((t) => {
+      const c = new Map<string, number>();
+      for (const x of t) if (x.status !== 'huy') c.set(x.service_date, (c.get(x.service_date) ?? 0) + 1);
+      setMarks(c);
+    }).catch(() => undefined);
+  }, []);
   const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, trips, now)) - Number(isUpcoming(a, trips, now)) || a.depart_at.localeCompare(b.depart_at));
   const first = sorted.find((t) => isUpcoming(t, trips, now));
   const open = picked === '' ? null : picked ?? first?.trip_id ?? (trips.length === 1 ? trips[0]!.trip_id : null);
@@ -132,11 +144,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       <section className="card">
         <div className="item-head"><h2>Chuyến của tôi · {fmtDate(day)}</h2><NotifyBell inline openKey={nbOpen} /></div>
         <NotifyBanner running={running} onOpen={() => setNbOpen((k) => k + 1)} />
-        <div className="inline-form">
-          <button className="btn small" aria-label="Ngày trước" onClick={() => { setDay(addDays(day, -1)); setOpen(null); }}>‹</button>
-          <label>Ngày<input type="date" value={day} onChange={(e) => { if (e.target.value) { setDay(e.target.value); setOpen(null); } }} /></label>
-          <button className="btn small" aria-label="Ngày sau" onClick={() => { setDay(addDays(day, 1)); setOpen(null); }}>›</button>
-        </div>
+        <MiniCal day={day} marks={marks} onMonth={loadMarks} onPick={(d) => { setDay(d); setOpen(null); }} />
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">{sorted.slice(0, cut).map(chip)}</div>
       </section>

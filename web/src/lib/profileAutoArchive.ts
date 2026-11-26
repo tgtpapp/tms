@@ -8,6 +8,7 @@
 //   <năm> / 03. Phương tiện / Hợp đồng thuê xe       – hợp đồng thuê xe              [hdtx:<id>]
 //   <năm> / Tài chính - Kế toán / BHXH & lương chuyển khoản – mỗi tháng có dữ liệu   [bhxh:<yyyy-mm>]
 //   <năm> / 03. Phương tiện / Sửa chữa / Tháng mm-yyyy – mỗi phiếu sửa chữa             [psc:<id>]
+//   <năm> / 02. Nhân sự / Nghỉ phép / Tháng mm-yyyy     – mỗi đơn nghỉ phép đã duyệt       [dnp:<id>]
 // Nội dung không đổi (so mã nội dung "sig" ghi trong ghi chú tệp) thì bỏ qua, không tải lên lại.
 // PDF phải vẽ trên trình duyệt nên chạy ngầm trên máy người có quyền: sau khi mở app, khi vừa sửa dữ liệu, và định kỳ.
 import { letterhead, loadBrand } from './brand';
@@ -22,8 +23,9 @@ import { boss, bossCol, company, driverPages, loadDriverPaper, loadVehiclePaper,
 import { loadLaborCtx, saveContractPdf, type Contract } from './laborContract';
 import { CONTRACT_COLS } from '../components/ContractEditor';
 import { fetchAll, supabase } from './supabase';
+import { archiveLeavePdf, LEAVE_PAPER_COLS, type LeaveRow } from './leavePaper';
 
-export interface AutoCan { drivers: boolean; vehicles: boolean; contracts: boolean; cv: boolean; docs: boolean; leases: boolean; pay: boolean; repairs: boolean }
+export interface AutoCan { drivers: boolean; vehicles: boolean; contracts: boolean; cv: boolean; docs: boolean; leases: boolean; pay: boolean; repairs: boolean; leaves?: boolean }
 let running = false, again = false;
 
 /** Dựng lại và lưu đè hồ sơ đã đổi / còn thiếu. Trả số tệp đã lưu. */
@@ -36,9 +38,9 @@ export async function autoArchiveProfiles(tenantId: string, me: { id: string | n
     await drive({ action: 'ping' });   // chưa kết nối Google Drive thì dừng ngay, không dựng giấy
     resetFolders();
     const items = await fetchAll<{ note: string | null }>(() => supabase.from('archive_items').select('note').eq('is_old', false)
-      .or('note.like.%[llhn:%,note.like.%[llpt:%,note.like.%[syll:%,note.like.%[vb:%,note.like.%[hdtx:%,note.like.%[bhxh:%').order('id'));
+      .or('note.like.%[llhn:%,note.like.%[llpt:%,note.like.%[syll:%,note.like.%[vb:%,note.like.%[hdtx:%,note.like.%[bhxh:%,note.like.%[dnp:%').order('id'));
     const sigs = new Map<string, string>();
-    for (const r of items) { const k = /\[((?:llhn|llpt|syll|vb|hdtx):[0-9a-f-]+|bhxh:\d{4}-\d{2})\]/.exec(r.note ?? '')?.[1]; if (k) sigs.set(k, /sig:([a-z0-9]+)/.exec(r.note ?? '')?.[1] ?? ''); }
+    for (const r of items) { const k = /\[((?:llhn|llpt|syll|vb|hdtx|dnp):[0-9a-f-]+|bhxh:\d{4}-\d{2})\]/.exec(r.note ?? '')?.[1]; if (k) sigs.set(k, /sig:([a-z0-9]+)/.exec(r.note ?? '')?.[1] ?? ''); }
     const base = sharedBase();
     let fail = 0;
     const step = async (fn: () => Promise<boolean>, what: string) => {
@@ -136,6 +138,10 @@ export async function autoArchiveProfiles(tenantId: string, me: { id: string | n
           }, `phiếu sửa chữa ${o.code}`);
         }
       }
+    }
+    if (can.leaves) {
+      const list = await fetchAll<LeaveRow>(() => supabase.from('staff_leaves').select(LEAVE_PAPER_COLS).eq('status', 'da_duyet').order('id'));
+      for (const l of list) await step(async () => archiveLeavePdf(tenantId, me, { ...l, days: Number(l.days) }, sigs), `đơn nghỉ phép ${l.from_on}`);
     }
     return n;
   } finally {

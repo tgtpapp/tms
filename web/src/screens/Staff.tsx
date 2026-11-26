@@ -185,7 +185,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
       {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} branches={branches} canConfig={perms.has('settings.edit')} /></section>}
       {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} branches={branches} /></section>}
       {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
-      {canView && mod === 'np' && perms.has('leave.view_all') && <LeavePage staff={staff} perms={common.leave} myUserId={ctx.user_id} avas={avas} onOpen={openFromTab} />}
+      {canView && mod === 'np' && perms.has('leave.view_all') && <LeavePage staff={staff} perms={common.leave} myUserId={ctx.user_id} avas={avas} onOpen={openFromTab} tenantId={tenantId} me={me} />}
       {(!canView || mod === 'hs') && <>
       <div className="staff-top">
         <div className="nsx-chips" role="tablist" aria-label="Lọc theo chức vụ" ref={chipsRef}>
@@ -772,7 +772,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
           </ul>
         </div>
       )}
-      {tab === 'np' && <div className="prof-pane"><LeaveOfStaff s={s} perms={props.leave} myUserId={props.myUserId} /></div>}
+      {tab === 'np' && <div className="prof-pane"><LeaveOfStaff s={s} all={props.staff} perms={props.leave} myUserId={props.myUserId} tenantId={props.tenantId} me={props.me} /></div>}
       {tab === 'll' && <div className="prof-pane"><Records {...props} s={s} /></div>}
     </div>
   );

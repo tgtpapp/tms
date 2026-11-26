@@ -1,11 +1,14 @@
 // Nghỉ phép (theo file mẫu "Quản lý nhân sự"): thẻ chỉ số, phép năm còn lại từng người, bảng đơn nghỉ có Duyệt / Từ chối ngay trong bảng.
 // Tự xin nghỉ cho mình ở hồ sơ của mình; quản lý (leave.add) ghi đơn cho người khác; leave.edit duyệt; leave.view_all xem tất cả.
 // Phép năm: số ngày chuẩn (Cấu hình 'nghi_phep.ngay_phep_nam', mặc định 12) + 1 ngày mỗi 5 năm làm việc – BLLĐ 2019 Điều 113, 114 (cần xác minh từng trường hợp).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar } from './StaffAvatar';
 import { Modal } from './Modal';
 import { fmtDate, today } from './Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
+import { PaperView, type Me } from './ProfilePapers';
+import { leaveHtml, loadLeaveCtx, type LeaveRow } from '../lib/leavePaper';
+import { profileChanged } from '../lib/profileAutoArchive';
 import { useToast } from '../lib/toast';
 
 export type LeaveKind = 'phep_nam' | 'om' | 'viec_rieng' | 'khong_luong' | 'thai_san' | 'nghi_bu';
@@ -13,6 +16,7 @@ type LeaveStatus = 'cho_duyet' | 'da_duyet' | 'tu_choi' | 'da_huy';
 export interface Leave {
   id: string; staff_id: string; kind: LeaveKind; from_on: string; to_on: string; days: number; reason: string | null;
   status: LeaveStatus; decide_note: string | null; created_by: string | null;
+  decided_by: string | null; handover_staff_id: string | null; created_at: string;
 }
 export interface LvStaff { id: string; user_id: string | null; full_name: string; joined_on: string; is_active: boolean; job_title: string | null; position: string }
 export interface LvPerms { add: boolean; edit: boolean; viewAll: boolean }
@@ -23,7 +27,7 @@ export const KIND: Record<LeaveKind, string> = {
 const STATUS: Record<LeaveStatus, [string, string]> = {
   cho_duyet: ['Chờ duyệt', 'warn-badge'], da_duyet: ['Đã duyệt', ''], tu_choi: ['Từ chối', 'locked'], da_huy: ['Đã hủy', 'locked'],
 };
-const COLS = 'id, staff_id, kind, from_on, to_on, days, reason, status, decide_note, created_by';
+const COLS = 'id, staff_id, kind, from_on, to_on, days, reason, status, decide_note, created_by, decided_by, handover_staff_id, created_at';
 const num = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
 /** Số ngày nghỉ: bỏ Chủ nhật */
 export function workDays(a: string, b: string): number {
@@ -56,11 +60,11 @@ export const usedOf = (list: Leave[], staffId: string, year = today().slice(0, 4
 
 /* ------------------------------------------------------------------ Form đơn nghỉ */
 
-function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[]; fixed?: string; edit?: Leave; onClose: () => void; onSaved: () => Promise<void> }) {
+function LeaveForm({ staff, all, fixed, edit, onClose, onSaved }: { staff: LvStaff[]; all: LvStaff[]; fixed?: string; edit?: Leave; onClose: () => void; onSaved: () => Promise<void> }) {
   const toast = useToast();
   const td = today();
   const [f, setF] = useState(() => ({ staff_id: edit?.staff_id ?? fixed ?? '', kind: edit?.kind ?? 'phep_nam' as LeaveKind, from_on: edit?.from_on ?? td,
-    to_on: edit?.to_on ?? td, days: String(edit?.days ?? workDays(td, td)), reason: edit?.reason ?? '' }));
+    to_on: edit?.to_on ?? td, days: String(edit?.days ?? workDays(td, td)), reason: edit?.reason ?? '', handover: edit?.handover_staff_id ?? '' }));
   const [id] = useState(() => edit?.id ?? crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const dates = (from: string, to: string) => { const t = to < from ? from : to; setF({ ...f, from_on: from, to_on: t, days: String(workDays(from, t)) }); };
@@ -70,7 +74,7 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
     if (!(days > 0)) return toast('error', 'Số ngày nghỉ phải lớn hơn 0');
     setBusy(true);
     try {
-      await rpc('save_leave', { p_id: id, p_staff_id: f.staff_id, p_kind: f.kind, p_from: f.from_on, p_to: f.to_on, p_days: days, p_reason: f.reason });
+      await rpc('save_leave', { p_id: id, p_staff_id: f.staff_id, p_kind: f.kind, p_from: f.from_on, p_to: f.to_on, p_days: days, p_reason: f.reason, p_handover: f.handover || null });
       toast('ok', edit ? 'Đã sửa đơn nghỉ' : 'Đã gửi đơn nghỉ');
       await onSaved();
       onClose();
@@ -97,6 +101,12 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
           <label>Đến ngày<input type="date" value={f.to_on} min={f.from_on} onChange={(e) => dates(f.from_on, e.target.value)} /></label>
           <label>Số ngày nghỉ<input inputMode="decimal" value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} /></label>
           <label>Lý do<input aria-label="Lý do nghỉ" value={f.reason} maxLength={300} onChange={(e) => setF({ ...f, reason: e.target.value })} /></label>
+          <label>Người nhận bàn giao
+            <select aria-label="Người nhận bàn giao" value={f.handover} onChange={(e) => setF({ ...f, handover: e.target.value })}>
+              <option value="">-- Chọn người nhận bàn giao --</option>
+              {all.filter((s) => s.is_active && s.id !== f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+          </label>
         </div>
         <div className="actions">
           <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? 'Đang lưu…' : edit ? 'Lưu' : 'Gửi đơn nghỉ'}</button>
@@ -107,6 +117,22 @@ function LeaveForm({ staff, fixed, edit, onClose, onSaved }: { staff: LvStaff[];
   );
 }
 
+/* ------------------------------------------------------------------ Đơn xin nghỉ phép (xem / in) */
+
+function LeavePaperView({ l, tenantId, me, onClose }: { l: Leave; tenantId: string; me: Me; onClose: () => void }) {
+  const toast = useToast();
+  const [html, setHtml] = useState('');
+  const ref = useRef({ me, onClose, toast });
+  ref.current = { me, onClose, toast };
+  useEffect(() => {
+    let live = true;
+    void loadLeaveCtx(tenantId, ref.current.me, l as LeaveRow).then((x) => { if (live) setHtml(leaveHtml(l as LeaveRow, x)); })
+      .catch((e) => { ref.current.toast('error', errMsg(e)); ref.current.onClose(); });
+    return () => { live = false; };
+  }, [l, tenantId]);
+  return html ? <PaperView title="Đơn xin nghỉ phép" pages={[{ html, land: false }]} onClose={onClose} /> : null;
+}
+
 /* ------------------------------------------------------------------ Một dòng đơn (bảng) */
 
 function useActs(reload: () => Promise<void>) {
@@ -114,7 +140,7 @@ function useActs(reload: () => Promise<void>) {
   const [busy, setBusy] = useState('');
   const act = async (id: string, fn: () => Promise<unknown>, ok: string) => {
     setBusy(id);
-    try { await fn(); toast('ok', ok); await reload(); } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
+    try { await fn(); toast('ok', ok); await reload(); profileChanged(); } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
   };
   return { busy, decide: (l: Leave, st: 'da_duyet' | 'tu_choi') => act(l.id, () => rpc('decide_leave', { p_id: l.id, p_status: st, p_note: null }), st === 'da_duyet' ? 'Đã duyệt đơn nghỉ' : 'Đã từ chối đơn nghỉ'),
     cancel: (l: Leave) => act(l.id, () => rpc('cancel_leave', { p_id: l.id }), 'Đã hủy đơn nghỉ') };
@@ -137,10 +163,11 @@ function StatusCell({ l, canDecide, busy, decide }: { l: Leave; canDecide: boole
 
 /* ------------------------------------------------------------------ Tab Nghỉ phép của module */
 
-export function LeavePage({ staff, perms, myUserId, avas, onOpen }: { staff: LvStaff[]; perms: LvPerms; myUserId: string | null; avas: Record<string, string>; onOpen?: (id: string) => void }) {
+export function LeavePage({ staff, perms, myUserId, avas, onOpen, tenantId, me }: { staff: LvStaff[]; perms: LvPerms; myUserId: string | null; avas: Record<string, string>; onOpen?: (id: string) => void; tenantId: string; me: Me }) {
   const { list, base, load } = useLeaves();
   const { busy, decide, cancel } = useActs(load);
   const [form, setForm] = useState<{ edit?: Leave } | null>(null);
+  const [paper, setPaper] = useState<Leave | null>(null);
   const [q, setQ] = useState(''), [st, setSt] = useState(''), [kd, setKd] = useState('');
   const td = today(), Y = td.slice(0, 4);
   const byId = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
@@ -194,6 +221,7 @@ export function LeavePage({ staff, perms, myUserId, avas, onOpen }: { staff: LvS
                       <td>{KIND[l.kind]}</td><td className="nsx-nw">{fmtDate(l.from_on)}</td><td className="nsx-nw">{fmtDate(l.to_on)}</td><td>{num(l.days)}</td><td>{l.reason ?? ''}</td>
                       <td><StatusCell l={l} canDecide={perms.edit} busy={busy === l.id} decide={(x, v) => void decide(x, v)} /></td>
                       <td className="nsx-nw">
+                        {l.status !== 'da_huy' && <button type="button" className="btn small" onClick={() => setPaper(l)}>Đơn</button>}
                         {l.status === 'cho_duyet' && (mine || perms.edit) && <button type="button" className="btn small" onClick={() => setForm({ edit: l })}>Sửa</button>}
                         {l.status !== 'da_huy' && l.status !== 'tu_choi' && (perms.edit || (mine && l.status === 'cho_duyet')) &&
                           <button type="button" className="btn small link" disabled={busy === l.id} onClick={() => void cancel(l)}>Hủy đơn</button>}
@@ -206,17 +234,19 @@ export function LeavePage({ staff, perms, myUserId, avas, onOpen }: { staff: LvS
           </div>
         )}
       </section>
-      {form && <LeaveForm staff={staff} edit={form.edit} onClose={() => setForm(null)} onSaved={load} />}
+      {form && <LeaveForm staff={staff} all={staff} edit={form.edit} onClose={() => setForm(null)} onSaved={load} />}
+      {paper && <LeavePaperView l={paper} tenantId={tenantId} me={me} onClose={() => setPaper(null)} />}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ Tab Nghỉ phép trong hồ sơ 1 người */
 
-export function LeaveOfStaff({ s, perms, myUserId }: { s: LvStaff; perms: LvPerms; myUserId: string | null }) {
+export function LeaveOfStaff({ s, all, perms, myUserId, tenantId, me }: { s: LvStaff; all: LvStaff[]; perms: LvPerms; myUserId: string | null; tenantId: string; me: Me }) {
   const { list, base, load } = useLeaves(s.id);
   const { busy, decide, cancel } = useActs(load);
   const [form, setForm] = useState<{ edit?: Leave } | null>(null);
+  const [paper, setPaper] = useState<Leave | null>(null);
   const mineProfile = s.user_id === myUserId;
   const q = quotaOf(s, base), u = usedOf(list, s.id);
   return (
@@ -236,17 +266,21 @@ export function LeaveOfStaff({ s, perms, myUserId }: { s: LvStaff; perms: LvPerm
                   {l.reason && <div className="muted small">{l.reason}</div>}</div>
                 <StatusCell l={l} canDecide={perms.edit && !mineProfile} busy={busy === l.id} decide={(x, v) => void decide(x, v)} />
               </div>
-              {l.status === 'cho_duyet' && (l.created_by === myUserId || perms.edit) && (
+              {l.status !== 'da_huy' && (
                 <div className="actions">
-                  <button type="button" className="btn small" onClick={() => setForm({ edit: l })}>Sửa</button>
-                  <button type="button" className="btn small link" disabled={busy === l.id} onClick={() => void cancel(l)}>Hủy đơn</button>
+                  <button type="button" className="btn small" onClick={() => setPaper(l)}>Đơn</button>
+                  {l.status === 'cho_duyet' && (l.created_by === myUserId || perms.edit) && <>
+                    <button type="button" className="btn small" onClick={() => setForm({ edit: l })}>Sửa</button>
+                    <button type="button" className="btn small link" disabled={busy === l.id} onClick={() => void cancel(l)}>Hủy đơn</button>
+                  </>}
                 </div>
               )}
             </li>
           ))}
         </ul>
       )}
-      {form && <LeaveForm staff={[s]} fixed={s.id} edit={form.edit} onClose={() => setForm(null)} onSaved={load} />}
+      {form && <LeaveForm staff={[s]} all={all} fixed={s.id} edit={form.edit} onClose={() => setForm(null)} onSaved={load} />}
+      {paper && <LeavePaperView l={paper} tenantId={tenantId} me={me} onClose={() => setPaper(null)} />}
     </div>
   );
 }

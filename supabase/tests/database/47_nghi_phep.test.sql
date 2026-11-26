@@ -56,6 +56,8 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select is((select count(*)::int from public.staff_leaves), 0, 'Nhà xe B không thấy đơn nghỉ của A');
 select throws_ok($$ select public.decide_leave('00000000-0000-0000-0000-0000000d0001', 'da_duyet', null) $$, 'P0002', null, 'Nhà xe B không duyệt được');
 select throws_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d0009', '00000000-0000-0000-0000-00000000aa01', 'om', '2026-12-01', '2026-12-01', 1, null) $$, 'P0002', null, 'Nhà xe B không ghi đơn cho người của A');
+select lives_ok($$ select public.save_staff('00000000-0000-0000-0000-00000000bb01', '{"full_name":"NV B","joined_on":"2024-01-01","position":"nhan_vien"}') $$, 'Hồ sơ nhân viên B');
+select throws_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d0008', '00000000-0000-0000-0000-00000000bb01', 'om', '2026-12-01', '2026-12-01', 1, null, '00000000-0000-0000-0000-00000000aa01') $$, '22023', null, 'Nhà xe B không bàn giao cho người của A');
 reset role;
 
 -- Chủ A duyệt; đơn đã duyệt không sửa được; hủy giữ lịch sử
@@ -66,6 +68,9 @@ select lives_ok($$ select public.decide_leave('00000000-0000-0000-0000-0000000d0
 select throws_ok($$ select public.decide_leave('00000000-0000-0000-0000-0000000d0001', 'tu_choi', null) $$, '22023', null, 'Đơn đã xử lý không duyệt lại');
 select lives_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d0004', '00000000-0000-0000-0000-00000000aa02', 'om', '2026-12-03', '2026-12-03', 1, 'Ốm') $$, 'Chủ ghi đơn cho lái xe 2');
 select lives_ok($$ select public.cancel_leave('00000000-0000-0000-0000-0000000d0004') $$, 'Hủy đơn');
+select lives_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d0005', '00000000-0000-0000-0000-00000000aa02', 'phep_nam', '2026-12-10', '2026-12-10', 1, 'Việc nhà', '00000000-0000-0000-0000-00000000aa01') $$, 'Đơn có người nhận bàn giao');
+select is((select handover_staff_id::text from public.staff_leaves where id = '00000000-0000-0000-0000-0000000d0005'), '00000000-0000-0000-0000-00000000aa01', 'Lưu người nhận bàn giao');
+select throws_ok($$ select public.save_leave('00000000-0000-0000-0000-0000000d0006', '00000000-0000-0000-0000-00000000aa02', 'om', '2026-12-11', '2026-12-11', 1, null, '00000000-0000-0000-0000-00000000aa02') $$, '22023', null, 'Không tự bàn giao cho chính mình');
 select is((select status from public.staff_leaves where id = '00000000-0000-0000-0000-0000000d0004'), 'da_huy', 'Hủy = đổi trạng thái, không xóa');
 reset role;
 set local role authenticated;

@@ -381,7 +381,7 @@ select is((select bool_and((e ->> 'ok')::boolean) from jsonb_array_elements(publ
   true, 'Lịch dán sau ghi đè: đổi tài + xe giữa 2 chuyến chồng giờ, kể cả chuyến đã xuất bến');
 select is((select vehicle_id from public.trips where id = (select v from t.ids where k = 'T5')), (select v from t.ids where k = 'X2'), 'Chuyến đã xuất bến được cập nhật xe');
 select is((select staff_id from public.trip_crew where trip_id = (select v from t.ids where k = 'T6') and role = 'lai_xe_1'), (select v from t.ids where k = 'D1'), 'Đổi tài đúng');
-select throws_ok(format('select public.assign_trip(%L, %L, %L, null, null, %L)', (select v from t.ids where k = 'T5'), (select v from t.ids where k = 'X1'), (select v from t.ids where k = 'D1'), 'x'),
+select throws_ok(format('select public.assign_trip(%L, %L, %L, null, null, %L)', (select v from t.ids where k = 'T5'), (select v from t.ids where k = 'X2'), (select v from t.ids where k = 'D2'), 'x'),
   '42501', null, 'Ngoài nhập lịch: chuyến đã xuất bến vẫn khóa');
 reset role;
 set local role authenticated;

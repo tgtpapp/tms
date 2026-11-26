@@ -67,6 +67,13 @@ function LeaveForm({ staff, all, fixed, edit, onClose, onSaved }: { staff: LvSta
     to_on: edit?.to_on ?? td, days: String(edit?.days ?? workDays(td, td)), reason: edit?.reason ?? '', handover: edit?.handover_staff_id ?? '' }));
   const [id] = useState(() => edit?.id ?? crypto.randomUUID());
   const [busy, setBusy] = useState(false);
+  // người nhận bàn giao: lái xe / nhân viên tự làm đơn (Thông tin của tôi) chỉ có hồ sơ của mình → lấy danh sách nhân sự đang làm của nhà xe
+  const [pool, setPool] = useState<{ id: string; full_name: string; is_active: boolean }[]>(all);
+  useEffect(() => {
+    if (all.filter((x) => x.is_active).length > 1) { setPool(all); return; }
+    void supabase.from('staff_members').select('id, full_name, is_active').eq('is_active', true).order('full_name')
+      .then(({ data }) => { if (data?.length) setPool(data as typeof pool); });
+  }, [all]);
   const dates = (from: string, to: string) => { const t = to < from ? from : to; setF({ ...f, from_on: from, to_on: t, days: String(workDays(from, t)) }); };
   async function save() {
     if (!f.staff_id) return toast('error', 'Chọn nhân viên');
@@ -104,7 +111,7 @@ function LeaveForm({ staff, all, fixed, edit, onClose, onSaved }: { staff: LvSta
           <label>Người nhận bàn giao
             <select aria-label="Người nhận bàn giao" value={f.handover} onChange={(e) => setF({ ...f, handover: e.target.value })}>
               <option value="">-- Chọn người nhận bàn giao --</option>
-              {all.filter((s) => s.is_active && s.id !== f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+              {pool.filter((s) => s.is_active && s.id !== f.staff_id).map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}
             </select>
           </label>
         </div>

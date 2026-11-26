@@ -2,7 +2,7 @@
 // Chỉ đọc dữ liệu đang có (hồ sơ, giấy tờ); không thêm bảng. Tuổi, sinh nhật chỉ có với người được xem hồ sơ riêng.
 import { letterhead, loadBrand } from '../lib/brand';
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar } from './StaffAvatar';
+import { Avatar, initials } from './StaffAvatar';
 import { PaperView } from './ProfilePapers';
 import { fmtDate, today, type Doc } from './Documents';
 import { company, type Page } from '../lib/profilePapers';
@@ -413,13 +413,31 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
   const [view, setView] = useState<Page[] | null>(null);
   async function print() {
     try {
-      const img = (s: OvStaff, px: number) => avas[s.id] ? `<img src="${avas[s.id]}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover">` : '';
-      const html = `${letterhead(await loadBrand())}<h2 style="text-align:center;margin:12px 0">SƠ ĐỒ TỔ CHỨC</h2>
-        <div style="text-align:center;margin-bottom:10px">${o.bosses.map((s) => `<div style="display:inline-block;margin:0 10px;text-align:center">${img(s, 56)}<br><b>${esc(s.full_name)}</b><br><i style="font-size:12px">${esc(job(s))}</i></div>`).join('')}</div>
-        <table style="width:100%;border-collapse:collapse"><tr>${o.depts.map((d) => `<td style="vertical-align:top;border:1px solid #333;border-top:4px solid ${d.color};padding:6px;font-size:12px">
-          <div style="text-align:center;font-weight:bold;font-size:13px">${esc(d.name)} (${d.n})</div>
-          ${[...d.heads, ...d.rest].map((s) => `<div style="padding:3px 0;border-top:1px dashed #ccc">${d.heads.includes(s) ? '<b>' : ''}${esc(s.full_name)}${d.heads.includes(s) ? '</b>' : ''}<br><i>${esc(job(s))}</i></div>`).join('')}</td>`).join('')}</tr></table>`;
-      setView([{ html, land: true }]);
+      // Bản in như mẫu: hàng lãnh đạo (thẻ đầu nền xanh đậm), các cột bộ phận có viền màu, trưởng bộ phận ở đầu cột, nhân viên bên dưới
+      const b = await loadBrand();
+      const ava = (s: OvStaff, px: number, ring = '#fff') => avas[s.id]
+        ? `<img src="${avas[s.id]}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;border:2px solid ${ring};display:block;margin:0 auto">`
+        : `<div style="width:${px}px;height:${px}px;border-radius:50%;border:2px solid ${ring};background:#e2e8f0;color:#334155;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(px / 2.8)}px;margin:0 auto">${esc(initials(s.full_name))}</div>`;
+      const boss = (s: OvStaff, i: number) => i === 0
+        ? `<div style="display:inline-block;vertical-align:top;margin:0 8px;padding:12px 28px;border-radius:12px;background:linear-gradient(135deg,#1e3a8a,#3b5bdb);color:#fff;text-align:center;min-width:150px">${ava(s, 64)}<div style="font-weight:700;font-size:13px;margin-top:6px">${esc(s.full_name)}</div><div style="font-size:11px;opacity:.85">${esc(job(s))}</div></div>`
+        : `<div style="display:inline-block;vertical-align:top;margin:0 8px;padding:12px 28px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;box-shadow:0 2px 8px rgba(15,23,42,.08);text-align:center;min-width:130px">${ava(s, 52, '#e5e7eb')}<div style="font-weight:700;font-size:12.5px;margin-top:6px;color:#0f172a">${esc(s.full_name)}</div><div style="font-size:11px;color:#475569">${esc(job(s))}</div></div>`;
+      const n = o.depts.length, land = n > 5, per = Math.min(n, land ? 7 : 5) || 1;
+      const col = (d: (typeof o.depts)[number]) => {
+        const h = d.heads[0];
+        const tint = /^#[0-9a-f]{6}$/i.test(d.color) ? `${d.color}14` : '#f8fafc';
+        const row = (s: OvStaff) => `<div style="display:flex;gap:6px;align-items:center;padding:6px 6px;border-top:1px solid #eef0f3">
+          <div style="flex:none">${ava(s, 26, '#e5e7eb')}</div><div style="min-width:0;line-height:1.2"><div style="font-weight:700;font-size:10.5px;color:#0f172a">${esc(s.full_name)}</div><div style="font-size:9px;color:#64748b">${esc(job(s))}</div></div></div>`;
+        return `<div style="display:inline-block;vertical-align:top;width:calc(${100 / per}% - 8px);margin:0 4px 8px;border:1px solid #e5e7eb;border-top:3px solid ${d.color};border-radius:8px;background:#fff;overflow:hidden;break-inside:avoid;page-break-inside:avoid">
+          <div style="background:${tint};text-align:center;padding:6px 4px 8px">
+            <div style="font-weight:700;font-size:11.5px;color:${d.color}">${esc(d.name)}</div><div style="font-size:9.5px;color:#64748b;margin-bottom:5px">${d.n} người</div>
+            ${h ? `${ava(h, 46, d.color)}<div style="font-weight:700;font-size:11px;margin-top:4px;color:#0f172a">${esc(h.full_name)}</div><div style="font-size:9.5px;color:#64748b">${esc(job(h))}</div>` : ''}
+          </div>${[...d.heads.slice(1), ...d.rest].map(row).join('')}</div>`;
+      };
+      const html = `<div style="-webkit-print-color-adjust:exact;print-color-adjust:exact">${letterhead(b)}
+        <h2 style="text-align:center;margin:10px 0 14px;font-size:18px;color:#1e293b">SƠ ĐỒ TỔ CHỨC ${esc(b.name.toUpperCase())}</h2>
+        <div style="text-align:center;margin-bottom:16px">${o.bosses.map(boss).join('')}</div>
+        <div style="text-align:center;font-size:0">${o.depts.map((d) => `<span style="font-size:12px;text-align:left">${col(d)}</span>`).join('')}</div></div>`;
+      setView([{ html, land }]);
     } catch (e) { toast('error', errMsg(e)); }
   }
   return (

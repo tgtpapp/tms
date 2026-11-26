@@ -78,6 +78,11 @@ reset role;
 delete from public.audit_logs where id = (select max(id) from public.audit_logs where entity = 'x');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+reset role;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+create temp table pg as select t, public.archive_page(t, (select from_on from r), (select to_on from r), null, 100) p from unnest(array['notifications', 'audit_logs']) t;
+grant select on pg to authenticated;
+set local role authenticated;
 select lives_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, 'Khớp Drive + đúng số dòng: chuyển được');
 select is((select status from public.data_archives), 'da_chuyen', 'Đánh dấu đã chuyển');
 select throws_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, '22023', null, 'Không chuyển lần 2');
@@ -86,5 +91,24 @@ select is((select count(*)::int from public.notifications where title = 'Cũ A')
 select is((select count(*)::int from public.notifications where title in ('Mới A', 'Cũ B')), 2, 'Giữ thông báo mới và dữ liệu nhà xe B');
 select is((select count(*)::int from public.audit_logs where entity = 'x'), 0, 'Đã xóa nhật ký cũ');
 select is((select count(*)::int from public.audit_logs where action = 'chuyen_du_lieu'), 1, 'Ghi 1 dòng nhật ký tổng, không ghi từng dòng bị xóa');
+
+-- Bước 3: phục hồi
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.archive_restore_page((select id from aid), 'notifications', (select p ->> 'rows' from pg where t = 'notifications'), (select p ->> 'sig' from pg where t = 'notifications')) $$,
+  'P0002', null, 'Chủ B không phục hồi được bản của nhà xe A');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select public.archive_restore_page((select id from aid), 'notifications', replace((select p ->> 'rows' from pg where t = 'notifications'), 'Cũ A', 'Sửa'), (select p ->> 'sig' from pg where t = 'notifications')) $$,
+  '22023', null, 'File bị sửa: từ chối');
+select is((public.archive_restore_page((select id from aid), 'notifications', (select p ->> 'rows' from pg where t = 'notifications'), (select p ->> 'sig' from pg where t = 'notifications')) ->> 'added')::int, 1, 'Phục hồi thông báo');
+select is((public.archive_restore_page((select id from aid), 'notifications', (select p ->> 'rows' from pg where t = 'notifications'), (select p ->> 'sig' from pg where t = 'notifications')) ->> 'added')::int, 0, 'Nạp lại lần 2 không tạo trùng');
+select is((public.archive_restore_page((select id from aid), 'audit_logs', (select p ->> 'rows' from pg where t = 'audit_logs'), (select p ->> 'sig' from pg where t = 'audit_logs')) ->> 'added')::int, 2, 'Phục hồi nhật ký (giữ mã cũ)');
+select lives_ok($$ select public.archive_restored((select id from aid), 3, 0) $$, 'Đánh dấu đã phục hồi');
+select is((select status from public.data_archives), 'da_phuc_hoi', 'Trạng thái đã phục hồi');
+select throws_ok($$ select public.archive_restore_page((select id from aid), 'notifications', (select p ->> 'rows' from pg where t = 'notifications'), (select p ->> 'sig' from pg where t = 'notifications')) $$,
+  '22023', null, 'Bản đã phục hồi không nạp lại');
+reset role;
+select is((select count(*)::int from public.notifications where title = 'Cũ A'), 1, 'Thông báo cũ đã trở lại');
+select is((select count(*)::int from public.audit_logs where entity = 'x'), 2, 'Nhật ký cũ đã trở lại');
 select * from finish();
 rollback;

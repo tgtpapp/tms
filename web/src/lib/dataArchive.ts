@@ -67,3 +67,35 @@ export async function moveArchive(id: string, sha: string, step: (s: string) => 
   step('Đang xóa dữ liệu đã chuyển khỏi database…');
   return rpc<Record<string, number>>('archive_move', { p_id: id, p_sha256: sha });
 }
+
+/** Thứ tự nạp lại (bảng cha trước) */
+const ORDER = ['notifications', 'notification_delivery_logs', 'zalo_messages', 'audit_logs', 'seat_inventory', 'transfer_items'];
+
+async function gunzip(u: Uint8Array): Promise<string> {
+  const out = new Blob([u as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip') as unknown as ReadableWritablePair<Uint8Array, Uint8Array>);
+  return new TextDecoder().decode(await new Response(out).arrayBuffer());
+}
+
+/** Bước 3: tải file từ Drive (khớp mã kiểm tra), nạp lại các dòng còn thiếu – không ghi đè, không xóa */
+export async function restoreArchive(x: { id: string; sha256: string; from_on: string; to_on: string }, step: (s: string) => void): Promise<{ added: number; failed: number }> {
+  step('Đang tải file từ Google Drive…');
+  const u = await verifyArchive(x.id, x.sha256);
+  let f: ArchiveFile;
+  try { f = JSON.parse(await gunzip(u)) as ArchiveFile; } catch { throw new Error('File trên Drive không đọc được'); }
+  if (f?.format !== 'tms-du-lieu-cu' || f.from !== x.from_on || f.to !== x.to_on || !Array.isArray(f.pages)) throw new Error('File không đúng bản dữ liệu đã chuyển');
+  const list = [...f.pages].sort((a, b) => ORDER.indexOf(a.t) - ORDER.indexOf(b.t));
+  let added = 0, failed = 0;
+  const again: ArchivePage[] = [];
+  for (const [i, p] of list.entries()) {
+    const r = await rpc<{ added: number; failed: number }>('archive_restore_page', { p_id: x.id, p_table: p.t, p_rows: p.rows, p_sig: p.sig });
+    added += r.added;
+    if (r.failed) again.push(p);
+    step(`Đang phục hồi ${i + 1}/${list.length} phần · đã thêm ${added.toLocaleString('vi-VN')} dòng`);
+  }
+  for (const p of again) {   // dòng lỗi do thiếu dòng cha: thử lại 1 lượt sau cùng
+    const r = await rpc<{ added: number; failed: number }>('archive_restore_page', { p_id: x.id, p_table: p.t, p_rows: p.rows, p_sig: p.sig });
+    added += r.added; failed += r.failed;
+  }
+  await rpc('archive_restored', { p_id: x.id, p_added: added, p_failed: failed });
+  return { added, failed };
+}

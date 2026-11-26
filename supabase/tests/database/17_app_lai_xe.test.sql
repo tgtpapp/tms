@@ -227,7 +227,16 @@ insert into public.role_permissions (tenant_id, role_id, permission_code)
 select r.tenant_id, r.id, 'vehicle.view_all' from public.roles r where r.code = 'driver' and r.tenant_id = (select v from t.ids where k = 'A') on conflict do nothing;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
-select is((select count(*)::int from public.vehicles), 2, 'Tích Xem tất cả: thấy mọi xe');
+select is((select array_agg(plate order by plate) from public.vehicles), array['51B-111.11'], 'Lái xe dù nhóm lỡ tích Xem tất cả vẫn chỉ thấy xe mình');
+reset role;
+insert into public.documents (tenant_id, owner_kind, vehicle_id, doc_type, doc_no, is_current)
+values ((select v from t.ids where k = 'A'), 'xe', (select v from t.ids where k = 'X1'), 'hop_dong_thue', '001/2026/HĐTX', true);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is((select count(*)::int from public.documents where doc_type = 'hop_dong_thue'), 0, 'Lái xe không xem hợp đồng thuê xe (thông tin nội bộ)');
+select is((select count(*)::int from public.documents where owner_kind = 'xe' and vehicle_id = (select v from t.ids where k = 'X1')), 3, 'Vẫn thấy giấy tờ xuất trình của xe mình');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select is((select count(*)::int from public.documents where doc_type = 'hop_dong_thue'), 1, 'Chủ xe xem được hợp đồng thuê xe');
 reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';

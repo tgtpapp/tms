@@ -18,6 +18,7 @@ import { DOC_COLS, docState, type Doc } from '../components/Documents';
 import { RECORD_OF } from '../lib/recordPapers';
 import { FilesViewButton } from '../components/FilePreview';
 import { DOC_TYPES } from '../lib/docTypes';
+import { VoiceAssistant } from '../components/VoiceAssistant';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -26,13 +27,13 @@ interface MyTrip {
 }
 type Call = 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy';
 interface Ticket {
-  id: string; booking_id: string; seat_label: string; from_stop_id: string; to_stop_id: string; from_idx: number; price: number;
+  id: string; booking_id: string; seat_label: string; from_stop_id: string; to_stop_id: string; from_idx: number; to_idx: number | null; price: number;
   status: 'dat' | 'da_tt'; passenger_name: string | null; passenger_phone: string | null; pickup_note: string | null; dropoff_note: string | null; boarded: boolean;
   crew_call: Call | null; no_show: boolean; dropped: boolean; pay_method: 'tien_mat' | 'chuyen_khoan' | null;
 }
 interface Layout { name: string; decks: number; rows: number; cols: number; seats: { label: string; deck: number; row: number; col: number; kind: string; sellable: boolean }[] }
 const CALL: Record<Call, string> = { da_goi: 'Đã gọi', nghe_may: 'Nghe máy · sẽ ra đón', thue_bao: 'Thuê bao / không nghe', bao_huy: 'Khách báo hủy' };
-const TICKET_COLS = 'id, booking_id, seat_label, from_stop_id, to_stop_id, from_idx, price, status, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, crew_call, no_show, dropped, pay_method';
+const TICKET_COLS = 'id, booking_id, seat_label, from_stop_id, to_stop_id, from_idx, to_idx, price, status, passenger_name, passenger_phone, pickup_note, dropoff_note, boarded, crew_call, no_show, dropped, pay_method';
 const mapUrl = (q: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -149,7 +150,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">{sorted.slice(0, cut).map(chip)}</div>
       </section>
-      {cur && <TripRun trip={cur} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
+      {cur && <TripRun trip={cur} routeName={dirName(routes[cur.route_id], cur.direction)} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
       {sorted.length > cut && <section className="card"><div className="drv-trips">{sorted.slice(cut).map(chip)}</div></section>}
       {staffId && <MyPapers staffId={staffId} plates={plates} />}
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
@@ -310,7 +311,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
 }
 
 /** Một chuyến (như app cũ): Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả khách & hàng. Gọi khách ghi trạng thái báo về quầy bán vé. */
-function TripRun({ trip, stopName, reload, scanned, onScan }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void }) {
+function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void; routeName: string }) {
   const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [codes, setCodes] = useState<Record<string, string>>({});
@@ -492,6 +493,10 @@ function TripRun({ trip, stopName, reload, scanned, onScan }: { trip: MyTrip; st
           {tickets.some((t) => t.no_show) && <div className="warn small">{tickets.filter((t) => t.no_show).length} khách vắng</div>}
           {tickets.length - boarded - tickets.filter((t) => t.no_show).length > 0 && <div className="warn small">{tickets.length - boarded - tickets.filter((t) => t.no_show).length} khách chưa đánh dấu lên xe hoặc vắng</div>}
           {due > 0 && <div className="warn small">Còn {money(due)} chưa thu</div>}</div>
+      )}
+      {trip.status === 'mo' && !trip.arrived_at && (
+        <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
+                        trip={{ depart_at: trip.depart_at, departed_at: trip.departed_at, arrived_at: trip.arrived_at, plate: trip.plate, routeName }} />
       )}
       <div className="dt-tabs" role="tablist" aria-label="Xem">
         {([['don', 'Đón khách'], ['ghe', 'Sơ đồ ghế'], ['tra', 'Trả & hàng']] as const).map(([k, n]) => (

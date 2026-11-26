@@ -423,5 +423,13 @@ select throws_ok(format('select public.learn_stop_location(%L, %L, 10.9, 106.9, 
   'P0002', null, 'Nhà xe B không sửa điểm dừng của A');
 reset role;
 
+-- ---------------------------------------------------------------- Lái xe gán nhóm theo chi nhánh vẫn thấy phiếu sửa chữa xe mình
+insert into public.branches (id, tenant_id, code, name) values ('00000000-0000-0000-0000-00000000cb01', (select v from t.ids where k = 'A'), 'CN-LX', 'Chi nhánh thử');
+update public.user_roles set scope_type = 'branch', scope_id = '00000000-0000-0000-0000-00000000cb01' where user_id = '00000000-0000-0000-0000-0000000000b5';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select ok((select count(*) from public.repair_orders) >= 1, 'Lái xe (nhóm theo chi nhánh) thấy phiếu sửa chữa xe mình chạy');
+reset role;
+
 select * from finish();
 rollback;

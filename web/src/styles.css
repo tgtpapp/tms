@@ -1967,3 +1967,17 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .hd-fill > b, .hd-fill > .w2 { grid-column: 1 / -1; }
 .hd-fill > span { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; min-width: 0; }
 .hd-blank { flex: 1 1 auto; border-bottom: 1px dotted #000; min-width: 10mm; height: 1em; }
+
+/* Bán vé / Gửi hàng: ô tìm trực tiếp trên thanh, thẻ tuyến hàng ngang dưới thanh tìm, cột chọn chuyến rộng gấp rưỡi, 2 cột giờ chạy */
+.dv-sbar { cursor: text; }
+.dv-sbar input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; color: inherit; padding: 0; }
+.dv-sbar input::-webkit-search-cancel-button { display: none; }
+.dv-sx { border: 0; background: transparent; color: var(--muted); font-size: 16px; cursor: pointer; padding: 4px 6px; }
+.dv-sbar + .vx-rcards { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 8px; margin: 0 0 10px; padding-bottom: 2px; }
+.dv-sbar + .vx-rcards .vx-rc { flex: 0 0 auto; min-width: 190px; }
+.qs-inline { margin-bottom: 10px; }
+.qs-inline .qs-list { max-height: none; }
+.vx-left .vx-trips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1000px) { .vx { grid-template-columns: 450px minmax(0, 1fr); } }
+.vx[hidden] { display: none; }
+.dv-sbar input { color: var(--text); }

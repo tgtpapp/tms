@@ -6,7 +6,6 @@ import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCa
 import { dirName, type Dir } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { MiniCal } from '../components/MiniCal';
-import { Modal } from '../components/Modal';
 import { ParcelPrint, ParcelSlip, type SlipData } from '../components/ParcelSlip';
 import { companyFileUrl } from '../lib/documents';
 import { fmtDate, today } from '../components/Documents';
@@ -69,7 +68,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const [f, setF] = useState(EMPTY);
   const tcCfg = useTripColorCfg();   // màu thẻ giờ chạy (Giao diện của tôi)
   const [req, setReq] = useState(() => crypto.randomUUID());
-  const [finding, setFinding] = useState(false);
+  const [finding, setFinding] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [rf, setRf] = useState(() => { try { return localStorage.getItem(ROUTE_KEY) ?? ''; } catch { return ''; } });
@@ -83,14 +82,16 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const [printing, setPrinting] = useState<SlipData[] | null>(null);
   const [pvOpen, setPvOpen] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
+  const [plates, setPlates] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    const [s, t, st, r, rs] = await Promise.all([
+    const [s, t, st, r, rs, v] = await Promise.all([
       supabase.from('shipments').select(SHIP_COLS).eq('service_date', day).order('created_at', { ascending: false }),
       supabase.from('trips').select('id, depart_at, route_id, direction, vehicle_id').eq('service_date', day).eq('status', 'mo').order('depart_at'),
       supabase.from('stops').select('id, name').eq('is_active', true).order('name'),
       supabase.from('routes').select('id, name, name_ve, is_active'),
       supabase.from('route_stops').select('route_id, seq, stop_id').order('seq'),
+      supabase.from('vehicles').select('id, plate'),
     ]);
     const err = s.error ?? t.error ?? st.error ?? r.error ?? rs.error;
     if (err) return toast('error', err.message);
@@ -99,6 +100,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     setStops((st.data ?? []) as Stop[]);
     setRoutes((r.data ?? []) as Route[]);
     setRstops((rs.data ?? []) as RouteStop[]);
+    setPlates(Object.fromEntries(((v.data ?? []) as { id: string; plate: string }[]).map((x) => [x.id, x.plate])));
   }, [day, toast]);
   useEffect(() => { void load(); }, [load]);
   // Phiếu vừa tìm được: cuộn tới và tô sáng
@@ -222,7 +224,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
       <span className="tc-l"><b className="vx-time">{hhmm(t.depart_at)}</b></span>
       <span className="tc-r">
         {!rfOk && <span className="vx-rname">{routeName(t)}</span>}
-        <span className="vx-meta"><span>{counts[t.id] ? `${counts[t.id]} phiếu` : ''}</span></span>
+        <span className="vx-meta"><span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? (plates[t.vehicle_id] ?? '').split('-').pop() : '—'}</span><span>{counts[t.id] ? `${counts[t.id]} phiếu` : ''}</span></span>
       </span>
     </button>
   );
@@ -231,19 +233,23 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   return (
     <>
       {printing && <ParcelPrint slips={printing} onClose={() => setPrinting(null)} />}
-      <button type="button" className="dv-sbar" onClick={() => setFinding(true)}><i className="fi fi-rr-search" aria-hidden="true" /><span>Tìm hàng theo số điện thoại người gửi / nhận, tên, mã phiếu…</span></button>
-      {finding && (
-        <ParcelSearch stopName={stopName} onClose={() => setFinding(false)}
-                      onPick={(x) => { setFinding(false); setDay(x.service_date); setFocus(x.id); }} />
+      <label className="dv-sbar"><i className="fi fi-rr-search" aria-hidden="true" />
+        <input type="search" autoComplete="off" value={finding} onChange={(e) => setFinding(e.target.value)} aria-label="Tìm hàng"
+               placeholder="Tìm hàng theo số điện thoại người gửi / nhận, tên, mã phiếu…" />
+        {finding && <button type="button" className="dv-sx" aria-label="Xóa tìm kiếm" onClick={() => setFinding('')}>✕</button>}
+      </label>
+      {rview === 'the' && !finding.trim() && <RouteCards opts={routeOpts} trips={trips} counts={counts} unit="phiếu" value={rfOk} onPick={pickRoute} />}
+      {finding.trim() && (
+        <ParcelSearch q={finding} stopName={stopName}
+                      onPick={(x) => { setFinding(''); setDay(x.service_date); setFocus(x.id); }} />
       )}
-      <div className="vx">
+      <div className="vx" hidden={!!finding.trim()}>
         <aside className="vx-left">
           <RouteViewToggle view={rview} onChange={setRview} />
           <TripColorPicker />
-          {rview === 'o' ? <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
+          {rview === 'o' && <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
               {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-            : <RouteCards opts={routeOpts} trips={trips} counts={counts} unit="phiếu" value={rfOk} onPick={pickRoute} />}
+            </select>}
           <div className="vx-cal">
             {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setF((x) => ({ ...x, trip_id: '' })); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
             <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>
@@ -320,17 +326,17 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
 }
 
 /** Tìm phiếu gửi hàng theo số điện thoại người gửi / nhận, tên hoặc mã phiếu (như Tìm vé) */
-function ParcelSearch({ stopName, onClose, onPick }: { stopName: (id: string) => string; onClose: () => void; onPick: (x: Shipment) => void }) {
+function ParcelSearch({ q, stopName, onPick }: { q: string; stopName: (id: string) => string; onPick: (x: Shipment) => void }) {
   const toast = useToast();
-  const [q, setQ] = useState('');
   const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
   const [lim, setLim] = useState(100);
   const [hits, setHits] = useState<(Shipment & { created_at: string })[] | null>(null);
   const raw = q.trim();
   const dg = raw.replace(/\D/g, '').replace(/^84/, '0');
   const isNum = /^[\d\s+.\-()]+$/.test(raw);
-  const short = !!raw && (isNum ? dg.length < 3 : raw.length < 2);
+  const short = isNum ? dg.length < 3 : raw.length < 2;
 
+  useEffect(() => { setLim(100); }, [raw]);
   useEffect(() => {
     if (short) { setHits(null); return; }
     let on = true;
@@ -353,18 +359,16 @@ function ParcelSearch({ stopName, onClose, onPick }: { stopName: (id: string) =>
   const shown = (hits ?? []).slice(0, lim);
   const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
   return (
-    <Modal title="Tìm hàng theo số điện thoại" onClose={onClose}>
-      <input className="qs-in" type="search" inputMode="tel" autoFocus autoComplete="off" value={q} onChange={(e) => { setQ(e.target.value); setLim(100); }}
-             placeholder="Số điện thoại, tên người gửi / nhận hoặc mã phiếu (để trống = tất cả)" />
+    <section className="card qs-inline">
       <div className="qsort">
         <button type="button" className={sortBy === 'dat' ? 'on' : ''} onClick={() => setSortBy('dat')}>Theo giờ nhận</button>
         <button type="button" className={sortBy === 'chay' ? 'on' : ''} onClick={() => setSortBy('chay')}>Theo ngày gửi</button>
       </div>
       <p className="muted small qs-sum">
-        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên (hoặc để trống để xem tất cả).'
+        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên.'
           : hits === null ? 'Đang tìm…'
           : shown.length ? <>Tìm thấy <b>{shown.length}{hits.length > lim ? '+' : ''}</b> phiếu · tổng cước {money(shown.filter((x) => x.status !== 'huy').reduce((a, x) => a + x.fee, 0))} (không tính phiếu hủy)</>
-          : 'Không tìm thấy phiếu nào.'}
+          : 'Không có'}
       </p>
       <div className="qs-list">
         {shown.map((x) => (
@@ -377,7 +381,7 @@ function ParcelSearch({ stopName, onClose, onPick }: { stopName: (id: string) =>
         ))}
         {hits && hits.length > lim && <button type="button" className="btn small" onClick={() => setLim(lim + 100)}>Xem thêm</button>}
       </div>
-    </Modal>
+    </section>
   );
 }
 

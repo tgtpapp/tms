@@ -236,7 +236,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
   };
   const [calOpen, setCalOpen] = useState(true);
   const [extra, setExtra] = useState<{ key: string; time: string; note: string } | null>(null);
-  const [finding, setFinding] = useState(false);
+  const [finding, setFinding] = useState('');
   const [focus, setFocus] = useState<string | null>(null);
   const [dead, setDead] = useState<Hit | null>(null);
   async function addExtra() {
@@ -283,25 +283,29 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
           Vé bán sẽ tự gửi lên khi có mạng.</p>
       )}
       {mine.length > 0 && <QueuePanel list={mine} online={online} onSync={() => void sync()} />}
-      <button type="button" className="dv-sbar" onClick={() => setFinding(true)}><i className="fi fi-rr-search" aria-hidden="true" /><span>Tìm vé theo số điện thoại, tên khách, mã vé…</span></button>
-      {finding && (
-        <TicketSearch routes={routes} stopName={stopName} onClose={() => setFinding(false)}
+      <label className="dv-sbar"><i className="fi fi-rr-search" aria-hidden="true" />
+        <input type="search" autoComplete="off" value={finding} onChange={(e) => setFinding(e.target.value)} aria-label="Tìm vé"
+               placeholder="Tìm vé theo số điện thoại, tên khách, mã vé…" />
+        {finding && <button type="button" className="dv-sx" aria-label="Xóa tìm kiếm" onClick={() => setFinding('')}>✕</button>}
+      </label>
+      {rview === 'the' && !finding.trim() && <RouteCards opts={routeOpts} trips={trips} counts={counts} unit="vé" value={rfOk} onPick={pickRoute} />}
+      {finding.trim() && (
+        <TicketSearch q={finding} routes={routes} stopName={stopName}
                       onPick={(x) => {
-                        setFinding(false);
+                        setFinding('');
                         if (x.status === 'huy' || x.status === 'het_han') { setDead(x); return; }
                         setDay(x.service_date); setRf(`${x.route_id}|${x.direction}`); setTripId(x.trip_id); setFocus(x.id);
                       }} />
       )}
       {dead && <CancelledTicket t={dead} admin={perms.has('sell_admin.cancelled')} stopName={stopName} routeName={dirName(routes.find((r) => r.id === dead.route_id), dead.direction)}
                                 onClose={() => setDead(null)} />}
-      <div className="vx">
+      <div className="vx" hidden={!!finding.trim()}>
         <aside className="vx-left">
           <RouteViewToggle view={rview} onChange={setRview} />
           <TripColorPicker />
-          {rview === 'o' ? <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
+          {rview === 'o' && <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
               {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-            </select>
-            : <RouteCards opts={routeOpts} trips={trips} counts={counts} unit="vé" value={rfOk} onPick={pickRoute} />}
+            </select>}
           <div className="vx-cal">
             {calOpen ? <MiniCal day={day} onPick={(d) => { setDay(d); setTripId(null); }} /> : <p className="vx-calday">{fmtDate(day)}</p>}
             <button type="button" className="vx-fold" aria-label={calOpen ? 'Thu gọn lịch' : 'Mở lịch'} onClick={() => setCalOpen(!calOpen)}>{calOpen ? '︿' : '﹀'}</button>
@@ -348,17 +352,17 @@ interface Hit {
   cancel_reason: string | null; pickup_note: string | null; dropoff_note: string | null;
 }
 
-function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; stopName: (id: string | null) => string; onClose: () => void; onPick: (x: Hit) => void }) {
+function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Route[]; stopName: (id: string | null) => string; onPick: (x: Hit) => void }) {
   const toast = useToast();
-  const [q, setQ] = useState('');
   const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
   const [lim, setLim] = useState(100);
   const [hits, setHits] = useState<Hit[] | null>(null);
   const raw = q.trim();
   const dg = raw.replace(/\D/g, '').replace(/^84/, '0');
   const isNum = /^[\d\s+.\-()]+$/.test(raw);
-  const short = !!raw && (isNum ? dg.length < 3 : raw.length < 2);
+  const short = isNum ? dg.length < 3 : raw.length < 2;
 
+  useEffect(() => { setLim(100); }, [raw]);
   useEffect(() => {
     if (short) { setHits(null); return; }
     let on = true;
@@ -390,18 +394,16 @@ function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; 
   const rName = (x: Hit) => dirName(routes.find((r) => r.id === x.route_id), x.direction);
   const when = (iso: string) => new Date(iso).toLocaleString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false });
   return (
-    <Modal title="Tìm vé theo số điện thoại" onClose={onClose}>
-      <input className="qs-in" type="search" inputMode="tel" autoFocus autoComplete="off" value={q} onChange={(e) => { setQ(e.target.value); setLim(100); }}
-             placeholder="Số điện thoại, tên khách hoặc mã vé (để trống = tất cả vé)" />
+    <section className="card qs-inline">
       <div className="qsort">
         <button type="button" className={sortBy === 'dat' ? 'on' : ''} onClick={() => setSortBy('dat')}>Theo giờ đặt</button>
         <button type="button" className={sortBy === 'chay' ? 'on' : ''} onClick={() => setSortBy('chay')}>Theo giờ chạy</button>
       </div>
       <p className="muted small qs-sum">
-        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên (hoặc để trống để xem tất cả).'
+        {short ? 'Nhập ít nhất 3 số điện thoại hoặc 2 chữ của tên.'
           : hits === null ? 'Đang tìm…'
           : shown.length ? <>Tìm thấy <b>{shown.length}{hits.length > lim ? '+' : ''}</b> vé · {new Set(shown.map((x) => x.trip_id)).size} chuyến · tổng {money(act.reduce((a, x) => a + x.price, 0))} (không tính vé hủy)</>
-          : 'Không tìm thấy vé nào.'}
+          : 'Không có'}
       </p>
       <div className="qs-list">
         {shown.map((x) => (
@@ -415,7 +417,7 @@ function TicketSearch({ routes, stopName, onClose, onPick }: { routes: Route[]; 
         ))}
         {hits && hits.length > lim && <button type="button" className="btn small" onClick={() => setLim(lim + 100)}>Xem thêm</button>}
       </div>
-    </Modal>
+    </section>
   );
 }
 

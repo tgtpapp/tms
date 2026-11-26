@@ -107,6 +107,8 @@ values ('77777777-7777-7777-7777-777777777772', (select v from t.ids where k = '
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
 select is((select count(*)::int from public.my_trips(app.local_today(), app.local_today() + 7)), 1, 'Lái xe thấy 1 chuyến của mình');
+select is((select array_agg(staff_id) from public.driver_first_months()), array[(select v from t.ids where k = 'D1')],
+  'Công & lương của tôi: lái xe nhận tháng chạy đầu tiên của chính mình (để trừ BHXH / chi phí / lương CK), không thấy của người khác');
 select is((select my_role from public.my_trips(app.local_today(), app.local_today() + 7)), 'lai_xe_1', 'Vai trò lái xe 1');
 select is((select count(*)::int from public.documents where owner_kind = 'nhan_su'), 2, 'Lái xe thấy giấy tờ của mình (GPLX, khám sức khỏe), không thấy của người khác');
 select is((select count(*)::int from public.documents where owner_kind = 'xe' and vehicle_id = (select v from t.ids where k = 'X1')), 3,

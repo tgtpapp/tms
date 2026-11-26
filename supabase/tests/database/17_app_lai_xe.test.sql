@@ -240,6 +240,15 @@ select is((select count(*)::int from public.documents where owner_kind = 'xe' an
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select count(*)::int from public.documents where doc_type = 'hop_dong_thue'), 1, 'Chủ xe xem được hợp đồng thuê xe');
 reset role;
+-- Phiếu sửa xe 2 ghi tên lái xe 1 → lái xe 1 thấy phiếu đó và biển số xe 2
+update public.repair_orders set driver_id = (select v from t.ids where k = 'D1') where vehicle_id = (select v from t.ids where k = 'X2');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is((select count(*)::int from public.repair_orders), 2, 'Lái xe thấy cả phiếu sửa chữa ghi tên mình');
+select is((select count(*)::int from public.repair_items), 2, 'Thấy nội dung phiếu ghi tên mình');
+select is((select count(*)::int from public.vehicles), 2, 'Thấy biển số xe ghi tên mình trên phiếu');
+reset role;
+update public.repair_orders set driver_id = null where vehicle_id = (select v from t.ids where k = 'X2');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select is((select count(*)::int from public.repair_orders), 2, 'Điều hành xem mọi phiếu sửa chữa');

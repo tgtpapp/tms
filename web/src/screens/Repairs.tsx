@@ -28,7 +28,8 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
   const [orders, setOrders] = useState<Order[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [vehicles, setVehicles] = useState<Veh[]>([]);
-  const [month, setMonth] = useState(today().slice(0, 7));
+  // người chỉ xem phiếu xe mình (lái xe): mặc định xem mọi tháng để thấy đủ lịch sử sửa chữa xe mình
+  const [month, setMonth] = useState(['repair.view_all', 'repair.add', 'repair.edit'].some((p) => perms.has(p)) ? today().slice(0, 7) : '');
   const [veh, setVeh] = useState('');
   const [f, setF] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);

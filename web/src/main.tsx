@@ -38,7 +38,17 @@ if (import.meta.env.PROD) {
     document.body.appendChild(bar);
   };
   setInterval(() => void check(), 120000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void check(); });
+  // App cài trên điện thoại (nhất là iPhone) mở lại từ nền KHÔNG tải lại trang → vẫn chạy bản cũ dù đã có bản sửa.
+  // Quay lại app sau ≥ 30 giây, có bản mới và không đang mở hộp nhập / gõ dở → tự tải lại bản mới.
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    void (async () => {
+      const busy = !!document.querySelector('.modal-back') || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '');
+      if (hiddenAt && Date.now() - hiddenAt >= 30000 && !busy && await newVersionAvailable()) { window.location.reload(); return; }
+      void check();
+    })();
+  });
 }
 
 // Khung ứng dụng dùng được khi mất mạng (chỉ bản đăng thật)

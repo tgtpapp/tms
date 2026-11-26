@@ -5,15 +5,16 @@ import { useEffect, useRef, useState } from 'react';
 import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, mentionedParcels, moneyOf, nextStopText,
   parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type VParcel, type VTicket, type VTrip } from '../lib/voice';
 import { rpc } from '../lib/supabase';
+import { distM, learnStop, type StopGeo } from '../lib/geo';
 
 type Mark = (ids: string[], action: 'len' | 'bo_len' | 'tra' | 'bo_tra' | 'vang' | 'bo_vang', patch: Partial<VTicket>) => Promise<void>;
 const UNDO = { len: ['bo_len', { boarded: false, dropped: false }], tra: ['bo_tra', { dropped: false }], vang: ['bo_vang', { no_show: false }] } as const;
 
 const greeted = new Set<string>();   // chuyến đã đọc câu mở đầu trong phiên này
 
-export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, onMark, onChanged }: {
+export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, onMark, onChanged, geo }: {
   tripId: string; trip: VTrip; tickets: VTicket[]; parcels: VParcel[]; cap: number; stopName: (id: string) => string; onMark: Mark;
-  onChanged: () => Promise<void>;
+  onChanged: () => Promise<void>; geo: Record<string, StopGeo>;
 }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<'doc' | 'nghe' | 'cho'>('cho');
@@ -54,8 +55,27 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
   }, [tickets, parcels]);
   const undo = useRef<{ ids: string[]; act: 'len' | 'tra' | 'vang' } | null>(null);
   const stopRef = useRef<() => void>(() => undefined);
-  const data = useRef({ trip, tickets, parcels, cap, stopName });
-  data.current = { trip, tickets, parcels, cap, stopName };
+  const data = useRef({ trip, tickets, parcels, cap, stopName, geo });
+  data.current = { trip, tickets, parcels, cap, stopName, geo };
+  // Tự nhắc khi sắp tới điểm (GPS): chỉ sau khi đã bật trợ lý ở chuyến này và xe đã xuất bến; mỗi điểm nhắc 1 lần lúc còn khoảng 2 km
+  const [active, setActive] = useState(() => greeted.has(tripId));
+  const told = useRef(new Set<string>());
+  useEffect(() => {
+    if (!active || !trip.departed_at || trip.arrived_at || !('geolocation' in navigator)) return;
+    const id = navigator.geolocation.watchPosition((p) => {
+      const d = data.current;
+      const stop = currentStop(d.tickets, 'don') || currentStop(d.tickets, 'tra') || parcelsOpen(d.parcels)[0]?.to_stop_id;
+      const g = stop ? d.geo[stop] : undefined;
+      if (!stop || !g || g.lat == null || g.lng == null || told.current.has(stop) || busyRef.current) return;
+      const m = distM(p.coords.latitude, p.coords.longitude, g.lat, g.lng);
+      if (m > 2000) return;
+      told.current.add(stop);
+      const km = m < 700 ? 'Sắp tới nơi.' : `Còn khoảng ${(Math.round(m / 500) / 2).toString().replace('.', ' phẩy ')} ki lô mét.`;
+      const t = `${km} ${nextStopText(d.tickets, d.parcels, d.stopName)}`;
+      setSaid(t); last.current = t; void speak(t);
+    }, () => undefined, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
+    return () => navigator.geolocation.clearWatch(id);
+  }, [active, trip.departed_at, trip.arrived_at]);
   useEffect(() => () => { stopSpeak(); stopRef.current(); }, []);
   if (!canSpeak()) return null;
 
@@ -131,6 +151,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       const due = g.reduce((a, p) => a + parcelDue(p), 0), n = g.reduce((a, p) => a + p.packages, 0);
       if (!isYes(await ask(`Xác nhận giao ${n} kiện cho ${receiverList(g)}${due ? `, thu ${sayMoney(due)} ${ck ? 'chuyển khoản' : 'tiền mặt'}` : ''}, đúng không ạ?`))) return 'Đã bỏ qua, chưa ghi.';
       for (const p of g) await rpc('deliver_shipment', { p_id: p.id, p_receiver: null, p_method: ck ? 'chuyen_khoan' : 'tien_mat' });
+      learnStop(tripId, g[0].to_stop_id);
       await onChanged();
       return `Đã ghi giao ${n} kiện${due ? `, đã thu ${sayMoney(due)}` : ''}.`;
     }
@@ -229,7 +250,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     setPhase('cho');
   }
   async function start() {
-    setOpen(true);
+    setOpen(true); setActive(true);
     if (!greeted.has(tripId)) {
       greeted.add(tripId);
       const d = data.current;

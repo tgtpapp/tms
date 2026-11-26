@@ -18,6 +18,7 @@ export interface AppConfig {
   dbLimitMb: number;
   fileLimitMb: number;
   neonLimitMb: number;
+  geocodeUrl: string;
 }
 
 export interface ConfigResult {
@@ -39,6 +40,7 @@ const RAW = {
   VITE_FILE_LIMIT_MB: import.meta.env.VITE_FILE_LIMIT_MB as string | undefined,
   VITE_NEON_LIMIT_MB: import.meta.env.VITE_NEON_LIMIT_MB as string | undefined,
   VITE_CREDIT: import.meta.env.VITE_CREDIT as string | undefined,
+  VITE_GEOCODE_URL: import.meta.env.VITE_GEOCODE_URL as string | undefined,
 };
 
 type RawKey = keyof typeof RAW;
@@ -57,6 +59,8 @@ export function loadConfig(): ConfigResult {
   const config: AppConfig = {
     appName: read('VITE_APP_NAME', missing) || 'TMS',
     credit: read('VITE_CREDIT', null),
+    // tra tọa độ tạm theo tên / địa chỉ điểm dừng (dịch vụ kiểu Nominatim); để trống = không tra, chỉ học từ GPS lái xe
+    geocodeUrl: read('VITE_GEOCODE_URL', null).replace(/\/+$/, ''),
     appEnv,
     // 'same-origin': máy chủ dự phòng trên máy tính (giao diện + hệ thống cùng 1 địa chỉ, địa chỉ đổi theo tên miền / đường hầm)
     supabaseUrl: read('VITE_SUPABASE_URL', missing) === 'same-origin' ? window.location.origin : read('VITE_SUPABASE_URL', missing),

@@ -19,6 +19,7 @@ import { RECORD_OF } from '../lib/recordPapers';
 import { FilesViewButton } from '../components/FilePreview';
 import { DOC_TYPES } from '../lib/docTypes';
 import { VoiceAssistant } from '../components/VoiceAssistant';
+import { learnStop, lookupMissing, type StopGeo } from '../lib/geo';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -57,6 +58,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   const [trips, setTrips] = useState<MyTrip[]>([]);
   const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [stops, setStops] = useState<Record<string, string>>({});
+  const [geo, setGeo] = useState<Record<string, StopGeo>>({});   // tọa độ điểm dừng (trợ lý nhắc sắp tới điểm)
   // chuyến người dùng tự bấm mở ('' = đã đóng); chưa bấm thì tự mở chuyến chuẩn bị chạy
   const [picked, setOpen] = useState<string | null>(null);
   const [nbOpen, setNbOpen] = useState(0);
@@ -69,13 +71,14 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       const [t, r, st] = await Promise.all([
         rpc<MyTrip[]>('my_trips', { p_from: day, p_to: day }),
         supabase.from('routes').select('id, name, name_ve'),
-        supabase.from('stops').select('id, name'),
+        supabase.from('stops').select('id, name, address, province, lat, lng'),
       ]);
       setTrips(t);
       const sc = t.length ? await supabase.from('order_scans').select('trip_id').in('trip_id', t.map((x) => x.trip_id)) : { data: [] };
       setScanned(new Set(((sc.data ?? []) as { trip_id: string }[]).map((x) => x.trip_id)));
       setRoutes(Object.fromEntries(((r.data ?? []) as { id: string; name: string; name_ve: string | null }[]).map((x) => [x.id, x])));
       setStops(Object.fromEntries(((st.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name])));
+      setGeo(Object.fromEntries(((st.data ?? []) as StopGeo[]).map((x) => [x.id, { ...x, lat: x.lat == null ? null : Number(x.lat), lng: x.lng == null ? null : Number(x.lng) }])));
     } catch (e) {
       toast('error', errMsg(e));
     }
@@ -150,7 +153,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
         {trips.length === 0 && <p className="muted">Không có chuyến xe nào được xếp cho bạn trong ngày.</p>}
         <div className="drv-trips">{sorted.slice(0, cut).map(chip)}</div>
       </section>
-      {cur && <TripRun trip={cur} routeName={dirName(routes[cur.route_id], cur.direction)} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
+      {cur && <TripRun trip={cur} geo={geo} routeName={dirName(routes[cur.route_id], cur.direction)} stopName={(id) => stops[id] ?? '?'} reload={load} scanned={scanned.has(cur.trip_id)} onScan={() => setScanTrip(cur)} />}
       {sorted.length > cut && <section className="card"><div className="drv-trips">{sorted.slice(cut).map(chip)}</div></section>}
       {staffId && <MyPapers staffId={staffId} plates={plates} />}
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
@@ -311,7 +314,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
 }
 
 /** Một chuyến (như app cũ): Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả khách & hàng. Gọi khách ghi trạng thái báo về quầy bán vé. */
-function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void; routeName: string }) {
+function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void; routeName: string; geo: Record<string, StopGeo> }) {
   const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [codes, setCodes] = useState<Record<string, string>>({});
@@ -370,6 +373,13 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
     return () => { clearInterval(t); document.removeEventListener('visibilitychange', vis); };
   }, [load, check]);
   useEffect(() => { void rpc<Layout | null>('my_trip_layout', { p_trip_id: trip.trip_id }).then(setLayout).catch(() => setLayout(null)); }, [trip.trip_id]);
+  // điểm dừng của chuyến chưa có tọa độ: tra tạm theo tên / địa chỉ (chỉ 1 lần mỗi điểm, chạy nền)
+  const stopKey = [...new Set([...tickets.flatMap((t) => [t.from_stop_id, t.to_stop_id]), ...parcels.map((p) => p.to_stop_id)])].sort().join(',');
+  useEffect(() => {
+    if (!stopKey || trip.status !== 'mo' || trip.arrived_at) return;
+    void lookupMissing(trip.trip_id, stopKey.split(',').map((id) => geo[id]).filter((x): x is StopGeo => !!x)).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopKey, trip.trip_id]);
   useEffect(() => { if (!hl) return; const t = window.setTimeout(() => setHl(null), 4000); return () => window.clearTimeout(t); }, [hl]);
 
   const cap = layout?.seats.filter((x) => x.sellable && (x.kind === 'ghe' || x.kind === 'giuong')).length ?? 0;
@@ -396,6 +406,8 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
     let ok = true;
     try { for (const t of list) await rpc('crew_mark', { p_ticket_id: t.id, p_action: action }); }
     catch (e) { ok = false; toast('error', errMsg(e)); }
+    // học vị trí điểm dừng từ GPS lúc báo đón / trả (trợ lý nhắc sắp tới điểm ở các chuyến sau)
+    if (ok && list[0] && (action === 'len' || action === 'tra')) learnStop(trip.trip_id, action === 'len' ? list[0].from_stop_id : list[0].to_stop_id);
     await load();
     return ok;
   }
@@ -498,7 +510,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
       )}
       {trip.status === 'mo' && !trip.arrived_at && (
         <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
-                        onChanged={load}
+                        onChanged={load} geo={geo}
                         onMark={async (ids, action, patch) => { if (!await act(tickets.filter((t) => ids.includes(t.id)), action, patch as Partial<Ticket>)) throw new Error('ghi lỗi'); }}
                         trip={{ depart_at: trip.depart_at, departed_at: trip.departed_at, arrived_at: trip.arrived_at, plate: trip.plate, routeName }} />
       )}

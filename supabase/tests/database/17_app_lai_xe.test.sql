@@ -402,5 +402,26 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","r
 select throws_ok(format('select public.crew_report(%L, %L, %L)', (select v from t.ids where k = 'T6'), 'nhan', 'x y'), 'P0002', null, 'Nhà xe B không báo vào chuyến của A');
 reset role;
 
+-- ---------------------------------------------------------------- Tọa độ điểm dừng: tra cứu tạm, học từ GPS lái xe, bỏ mẫu sai
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select is(public.set_stop_lookup_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 10.9, 106.9), true, 'Tọa độ tạm theo tra cứu');
+select is(public.learn_stop_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 10.95, 106.85, 300), 'bo_qua', 'Bỏ mẫu GPS kém');
+select is(public.learn_stop_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 10.95, 106.85, 15), 'hoc', 'Học lần đầu');
+select is((select lat::text || ',' || geo_src from public.stops where code = 'HN'), '10.950000,hoc', 'Vị trí thật thay tọa độ tra cứu');
+select is(public.set_stop_lookup_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 11, 107), false, 'Tra cứu không đè tọa độ đã học');
+select public.learn_stop_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 10.9502, 106.8502, 10);
+select public.learn_stop_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 10.9504, 106.8504, 10);
+select is(public.learn_stop_location((select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN'), 11.2, 106.85, 10), 'bo_qua', 'Bỏ mẫu cách quá xa khi đã chắc');
+select is((select geo_n from public.stops where code = 'HN'), 3, 'Đếm số lần học');
+select throws_ok(format('select public.learn_stop_location(%L, %L, 10.9, 106.9, 10)', (select v from t.ids where k = 'T3'), (select id from public.stops where code = 'HN')),
+  'P0002', null, 'Không học cho chuyến không phải của mình');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok(format('select public.learn_stop_location(%L, %L, 10.9, 106.9, 10)', (select v from t.ids where k = 'T6'), (select id from public.stops where code = 'HN')),
+  'P0002', null, 'Nhà xe B không sửa điểm dừng của A');
+reset role;
+
 select * from finish();
 rollback;

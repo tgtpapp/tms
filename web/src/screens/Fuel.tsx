@@ -1,4 +1,5 @@
 // Nhiên liệu (như app cũ): nhập dầu vào bồn, cấp dầu từ bồn cho xe, đổ ngoài cây xăng; tồn bồn, giá bình quân, tiêu hao theo xe.
+import { personSign } from '../lib/signatures';
 import { letterhead, loadBrand } from '../lib/brand';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { MonthPicker } from '../components/MonthPicker';
@@ -33,7 +34,7 @@ const money = (n: number) => `${num(Math.round(n))} đ`;
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number); return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`; };
 
-const FUEL_COLS = 'id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files, market_price';
+const FUEL_COLS = 'id, code, kind, entry_date, entry_time, vehicle_id, driver_id, odo_km, liters, unit_price, supplier, invoice_no, note, files, market_price, created_by';
 /** Lưu tạm toàn bộ phiếu nhiên liệu trong phiên (theo nhà xe + người dùng); mở lại mục chỉ tải lại khi dấu thay đổi khác */
 const fuelCache = new Map<string, { sig: string; data: FuelEntry[] }>();
 async function fuelSig(): Promise<string | null> {
@@ -157,12 +158,17 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
   async function printSlips(ids: string[], all: FuelEntry[] = rows) {
     const c = await company();
     const L = fuelLedger(all, set);
-    setSlips(ids.map((id) => all.find((r) => r.id === id)).filter((r): r is FuelEntry => !!r).map((r) => {
+    const picked = ids.map((id) => all.find((r) => r.id === id)).filter((r): r is FuelEntry => !!r);
+    // chữ ký theo quy tắc: người lập phiếu (thủ kho / người cấp / người duyệt) và lái xe nhận
+    const signs = await Promise.all(picked.map((r) => Promise.all([
+      personSign(ctx.tenant_id, { userId: r.created_by ?? null }), personSign(ctx.tenant_id, { staffId: r.driver_id }),
+    ])));
+    setSlips(picked.map((r, i) => {
       const m = L.map.get(r.id);
       return { company: c.name, address: c.address, kind: r.kind, code: r.code, date: r.entry_date, time: r.entry_time, tank: set.tank_name, fuelType: set.fuel_type,
         plate: plate(r.vehicle_id), driver: driver(r.driver_id), supplier: r.supplier ?? '', invoice: r.invoice_no ?? '', odo: r.odo_km, kmRun: m?.km ?? 0, per100: m?.per100 ?? 0,
         norm: vehicles.find((v) => v.id === r.vehicle_id)?.fuel_norm ?? null, liters: r.liters, price: m?.price ?? 0, avgPrice: r.kind === 'bon' && r.unit_price == null,
-        market: !!r.market_price, tankAfter: m?.tank ?? 0, note: r.note ?? '', by: '' };
+        market: !!r.market_price, tankAfter: m?.tank ?? 0, note: r.note ?? '', by: signs[i]![0].name, bySign: signs[i]![0], driverSign: signs[i]![1] };
     }));
   }
   /** Tạo phiếu đổ dầu ngoài từ ảnh (trụ bơm, hóa đơn, biển số, đồng hồ km): AI đọc rồi điền sẵn, người dùng kiểm tra rồi lưu (như app cũ). */

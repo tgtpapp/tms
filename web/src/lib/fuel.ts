@@ -4,6 +4,7 @@ export interface FuelEntry {
   id: string; code: string; kind: FuelKind; entry_date: string; entry_time: string | null; vehicle_id: string | null; driver_id: string | null;
   odo_km: number | null; liters: number; unit_price: number | null; supplier: string | null; invoice_no: string | null; note: string | null; files: string[];
   market_price?: boolean;
+  created_by?: string | null;
 }
 export interface FuelSettings { tank_name: string; fuel_type: string; capacity_l: number; opening_l: number; opening_price: number; opening_on: string | null; alert_l: number; issue_price_mode: 'tt' | 'bq' }
 export interface FuelRow { tank: number; avg: number; price: number; amount: number; km: number; per100: number }

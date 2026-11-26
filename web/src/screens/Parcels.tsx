@@ -1,4 +1,5 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
+import { personSign, type Sign } from '../lib/signatures';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
 import { dirName, type Dir } from '../lib/routes';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
@@ -73,6 +74,9 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const [calOpen, setCalOpen] = useState(true);
   const [co, setCo] = useState<Co>({ name: ctx.tenant_name ?? '', address: '', phone: '', tax: '', logo: null });
   const [ti, setTi] = useState({ plate: '', driver: '', phone: '' });
+  // chữ ký của người đang lập phiếu (hồ sơ nhân viên, chưa có thì tài khoản) – tải sẵn để bản in có ngay
+  const [mySign, setMySign] = useState<Sign | null>(null);
+  useEffect(() => { void personSign(ctx.tenant_id, { userId: ctx.user_id }).then(setMySign); }, [ctx.tenant_id, ctx.user_id]);
   const [printing, setPrinting] = useState<SlipData[] | null>(null);
   const [pvOpen, setPvOpen] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
@@ -167,7 +171,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     const t = trips.find((y) => y.id === x.trip_id) ?? null;
     return { code: x.code, company: co, departAt: t?.depart_at ?? null, route: t ? routeName(t) : '', plate: info.plate, driver: info.driver, driverPhone: info.phone,
       from: x.from, to: x.to, senderName: x.sender_name, senderPhone: x.sender_phone, receiverName: x.receiver_name, receiverPhone: x.receiver_phone,
-      description: x.description, packages: x.packages, weight: x.weight, value: x.value, fee: x.fee, payer: x.payer, cod: x.cod, note: x.note, staff: ctx.full_name ?? '', at: x.at };
+      description: x.description, packages: x.packages, weight: x.weight, value: x.value, fee: x.fee, payer: x.payer, cod: x.cod, note: x.note, staff: ctx.full_name ?? '', staffSign: mySign, at: x.at };
   };
   const draft = slipOf({ code: null, trip_id: f.trip_id || null, from: f.from, to: f.to, sender_name: f.sender_name, sender_phone: f.sender_phone, receiver_name: f.receiver_name,
     receiver_phone: f.receiver_phone, description: f.description, packages: Number(f.packages) || 1, weight: f.weight ? Number(f.weight) : null, value: f.value ? Number(f.value) : null,

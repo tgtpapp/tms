@@ -1,4 +1,5 @@
 // Phiếu nhiên liệu in máy in nhiệt khổ 80mm (như app cũ): phiếu nhập dầu / xuất dầu / đổ dầu ngoài.
+import { showName, type PersonSign } from '../lib/signatures';
 import { PrintHead } from './PrintHead';
 import { printThermal } from '../lib/thermalPrint';
 import { ThermalInfo } from './ThermalInfo';
@@ -10,6 +11,7 @@ export interface FuelSlipData {
   company: string; address: string; kind: 'nhap' | 'bon' | 'ngoai'; code: string; date: string; time: string | null; tank: string; fuelType: string;
   plate: string; driver: string; supplier: string; invoice: string; deliverer?: string; odo: number | null; kmRun: number; per100: number; norm: number | null;
   liters: number; price: number; avgPrice: boolean; market: boolean; tankAfter: number; note: string; by: string;
+  bySign?: PersonSign | null; driverSign?: PersonSign | null;   // chữ ký người lập (thủ kho / người cấp / người duyệt) và lái xe nhận
 }
 const n0 = (n: number, d = 0) => n.toLocaleString('vi-VN', { maximumFractionDigits: d });
 const TITLE = { nhap: 'PHIẾU NHẬP DẦU', bon: 'PHIẾU XUẤT DẦU', ngoai: 'PHIẾU ĐỔ DẦU NGOÀI' } as const;
@@ -51,8 +53,10 @@ export function FuelSlip({ list, onClose }: { list: FuelSlipData[]; onClose: () 
               {r.kind !== 'ngoai' && <><div className="ve-line" />{kv('Tồn bồn sau phiếu', `${n0(r.tankAfter, 2)} lít`)}</>}
               <div className="ve-line" />
               <table className="nl80-sg"><tbody><tr>
-                <td><b>{r.kind === 'nhap' ? 'Người giao' : r.kind === 'bon' ? 'Người cấp' : 'Người duyệt'}</b><br /><i>(Ký, họ tên)</i></td>
-                <td><b>{r.kind === 'nhap' ? 'Thủ kho' : 'Lái xe nhận'}</b><br /><i>(Ký, họ tên)</i></td>
+                <td><b>{r.kind === 'nhap' ? 'Người giao' : r.kind === 'bon' ? 'Người cấp' : 'Người duyệt'}</b><br /><i>(Ký, họ tên)</i>
+                  {r.kind !== 'nhap' && <SignCell s={r.bySign} />}{r.kind === 'nhap' && r.deliverer ? <><div className="nl80-sgi" /><b>{r.deliverer}</b></> : null}</td>
+                <td><b>{r.kind === 'nhap' ? 'Thủ kho' : 'Lái xe nhận'}</b><br /><i>(Ký, họ tên)</i>
+                  <SignCell s={r.kind === 'nhap' ? r.bySign : r.driverSign} fallback={r.kind === 'nhap' ? r.by : r.driver} /></td>
               </tr></tbody></table>
               <div className="c small">{r.by ? `Lập: ${r.by} · ` : ''}In: {pad(now.getDate())}/{pad(now.getMonth() + 1)} {pad(now.getHours())}:{pad(now.getMinutes())}</div>
             </div>
@@ -62,4 +66,10 @@ export function FuelSlip({ list, onClose }: { list: FuelSlipData[]; onClose: () 
     </div>,
     document.body,
   );
+}
+
+/** Ô chữ ký: ảnh chữ ký (nếu có) + họ tên (không in họ tên khi chữ ký đã có họ tên) */
+function SignCell({ s, fallback }: { s?: PersonSign | null; fallback?: string }) {
+  const name = s?.name || fallback || '';
+  return <><div className="nl80-sgi">{s?.img && <img src={s.img} alt="" />}</div>{showName(s) && name ? <b>{name}</b> : null}</>;
 }

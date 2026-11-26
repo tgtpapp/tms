@@ -1,4 +1,5 @@
 // Phiếu gửi hàng khổ K80 (như app cũ): xem trước ngay khi nhập, in máy in nhiệt 80mm (hoặc 58mm).
+import { showName, type Sign } from '../lib/signatures';
 import { PrintHead } from './PrintHead';
 import { printThermal } from '../lib/thermalPrint';
 import { ThermalInfo } from './ThermalInfo';
@@ -11,6 +12,7 @@ export interface SlipData {
   from: string; to: string; senderName: string; senderPhone: string; receiverName: string; receiverPhone: string;
   description: string; packages: number; weight: number | null; value: number | null;
   fee: number; payer: 'nguoi_gui' | 'nguoi_nhan'; cod: number; note: string; staff: string; at: string;
+  staffSign?: Sign | null;                 // chữ ký nhân viên nhận hàng (theo quy tắc chữ ký của bản in)
 }
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -50,7 +52,7 @@ export function ParcelSlip({ d, i = 0, n = 1 }: { d: SlipData; i?: number; n?: n
       </div>
       {d.note && <div className="small">Ghi chú: {d.note}</div>}
       <div className="ve-line" />
-      <div className="gh8-sg"><div><small>NGƯỜI GỬI</small><div className="gh8-sp" /><b>{d.senderName}</b></div><div><small>NV NHẬN HÀNG</small><div className="gh8-sp" /><b>{d.staff}</b></div></div>
+      <div className="gh8-sg"><div><small>NGƯỜI GỬI</small><div className="gh8-sp" /><b>{d.senderName}</b></div><div><small>NV NHẬN HÀNG</small><div className="gh8-sp">{d.staffSign?.img && <img src={d.staffSign.img} alt="" />}</div><b>{showName(d.staffSign) ? d.staff : ''}</b></div></div>
       <div className="ve-line" />
       <div className="c small">Quý khách kiểm tra hàng khi nhận.<br />Giữ phiếu để đối chiếu.</div>
       <div className="small">Lập phiếu: {d.staff} · {fmt(d.at, { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric', hour12: false })}</div>

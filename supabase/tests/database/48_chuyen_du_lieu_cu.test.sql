@@ -55,5 +55,36 @@ select is((public.archive_preview((select from_on from r), (select to_on from r)
 select ok(public.archive_page('notifications', (select from_on from r), (select to_on from r), null, 100) ->> 'rows' not like '%Cũ A%', 'Chủ B không xuất được dữ liệu nhà xe A');
 reset role;
 select is((select count(*)::int from public.notifications), 3, 'Bước 1 chưa xóa gì khỏi database');
+
+-- Bước 2: xóa khỏi database sau khi khớp Drive
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select throws_ok($$ select public.archive_move((select id from public.data_archives limit 1), repeat('a', 64)) $$, '42501', null, 'Lái xe không xóa được');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+reset role;
+create temp table aid as select id from public.data_archives;
+grant select on aid to authenticated;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, 'P0002', null, 'Chủ B không xóa được bản của nhà xe A');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select public.archive_move((select id from aid), repeat('b', 64)) $$, '22023', null, 'File trên Drive không khớp: không xóa');
+reset role;
+insert into public.audit_logs (tenant_id, action, entity, created_at) values ((select id from public.tenants where code = 'nha-xe-a'), 'thu', 'x', now() - interval '2 years');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, '22023', null, 'Dữ liệu đổi sau khi sao lưu: không xóa');
+reset role;
+delete from public.audit_logs where id = (select max(id) from public.audit_logs where entity = 'x');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, 'Khớp Drive + đúng số dòng: chuyển được');
+select is((select status from public.data_archives), 'da_chuyen', 'Đánh dấu đã chuyển');
+select throws_ok($$ select public.archive_move((select id from aid), repeat('a', 64)) $$, '22023', null, 'Không chuyển lần 2');
+reset role;
+select is((select count(*)::int from public.notifications where title = 'Cũ A'), 0, 'Đã xóa thông báo cũ của nhà xe A');
+select is((select count(*)::int from public.notifications where title in ('Mới A', 'Cũ B')), 2, 'Giữ thông báo mới và dữ liệu nhà xe B');
+select is((select count(*)::int from public.audit_logs where entity = 'x'), 0, 'Đã xóa nhật ký cũ');
+select is((select count(*)::int from public.audit_logs where action = 'chuyen_du_lieu'), 1, 'Ghi 1 dòng nhật ký tổng, không ghi từng dòng bị xóa');
 select * from finish();
 rollback;

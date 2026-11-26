@@ -1,6 +1,7 @@
 // Cấu hình › Chuyển dữ liệu cũ sang Google Drive (chỉ Chủ nhà xe): chọn khoảng ngày (cũ hơn 12 tháng), xem số dòng, sao lưu lên Drive.
 import { useCallback, useEffect, useState } from 'react';
-import { ARCHIVE_TABLES, archivePreview, archiveToDrive, verifyArchive } from '../lib/dataArchive';
+import { ARCHIVE_TABLES, archivePreview, archiveToDrive, moveArchive, verifyArchive } from '../lib/dataArchive';
+import { Modal } from './Modal';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 
@@ -21,6 +22,8 @@ export function ArchivePanel() {
   const [to, setTo] = useState(maxTo);
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [busy, setBusy] = useState('');
+  const [mv, setMv] = useState<Row | null>(null);
+  const [typed, setTyped] = useState('');
   const load = useCallback(async () => {
     const r = await supabase.from('data_archives').select('id, from_on, to_on, file_name, size_bytes, sha256, counts, row_count, status, created_at').order('created_at', { ascending: false });
     setList((r.data ?? []) as Row[]);
@@ -39,6 +42,16 @@ export function ArchivePanel() {
       const r = await archiveToDrive(from, to, setBusy);
       toast('ok', `Đã sao lưu ${n0(r.rows)} dòng lên Google Drive (${mb(r.size)}) và đối chiếu khớp`);
       setCounts(null);
+      await load();
+    } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
+  }
+  async function move() {
+    const x = mv;
+    if (!x) return;
+    setMv(null); setTyped('');
+    try {
+      await moveArchive(x.id, x.sha256, setBusy);
+      toast('ok', `Đã chuyển ${n0(x.row_count)} dòng (${dmy(x.from_on)} – ${dmy(x.to_on)}) khỏi database. Bản trên Google Drive giữ để phục hồi khi cần`);
       await load();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(''); }
   }
@@ -73,12 +86,32 @@ export function ArchivePanel() {
           <li key={x.id} className="item">
             <div className="item-head">
               <span><b>{dmy(x.from_on)} – {dmy(x.to_on)}</b> <span className="small muted">· {n0(x.row_count)} dòng{x.size_bytes ? ` · ${mb(x.size_bytes)}` : ''}</span></span>
-              <button type="button" className="btn small" disabled={!!busy} onClick={() => void check(x)}>Đối chiếu với Drive</button>
+              <span className="actions">
+                <button type="button" className="btn small" disabled={!!busy} onClick={() => void check(x)}>Đối chiếu với Drive</button>
+                {x.status === 'da_sao_luu' && <button type="button" className="btn small danger" disabled={!!busy} onClick={() => { setTyped(''); setMv(x); }}>Xóa khỏi database</button>}
+              </span>
             </div>
             <div className="small muted">{STATUS[x.status]}</div>
           </li>
         ))}
       </ul>
+      {mv && (
+        <Modal title={`Xóa khỏi database: ${dmy(mv.from_on)} – ${dmy(mv.to_on)}`} onClose={() => setMv(null)}>
+          <div className="form">
+            <table className="plist">
+              <tbody>
+                {ARCHIVE_TABLES.map(([k, l]) => <tr key={k}><td>{l}</td><td style={{ textAlign: 'right' }}><b>{n0(mv.counts[k] ?? 0)}</b></td></tr>)}
+              </tbody>
+            </table>
+            <p className="small">App tải lại file từ Google Drive, khớp với bản đã sao lưu và số dòng không đổi thì mới xóa. Muốn xem lại dữ liệu này thì bấm Phục hồi.</p>
+            <label>Gõ <b>XOA</b> để xác nhận<input value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" /></label>
+            <div className="actions">
+              <button type="button" className="btn danger" disabled={typed.trim().toUpperCase() !== 'XOA'} onClick={() => void move()}>Xóa khỏi database</button>
+              <button type="button" className="btn" onClick={() => setMv(null)}>Thôi</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

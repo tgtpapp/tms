@@ -59,3 +59,11 @@ export async function verifyArchive(id: string, sha: string): Promise<Uint8Array
   if ((await sha256(u)) !== sha) throw new Error('File trên Google Drive không khớp với bản đã sao lưu');
   return u;
 }
+
+/** Bước 2: tải lại file từ Drive, khớp mã kiểm tra thì mới xóa khoảng ngày đó khỏi database (máy chủ kiểm lại số dòng, lệch thì hủy) */
+export async function moveArchive(id: string, sha: string, step: (s: string) => void): Promise<Record<string, number>> {
+  step('Đang tải file từ Google Drive để đối chiếu…');
+  await verifyArchive(id, sha);
+  step('Đang xóa dữ liệu đã chuyển khỏi database…');
+  return rpc<Record<string, number>>('archive_move', { p_id: id, p_sha256: sha });
+}

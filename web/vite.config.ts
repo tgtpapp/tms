@@ -42,6 +42,12 @@ function security(supabaseUrl: string): Plugin {
   Cross-Origin-Opener-Policy: same-origin
 /sw.js
   Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/tai-lai.js
+  Cache-Control: no-cache
 `;
   return {
     name: 'tms-security', apply: 'build',

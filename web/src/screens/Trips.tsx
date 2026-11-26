@@ -1,4 +1,5 @@
 import { dirName } from '../lib/routes';
+import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { applyFilter, GridView, RouteFilterBar, useBoardFilter, VehicleUsage, type Group } from '../components/DispatchBoard';
 import { Modal } from '../components/Modal';
 import { ScheduleImport } from '../components/ScheduleImport';
@@ -343,6 +344,7 @@ function Schedules(props: Ctx) {
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, canImport, ends, printOrder, reload, day, setDay, tenantId, canArchive, me } = props;
+  const tcCfg = useTripColorCfg();   // màu thẻ giờ chạy (Giao diện của tôi)
   const [imp, setImp] = useState(false);
   const [papers, setPapers] = useState(false);
   const { f, setF, view, setView } = useBoardFilter();
@@ -453,10 +455,12 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
           const ok = t.status === 'mo' && !!veh && !!d1;
           const label = `${hhmm(t.depart_at)} ${dirName(routes.find((r) => r.id === t.route_id), t.direction)}`;
           return (
-            <li key={t.id} className="item">
+            <li key={t.id} className={`item tcard${t.status === 'huy' ? ' off' : ''}`} style={tripColorVars(tcCfg, t.route_id, t.direction, hhmm(t.depart_at))}>
+              <div className="tcard-l"><b>{hhmm(t.depart_at)}</b><small>– {hhmm(t.arrive_at)}</small></div>
+              <div className="tcard-r">
               <div className="item-head">
                 <div>
-                  <b>{hhmm(t.depart_at)}–{hhmm(t.arrive_at)}</b> · {dirName(routes.find((r) => r.id === t.route_id), t.direction)}
+                  <b>{dirName(routes.find((r) => r.id === t.route_id), t.direction)}</b>
                   <span className="muted small"> · {ends(t.route_id, t.direction) || (t.direction === 'di' ? 'chiều đi' : 'chiều về')}{t.schedule_id ? '' : ' · tăng cường'}</span>
                   {t.status === 'huy' ? <span className="badge locked">Đã hủy: {t.cancel_reason}</span>
                     : ok ? <span className="badge">Đủ xe + lái</span> : <span className="badge warn-badge">Chưa xếp xe / lái</span>}
@@ -489,6 +493,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
                 )}
               </div>
               {open === t.id && <Assign {...props} trip={t} onClose={() => setOpen(null)} />}
+              </div>
             </li>
           );
         })}

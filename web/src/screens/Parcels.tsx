@@ -1,4 +1,5 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
+import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { personSign, type Sign } from '../lib/signatures';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
 import { dirName, type Dir } from '../lib/routes';
@@ -65,6 +66,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [rstops, setRstops] = useState<RouteStop[]>([]);
   const [f, setF] = useState(EMPTY);
+  const tcCfg = useTripColorCfg();   // màu thẻ giờ chạy (Giao diện của tôi)
   const [req, setReq] = useState(() => crypto.randomUUID());
   const [finding, setFinding] = useState(false);
   const [focus, setFocus] = useState<string | null>(null);
@@ -214,11 +216,13 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
 
   const nowMs = Date.now();
   const card = (t: Trip) => (
-    <button key={t.id} type="button" className={['vx-trip', t.id === f.trip_id && 'on', new Date(t.depart_at).getTime() < nowMs && 'past'].filter(Boolean).join(' ')}
+    <button key={t.id} type="button" style={tripColorVars(tcCfg, t.route_id, t.direction, hhmm(t.depart_at))} className={['vx-trip tc', t.id === f.trip_id && 'on', new Date(t.depart_at).getTime() < nowMs && 'past'].filter(Boolean).join(' ')}
             aria-label={`Chuyến ${hhmm(t.depart_at)} ${routeName(t)}`} onClick={() => pickTrip(t.id === f.trip_id ? null : t)}>
-      <b className="vx-time">{hhmm(t.depart_at)}</b>
-      {!rfOk && <span className="vx-rname">{routeName(t)}</span>}
-      <span className="vx-meta"><span>{counts[t.id] ? `${counts[t.id]} phiếu` : ''}</span></span>
+      <span className="tc-l"><b className="vx-time">{hhmm(t.depart_at)}</b></span>
+      <span className="tc-r">
+        {!rfOk && <span className="vx-rname">{routeName(t)}</span>}
+        <span className="vx-meta"><span>{counts[t.id] ? `${counts[t.id]} phiếu` : ''}</span></span>
+      </span>
     </button>
   );
   const up = shown.filter((t) => new Date(t.depart_at).getTime() >= nowMs), past = shown.filter((t) => new Date(t.depart_at).getTime() < nowMs);

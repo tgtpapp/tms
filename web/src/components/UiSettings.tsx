@@ -1,7 +1,23 @@
 // Giao diện của tôi (như app cũ): mỗi người tự chọn, lưu trên máy này; đổi là thấy ngay.
 import { useEffect, useState } from 'react';
 import { ACC, DEF, FONTS, PRESETS, useUi, type Mode, type UiCfg } from '../lib/theme';
+import { saveTripColorCfg, TRIP_COLOR_DEF, useTripColorCfg, type TripColorCfg } from '../lib/tripColor';
 import { canSpeak, saveVoiceCfg, speak, viVoices, voiceCfg, type VoiceCfg } from '../lib/voice';
+
+/** Màu thẻ giờ chạy (Bán vé, Gửi hàng, Điều hành dạng thẻ) */
+function TripColorSettings() {
+  const c = useTripColorCfg();
+  return (
+    <div className="ux-sec"><h4>Màu thẻ giờ chạy (Bán vé, Gửi hàng, Điều hành)</h4>
+      <Seg<TripColorCfg['mode']> label="Màu thẻ giờ chạy" value={c.mode} opts={[['mac_dinh', 'Một màu'], ['tuyen', 'Mỗi tuyến 1 màu'], ['gio', 'Mỗi giờ 1 màu']]}
+        onPick={(mode) => saveTripColorCfg({ ...c, mode })} />
+      <div className="actions">
+        {c.mode !== 'mac_dinh' && <button type="button" className="btn small" onClick={() => saveTripColorCfg({ ...c, seed: (c.seed + 1 + Math.floor(Math.random() * 10)) % 12 })}>🎨 Đổi màu</button>}
+        <button type="button" className="btn small link" onClick={() => saveTripColorCfg(TRIP_COLOR_DEF)}>Về mặc định</button>
+      </div>
+    </div>
+  );
+}
 
 /** Giọng đọc của Trợ lý giọng nói (app lái xe): chọn giọng, tốc độ, âm lượng, tự đọc tin mới */
 function VoiceSettings() {
@@ -100,6 +116,7 @@ export function UiSettings() {
         <div className="actions"><button type="button" className="btn small" onClick={() => play(false)}>✨ Xem thử: khách lên xe</button>
           <button type="button" className="btn small" onClick={() => play(true)}>📞 Xem thử: gọi khách</button></div>
       </div>
+      <TripColorSettings />
       <VoiceSettings />
       <p className="small muted">Lưu riêng trên máy này, không ảnh hưởng người khác; bản in luôn nền trắng.</p>
     </section>

@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { PrintHead } from '../components/PrintHead';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
 import { OrderIssue } from '../components/OrderIssue';
@@ -251,19 +252,22 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
     }
   }
   const tail = (p: string) => p.split('-').pop() ?? p;   // 60F-004.41 → 004.41 như Vexere
+  const tcCfg = useTripColorCfg();
   const card = (t: Trip) => {
     const total = sellable(t.vehicle_type_id);
     const sold = counts[t.id] ?? 0;
     const name = dirName(routes.find((r) => r.id === t.route_id), t.direction);
     const past = new Date(t.depart_at).getTime() < Date.now();
     return (
-      <button key={t.id} className={['vx-trip', t.id === tripId && 'on', past && 'past', t.manifest_printed_at && 'phoi', t.departed_at && 'xb'].filter(Boolean).join(' ')}
+      <button key={t.id} style={tripColorVars(tcCfg, t.route_id, t.direction, hhmm(t.depart_at))} className={['vx-trip tc', t.id === tripId && 'on', past && 'past', t.manifest_printed_at && 'phoi', t.departed_at && 'xb'].filter(Boolean).join(' ')}
               aria-label={`Chuyến ${hhmm(t.depart_at)} ${name}`} title={[name, t.departed_at && 'Đã xuất bến', t.manifest_printed_at && 'Đã in phơi'].filter(Boolean).join(' · ')}
               onClick={() => pickTrip(t.id)}>
-        <b className="vx-time">{hhmm(t.depart_at)}</b>
-        {!rfOk && <span className="vx-rname">{name}</span>}
-        <span className="vx-meta"><span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? tail(plates[t.vehicle_id] ?? '') : '—'}</span><span>{t.vehicle_type_id ? `${sold}|${total}` : ''}</span></span>
-        <span className="vx-bar"><span style={{ width: `${total ? Math.min(100, Math.round((sold / total) * 100)) : 0}%` }} /></span>
+        <span className="tc-l"><b className="vx-time">{hhmm(t.depart_at)}</b></span>
+        <span className="tc-r">
+          {!rfOk && <span className="vx-rname">{name}</span>}
+          <span className="vx-meta"><span><i className={t.vehicle_id ? 'dot ok' : 'dot'} />{t.vehicle_id ? tail(plates[t.vehicle_id] ?? '') : '—'}</span><span>{t.vehicle_type_id ? `${sold}|${total}` : ''}</span></span>
+          <span className="vx-bar"><span style={{ width: `${total ? Math.min(100, Math.round((sold / total) * 100)) : 0}%` }} /></span>
+        </span>
       </button>
     );
   };

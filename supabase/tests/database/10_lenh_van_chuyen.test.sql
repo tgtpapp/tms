@@ -214,7 +214,7 @@ reset role;
 select is(length((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))), 32, 'Mỗi lệnh có mã bí mật 32 ký tự');
 select is((select count(distinct scan_token)::int from public.transport_orders), (select count(*)::int from public.transport_orders), 'Mã không trùng giữa các lệnh');
 select is((public.svc_lenh_by_token((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) ->> 'required')::int, 2,
-  'Lệnh 1 lượt có giờ: cần 2 dấu bến xe');
+  'Lệnh cần tối thiểu 2 dấu bến xe (lượt đi + lượt về)');
 select ok(public.svc_lenh_by_token('khongphaima') is null, 'Mã sai: không có lệnh');
 select ok(public.svc_lenh_by_token((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6'))) -> 'legs' is not null, 'Có giờ các lượt');
 select is((select count(*)::int from generate_series(1, 16) g where public.svc_lenh_try((select scan_token from public.transport_orders where trip_id = (select v from t.ids where k = 'T6')))), 15,

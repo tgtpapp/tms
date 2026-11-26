@@ -1,6 +1,6 @@
 // Edge Function: lưu lệnh vận chuyển đã đóng dấu bằng mã QR in trên lệnh (lái xe mở Zalo quét mã, không cần đăng nhập).
 // - info: thông tin lệnh (số lệnh, xe, tuyến, giờ các lượt, số dấu bến xe cần có) — không có thông tin cá nhân.
-// - upload: AI đọc ảnh lệnh → đúng số lệnh + đủ dấu bến xe (2 dấu mỗi lượt có giờ chạy) mới lưu vào hồ sơ Google Drive của nhà xe;
+// - upload: AI đọc ảnh lệnh → đúng số lệnh + có dấu mộc bến xe ở cả lượt đi và lượt về (tối thiểu 2 dấu) mới lưu vào hồ sơ Google Drive;
 //   chưa đủ dấu thì báo kiểm tra lại, không lưu. Mỗi lệnh tối đa 15 lần thử / ngày, chỉ trong 30 ngày sau hạn lệnh.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 import { parseProviders, readDocument, ReaderError } from '../_shared/doc_reader.ts';
@@ -63,17 +63,21 @@ Deno.serve(async (req) => {
     const tr = await admin.rpc('svc_lenh_try', { p_token: token });
     if (!tr.data) throw new HttpError(429, 'Lệnh này đã thử lưu quá 15 lần hôm nay, mai thử lại');
 
-    let v: DocRead & { so_dau_ben?: number | string | null };
+    type LenhRead = DocRead & { so_dau_ben?: number | string | null; dau_luot_di?: number | string | null; dau_luot_ve?: number | string | null };
+    let v: LenhRead;
     try {
       v = (await readDocument({ docType: 'lenh_dau', def: LENH_DAU, files: [{ mime: 'image/jpeg', data: page }], providers: parseProviders(Deno.env.get('AI_PROVIDERS')),
-        timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 25000) || 25000 })).fields as unknown as DocRead & { so_dau_ben?: number | string | null };
+        timeoutMs: Number(Deno.env.get('AI_TIMEOUT_MS') ?? 25000) || 25000 })).fields as unknown as LenhRead;
     } catch (e) { throw new HttpError(e instanceof ReaderError ? e.status : 502, `Máy chưa đọc được ảnh lệnh: ${e instanceof Error ? e.message : e}. Chụp lại rõ hơn`); }
     if (!/lệnh/i.test(v.loai ?? '') || !v.lenh_so) throw new HttpError(422, 'Ảnh không phải lệnh vận chuyển hoặc không đọc được số lệnh. Chụp thẳng, đủ cả tờ lệnh');
     const core = norm(o.order_no.split('/')[0] ?? o.order_no);
     if (!norm(v.lenh_so).includes(core)) throw new HttpError(422, `Ảnh là lệnh khác (đọc được số ${v.lenh_so}), không phải lệnh ${o.order_no}`);
-    const stamps = Number(v.so_dau_ben ?? 0) || 0;
-    if (stamps < o.required) {
-      return json(422, { error: `Chưa đủ dấu bến xe: mới thấy ${stamps}/${o.required} dấu. Kiểm tra lại các ô Bến xe trên lệnh (đủ dấu bến đi và bến đến của từng lượt) rồi chụp lại`, stamps, required: o.required });
+    // Đủ lượt đi + lượt về: mỗi lượt có ít nhất 1 dấu mộc bến xe (tổng tối thiểu 2 dấu)
+    const di = Number(v.dau_luot_di ?? 0) || 0, ve = Number(v.dau_luot_ve ?? 0) || 0;
+    const stamps = Math.max(Number(v.so_dau_ben ?? 0) || 0, di + ve);
+    if (di < 1 || ve < 1 || stamps < o.required) {
+      const thieu = [di < 1 && 'lượt đi', ve < 1 && 'lượt về'].filter(Boolean).join(' và ');
+      return json(422, { error: `Chưa đủ dấu bến xe${thieu ? `: chưa thấy dấu ở ${thieu}` : ''}. Kiểm tra lại cột Bến xe trên lệnh (lượt đi và lượt về đều phải có dấu) rồi chụp lại`, stamps, required: o.required });
     }
 
     const [c, st, rt] = await Promise.all([

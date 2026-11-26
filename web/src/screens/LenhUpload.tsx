@@ -67,7 +67,7 @@ export function LenhUpload({ token }: { token: string }) {
             <div><b>{info.order_no}</b></div>
             <div>{info.route}{info.plate ? ` · ${info.plate}` : ''}</div>
             <div className="small">Hiệu lực {d(info.valid_from)} – {d(info.valid_to)}</div>
-            <div className="small">Cần đủ <b>{info.required}</b> dấu bến xe ({info.required / 2} lượt × bến đi + bến đến)</div>
+            <div className="small">Cần có dấu bến xe ở cả <b>lượt đi</b> và <b>lượt về</b></div>
             {info.saved && <div className="small state-con_han">Lệnh này đã được lưu vào hồ sơ</div>}
           </div>
           {info.expired ? <p className="error-text">Lệnh đã quá hạn lưu.</p> : (

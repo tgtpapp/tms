@@ -296,10 +296,15 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
     setF((cur) => applyToForm(cur, s.values));
   }
 
-  async function submit(e: FormEvent) {
+  /** Bấm Lưu: mọi lỗi (kể cả lỗi bất ngờ) đều báo ra màn hình, không bao giờ "bấm mà không có gì xảy ra" */
+  function submit(e: FormEvent) {
     e.preventDefault();
+    void save().catch((err) => { setBusy(false); toast('error', `Chưa lưu được: ${errMsg(err)}`); });
+  }
+  async function save() {
     if (!f.full_name.trim()) return toast('error', 'Nhập họ tên');
     if (!f.joined_on) return toast('error', 'Nhập ngày vào công ty');
+    if (f.joined_on > today()) return toast('error', 'Ngày vào công ty không được sau hôm nay');
     if (f.phone && !/^0[0-9]{9}$/.test(f.phone.trim())) return toast('error', 'Số điện thoại phải gồm 10 số, bắt đầu bằng 0');
     if (f.left_on && f.joined_on && f.left_on < f.joined_on) return toast('error', 'Ngày nghỉ việc không được trước ngày vào công ty');
     setBusy(true);
@@ -381,7 +386,8 @@ function StaffForm(props: Common & { staff: Staff[]; editing?: Staff; onDone?: (
           ))}
         </div>
       )}
-      <form className="form" onSubmit={submit}>
+      {/* noValidate: tự kiểm tra trong lúc lưu và báo lỗi bằng chữ; để trình duyệt tự chặn thì có lúc chặn âm thầm (ô lỗi bị che) nên bấm Lưu không thấy gì */}
+      <form className="form" onSubmit={submit} noValidate>
         <div className="grid2">
           <label>Họ tên<input value={f.full_name} onChange={set('full_name')} required /></label>
           <ChipInput label="Chức vụ" value={f.job_title} onChange={(v) => setF((cur) => ({ ...cur, job_title: v }))} placeholder="vd: Giám đốc, Kế toán, Điều hành, Lái xe"

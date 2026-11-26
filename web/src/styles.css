@@ -1960,3 +1960,7 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .hdvc.hdvc1 .sign-box.sign-stack img { max-height: 70px; }
 .hdvc h2 { font-size: 17px; margin: 0 0 2px; }
 .hdvc-ds td, .hdvc-ds th { padding: 4px 5px; font-size: 12.5px; height: 22px; }
+.hdvc-ds td { height: var(--rh, 22px); }
+.hd-fill > span { display: flex; gap: 4px; align-items: baseline; }
+.hd-fill > span + span { margin-top: 1px; }
+.hd-blank { flex: 1 1 auto; border-bottom: 1px dotted #000; min-width: 40mm; height: 1em; }

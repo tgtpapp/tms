@@ -16,6 +16,7 @@ export interface CharterDoc {
   vehicle_id?: string | null; driver1_id?: string | null; driver2_id?: string | null;
 }
 interface Company { name: string; legal_name: string | null; tax_code: string | null; address: string | null; phone: string | null; transport_license_no: string | null;
+  transport_license_date: string | null; transport_license_issuer: string | null;
   email: string; director: string; title: string; sign: string | null; seal: string | null; signName: boolean }
 /** Giấy tờ phục vụ Lệnh vận chuyển: phù hiệu xe, GPLX lái xe, chữ ký lái xe */
 interface Extra { badge: Map<string, { no: string | null; exp: string | null }>; gplx: Map<string, { no: string | null; hang: string | null }>; signs: Map<string, Sign> }
@@ -28,6 +29,8 @@ const dmy = (d: string) => d.split('-').reverse().join('/');
 const money = (n: number) => n.toLocaleString('vi-VN');
 const party = (x: string | null) => (x === 'A' ? 'Bên A chịu' : x === 'B' ? 'Bên B chịu' : 'theo thỏa thuận');
 const dots = (n = 20) => '.'.repeat(n);
+/** Ô ghi tay rộng hết phần còn lại của dòng (có dữ liệu thì in đậm) */
+const W = ({ v }: { v?: string | number | null }) => (v != null && String(v).trim() ? <b>{v}</b> : <i className="hd-blank" />);
 const V = ({ v, n = 20 }: { v?: string | number | null; n?: number }) => (v != null && String(v).trim() ? <b>{v}</b> : <>{dots(n)}</>);
 /** Số lệnh vận chuyển theo số hợp đồng: 0001/HĐVC-TGTP → 0001/<năm>/LVC-TGTP */
 const orderNo = (c: CharterDoc) => {
@@ -45,7 +48,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
       const vids = [...new Set(docs.map((c) => c.vehicle_id).filter((x): x is string => !!x))];
       const sids = [...new Set(docs.flatMap((c) => [c.driver1_id, c.driver2_id]).filter((x): x is string => !!x))];
       const [tn, ss, ph, gp, um] = await Promise.all([
-        supabase.from('tenants').select('name, legal_name, tax_code, address, phone, transport_license_no').maybeSingle(),
+        supabase.from('tenants').select('name, legal_name, tax_code, address, phone, transport_license_no, transport_license_date, transport_license_issuer').maybeSingle(),
         supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'cong_ty.chuc_danh_ky', 'in.chu_ky_giam_doc', 'in.con_dau', 'cong_ty.email']),
         vids.length ? supabase.from('documents').select('vehicle_id, doc_no, expires_on').in('vehicle_id', vids).eq('doc_type', 'phu_hieu').eq('is_current', true) : Promise.resolve({ data: [] }),
         sids.length ? supabase.from('documents').select('staff_id, doc_no, data').in('staff_id', sids).eq('doc_type', 'gplx').eq('is_current', true) : Promise.resolve({ data: [] }),
@@ -59,7 +62,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
         loadSigns(tenantId, sids.flatMap((id) => [`nv_${id}`, users.get(id) ?? null])),
       ]);
       const gd = raw('in.chu_ky_giam_doc') === false ? null : sg.get('giam_doc') ?? null;
-      const t = (tn.data ?? { name: '' }) as Pick<Company, 'name' | 'legal_name' | 'tax_code' | 'address' | 'phone' | 'transport_license_no'>;
+      const t = (tn.data ?? { name: '' }) as Pick<Company, 'name' | 'legal_name' | 'tax_code' | 'address' | 'phone' | 'transport_license_no' | 'transport_license_date' | 'transport_license_issuer'>;
       // chữ ký lái xe: trong hồ sơ nhân viên trước, chưa có thì chữ ký tài khoản (quy tắc chung)
       const signs = new Map<string, Sign>();
       for (const id of sids) { const x = ds.get(`nv_${id}`)?.img ? ds.get(`nv_${id}`) : ds.get(users.get(id) ?? ''); if (x?.img) signs.set(id, x); }
@@ -100,7 +103,10 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
           const bd = c.vehicle_id ? ex.badge.get(c.vehicle_id) : undefined;
           const g = (id: string | null) => (id ? ex.gplx.get(id) : undefined);
           const rest = Math.max(0, c.price - c.deposit);
-          const blank = Math.max(0, Math.min(Math.max(c.passengers, c.pax.length), 30) - c.pax.length);
+          // Danh sách: sẵn tối thiểu 15 dòng (hoặc đủ số khách), chiều cao dòng co giãn cho bảng vừa 1 trang
+          const rows = Math.max(15, c.pax.length);
+          const blank = rows - c.pax.length;
+          const rh = `${Math.max(5, Math.min(11, 150 / rows)).toFixed(1)}mm`;
           return [
             /* ---------------- Trang 1: Hợp đồng ---------------- */
             <div key={`${c.id}-hd`} className="lenh hdvc hdvc1">
@@ -118,11 +124,14 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
                 Mã số thuế / Số ĐKKD: <V v={co.tax_code} /> · Địa chỉ trụ sở: <V v={co.address} n={40} /><br />
                 Người đại diện theo pháp luật: <V v={co.director} /> · Chức vụ: <V v={co.title} /><br />
                 Điện thoại: <V v={co.phone} /> · Email: <V v={co.email} /> · Tài khoản ngân hàng: {dots(22)} tại Ngân hàng {dots(16)}<br />
-                Giấy phép kinh doanh vận tải bằng xe ô tô số: <V v={co.transport_license_no} /> do {dots(18)} cấp ngày {dots(12)} (loại hình: kinh doanh vận tải hành khách theo hợp đồng).</p>
-              <p><b>BÊN THUÊ VẬN CHUYỂN (Bên B): {c.customer_name.toUpperCase()}</b><br />
-                Mã số thuế / Số CCCD: <V v={c.customer_tax_code} /> · Địa chỉ: <V v={c.customer_address} n={40} /><br />
-                Người đại diện / Trưởng đoàn: <V v={c.customer_rep} /> · Chức vụ: {dots(16)}<br />
-                Điện thoại: <V v={c.customer_phone} /> · Email: <V v={c.customer_email} /> · Tài khoản ngân hàng (nếu có): {dots(22)}</p>
+                Giấy phép kinh doanh vận tải bằng xe ô tô số: <V v={co.transport_license_no} /> do <V v={co.transport_license_issuer} n={18} /> cấp ngày <V v={co.transport_license_date ? dmy(co.transport_license_date) : null} n={12} /> (loại hình: kinh doanh vận tải hành khách theo hợp đồng).</p>
+              {/* Bên B: mỗi thông tin 1 dòng, chỗ trống kẻ chấm rộng để ghi tay */}
+              <p className="hd-fill"><b>BÊN THUÊ VẬN CHUYỂN (Bên B): {c.customer_name.toUpperCase()}</b><br />
+                <span>Mã số thuế / Số CCCD: <W v={c.customer_tax_code} /></span>
+                <span>Địa chỉ: <W v={c.customer_address} /></span>
+                <span>Người đại diện / Trưởng đoàn: <W v={c.customer_rep} /></span><span>Chức vụ: <W /></span>
+                <span>Điện thoại: <W v={c.customer_phone} /></span><span>Email: <W v={c.customer_email} /></span>
+                <span>Tài khoản ngân hàng (nếu có): <W /></span></p>
               <p>Hai bên thống nhất ký kết hợp đồng vận chuyển hành khách với các điều khoản sau:</p>
               <p><b>Điều 1. Nội dung, lịch trình và phương tiện</b><br />
                 1. Bên A vận chuyển hành khách cho Bên B theo hình thức vận tải hành khách theo hợp đồng: ☐ theo chuyến ☐ đưa đón cán bộ công nhân viên, học sinh ☐ phục vụ du lịch, sự kiện.<br />
@@ -168,7 +177,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
                 Biển kiểm soát xe: <V v={c.plate} /> · Họ tên lái xe: <V v={c.drivers.join(', ')} /><br />
                 Hành trình: từ <b>{c.pickup_place}</b> đến <b>{c.destination}</b><br />
                 Thời gian khởi hành: {hm(c.start_at)}, ngày {vnDate(c.start_at)}</p>
-              <table className="lenh-table hdvc-ds">
+              <table className="lenh-table hdvc-ds" style={{ ['--rh' as string]: rh }}>
                 <thead><tr><th>STT</th><th>Họ và tên hành khách</th><th>Năm sinh</th><th>Số CCCD / Hộ chiếu (nếu có)</th><th>Điểm đón</th><th>Điểm trả</th><th>Ghi chú</th></tr></thead>
                 <tbody>
                   {c.pax.map((p, i) => <tr key={i}><td className="c">{i + 1}</td><td>{p.full_name}</td><td className="c">{p.birth_year ?? ''}</td><td /><td /><td /><td /></tr>)}
@@ -187,7 +196,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
               {quocHieu}
               <p style={{ marginTop: 10 }}><b>TÊN ĐƠN VỊ VẬN TẢI: {coName}</b><br />
                 Địa chỉ: <V v={co.address} n={40} /> · Số điện thoại: <V v={co.phone} /><br />
-                Giấy phép KDVT số: <V v={co.transport_license_no} /> cấp ngày {dots(12)}</p>
+                Giấy phép KDVT số: <V v={co.transport_license_no} /> do <V v={co.transport_license_issuer} n={18} /> cấp ngày <V v={co.transport_license_date ? dmy(co.transport_license_date) : null} n={12} /></p>
               <h1 className="c">LỆNH VẬN CHUYỂN</h1>
               <p className="c">Số: <b>{orderNo(c)}</b><br /><i>(Kèm theo Hợp đồng vận chuyển hành khách số {c.contract_no} ngày {c.signed_on ? dmy(c.signed_on) : dots(10)})</i></p>
               <p><b>I. THÔNG TIN PHƯƠNG TIỆN VÀ NGƯỜI LÁI XE</b><br />

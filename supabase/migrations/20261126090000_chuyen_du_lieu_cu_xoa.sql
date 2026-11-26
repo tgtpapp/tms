@@ -35,7 +35,7 @@ begin
   end if;
   perform app.archive_check(a.from_on, a.to_on);
   v_now := app.archive_counts(v_tid, a.from_on, a.to_on);
-  if v_now <> a.counts then
+  if exists (select 1 from jsonb_each_text(v_now) c where c.value::int <> coalesce((a.counts ->> c.key)::int, 0)) then
     raise exception 'Dữ liệu trong khoảng ngày đã thay đổi sau khi sao lưu. Hãy sao lưu lại rồi mới chuyển' using errcode = '22023';
   end if;
   perform set_config('app.chuyen_du_lieu', 'on', true);
@@ -45,7 +45,7 @@ begin
     get diagnostics n = row_count;
     v_done := v_done || jsonb_build_object(r.tbl, n);
   end loop;
-  if (select count(*) from jsonb_each_text(a.counts) c where c.value::int <> coalesce((v_done ->> c.key)::int, -1)) > 0 then
+  if exists (select 1 from jsonb_each_text(v_done) c where c.value::int <> coalesce((a.counts ->> c.key)::int, 0)) then
     raise exception 'Số dòng xóa không khớp với bản sao lưu, đã hủy, không xóa gì' using errcode = '22023';
   end if;
   perform set_config('app.chuyen_du_lieu', 'off', true);

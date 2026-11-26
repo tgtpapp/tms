@@ -683,7 +683,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
     const d = props.papers.find((x) => x.staff_id === s.id && x.doc_type === code && x.is_current);
     return !d || (d.expires_on != null && d.expires_on < td);
   }).length;
-  const nRec = props.records.filter((r) => r.staff_id === s.id).length;
+  const nRec = recordsWithPapers(props.records, props.docs, s.id).length;
   const tabs: { key: typeof tab; label: string; warn?: boolean }[] = [
     { key: 'tt', label: 'Thông tin cá nhân' },
     { key: 'cv', label: 'Công việc & lương' },
@@ -1060,13 +1060,29 @@ function recordValues(def: DocTypeDef, r: StaffRecord): Values {
   return v;
 }
 
+/** Giấy khám SK / giấy tập huấn ở mục Giấy tờ (cả bản cũ) cũng là 1 lần trong lý lịch; trùng ngày với dòng lý lịch thì lấy dòng lý lịch. */
+function recordsWithPapers(records: StaffRecord[], docs: Doc[], staffId: string): (StaffRecord & { fromDoc?: boolean })[] {
+  const mine = records.filter((r) => r.staff_id === staffId);
+  const extra = docs.filter((g) => g.staff_id === staffId && RECORD_OF[g.doc_type]).map((g) => {
+    const day = g.issued_on || g.valid_from || g.created_at.slice(0, 10);
+    const dt = (k: string) => String(g.data?.[k] ?? '').trim();
+    const title = g.doc_type === 'kham_suc_khoe'
+      ? [dt('ket_luan'), dt('hang_du_dieu_kien') && `Đủ điều kiện lái xe hạng ${dt('hang_du_dieu_kien')}`].filter(Boolean).join(' · ') || 'Khám sức khỏe'
+      : 'Tập huấn nghiệp vụ';
+    return { id: g.id, staff_id: staffId, kind: RECORD_OF[g.doc_type] as RecordKind, occurred_on: day, doc_no: g.doc_no, title,
+      vehicle_id: null, data: { co_so: g.issuer, het_han: g.expires_on }, files: g.files, fromDoc: true };
+  }).filter((x, i, A) => !mine.some((r) => r.kind === x.kind && r.occurred_on === x.occurred_on)
+    && A.findIndex((y) => y.kind === x.kind && y.occurred_on === x.occurred_on) === i);
+  return [...mine, ...extra].sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
+}
+
 function Records(props: Common & { s: Staff }) {
   const { s, records, canEdit, tenantId, reload } = props;
   const toast = useToast();
   const [filter, setFilter] = useState<RecordKind | ''>('');
   const [form, setForm] = useState<{ id: string | null; code: string; values: Values; scanned: Scanned | null; req: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const mine = records.filter((r) => r.staff_id === s.id);
+  const mine = recordsWithPapers(records, props.docs, s.id);
   const shown = mine.filter((r) => !filter || r.kind === filter);
 
   /** Gắn ảnh / PDF vào dòng lý lịch chưa có tệp (vd giấy khám SK, giấy tập huấn chuyển từ app cũ) */
@@ -1182,12 +1198,12 @@ function Records(props: Common & { s: Staff }) {
                 </div>
                 <div className="actions">
                   <FilesButton files={r.files} />
-                  {canEdit && r.files.length === 0 && (
+                  {canEdit && !r.fromDoc && r.files.length === 0 && (
                     <label className="btn small">📎 Gắn tệp
                       <input type="file" accept="image/*,application/pdf" multiple hidden aria-label={`Gắn tệp lý lịch ${fmtDate(r.occurred_on)} ${d.name}`}
                              onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; void attach(r, fs); }} /></label>
                   )}
-                  {canEdit && <button className="btn small" onClick={() => setForm({ id: r.id, code: d.code, values: recordValues(d, r), scanned: null, req: crypto.randomUUID() })}>Sửa</button>}
+                  {canEdit && !r.fromDoc && <button className="btn small" onClick={() => setForm({ id: r.id, code: d.code, values: recordValues(d, r), scanned: null, req: crypto.randomUUID() })}>Sửa</button>}
                 </div>
               </div>
             </li>

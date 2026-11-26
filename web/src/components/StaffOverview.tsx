@@ -487,6 +487,12 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
 
 /* ------------------------------------------------------------------ In thẻ nhân viên (85,6 x 54 mm) */
 
+interface CardColorCfg { mode: 'mac_dinh' | 'chuc_vu' | 'moi_nguoi'; jobs: Record<string, string>; seed: number }
+const CARD_KEY = 'tms.the_nv_mau';
+const CARD_DEF: CardColorCfg = { mode: 'mac_dinh', jobs: {}, seed: 0 };
+/** Màu đủ đậm cho chữ trắng trên dải màu */
+const CARD_PALETTE = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#0891b2', '#db2777', '#b45309', '#0d9488', '#be123c', '#4f46e5', '#15803d', '#475569'];
+
 export function StaffCards({ staff, avas, branches = [] }: Common & { branches?: { id: string; label: string }[] }) {
   const toast = useToast();
   const [orgCfg] = useOrgCfg();
@@ -506,7 +512,18 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
   const [view, setView] = useState<Page[] | null>(null);
   useEffect(() => { void company().then((c) => setCo(c.name)).catch(() => undefined); }, []);
   const chosen = list.filter((s) => sel.has(s.id));
-  const color = (s: OvStaff) => (s.position === 'lai_xe' ? '#16a34a' : s.position === 'phu_xe' ? '#f59e0b' : '#2563eb');
+  // Màu thẻ: mặc định (theo loại: lái xe xanh lá, phụ xe cam, còn lại xanh dương) · theo chức vụ (tự chọn màu từng chức vụ) · mỗi người 1 màu.
+  // Lưu trên máy này để lần sau mở lại vẫn giữ.
+  const [mau, setMau] = useState<CardColorCfg>(() => { try { return { ...CARD_DEF, ...JSON.parse(localStorage.getItem(CARD_KEY) ?? '{}') } as CardColorCfg; } catch { return CARD_DEF; } });
+  const saveMau = (v: CardColorCfg) => { setMau(v); try { localStorage.setItem(CARD_KEY, JSON.stringify(v)); } catch { /* bỏ qua */ } };
+  const jobs = uniqF(act.map(job)).sort((a, b) => a.localeCompare(b, 'vi'));
+  const defColor = (s: OvStaff) => (s.position === 'lai_xe' ? '#16a34a' : s.position === 'phu_xe' ? '#f59e0b' : '#2563eb');
+  const jobColor = (j: string, i: number) => mau.jobs[fold(j)] ?? CARD_PALETTE[i % CARD_PALETTE.length]!;
+  const color = (s: OvStaff) => {
+    if (mau.mode === 'chuc_vu') return jobColor(job(s), Math.max(0, jobs.findIndex((j) => fold(j) === fold(job(s)))));
+    if (mau.mode === 'moi_nguoi') return CARD_PALETTE[(act.findIndex((x) => x.id === s.id) + mau.seed) % CARD_PALETTE.length]!;
+    return defColor(s);
+  };
   /** Màu đậm hơn (dải trái của thẻ) */
   const shade = (hex: string, k: number) => `#${[1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;
   const card = (s: OvStaff, photo: string | null) => {
@@ -544,8 +561,17 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
         <select className="nsx-search" value={d} onChange={(e) => setD(e.target.value)} aria-label="Lọc bộ phận"><option value="">Tất cả bộ phận</option>{depts.map((x) => <option key={x}>{x}</option>)}</select>
         <button type="button" className="btn small" onClick={() => setSel(new Set([...sel, ...list.map((s) => s.id)]))}>Chọn tất cả</button>
         <button type="button" className="btn small" onClick={() => setSel(new Set())}>Bỏ chọn</button>
+        <select className="nsx-search" aria-label="Màu thẻ" value={mau.mode} onChange={(e) => saveMau({ ...mau, mode: e.target.value as CardColorCfg['mode'] })}>
+          <option value="mac_dinh">Màu mặc định</option><option value="chuc_vu">Màu theo chức vụ</option><option value="moi_nguoi">Mỗi người 1 màu</option>
+        </select>
+        {mau.mode === 'moi_nguoi' && <button type="button" className="btn small" onClick={() => saveMau({ ...mau, seed: (mau.seed + 1 + Math.floor(Math.random() * (CARD_PALETTE.length - 1))) % CARD_PALETTE.length })}>Đổi màu</button>}
+        {mau.mode !== 'mac_dinh' && <button type="button" className="btn small" onClick={() => saveMau(CARD_DEF)}>Về mặc định</button>}
         <button type="button" className="btn small primary" disabled={!chosen.length || busy} onClick={() => void print()}>{busy ? 'Đang chuẩn bị…' : `🖨 In ${chosen.length} thẻ`}</button>
       </div>
+      {mau.mode === 'chuc_vu' && <div className="nsx-pick">{jobs.map((j, i) => (
+        <label key={j} className="nsx-tp on"><input type="color" aria-label={`Màu ${j}`} value={jobColor(j, i)}
+          onChange={(e) => saveMau({ ...mau, jobs: { ...mau.jobs, [fold(j)]: e.target.value } })} /><span>{j}</span></label>
+      ))}</div>}
       <div className="nsx-pick">{list.map((s) => (
         <label key={s.id} className={`nsx-tp${sel.has(s.id) ? ' on' : ''}`}>
           <input type="checkbox" checked={sel.has(s.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(s.id); else n.delete(s.id); setSel(n); }} />

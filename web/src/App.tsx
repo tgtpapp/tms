@@ -46,7 +46,15 @@ function Root() {
         return;
       }
       // Thiết bị lạ của nhân viên văn phòng / quản lý: chờ cho phép từ thiết bị đang dùng
-      if (await deviceHello() === 'cho_duyet') { setView({ kind: 'pending_device' }); return; }
+      const dh = await deviceHello();
+      if (dh === 'cho_duyet') { setView({ kind: 'pending_device' }); return; }
+      // Nhà xe bật "máy tính chỉ đăng nhập bằng QR": phiên mật khẩu trên máy tính bị chặn → đăng xuất, màn đăng nhập hiện mã QR
+      if (dh === 'chi_qr') {
+        try { sessionStorage.setItem('tms.dang_nhap_bao', 'Máy tính chỉ đăng nhập bằng quét mã QR từ app trên điện thoại.'); } catch { /* bỏ qua */ }
+        await supabase.auth.signOut({ scope: 'local' });
+        setView({ kind: 'login' });
+        return;
+      }
       const ctx = await loadAccountContext();
       if (ctx.tenant_id) setView({ kind: 'tenant', ctx });
       else if (ctx.is_platform_admin) setView({ kind: 'platform' });

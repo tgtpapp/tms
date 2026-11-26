@@ -303,6 +303,10 @@ function UserItem(props: {
               <option value="khong">Không cần duyệt</option>
             </select>
           </label>
+          <button className="btn small" disabled={busy} title="Khi máy tính chỉ được đăng nhập bằng mã QR (mất / hỏng điện thoại)"
+                  onClick={() => void run(() => rpc('allow_desktop_password', { p_user_id: user.id, p_on: true }), 'Đã cho đăng nhập bằng mật khẩu trên máy tính trong 1 ngày')}>
+            Tạm cho đăng nhập mật khẩu trên máy tính (1 ngày)
+          </button>
           <button className="btn small" disabled={busy}
                   onClick={() => void run(() => rpc('set_user_status', { p_user_id: user.id, p_status: user.status === 'active' ? 'locked' : 'active' }),
                                           user.status === 'active' ? 'Đã khóa tài khoản' : 'Đã mở khóa')}>

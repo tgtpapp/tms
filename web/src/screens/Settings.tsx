@@ -5,6 +5,8 @@ import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
 import { BackupPanel } from '../components/BackupPanel';
 import { ArchivePanel } from '../components/ArchivePanel';
+import { DesktopQrPolicy } from '../components/DesktopQrPolicy';
+import { AppLinkQr } from '../components/AppLinkQr';
 import { StorageUsage } from '../components/StorageUsage';
 import { ZaloSettings } from '../components/ZaloSettings';
 import { DriveSettings } from '../components/DriveSettings';
@@ -200,7 +202,9 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
             await load();
           })()} /> Nhân viên văn phòng, quản lý đăng nhập trên thiết bị lạ phải được cho phép</label>
         <p className="muted small">Lái xe, phụ xe không áp dụng. Muốn khác cho từng người: vào Người dùng, chọn ở ô "Duyệt thiết bị lạ" của người đó.</p>
+        <DesktopQrPolicy />
       </section>
+      <AppLinkQr />
       <form className="card form" onSubmit={saveSale}>
         <h2>Bán vé</h2>
         <div className="grid2">

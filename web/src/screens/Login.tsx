@@ -43,6 +43,21 @@ export function LoginScreen() {
   const [error, setError] = useState('');
   const [report, setReport] = useState(false);
   const [qr, setQr] = useState(false);
+  const [note] = useState(() => { try { const m = sessionStorage.getItem('tms.dang_nhap_bao') ?? ''; sessionStorage.removeItem('tms.dang_nhap_bao'); return m; } catch { return ''; } });
+  // Máy tính + nhà xe bật "máy tính chỉ đăng nhập bằng QR": vào thẳng mã QR, không hiện ô mật khẩu (trình duyệt không lưu được mật khẩu)
+  const [qrOnly, setQrOnly] = useState(false);
+  const code0 = otherTenant ? tenantCode.trim().toLowerCase() : config.tenantCode;
+  useEffect(() => {
+    if (deviceName().mobile || !code0) return;
+    let live = true;
+    const t = setTimeout(() => {
+      void supabase.rpc('login_policy', { p_code: code0 }).then(({ data }) => {
+        const on = !!(data as { may_tinh_qr?: boolean } | null)?.may_tinh_qr;
+        if (live) { setQrOnly(on); if (on) setQr(true); }
+      });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [code0]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -59,7 +74,7 @@ export function LoginScreen() {
     if (!isEmail) rememberCode(otherTenant ? code : null);
   }
 
-  if (qr) return <Centered><QrLogin onBack={() => setQr(false)} /></Centered>;
+  if (qr) return <Centered><QrLogin note={note} qrOnly={qrOnly} onBack={() => setQr(false)} /></Centered>;
 
   return (
     <Centered>
@@ -149,7 +164,7 @@ export function LoginReport({ code, askCode, phone, onClose }: { code: string; a
 }
 
 /** Đăng nhập máy tính bằng mã QR (như Zalo PC): quét bằng camera điện thoại đang đăng nhập app, bấm Đồng ý */
-function QrLogin({ onBack }: { onBack: () => void }) {
+function QrLogin({ onBack, note, qrOnly }: { onBack: () => void; note?: string; qrOnly?: boolean }) {
   const [code, setCode] = useState<{ id: string; secret: string } | null>(null);
   const [img, setImg] = useState('');
   const [state, setState] = useState<'cho' | 'het_han' | 'tu_choi' | 'dang_vao' | 'loi'>('cho');
@@ -182,6 +197,7 @@ function QrLogin({ onBack }: { onBack: () => void }) {
   return (
     <section className="card form narrow qr-login">
       <h2>Đăng nhập bằng mã QR</h2>
+      {note && <p className="error-text">{note}</p>}
       {state === 'cho' && (img ? <img src={img} alt="Mã QR đăng nhập" width={280} height={280} /> : <p className="muted">Đang tạo mã…</p>)}
       {state === 'cho' && <ol className="small">
         <li>Mở app trên điện thoại, bấm <b>Quét QR</b> (đầu thanh menu) hoặc <b>Tài khoản của tôi → Quét mã QR đăng nhập máy tính</b>.</li>
@@ -192,7 +208,7 @@ function QrLogin({ onBack }: { onBack: () => void }) {
       {state === 'tu_choi' && <p className="error-text">Điện thoại đã từ chối.</p>}
       {state === 'loi' && <p className="error-text">{err || 'Không tạo được mã'}</p>}
       {(state === 'het_han' || state === 'tu_choi' || state === 'loi') && <button type="button" className="btn primary" onClick={() => void start()}>Làm mới mã</button>}
-      <button type="button" className="btn link" onClick={onBack}>Đăng nhập bằng mật khẩu</button>
+      <button type="button" className="btn link" onClick={onBack}>{qrOnly ? 'Được quản lý tạm cho phép? Đăng nhập bằng mật khẩu' : 'Đăng nhập bằng mật khẩu'}</button>
     </section>
   );
 }

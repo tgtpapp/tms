@@ -7,12 +7,13 @@ import { deviceId, deviceName, qrJustUsed, setQrJustUsed } from '../lib/device';
 import { useToast } from '../lib/toast';
 
 /** Báo thiết bị khi mở app. Trả 'ok' / 'cho_duyet'; lỗi mạng coi như 'ok' (dữ liệu vẫn do database chặn). */
-export async function deviceHello(): Promise<'ok' | 'cho_duyet'> {
+export async function deviceHello(): Promise<'ok' | 'cho_duyet' | 'chi_qr'> {
   const qr = qrJustUsed();
   try {
-    const r = await rpc<string>('device_hello', { p_device_id: deviceId(), p_name: deviceName().name, p_qr: qr?.id ?? null, p_qr_secret: qr?.secret ?? null });
+    const d = deviceName();
+    const r = await rpc<string>('device_hello', { p_device_id: deviceId(), p_name: d.name, p_qr: qr?.id ?? null, p_qr_secret: qr?.secret ?? null, p_desktop: !d.mobile });
     if (qr) setQrJustUsed(null);
-    return r === 'cho_duyet' ? 'cho_duyet' : 'ok';
+    return r === 'cho_duyet' || r === 'chi_qr' ? r : 'ok';
   } catch {
     return 'ok';
   }

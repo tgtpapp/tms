@@ -40,7 +40,8 @@ language plpgsql stable security definer set search_path = ''
 as $$
 declare v_tid uuid := app.current_tenant_id();
 begin
-  if v_tid is null or not (app.is_my_staff(p_staff_id::text) or app.has_permission('staff.view_all') or app.has_permission('staff.manage')) then
+  if v_tid is null or not exists (select 1 from public.staff_members where tenant_id = v_tid and id = p_staff_id)
+     or not (app.is_my_staff(p_staff_id::text) or app.has_permission('staff.view_all') or app.has_permission('staff.manage')) then
     raise exception 'Không tìm thấy nhân viên' using errcode = 'P0002';
   end if;
   return app.paper_maker_of(v_tid, p_staff_id);

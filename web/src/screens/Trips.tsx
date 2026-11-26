@@ -131,7 +131,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
   const [issuing, setIssuing] = useState<string | null>(null);
   const printOrder = useCallback(async (t: Trip) => { setIssuing(t.id); }, []);
 
-  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, ends, path, printOrder, reload: load,
+  const ctx = { routes, schedules, trips, crew, vehicles, staff, licenses, orders, vtypes, canEdit, canImport, ends, path, printOrder, reload: load,
     tenantId: account.tenant_id ?? '', canArchive: perms.has('archive.manage'), me: { id: account.user_id, name: account.full_name ?? '' } };
   return (
     <>
@@ -147,7 +147,7 @@ export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perm
 interface Ctx {
   tenantId: string; canArchive: boolean; me: { id: string | null; name: string };
   routes: Route[]; schedules: Schedule[]; trips: Trip[]; crew: Crew[]; vehicles: Vehicle[]; staff: Staff[]; licenses: License[];
-  orders: Order[]; vtypes: VType[]; canEdit: boolean; ends: (routeId: string, dir: Dir) => string; path: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
+  orders: Order[]; vtypes: VType[]; canEdit: boolean; canImport: boolean; ends: (routeId: string, dir: Dir) => string; path: (routeId: string, dir: Dir) => string; printOrder: (t: Trip) => Promise<void>;
   reload: () => Promise<void>;
 }
 
@@ -342,7 +342,7 @@ function Schedules(props: Ctx) {
 /* ------------------------------------------------------------------ Chuyến theo ngày */
 
 function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
-  const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, ends, printOrder, reload, day, setDay, tenantId, canArchive, me } = props;
+  const { routes, trips, crew, vehicles, staff, orders, vtypes, canEdit, canImport, ends, printOrder, reload, day, setDay, tenantId, canArchive, me } = props;
   const [imp, setImp] = useState(false);
   const [papers, setPapers] = useState(false);
   const { f, setF, view, setView } = useBoardFilter();

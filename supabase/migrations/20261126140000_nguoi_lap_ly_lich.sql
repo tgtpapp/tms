@@ -67,7 +67,7 @@ do $$
 declare v text;
 begin
   v := pg_get_functiondef('app.can_read_signature(text)'::regprocedure);
-  v := replace(v, 'select app.has_permission(''order.add'')', 'select (p_file = any (app.my_paper_maker_files())) or app.has_permission(''order.add'')');
+  v := regexp_replace(v, '(\$function\$\s*)select ', '\1select (p_file = any (app.my_paper_maker_files())) or ');
   if v not like '%my_paper_maker_files%' then raise exception 'Không sửa được can_read_signature'; end if;
   execute v;
 end;

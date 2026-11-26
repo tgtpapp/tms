@@ -30,6 +30,8 @@ select lives_ok($$ select public.set_route_stops((select id from public.routes),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'BXBH'), 'minutes_from_start', 0),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'BR'), 'minutes_from_start', 60),
   jsonb_build_object('stop_id', (select id from public.stops where code = 'BXVT'), 'minutes_from_start', 90))) $$, 'Điểm dừng');
+select lives_ok($$ select public.save_fare_table(null, (select id from public.routes), app.local_today(), null, null, jsonb_build_array(
+  jsonb_build_object('from', '', 'to', '', 'price', 150000))) $$, 'Bảng giá');
 select lives_ok($$ insert into public.vehicle_types (code, name, reg_seats) values ('G3', 'Xe 3 ghế', 4) $$, 'Loại xe');
 select lives_ok($$ select public.set_seat_layout((select id from public.vehicle_types), 2, 2, jsonb_build_array(
   jsonb_build_object('label', 'A01', 'deck', 1, 'row', 1, 'col', 1, 'kind', 'ghe'),

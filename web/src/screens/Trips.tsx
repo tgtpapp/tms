@@ -48,6 +48,8 @@ const addDays = (d: string, n: number) => {
 export function TripsScreen({ ctx: account, perms }: { ctx: AccountContext; perms: Permissions }) {
   const toast = useToast();
   const canEdit = perms.has('trip.manage');
+  // nhập lịch Vexere / Excel: Điều hành: Sửa hoặc người được Cấp lệnh (nhân viên bán vé)
+  const canImport = canEdit || perms.has('trip.edit') || perms.has('order.add');
   const [day, setDay] = useState(today());
   const [routes, setRoutes] = useState<Route[]>([]);
   const [rstops, setRstops] = useState<RouteStop[]>([]);
@@ -390,9 +392,9 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
     <section className="card">
       <div className="item-head">
         <h2>Chuyến ngày {fmtDate(day)} <span className="muted small">· Âm lịch {lunarText(day)}</span></h2>
-        {canEdit && <span className="actions"><button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>
-          <button className="btn small" title="Tạo chuyến theo các giờ trong lịch chạy (đến hết năm; từ 01/12 tạo cả năm sau). Không tạo trùng." onClick={() => void generate()}>Tạo chuyến theo lịch</button>
-          <button className="btn small" onClick={() => setPapers(true)}>Phân công &amp; nghiệm thu</button></span>}
+        {(canEdit || canImport) && <span className="actions">{canImport && <button className="btn small" onClick={() => setImp(true)}>⇪ Nhập lịch Vexere / Excel</button>}
+          {canEdit && <><button className="btn small" title="Tạo chuyến theo các giờ trong lịch chạy (đến hết năm; từ 01/12 tạo cả năm sau). Không tạo trùng." onClick={() => void generate()}>Tạo chuyến theo lịch</button>
+          <button className="btn small" onClick={() => setPapers(true)}>Phân công &amp; nghiệm thu</button></>}</span>}
       </div>
       <div className="inline-form">
         <button className="btn small" aria-label="Ngày trước" onClick={() => setDay(addDays(day, -1))}>‹</button>

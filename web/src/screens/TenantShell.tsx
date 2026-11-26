@@ -165,7 +165,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
     { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },
-    { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') },
+    { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') || perms.has('order.add') },
     { key: 'safety', label: 'Giám sát ATGT', icon: 'shield-exclamation', group: 'Bán vé & điều hành', show: perms.has('safety.view') },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: perms.has('route.view') },
     { key: 'repairs', label: 'Sửa chữa', icon: 'tools', group: 'Danh mục', show: perms.has('repair.view') },

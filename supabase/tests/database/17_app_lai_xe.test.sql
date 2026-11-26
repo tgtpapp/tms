@@ -358,5 +358,37 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","r
 select throws_ok($$ select app.svc_auto_trip_marks() $$, '42501', null, 'Người dùng không gọi được tự ghi của máy chủ');
 reset role;
 
+-- ---------------------------------------------------------------- Nhập lịch dán (Vexere): ghi đè cả lô, đổi tài giữa 2 chuyến chồng giờ, cả chuyến đã xuất bến
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select lives_ok($$ select public.add_extra_trip((select id from public.routes where code = 'HN-VT'), 'di', app.local_today() + 5, '07:30', null) $$, 'Chuyến thêm 07:30');
+reset role;
+insert into t.ids select 'T5', id from public.trips where direction = 'di' and service_date = app.local_today() + 5 and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI') = '07:00';
+insert into t.ids select 'T6', id from public.trips where direction = 'di' and service_date = app.local_today() + 5 and to_char(depart_at at time zone 'Asia/Ho_Chi_Minh', 'HH24:MI') = '07:30';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((select bool_and((e ->> 'ok')::boolean) from jsonb_array_elements(public.import_schedule(jsonb_build_array(
+  jsonb_build_object('trip_id', (select v from t.ids where k = 'T5'), 'vehicle_id', (select v from t.ids where k = 'X1'), 'driver1', (select v from t.ids where k = 'D1')),
+  jsonb_build_object('trip_id', (select v from t.ids where k = 'T6'), 'vehicle_id', (select v from t.ids where k = 'X2'), 'driver1', (select v from t.ids where k = 'D2'))), 'lịch Vexere')) e),
+  true, 'Nhập lịch lần 1');
+reset role;
+update public.trips set departed_at = now() where id = (select v from t.ids where k = 'T5');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+select is((select bool_and((e ->> 'ok')::boolean) from jsonb_array_elements(public.import_schedule(jsonb_build_array(
+  jsonb_build_object('trip_id', (select v from t.ids where k = 'T5'), 'vehicle_id', (select v from t.ids where k = 'X2'), 'driver1', (select v from t.ids where k = 'D2')),
+  jsonb_build_object('trip_id', (select v from t.ids where k = 'T6'), 'vehicle_id', (select v from t.ids where k = 'X1'), 'driver1', (select v from t.ids where k = 'D1'))), 'lịch Vexere')) e),
+  true, 'Lịch dán sau ghi đè: đổi tài + xe giữa 2 chuyến chồng giờ, kể cả chuyến đã xuất bến');
+select is((select vehicle_id from public.trips where id = (select v from t.ids where k = 'T5')), (select v from t.ids where k = 'X2'), 'Chuyến đã xuất bến được cập nhật xe');
+select is((select staff_id from public.trip_crew where trip_id = (select v from t.ids where k = 'T6') and role = 'lai_xe_1'), (select v from t.ids where k = 'D1'), 'Đổi tài đúng');
+select throws_ok(format('select public.assign_trip(%L, %L, %L, null, null, %L)', (select v from t.ids where k = 'T5'), (select v from t.ids where k = 'X1'), (select v from t.ids where k = 'D1'), 'x'),
+  '42501', null, 'Ngoài nhập lịch: chuyến đã xuất bến vẫn khóa');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok(format('select public.import_schedule(%L, %L)', jsonb_build_array(jsonb_build_object('trip_id', (select v from t.ids where k = 'T5'))), 'x'),
+  'P0002', null, 'Nhà xe B không nhập lịch vào chuyến của A');
+reset role;
+
 select * from finish();
 rollback;

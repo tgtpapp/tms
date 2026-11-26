@@ -56,7 +56,11 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
         supabase.from('vehicle_types').select('id, name, reg_seats, reg_berths, is_active'),
         supabase.from('tenant_settings').select('value').eq('key', 'chuyen.loai_xe_mac_dinh').maybeSingle(),
       ]);
-      setBase({ routes: (r.data ?? []) as Route[], vehicles: (v.data ?? []) as Veh[], staff: (s.data ?? []) as Staff[], types: (t.data ?? []) as VType[],
+      // người bán vé (Cấp lệnh) có thể không được xem danh sách xe: lấy thêm danh sách xe đang chạy của hàm xếp nhanh
+      const vehs = (v.data ?? []) as Veh[];
+      const pick = await rpc<{ vehicles: { id: string; plate: string }[] }>('assign_pick_lists').catch(() => null);
+      for (const x of pick?.vehicles ?? []) if (!vehs.some((y) => y.id === x.id)) vehs.push({ id: x.id, plate: x.plate, is_active: true });
+      setBase({ routes: (r.data ?? []) as Route[], vehicles: vehs, staff: (s.data ?? []) as Staff[], types: (t.data ?? []) as VType[],
         defType: typeof d.data?.value === 'string' ? d.data.value : '' });
     })();
   }, []);
@@ -140,8 +144,9 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
       else if (!vOk || !eOk) r.st = !vOk && !eOk ? 'Thiếu cả lái xe và xe' : !eOk ? 'Thiếu lái xe: không có lái xe thì xe không chạy được' : 'Thiếu xe: lái xe chưa biết chạy xe nào';
       else {
         r.same = !!(trip && v && e && trip.vehicle_id === v.id && d1?.staff_id === e.id);
+        // lịch dán sau là mới nhất: cập nhật cả chuyến đã xuất bến (chỉ xe + lái xe)
         const locked = !!(trip?.departed_at && !trip.edit_unlocked_at);
-        if (trip && locked) { r.st = r.same ? 'Khớp lịch hiện có (chuyến đã xuất bến)' : 'Khác lịch hiện có, chuyến đã xuất bến nên không sửa'; r.tone = r.same ? 'ok' : 'muted'; }
+        if (trip && locked) { r.ok = true; r.st = r.same ? 'Khớp lịch hiện có (chuyến đã xuất bến)' : 'Khác lịch hiện có, chuyến đã xuất bến: sẽ cập nhật'; r.tone = r.same ? 'ok' : 'warn'; }
         else if (trip) { r.ok = true; r.st = r.same ? 'Khớp lịch hiện có' : !trip.vehicle_id && !d1 ? 'Điền vào chuyến đang trống' : 'Khác lịch hiện có, sẽ cập nhật'; r.tone = r.same ? 'ok' : 'warn'; }
         else if (route.id && (r.reopen = gone.find((t) => t.route_id === route.id && t.direction === route.dir && t.service_date === ngay && hhmm(t.depart_at) === it.gio) ?? null)) {
           r.ok = true; r.st = 'Chuyến đã xóa trước đó, nay có tài xế: khôi phục và cập nhật'; r.tone = 'warn';
@@ -216,6 +221,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
     const sel = rows.filter((r, i) => pick.has(i) && r.ok && !r.same);
     if (!sel.length) { toast('error', 'Chưa chọn dòng nào để áp dụng'); return; }
     let up = 0, nw = 0, warnN = 0, del = 0, back = 0;
+    const plan: { trip_id: string; vehicle_id: string | null; driver1: string | null; label: string }[] = [];
     const errs: string[] = [], madeE: string[] = [], madeV: string[] = [], madeR: string[] = [];
     const routeIds = new Map<string, string>(), vehIds = new Map<string, string>(), empIds = new Map<string, string>();
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: TZ });
@@ -272,17 +278,24 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
           tripId = await rpc<string>('add_extra_trip', { p_route_id: routeId, p_direction: r.route.dir, p_date: r.ngay, p_time: r.gio, p_note: null });
           nw++;
         } else up++;
-        const keep = (role: Crew['role']) => crew.find((c) => c.trip_id === tripId && c.role === role)?.staff_id ?? null;
-        const args = { p_trip_id: tripId, p_vehicle_id: vehId, p_driver1: empId, p_driver2: keep('lai_xe_2'), p_assistant: keep('phu_xe') };
-        const res = await rpc<{ saved: boolean; warnings: string[] }>('assign_trip', { ...args, p_reason: null });
-        if (!res.saved) {
-          warnN++;
-          await rpc('assign_trip', { ...args, p_reason: `Nhập từ ${src}: ${res.warnings.join('; ')}`.slice(0, 500) });
-        }
+        plan.push({ trip_id: tripId, vehicle_id: vehId, driver1: empId, label });
       } catch (e) {
         const m = errMsg(e);
         errs.push(`${label}: ${/no_overlap/.test(m) ? 'xe hoặc lái xe trùng giờ với chuyến khác' : m}`);
       }
+    }
+    // xếp xe + lái xe cả lô trong 1 lần (đổi tài / đổi nốt giữa các chuyến không bị báo trùng giờ; gồm cả chuyến đã xuất bến)
+    if (plan.length) {
+      setBusy(`Đang xếp xe + lái xe ${plan.length} chuyến…`);
+      try {
+        const res = await rpc<{ trip_id: string; ok: boolean; warnings?: string[]; error?: string }[]>('import_schedule',
+          { p_rows: plan.map(({ trip_id, vehicle_id, driver1 }) => ({ trip_id, vehicle_id, driver1 })), p_src: src });
+        for (const x of res) {
+          const lb = plan.find((p) => p.trip_id === x.trip_id)?.label ?? '';
+          if (!x.ok) { errs.push(`${lb}: ${x.error ?? 'lỗi'}`); continue; }
+          if (x.warnings?.length) warnN++;
+        }
+      } catch (e) { errs.push(errMsg(e)); }
     }
     setBusy(null);
     const done = `Đã nhập lịch: cập nhật ${up} chuyến, tạo mới ${nw} chuyến`

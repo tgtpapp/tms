@@ -12,6 +12,8 @@ export function initPwa() {
   try {
     const m = JSON.parse(localStorage.getItem(ICON_KEY) ?? 'null') as { n: string; t: string; s: string | null; v: string } | null;
     if (m?.t) brandApp(m.n, m.t, m.s, m.v);
+    const ic = iosIcon();
+    if (ic && isIOS()) setTouchIcon(ic.url);
   } catch { /* bỏ qua */ }
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); ev = e as InstallEvent; emit(); });
   window.addEventListener('appinstalled', () => { ev = null; emit(); });
@@ -37,6 +39,38 @@ export const shortName = (name: string) => name.replace(/^\s*nhà\s*xe\s+/i, '')
 
 let lastKey = '';
 const ICON_KEY = 'tms.app_icon';
+const IOS_ICON_KEY = 'tms.app_icon_ios';
+const iosIcon = () => { try { return JSON.parse(localStorage.getItem(IOS_ICON_KEY) ?? 'null') as { s: string; url: string } | null; } catch { return null; } };
+function setTouchIcon(href: string) {
+  let l = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+  if (!l) { l = document.createElement('link'); l.rel = 'apple-touch-icon'; document.head.appendChild(l); }
+  l.setAttribute('sizes', '180x180');
+  l.href = href;
+}
+
+/** iPhone / iPad: biểu tượng app vẽ sẵn ngay trên máy từ ảnh đại diện (ảnh nhúng thẳng vào trang, PNG 180×180).
+ *  Safari lấy biểu tượng đúng lúc bấm "Thêm vào MH chính"; ảnh nằm ở máy chủ thì lần gọi đầu chậm (máy chủ khởi động + đọc Drive)
+ *  nên Safari bỏ qua và lấy ảnh chụp màn hình / chữ cái → không ra ảnh đại diện. Ảnh vẽ sẵn thì không cần tải gì. */
+export async function iosIconFrom(staffId: string | null, src: string | null | undefined) {
+  if (!isIOS() || !staffId || !src) return;
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const z = 180, c = document.createElement('canvas');
+    c.width = z; c.height = z;
+    const g = c.getContext('2d');
+    if (!g) return;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, z, z);
+    // phủ kín ô vuông, lấy phần đầu (ảnh chân dung dọc: giữ đỉnh đầu như ảnh đại diện trong app)
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const sx = (img.naturalWidth - side) / 2, sy = Math.max(0, (img.naturalHeight - side) * 0.22);
+    g.drawImage(img, sx, sy, side, side, 0, 0, z, z);
+    const url = c.toDataURL('image/png');
+    setTouchIcon(url);
+    try { localStorage.setItem(IOS_ICON_KEY, JSON.stringify({ s: staffId, url })); } catch { /* đầy bộ nhớ: vẫn dùng được trong phiên này */ }
+  } catch { /* không vẽ được: giữ biểu tượng từ máy chủ */ }
+}
 /** Máy này đã biết người dùng (đã đăng nhập ít nhất 1 lần) → biểu tượng cài app là ảnh của người đó */
 export const knowsUser = () => { try { return !!localStorage.getItem(ICON_KEY); } catch { return false; } };
 /** Đổi tên + biểu tượng app trên máy này theo nhà xe và ảnh đại diện của người đăng nhập (chưa có ảnh: logo nhà xe, không có nữa: biểu tượng chung).
@@ -53,8 +87,8 @@ export function brandApp(name: string, tenantId: string, staffId: string | null,
   if (link) link.href = `${fn}?${new URLSearchParams({ m: '1', o: location.origin, n: name, ...Object.fromEntries(qs) })}`;
   const t = document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
   if (t) t.content = shortName(name);
-  let l = document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
-  if (!l) { l = document.createElement('link'); l.rel = 'apple-touch-icon'; document.head.appendChild(l); }
-  l.setAttribute('sizes', '180x180');
-  l.href = `${fn}?${qs}&z=192`;
+  const ic = isIOS() ? iosIcon() : null;
+  if (ic && staffId && ic.s === staffId) setTouchIcon(ic.url); else setTouchIcon(`${fn}?${qs}&z=192`);
+  // gọi trước để máy chủ "thức" sẵn và trình duyệt giữ ảnh trong bộ nhớ đệm, lúc cài lấy được ngay
+  try { void fetch(`${fn}?${qs}&z=192`, { mode: 'no-cors' }).catch(() => undefined); } catch { /* bỏ qua */ }
 }

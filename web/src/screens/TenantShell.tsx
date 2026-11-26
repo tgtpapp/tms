@@ -25,7 +25,7 @@ import { SafetyScreen } from './Safety';
 import { FuelPriceAlert } from '../components/FuelPriceAlert';
 import { FuelReportAlert } from '../components/FuelReportAlert';
 import { hasShare, takeSharedFiles } from '../lib/shareIn';
-import { brandApp } from '../lib/pwa';
+import { brandApp, iosIconFrom } from '../lib/pwa';
 import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
@@ -83,6 +83,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   useEffect(() => {
     if (!ctx.tenant_id) return;
     brandApp(ctx.tenant_name ?? config.appName, ctx.tenant_id, myStaff, myAva ? decodeURIComponent(/#v=([^#]*)$/.exec(myAva)?.[1] ?? '') : '');
+    void iosIconFrom(myStaff, myAva);
   }, [ctx.tenant_id, ctx.tenant_name, myStaff, myAva]);
   // tải sẵn đầu trang in (logo, tên, địa chỉ, liên hệ) để bản in đầu tiên đã đủ thông tin
   useEffect(() => { if (ctx.tenant_id) void loadBrand().catch(() => undefined); }, [ctx.tenant_id]);

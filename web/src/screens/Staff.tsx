@@ -15,7 +15,7 @@ import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
-  DOC_COLS, DocFields, DocRow, docState, FilesButton, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
+  DeleteDupButton, DOC_COLS, DocFields, DocRow, docState, FilesButton, isDupDoc, paperNo, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
   type Values, valuesFromDoc,
 } from '../components/Documents';
 import { DOC_TYPES, docTypeOf, type DocTypeDef } from '../lib/docTypes';
@@ -757,7 +757,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
                       required={required.includes(def.code)} reload={reload} clearable lockExpired />
             ))}
           </ul>
-          <OldDocs docs={mine} />
+          <OldDocs docs={mine} canDelete={canEdit} onDeleted={props.reload} />
           {s.position === 'lai_xe' && <LicenseCheck rows={props.licenses.filter((l) => l.staff_id === s.id)} types={props.types} />}
         </div>
       )}
@@ -1061,7 +1061,17 @@ function recordValues(def: DocTypeDef, r: StaffRecord): Values {
 }
 
 /** Giấy khám SK / giấy tập huấn ở mục Giấy tờ (cả bản cũ) cũng là 1 lần trong lý lịch; trùng ngày với dòng lý lịch thì lấy dòng lý lịch. */
-function recordsWithPapers(records: StaffRecord[], docs: Doc[], staffId: string): (StaffRecord & { fromDoc?: boolean })[] {
+/** Dòng lý lịch trùng giấy khác (như máy chủ kiểm khi xóa): cùng loại + cùng ngày / cùng số với dòng khác,
+ *  hoặc trùng giấy khám SK / tập huấn ở mục Giấy tờ (cùng số, ngày cấp hoặc hạn) */
+function isDupRecord(r: StaffRecord, records: StaffRecord[], docs: Doc[]): boolean {
+  const no = paperNo(r.doc_no, r.title);
+  const type = Object.keys(RECORD_OF).find((t) => RECORD_OF[t] === r.kind);
+  return records.some((x) => x.id !== r.id && x.staff_id === r.staff_id && x.kind === r.kind && (x.occurred_on === r.occurred_on || (!!no && paperNo(x.doc_no, x.title) === no)))
+    || (!!type && docs.some((g) => g.staff_id === r.staff_id && g.doc_type === type
+      && ((!!no && paperNo(g.doc_no) === no) || g.issued_on === r.occurred_on || (!!g.expires_on && g.expires_on === String(r.data?.het_han ?? '')))));
+}
+
+function recordsWithPapers(records: StaffRecord[], docs: Doc[], staffId: string): (StaffRecord & { fromDoc?: boolean; doc?: Doc })[] {
   const mine = records.filter((r) => r.staff_id === staffId);
   const extra = docs.filter((g) => g.staff_id === staffId && RECORD_OF[g.doc_type]).map((g) => {
     const day = g.issued_on || g.valid_from || g.created_at.slice(0, 10);
@@ -1070,7 +1080,7 @@ function recordsWithPapers(records: StaffRecord[], docs: Doc[], staffId: string)
       ? [dt('ket_luan'), dt('hang_du_dieu_kien') && `Đủ điều kiện lái xe hạng ${dt('hang_du_dieu_kien')}`].filter(Boolean).join(' · ') || 'Khám sức khỏe'
       : 'Tập huấn nghiệp vụ';
     return { id: g.id, staff_id: staffId, kind: RECORD_OF[g.doc_type] as RecordKind, occurred_on: day, doc_no: g.doc_no, title,
-      vehicle_id: null, data: { co_so: g.issuer, het_han: g.expires_on }, files: g.files, fromDoc: true };
+      vehicle_id: null, data: { co_so: g.issuer, het_han: g.expires_on }, files: g.files, fromDoc: true, doc: g };
   }).filter((x, i, A) => !mine.some((r) => r.kind === x.kind && r.occurred_on === x.occurred_on)
     && A.findIndex((y) => y.kind === x.kind && y.occurred_on === x.occurred_on) === i);
   return [...mine, ...extra].sort((a, b) => b.occurred_on.localeCompare(a.occurred_on));
@@ -1203,6 +1213,8 @@ function Records(props: Common & { s: Staff }) {
                       <input type="file" accept="image/*,application/pdf" multiple hidden aria-label={`Gắn tệp lý lịch ${fmtDate(r.occurred_on)} ${d.name}`}
                              onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; void attach(r, fs); }} /></label>
                   )}
+                  {canEdit && !r.fromDoc && isDupRecord(r, records, props.docs) && <DeleteDupButton kind="ly_lich" id={r.id} label={`dòng ${fmtDate(r.occurred_on)} trùng`} onDone={reload} />}
+                  {canEdit && r.doc && isDupDoc(r.doc, props.docs) && <DeleteDupButton kind="giay_to" id={r.id} label={`bản cũ ${fmtDate(r.occurred_on)} trùng`} onDone={reload} />}
                   {canEdit && !r.fromDoc && <button className="btn small" onClick={() => setForm({ id: r.id, code: d.code, values: recordValues(d, r), scanned: null, req: crypto.randomUUID() })}>Sửa</button>}
                 </div>
               </div>

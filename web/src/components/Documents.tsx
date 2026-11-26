@@ -369,7 +369,45 @@ export function DocRow(props: {
 
 /* ------------------------------------------------------------------ Giấy cũ */
 
-export function OldDocs({ docs }: { docs: Doc[] }) {
+/** Số giấy chuẩn hóa để so trùng (như app.paper_no trên máy chủ): số ghi riêng, chưa có thì lấy "số …" trong nội dung */
+export function paperNo(no: string | null | undefined, title?: string | null): string {
+  const raw = (no ?? '').trim() || (/s[ốo]\s*:?\s*([0-9A-Za-z/.\-]+)/i.exec(title ?? '')?.[1] ?? '');
+  return raw.replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+}
+/** Bản giấy cũ trùng 1 bản khác cùng loại (cùng số + hạn, hoặc cùng ngày cấp + hạn) – như máy chủ kiểm khi xóa */
+export function isDupDoc(d: Doc, all: Doc[]): boolean {
+  if (d.is_current) return false;
+  const no = paperNo(d.doc_no);
+  return all.some((x) => x.id !== d.id && x.doc_type === d.doc_type && x.staff_id === d.staff_id && x.vehicle_id === d.vehicle_id
+    && ((!!no && paperNo(x.doc_no) === no && x.expires_on === d.expires_on)
+      || (x.issued_on === d.issued_on && x.expires_on === d.expires_on && (!no || !paperNo(x.doc_no) || paperNo(x.doc_no) === no))));
+}
+
+/** Xóa hẳn bản trùng (máy chủ chỉ cho xóa khi còn bản trùng khác), có hỏi lại tại chỗ */
+export function DeleteDupButton({ kind, id, label, onDone }: { kind: 'ly_lich' | 'giay_to'; id: string; label: string; onDone: () => void | Promise<void> }) {
+  const toast = useToast();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!ask) return <button type="button" className="btn small link danger-text" onClick={() => setAsk(true)}>Xóa bản trùng</button>;
+  return (
+    <span className="inline-form">
+      <span className="small">Xóa hẳn {label}?</span>
+      <button type="button" className="btn small danger" disabled={busy} onClick={async () => {
+        setBusy(true);
+        try {
+          await rpc('delete_duplicate_paper', { p_kind: kind, p_id: id });
+          toast('ok', `Đã xóa ${label}`);
+          setAsk(false);
+          await onDone();
+          window.dispatchEvent(new Event('tms-hs-doi'));   // như profileChanged(): hồ sơ đã lưu tự cập nhật
+        } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+      }}>Xóa hẳn</button>
+      <button type="button" className="btn small link" onClick={() => setAsk(false)}>Thôi</button>
+    </span>
+  );
+}
+
+export function OldDocs({ docs, canDelete, onDeleted }: { docs: Doc[]; canDelete?: boolean; onDeleted?: () => void | Promise<void> }) {
   const [show, setShow] = useState(false);
   const old = docs.filter((d) => !d.is_current).sort((a, b) => b.created_at.localeCompare(a.created_at));
   if (old.length === 0) return null;
@@ -382,6 +420,7 @@ export function OldDocs({ docs }: { docs: Doc[] }) {
             <li key={d.id} className="muted">
               {docTypeOf(d.doc_type)?.name ?? d.doc_type} · {d.doc_no ?? 'không số'} · {d.expires_on ? `hết hạn ${fmtDate(d.expires_on)}` : 'không thời hạn'}
               <FilesButton files={d.files} />
+              {canDelete && onDeleted && isDupDoc(d, docs) && <DeleteDupButton kind="giay_to" id={d.id} label={`bản trùng ${docTypeOf(d.doc_type)?.name ?? d.doc_type}`} onDone={onDeleted} />}
             </li>
           ))}
         </ul>

@@ -381,7 +381,7 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
                   canEdit={canEdit} reload={reload} check={(v) => <PlateCheck docPlate={v['xe.bien_so']} plate={vehicle.plate} />} />
         ))}
       </ul>
-      <OldDocs docs={mine} />
+      <OldDocs docs={mine} canDelete={canEdit} onDeleted={reload} />
     </div>
   );
 }

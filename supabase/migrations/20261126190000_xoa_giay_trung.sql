@@ -24,7 +24,7 @@ begin
   if p_kind = 'ly_lich' then
     select * into r from public.staff_records where id = p_id and tenant_id = v_tid;
     if not found then raise exception 'Không tìm thấy' using errcode = 'P0002'; end if;
-    if not app.has_permission('staff.manage') then raise exception 'Không có quyền sửa lý lịch' using errcode = '42501'; end if;
+    if not app.has_permission('staff.edit') then raise exception 'Không có quyền sửa lý lịch' using errcode = '42501'; end if;
     v_no := app.paper_no(r.doc_no, r.title);
     v_type := case r.kind when 'suc_khoe' then 'kham_suc_khoe' when 'dao_tao' then 'tap_huan' end;
     if not exists (select 1 from public.staff_records x where x.tenant_id = v_tid and x.staff_id = r.staff_id and x.kind = r.kind and x.id <> r.id

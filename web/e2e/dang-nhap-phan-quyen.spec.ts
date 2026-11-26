@@ -648,7 +648,6 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText('Chuyến đã xóa trước đó, nay có tài xế: khôi phục và cập nhật', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /^✔ Áp dụng các dòng đã chọn/ }).click();
   await expect(page.getByText(/khôi phục 1 chuyến/)).toBeVisible();
-  console.log('NHAP_LICH_TOAST', await page.getByText(/khôi phục 1 chuyến/).first().textContent());
   await page.getByRole('button', { name: 'Đóng cửa sổ' }).click();
   await expect(page.getByText('Đủ xe + lái', { exact: true })).toBeVisible();
 

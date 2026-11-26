@@ -66,7 +66,7 @@ begin
   perform set_config('app.nhap_lich', 'on', true);
   -- giữ lịch cũ để trả lại nếu dòng nào không xếp được
   create temp table if not exists nhap_lich_cu (trip_id uuid, vehicle_id uuid, d1 uuid, d2 uuid, px uuid) on commit drop;
-  delete from nhap_lich_cu;
+  delete from nhap_lich_cu where true;   -- PostgREST bật safeupdate: DELETE phải có WHERE
   insert into nhap_lich_cu
   select t.id, t.vehicle_id,
          (select staff_id from public.trip_crew c where c.tenant_id = v_tid and c.trip_id = t.id and c.role = 'lai_xe_1'),

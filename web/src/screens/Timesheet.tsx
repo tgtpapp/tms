@@ -403,8 +403,6 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
         <span className="small">Trang {pg + 1}/{pages} · {found.length} người</span>
         <button type="button" className="btn small" disabled={pg >= pages - 1} onClick={() => setPage(pg + 1)}>Sau ›</button>
       </div>}
-      <p className="small muted">Công chuẩn: <b>{d.congChuan}</b> ngày/tháng · Ngày nghỉ tuần: <b>{d.offSat ? 'Thứ 7 và Chủ nhật' : 'Chủ nhật'}</b> (theo cài đặt Hợp đồng lao động) · Lái xe: công lấy từ chuyến đã chạy (lái xe 1); văn phòng: tự điền X ngày làm việc đã qua.
-        {money_ && ' Lương CK, BHXH, lương cố định nhập ở Cấu hình › BHXH & lương chuyển khoản theo tháng; tiền tài nhập ở hồ sơ xe.'}</p>
       {view && <PaperView title={view.title} pages={[{ html: view.html, land: view.land ?? true }]} onClose={() => setView(null)} />}
     </section>
     </>

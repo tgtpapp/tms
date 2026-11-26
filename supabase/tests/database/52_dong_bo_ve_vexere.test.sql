@@ -51,7 +51,7 @@ select throws_ok($$ select public.sync_vexere_tickets((select v from t.ids where
 
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is(public.sync_vexere_tickets((select v from t.ids where k = 'T'), jsonb_build_array(
-  jsonb_build_object('id', '101', 'ghe', 'A1', 'tt', 'tt', 'gia', '150000', 'ten', 'Khách Một', 'sdt', '0901 111 111', 'tu_ma', 'BXBH', 'den_ma', 'BXVT'),
+  jsonb_build_object('id', '101', 'ghe', 'A1', 'tt', 'tt', 'gia', '150000', 'ten', 'Khách Một', 'sdt', '0901 111 111', 'tu_ma', 'BXBH', 'den_ma', 'BXVT', 'don', 'VP Cty', 'tra', 'Phước Lộc', 'ghi_chu', 'TX thu'),
   jsonb_build_object('id', '102', 'ghe', 'X9', 'hang', '2', 'cot', '1', 'tt', 'coc', 'coc', '50000', 'gia', '150000', 'sdt', '0902222222',
                      'tu_ten', 'Bến xe Biên Hòa', 'den_ten', 'Bà Rịa'),
   jsonb_build_object('id', '103', 'ghe', 'Z9', 'tt', 'giu'),
@@ -62,12 +62,14 @@ select is((select string_agg(seat_label || ':' || status || ':' || deposit, ',' 
 select is((select count(*)::int from public.bookings where channel = 'vexere' and code ~ '^[A-Z0-9]{6}$' and ext_ref like 'vexere:%'), 2,
   'Mã vé là mã TMS, kênh vexere');
 select is((select passenger_phone from public.seat_inventory where seat_label = 'A01'), '0901111111', 'SĐT chỉ giữ chữ số');
+select is((select pickup_note || '/' || dropoff_note from public.seat_inventory where seat_label = 'A01'), 'VP Cty/Phước Lộc', 'Điểm đón / trả Vexere');
+select is((select b.note from public.bookings b join public.seat_inventory s on s.booking_id = b.id where s.seat_label = 'A01'), 'TX thu', 'Ghi chú vé vào đơn');
 select is((select to_stop_id from public.seat_inventory where seat_label = 'A02'), (select v from t.ids where k = 'BR'), 'Nhận điểm trả theo tên');
 select is((select count(*)::int from public.seat_inventory where hold_until is not null), 0, 'Giữ tới giờ chạy, không tự nhả');
 select is((select count(*)::int from public.ledger_transactions), 0, 'Không ghi sổ tiền');
 
 select is(public.sync_vexere_tickets((select v from t.ids where k = 'T'), jsonb_build_array(
-  jsonb_build_object('id', '101', 'ghe', 'A1', 'tt', 'tt', 'gia', '150000', 'ten', 'Khách Một', 'sdt', '0901 111 111', 'tu_ma', 'BXBH', 'den_ma', 'BXVT'),
+  jsonb_build_object('id', '101', 'ghe', 'A1', 'tt', 'tt', 'gia', '150000', 'ten', 'Khách Một', 'sdt', '0901 111 111', 'tu_ma', 'BXBH', 'den_ma', 'BXVT', 'don', 'VP Cty', 'tra', 'Phước Lộc', 'ghi_chu', 'TX thu'),
   jsonb_build_object('id', '102', 'ghe', 'X9', 'hang', '2', 'cot', '1', 'tt', 'tt', 'gia', '150000', 'sdt', '0902222222',
                      'tu_ten', 'Bến xe Biên Hòa', 'den_ten', 'Bà Rịa'))) - 'loi',
   '{"moi": 0, "huy": 0, "cap_nhat": 1, "giu_nguyen": 1}'::jsonb, 'Chạy lại: không trùng, vé đã trả đủ thì cập nhật');

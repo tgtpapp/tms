@@ -13,13 +13,15 @@ export interface VxRaw {
   ghi?: string | null; // Note
   tu?: string | null;  // FromArea "1~155972|16|BXBH|Bến xe Biên Hòa"
   den?: string | null; // ToArea
+  don?: string | null; // PickupInfo "Vp Cty||0||" (chữ điểm đón)
+  tra?: string | null; // DropOffInfo (chữ điểm trả)
 }
 export interface VxTrip { tuyen: string; gio: string; ve: VxRaw[] }
 export interface VxPayload { tms: 'vexere_ve'; ngay: string; chuyen: VxTrip[] }
 
 export interface SyncTicket {
   id: string; ghe: string; tang?: string; hang?: string; cot?: string; tt: 'tt' | 'coc' | 'giu' | 'huy';
-  gia?: string; coc?: string; ten?: string; sdt?: string; ghi_chu?: string; tu_ma?: string; tu_ten?: string; den_ma?: string; den_ten?: string;
+  gia?: string; coc?: string; ten?: string; sdt?: string; ghi_chu?: string; don?: string; tra?: string; tu_ma?: string; tu_ten?: string; den_ma?: string; den_ten?: string;
 }
 
 /** Đọc gói vé Vexere; không phải gói vé thì trả null */
@@ -52,7 +54,7 @@ export function toSyncTicket(v: VxRaw): SyncTicket {
   return {
     id: String(v.id), ghe: part(v.ghe, 0), tang: part(v.ghe, 1) || undefined, hang: part(v.ghe, 2) || undefined, cot: part(v.ghe, 3) || undefined,
     tt: vxStatus(v), gia: num(v.gia), coc: num(v.coc), ten: part(v.kh, 3) || undefined, sdt: part(v.kh, 4) || undefined,
-    ghi_chu: v.ghi?.trim() || undefined, tu_ma: tu.ma || undefined, tu_ten: tu.ten || undefined, den_ma: den.ma || undefined, den_ten: den.ten || undefined,
+    ghi_chu: v.ghi?.trim() || undefined, don: part(v.don, 0) || undefined, tra: part(v.tra, 0) || undefined, tu_ma: tu.ma || undefined, tu_ten: tu.ten || undefined, den_ma: den.ma || undefined, den_ten: den.ten || undefined,
   };
 }
 

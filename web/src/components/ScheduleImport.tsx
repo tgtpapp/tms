@@ -7,6 +7,8 @@ import { fmtDate } from './Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { dirName, reverseName, type Dir } from '../lib/routes';
+import { parseVxPayload, type VxPayload } from '../lib/vexereTickets';
+import { VexereTicketSync } from './VexereTicketSync';
 import { norm, parseRows, parseVexere, plateKey, routeKey, templateCsv, textToRows, titleCase, type Parsed } from '../lib/scheduleImport';
 
 interface Route { id: string; code: string; name: string; name_ve: string | null; is_active: boolean }
@@ -35,6 +37,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   const [txt, setTxt] = useState('');
   const [msg, setMsg] = useState<{ ok: string; warn: string[] } | null>(null);
   const [P, setP] = useState<Parsed | null>(null);
+  const [ve, setVe] = useState<VxPayload | null>(null);
   const [src, setSrc] = useState('');
   const [opt, setOpt] = useState({ e: true, v: true, n: true });
   const [base, setBase] = useState<{ routes: Route[]; vehicles: Veh[]; staff: Staff[]; types: VType[]; defType: string } | null>(null);
@@ -176,6 +179,9 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   useEffect(() => { setPick(new Set(rows.map((r, i) => (r.ok && !r.same ? i : -1)).filter((i) => i >= 0))); }, [rows]);
 
   function readText(raw: string) {
+    const vx = parseVxPayload(raw);
+    if (vx) { setP(null); setVe(vx); setMsg({ ok: `Đọc được vé Vexere ${vx.chuyen.length} chuyến, ngày ${fmtDate(vx.ngay)}.`, warn: [] }); return; }
+    setVe(null);
     const v = parseVexere(raw);
     if (v.items.length) {
       setP(v); setSrc('lịch Vexere');
@@ -348,6 +354,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readFile(f); }} />
         </div>
 
+        {ve && base && <VexereTicketSync data={ve} routes={base.routes} onDone={onDone} />}
         {P && rows.length > 0 && (
           <>
             <div>

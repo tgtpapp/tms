@@ -1,5 +1,5 @@
 import { Avatar, useAvatars } from '../components/StaffAvatar';
-import { loadBrand } from '../lib/brand';
+import { loadBrand, rememberSplash } from '../lib/brand';
 import { NotifyBell } from '../components/NotifyBell';
 import { useCallback, useEffect, useState } from 'react';
 import { Centered } from '../components/Centered';
@@ -86,7 +86,11 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     void iosIconFrom(myStaff, myAva);
   }, [ctx.tenant_id, ctx.tenant_name, myStaff, myAva]);
   // tải sẵn đầu trang in (logo, tên, địa chỉ, liên hệ) để bản in đầu tiên đã đủ thông tin
-  useEffect(() => { if (ctx.tenant_id) void loadBrand().catch(() => undefined); }, [ctx.tenant_id]);
+  useEffect(() => {
+    if (!ctx.tenant_id) return;
+    // nhớ tên nhà xe + logo cho màn chờ lúc tải lại trang
+    void loadBrand().then((b) => rememberSplash(ctx.tenant_name ?? b.name, b.logo)).catch(() => undefined);
+  }, [ctx.tenant_id, ctx.tenant_name]);
   useEffect(() => { if (!shareMsg) return; const t = window.setTimeout(() => setShareMsg(''), 12_000); return () => window.clearTimeout(t); }, [shareMsg]);
 
   const load = useCallback(async () => {

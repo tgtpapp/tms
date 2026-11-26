@@ -60,3 +60,23 @@ export function letterhead(b: Brand): string {
   ${b.address ? `<div style="font-size:12px">Địa chỉ: ${esc(b.address)}</div>` : ''}${c.length ? `<div style="font-size:12px">${esc(c.join(' · '))}</div>` : ''}</td></tr></table>
   <div style="border-top:1.5px solid #000;margin:5px 0 8px"></div>`;
 }
+
+/* ---------- Màn chờ lúc tải lại trang: tên nhà xe + logo chìm của nhà xe đăng nhập lần trước trên máy này ---------- */
+const SPLASH_KEY = 'tms.man_cho';
+export function splashBrand(): { name: string; logo: string | null } | null {
+  try { return JSON.parse(localStorage.getItem(SPLASH_KEY) ?? 'null') as { name: string; logo: string | null } | null; } catch { return null; }
+}
+/** Nhớ tên + logo (thu nhỏ 256px cho nhẹ) */
+export async function rememberSplash(name: string, logo: string | null) {
+  let small: string | null = null;
+  if (logo) {
+    try {
+      const img = new Image(); img.src = logo; await img.decode();
+      const k = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
+      small = c.toDataURL('image/png');
+    } catch { small = null; }
+  }
+  try { localStorage.setItem(SPLASH_KEY, JSON.stringify({ name, logo: small })); } catch { /* bỏ qua */ }
+}

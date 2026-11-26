@@ -251,6 +251,14 @@ function applyToForm(f: Form, v: Values): Form {
 }
 
 interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
+/** Màu riêng mỗi người (ngẫu nhiên theo mã hồ sơ, cố định giữa các lần mở): đầu thẻ hồ sơ + đầu trang hồ sơ */
+const PERSON_COLORS = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#0891b2', '#db2777', '#b45309', '#0d9488', '#be123c', '#4f46e5', '#15803d', '#9333ea'];
+function personColor(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return PERSON_COLORS[h % PERSON_COLORS.length]!;
+}
+
 interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; papers: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;
   records: StaffRecord[]; types: Option[]; licenses: LicenseRow[]; reload: () => Promise<void>;
@@ -600,7 +608,7 @@ function StaffList(props: Common & { staff: Staff[]; myUserId: string | null; op
           const pay = salary.get(s.id);
           return (
             <div key={s.id} id={`nv-${s.id}`} className={`nsx-emp pos-${s.position}${s.is_active ? '' : ' off'}${canOpen ? ' can' : ''}`}
-                 onClick={canOpen ? () => openOne(s.id, true) : undefined}>
+                 style={{ ['--gc' as string]: personColor(s.id) }} onClick={canOpen ? () => openOne(s.id, true) : undefined}>
               <span className="nsx-emp-cov">
                 {!sameAsGroup(s) && <span className="nsx-emp-pos">{POSITION[s.position]}</span>}
                 {bad > 0 && <span className="nsx-emp-warn" title={`${bad} việc cần xử lý`} aria-hidden="true">⚠</span>}
@@ -711,7 +719,7 @@ function StaffDetail(props: Common & { staff: Staff[]; s: Staff; p: StaffPrivate
   return (
     <div className="sub prof">
       {cv && <PaperView title={`Sơ yếu lý lịch · ${s.full_name}`} pages={cv} onClose={() => setCv(null)} />}
-      <div className={`prof-head nsx-pf pos-${s.position}`}>
+      <div className={`prof-head nsx-pf pos-${s.position}`} style={{ ['--gc' as string]: personColor(s.id) }}>
         <StaffAvatar tenantId={tenantId} staffId={s.id} name={s.full_name} canEdit={canEdit} />
         <div className="prof-id">
           <span className="nsx-pf-code">{[sameAsGroup(s) ? '' : POSITION[s.position], s.department?.trim().toLocaleLowerCase('vi') === jobKey(s) ? '' : s.department?.trim() ?? ''].filter(Boolean).join(' · ')}</span>

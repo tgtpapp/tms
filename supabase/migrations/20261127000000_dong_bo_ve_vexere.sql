@@ -36,7 +36,7 @@ declare
   v_new int := 0; v_upd int := 0; v_huy int := 0; v_same int := 0; v_n int;
   v_err jsonb := '[]'::jsonb;
 begin
-  if v_tid is null or not app.has_permission('ticket.sell') then
+  if v_tid is null or not app.has_permission('sell.add') then
     raise exception 'Không có quyền bán vé' using errcode = '42501';
   end if;
   select * into v_trip from public.trips where id = p_trip_id and tenant_id = v_tid;

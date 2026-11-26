@@ -1,0 +1,19 @@
+name: Chẩn đoán tạm (mở trang thật, chỉ đọc lỗi console)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  chan-doan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Cài trình duyệt
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Mở trang thật, in lỗi
+        working-directory: web
+        run: node ../.github/scripts/chan_doan_trang.mjs

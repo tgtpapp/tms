@@ -327,7 +327,8 @@ export function DocRow(props: {
         </div>
       </div>
       {/* ảnh giấy tờ hiện sẵn, bấm vào xem lớn ngay trong app */}
-      {((doc?.files.length ?? 0) > 0 || !!props.extraFiles?.length) && <FilePreviews files={[...(doc?.files ?? []), ...(props.extraFiles ?? [])]} />}
+      {/* ảnh của giấy; giấy chưa có ảnh thì mới lấy ảnh ở dòng lý lịch (không hiện 2 lần cùng 1 giấy) */}
+      {((doc?.files.length ?? 0) > 0 || !!props.extraFiles?.length) && <FilePreviews files={doc?.files.length ? doc.files : props.extraFiles ?? []} />}
       {mode !== 'view' && (
         <div className="sub">
           {mode === 'add' && (

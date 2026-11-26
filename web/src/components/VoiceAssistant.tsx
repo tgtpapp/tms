@@ -2,7 +2,7 @@
 // Bấm nút lớn → lần đầu đọc tình hình chuyến + điểm tới rồi hỏi "Anh cần gì?"; các lần sau chỉ bíp rồi nghe.
 // Màn trợ lý phủ kín: chạm bất kỳ đâu để nói tiếp (không cần nhìn), nút Đóng ở góc.
 import { useEffect, useRef, useState } from 'react';
-import { beep, canListen, canSpeak, clean, codText, currentStop, intentOf, isYes, listen, litersOf, mentioned, mentionedParcels, moneyOf, nextStopText,
+import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, mentionedParcels, moneyOf, nextStopText,
   parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type VParcel, type VTicket, type VTrip } from '../lib/voice';
 import { rpc } from '../lib/supabase';
 
@@ -21,6 +21,37 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
   const [said, setSaid] = useState('');
   const last = useRef('');
   const heardLast = useRef('');
+  /** Gọi khách: chờ chạm để mở cuộc gọi; gọi xong chờ ghi kết quả */
+  const [dial, setDial] = useState<{ phone: string; ticketId: string | null; name: string } | null>(null);
+  const callBack = useRef<{ ticketId: string; name: string } | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = phase !== 'cho';
+  // quay lại app sau cuộc gọi → hỏi kết quả gọi khách
+  useEffect(() => {
+    const on = () => {
+      if (document.visibilityState !== 'visible' || !callBack.current || !open) return;
+      void say(`Khách ${callBack.current.name} nghe máy không? Anh chạm màn hình rồi trả lời.`).then(() => setPhase('cho'));
+    };
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // Tin mới trên chuyến đang chạy (vé mới, vé hủy, hàng mới): tự đọc khi đã bật trợ lý trên chuyến này
+  const seen = useRef<{ t: Map<string, VTicket>; p: Set<string> } | null>(null);
+  useEffect(() => {
+    const prev = seen.current;
+    seen.current = { t: new Map(tickets.map((x) => [x.id, x])), p: new Set(parcels.map((x) => x.id)) };
+    if (!prev || !greeted.has(tripId) || !voiceCfg().news || busyRef.current) return;
+    const added = tickets.filter((x) => !prev.t.has(x.id));
+    const gone = [...prev.t.values()].filter((x) => !tickets.some((y) => y.id === x.id));
+    const newP = parcels.filter((x) => !prev.p.has(x.id) && x.status !== 'huy');
+    const parts: string[] = [];
+    if (added.length) parts.push(`Có ${added.length} khách mới, ${whoList(added)}, đón tại ${stopName(added[0].from_stop_id)}.`);
+    if (gone.length) parts.push(`${whoList(gone)} đã hủy vé.`);
+    if (newP.length) parts.push(`Có thêm ${newP.reduce((a, x) => a + x.packages, 0)} kiện hàng giao tại ${stopName(newP[0].to_stop_id)}.`);
+    if (parts.length) { const t = clean(`Tin mới. ${parts.join(' ')}`); setSaid(t); last.current = t; void speak(t); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickets, parcels]);
   const undo = useRef<{ ids: string[]; act: 'len' | 'tra' | 'vang' } | null>(null);
   const stopRef = useRef<() => void>(() => undefined);
   const data = useRef({ trip, tickets, parcels, cap, stopName });
@@ -125,6 +156,43 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     const n = await rpc<number>('crew_report', { p_trip_id: tripId, p_kind: kind, p_text: text });
     return n ? `Đã gửi ${lead} về văn phòng điều hành.` : 'Đã ghi nhận, nhưng nhà xe chưa có người điều hành nhận báo.';
   }
+  /** Gọi khách / người nhận hàng: tìm theo tên hoặc 3 số cuối, chạm màn hình để mở cuộc gọi */
+  async function call(q: string): Promise<string> {
+    const d = data.current, live = d.tickets.filter((t) => !t.no_show && !t.dropped);
+    let tk = mentioned(q, live).filter((t) => t.passenger_phone);
+    let ps = tk.length ? [] : mentionedParcels(q, parcelsOpen(d.parcels));
+    if (!tk.length && !ps.length) {
+      const stop = currentStop(d.tickets, 'don');
+      const here = live.filter((t) => !t.boarded && t.from_stop_id === stop && t.passenger_phone);
+      if (here.length === 1) tk = here;
+      else {
+        const a = await ask('Gọi ai ạ? Anh nói tên hoặc 3 số cuối điện thoại.');
+        tk = mentioned(a, live).filter((t) => t.passenger_phone);
+        if (!tk.length) ps = mentionedParcels(a, parcelsOpen(d.parcels));
+      }
+    }
+    if (tk.length) {
+      const t = tk[0], name = whoOf(t.passenger_name, t.passenger_phone);
+      setDial({ phone: t.passenger_phone!, ticketId: t.id, name });
+      return `Chạm màn hình để gọi ${name}.`;
+    }
+    if (ps.length) {
+      const p = ps[0], name = whoOf(p.receiver_name, p.receiver_phone);
+      setDial({ phone: p.receiver_phone, ticketId: null, name });
+      return `Chạm màn hình để gọi ${name}.`;
+    }
+    return 'Em không tìm thấy người đó trên chuyến.';
+  }
+  /** Ghi kết quả gọi khách sau khi gọi xong */
+  async function callResult(q: string): Promise<string> {
+    const cb = callBack.current; callBack.current = null;
+    if (!cb) return '';
+    const r = callResultOf(q);
+    if (!r) return 'Em chưa rõ kết quả, chưa ghi. Anh ghi trên màn hình giúp em.';
+    await rpc('crew_mark', { p_ticket_id: cb.ticketId, p_action: r });
+    await onChanged();
+    return r === 'nghe_may' ? `Đã ghi ${cb.name} nghe máy, sẽ ra đón.` : r === 'thue_bao' ? `Đã ghi ${cb.name} thuê bao, không nghe máy.` : `Đã ghi ${cb.name} báo hủy.`;
+  }
   function answer(q: string): string {
     const d = data.current;
     switch (intentOf(q)) {
@@ -150,7 +218,9 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     const it: Intent = q ? intentOf(q) : 'khong_ro';
     let out: string;
     try {
-      out = !q ? 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.'
+      out = q && callBack.current ? await callResult(q)
+        : !q ? 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.'
+        : it === 'goi' ? await call(q)
         : it === 'don' || it === 'tra' || it === 'vang' || it === 'hoan_tac' ? await update(q, it)
         : it === 'giao' || it === 'do_dau' || it === 'chi_phi' || it === 'su_co' || it === 'tre_gio' || it === 'nhan' ? await report(q, it)
         : answer(q);
@@ -167,16 +237,26 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     }
     await turn();
   }
-  function close() { stopSpeak(); stopRef.current(); setOpen(false); setPhase('cho'); }
+  function close() { stopSpeak(); stopRef.current(); setOpen(false); setPhase('cho'); setDial(null); callBack.current = null; }
 
   return (
     <>
       <button type="button" className="btn va-btn" onClick={() => void start()} aria-label="Trợ lý giọng nói">🎙 Trợ lý giọng nói</button>
       {open && (
-        <div className="va-pane" role="dialog" aria-label="Trợ lý giọng nói" onClick={() => { if (phase !== 'nghe') void turn(); }}>
+        <div className="va-pane" role="dialog" aria-label="Trợ lý giọng nói" onClick={() => {
+          if (phase === 'nghe') return;
+          if (dial) {   // mở cuộc gọi bằng chính lần chạm (trình duyệt chỉ cho mở cuộc gọi khi người dùng chạm)
+            stopSpeak();
+            if (dial.ticketId) { callBack.current = { ticketId: dial.ticketId, name: dial.name }; void rpc('crew_mark', { p_ticket_id: dial.ticketId, p_action: 'goi' }).catch(() => undefined); }
+            const tel = dial.phone; setDial(null);
+            window.location.href = `tel:${tel}`;
+            return;
+          }
+          void turn();
+        }}>
           <button type="button" className="va-x" aria-label="Đóng trợ lý" onClick={(e) => { e.stopPropagation(); close(); }}>✕</button>
           <div className={`va-mic ${phase}`}>🎙</div>
-          <div className="va-st">{phase === 'nghe' ? 'Đang nghe…' : phase === 'doc' ? 'Đang đọc…' : 'Chạm để nói'}</div>
+          <div className="va-st">{phase === 'nghe' ? 'Đang nghe…' : phase === 'doc' ? 'Đang đọc…' : dial ? `📞 Chạm để gọi ${dial.name}` : 'Chạm để nói'}</div>
           {heard && <div className="va-q">“{heard}”</div>}
           {said && <div className="va-a">{said}</div>}
         </div>

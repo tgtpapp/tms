@@ -82,7 +82,7 @@ export function tripText(t: VTrip, tk: VTicket[], cap: number): string {
 }
 
 export type Intent = 'diem_toi' | 'thu_ho' | 'chuyen' | 'nhac_lai' | 'don' | 'tra' | 'vang' | 'hoan_tac'
-  | 'giao' | 'do_dau' | 'chi_phi' | 'su_co' | 'tre_gio' | 'nhan' | 'khong_ro';
+  | 'giao' | 'do_dau' | 'chi_phi' | 'su_co' | 'tre_gio' | 'nhan' | 'goi' | 'khong_ro';
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase();
 /** Hiểu câu hỏi theo từ khóa (giai đoạn 1 chỉ có tra cứu) */
 export function intentOf(heard: string): Intent {
@@ -96,6 +96,7 @@ export function intentOf(heard: string): Intent {
   if (/do dau|do xang|do nhien lieu|bom dau/.test(s)) return 'do_dau';
   if (/cau duong|phi duong|tram thu phi|ve cau|chi phi|tien phi|sua xe|va lop|rua xe|gui xe|an uong/.test(s) && moneyOf(heard)) return 'chi_phi';
   if (/bao dieu hanh|nhan dieu hanh|bao van phong|nhan van phong|nhan cho|chuyen loi/.test(s) && !/ket xe|\btre\b|\bcham\b|su co|tai nan/.test(s)) return 'nhan';
+  if (/\bgoi\b|\balo\b|bam so|dien thoai cho/.test(s) && !/dieu hanh|van phong/.test(s)) return 'goi';
   if (/su co|tai nan|va cham|hu xe|hong xe|xe hu|xe hong|thung lop|be lop|xit lop|chet may|qua nhiet|canh sat|csgt|bi phat/.test(s)) return 'su_co';
   if (/\btre\b|\bcham\b|ket xe|tac duong|un tac/.test(s)) return 'tre_gio';
   if (/thu ho|cod|kien|tien hang|bao nhieu hang|con hang|tong tien/.test(s)) return 'thu_ho';
@@ -115,12 +116,17 @@ const recCtor = (): RecCtor | null => {
 export const canListen = () => !!recCtor();
 export const canSpeak = () => 'speechSynthesis' in window;
 
-let voice: SpeechSynthesisVoice | null = null;
+/** Giọng đọc trợ lý (Tài khoản của tôi → Giao diện của tôi), lưu trên máy này */
+export interface VoiceCfg { voice: string; rate: number; volume: number; news: boolean }
+const VOICE_KEY = 'tms.giong_doc';
+export const VOICE_DEF: VoiceCfg = { voice: '', rate: 0.95, volume: 1, news: true };
+export function voiceCfg(): VoiceCfg { try { return { ...VOICE_DEF, ...JSON.parse(localStorage.getItem(VOICE_KEY) ?? '{}') } as VoiceCfg; } catch { return VOICE_DEF; } }
+export function saveVoiceCfg(c: VoiceCfg) { try { localStorage.setItem(VOICE_KEY, JSON.stringify(c)); } catch { /* bỏ qua */ } }
+/** Các giọng tiếng Việt có trong máy (danh sách có thể tải chậm: gọi lại sau sự kiện voiceschanged) */
+export const viVoices = () => (window.speechSynthesis?.getVoices() ?? []).filter((v) => /^vi/i.test(v.lang));
 function viVoice(): SpeechSynthesisVoice | null {
-  if (voice) return voice;
-  const vs = window.speechSynthesis?.getVoices() ?? [];
-  voice = vs.find((v) => /^vi/i.test(v.lang)) ?? null;
-  return voice;
+  const vs = viVoices(), want = voiceCfg().voice;
+  return vs.find((v) => v.voiceURI === want) ?? vs[0] ?? null;
 }
 /** Đọc to (hơi chậm, âm lượng tối đa); xong thì resolve */
 export function speak(text: string): Promise<void> {
@@ -128,7 +134,8 @@ export function speak(text: string): Promise<void> {
     if (!canSpeak()) { res(); return; }
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'vi-VN'; u.rate = 0.95; u.volume = 1;
+    const c = voiceCfg();
+    u.lang = 'vi-VN'; u.rate = c.rate; u.volume = c.volume;
     const v = viVoice(); if (v) u.voice = v;
     u.onend = () => res(); u.onerror = () => res();
     window.speechSynthesis.speak(u);
@@ -229,3 +236,13 @@ export function mentionedParcels(heard: string, pool: VParcel[]): VParcel[] {
 export const parcelsOpen = openParcels;
 export const parcelDue = toCollect;
 export const receiverList = (ps: VParcel[]) => list(ps.map((p) => who(p.receiver_name, p.receiver_phone)), 2);
+
+/** Kết quả gọi khách trong câu trả lời */
+export function callResultOf(heard: string): 'nghe_may' | 'thue_bao' | 'bao_huy' | null {
+  const s = fold(heard);
+  if (/huy|khong di nua|bo ve/.test(s)) return 'bao_huy';
+  if (/thue bao|khong nghe|khong bat|tat may|ban may|khong lien lac|chua nghe/.test(s)) return 'thue_bao';
+  if (/nghe may|co nghe|ra don|dang ra|da nghe|\bco\b|\bdung\b|\bok\b|\bu\b/.test(s)) return 'nghe_may';
+  return null;
+}
+export const whoOf = (name: string | null | undefined, phone: string | null | undefined) => who(name, phone);

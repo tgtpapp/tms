@@ -3,7 +3,7 @@
 // Câu trả lời: 1–3 câu ngắn, kiểu văn nói, không ký tự đặc biệt; giờ "14 giờ 30", tiền "1 triệu 200 nghìn", số điện thoại "đuôi 4512".
 
 export interface VTicket {
-  from_stop_id: string; to_stop_id: string; from_idx: number; to_idx: number | null; price: number; status: 'dat' | 'da_tt';
+  id: string; from_stop_id: string; to_stop_id: string; from_idx: number; to_idx: number | null; price: number; status: 'dat' | 'da_tt';
   passenger_name: string | null; passenger_phone: string | null; boarded: boolean; no_show: boolean; dropped: boolean;
 }
 export interface VParcel {
@@ -81,12 +81,16 @@ export function tripText(t: VTrip, tk: VTicket[], cap: number): string {
   return clean(head);
 }
 
-export type Intent = 'diem_toi' | 'thu_ho' | 'chuyen' | 'nhac_lai' | 'khong_ro';
+export type Intent = 'diem_toi' | 'thu_ho' | 'chuyen' | 'nhac_lai' | 'don' | 'tra' | 'vang' | 'hoan_tac' | 'khong_ro';
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase();
 /** Hiểu câu hỏi theo từ khóa (giai đoạn 1 chỉ có tra cứu) */
 export function intentOf(heard: string): Intent {
   const s = fold(heard);
   if (/nhac lai|noi lai|lap lai/.test(s)) return 'nhac_lai';
+  if (/hoan tac|huy vua|bo vua|ghi nham|nham roi/.test(s)) return 'hoan_tac';
+  if (/khach vang|vang mat|bao vang|ghi vang|vang roi|khong co mat|khong ra|khong di|bo chuyen|khong thay khach/.test(s)) return 'vang';
+  if (/da tra|tra du|tra xong|xuong xe|tra het/.test(s)) return 'tra';
+  if (/da don|don du|don xong|don het|len xe|da len|don roi/.test(s)) return 'don';
   if (/thu ho|cod|kien|tien hang|bao nhieu hang|con hang|tong tien/.test(s)) return 'thu_ho';
   if (/diem|toi dau|ke tiep|tiep theo|may khach|don ai|tra ai|khach nao|don khach|tra khach/.test(s)) return 'diem_toi';
   if (/chuyen|may gio|gio chay|xe nao|ban duoc|bao nhieu ghe/.test(s)) return 'chuyen';
@@ -151,3 +155,31 @@ export function listen(onStart?: () => void): { done: Promise<string>; stop: () 
   try { r.start(); onStart?.(); } catch { /* đang nghe */ }
   return { done, stop: () => { try { r.abort(); } catch { /* bỏ qua */ } } };
 }
+
+
+/* ---------------- Giai đoạn 2: cập nhật đã đón / đã trả / khách vắng ---------------- */
+export const isYes = (heard: string) => /\b(dung|phai|u|uh|ok|oke|co|dong y|chot|xac nhan|duoc)\b/.test(fold(heard)) && !/\b(khong|sai|chua)\b/.test(fold(heard));
+/** Điểm đón gần nhất còn khách chờ / điểm trả gần nhất còn khách chưa xuống */
+export function currentStop(tk: VTicket[], mode: 'don' | 'tra'): string {
+  let stop = '', idx = Infinity;
+  for (const t of tk.filter((x) => !x.no_show && (mode === 'don' ? !x.boarded : x.boarded && !x.dropped))) {
+    const i = mode === 'don' ? t.from_idx : t.to_idx ?? 999;
+    if (i < idx) { idx = i; stop = mode === 'don' ? t.from_stop_id : t.to_stop_id; }
+  }
+  return stop;
+}
+/** Khách được nhắc tới trong câu nói: theo 4 số cuối điện thoại hoặc theo tên (bỏ dấu); không nhắc ai thì [] */
+export function mentioned(heard: string, pool: VTicket[]): VTicket[] {
+  const digits = heard.replace(/\D/g, '');
+  if (digits.length >= 3) {
+    const by = pool.filter((t) => (t.passenger_phone ?? '').replace(/\D/g, '').endsWith(digits.slice(-4)));
+    if (by.length) return by;
+  }
+  const s = ` ${fold(heard)} `;
+  return pool.filter((t) => {
+    const w = fold(t.passenger_name ?? '').split(/\s+/).filter((x) => x.length >= 2);
+    const last = w[w.length - 1];
+    return !!last && s.includes(` ${last} `);
+  });
+}
+export const whoList = (ts: VTicket[]) => list(ts.map((t) => who(t.passenger_name, t.passenger_phone)));

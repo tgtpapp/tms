@@ -391,11 +391,13 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
     }
   }
   /** Ghi trạng thái khách (đổi ngay trên màn hình, lỗi thì tải lại) */
-  async function act(list: Ticket[], action: string, patch: Partial<Ticket>) {
+  async function act(list: Ticket[], action: string, patch: Partial<Ticket>): Promise<boolean> {
     setTickets((cur) => cur.map((x) => (list.some((y) => y.id === x.id) ? { ...x, ...patch } : x)));
+    let ok = true;
     try { for (const t of list) await rpc('crew_mark', { p_ticket_id: t.id, p_action: action }); }
-    catch (e) { toast('error', errMsg(e)); }
+    catch (e) { ok = false; toast('error', errMsg(e)); }
     await load();
+    return ok;
   }
   /** Lên xe: cả đoàn cùng đơn, cùng điểm đón (như app cũ) */
   function board(t: Ticket) {
@@ -496,6 +498,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
       )}
       {trip.status === 'mo' && !trip.arrived_at && (
         <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
+                        onMark={async (ids, action, patch) => { if (!await act(tickets.filter((t) => ids.includes(t.id)), action, patch as Partial<Ticket>)) throw new Error('ghi lỗi'); }}
                         trip={{ depart_at: trip.depart_at, departed_at: trip.departed_at, arrived_at: trip.arrived_at, plate: trip.plate, routeName }} />
       )}
       <div className="dt-tabs" role="tablist" aria-label="Xem">

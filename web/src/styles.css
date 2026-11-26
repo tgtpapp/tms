@@ -1953,14 +1953,17 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .tcp .btn { white-space: nowrap; }
 
 /* Hợp đồng vận chuyển: trang hợp đồng gói gọn 1 trang A4 */
-.hdvc.hdvc1 { font-size: 12.5px; line-height: 1.35; padding: 9mm 11mm 6mm; }
-.hdvc.hdvc1 p { margin: 3px 0; }
-.hdvc.hdvc1 h1 { font-size: 18px; margin: 4px 0 0; }
-.hdvc.hdvc1 .sign-box { height: 70px; }
-.hdvc.hdvc1 .sign-box.sign-stack img { max-height: 70px; }
+.hdvc.hdvc1 { font-size: 11px; line-height: 1.28; padding: 7mm 10mm 5mm; }
+.hdvc.hdvc1 p { margin: 2px 0; }
+.hdvc.hdvc1 h1 { font-size: 16px; margin: 3px 0 0; }
+.hdvc.hdvc1 .lenh-foot td { font-size: 11px; }
+.hdvc.hdvc1 .sign-box { height: 62px; }
+.hdvc.hdvc1 .sign-box.sign-stack { height: 62px; }
+.hdvc.hdvc1 .sign-box.sign-stack img { max-height: 62px; }
 .hdvc h2 { font-size: 17px; margin: 0 0 2px; }
 .hdvc-ds td, .hdvc-ds th { padding: 4px 5px; font-size: 12.5px; height: 22px; }
 .hdvc-ds td { height: var(--rh, 22px); }
+.hd-fill { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 1px; margin: 2px 0; }
+.hd-fill > b, .hd-fill > .w2 { grid-column: 1 / -1; }
 .hd-fill > span { display: flex; gap: 4px; align-items: baseline; }
-.hd-fill > span + span { margin-top: 1px; }
 .hd-blank { flex: 1 1 auto; border-bottom: 1px dotted #000; min-width: 40mm; height: 1em; }

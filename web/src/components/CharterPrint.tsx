@@ -42,6 +42,8 @@ const orderNo = (c: CharterDoc) => {
 export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; tenantId: string; onClose: () => void }) {
   const [co, setCo] = useState<Company | null>(null);
   const [ex, setEx] = useState<Extra | null>(null);
+  // Chèn chữ ký + con dấu vào bản in: mặc định để trống (ký, đóng dấu tay); tích chọn mới chèn
+  const [stamp, setStamp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     void (async () => {
@@ -75,24 +77,17 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
         sign: gd?.img ?? null, seal, signName: showName(gd) });
     })();
   }, [tenantId, docs]);
-  useEffect(() => {
-    if (!co || !ex) return;
-    const imgs = Array.from(ref.current?.querySelectorAll('img') ?? []);
-    let done = false;
-    const go = () => { if (!done) { done = true; window.print(); } };
-    void Promise.all(imgs.map((i) => (i.complete ? Promise.resolve() : new Promise((r) => { i.onload = r; i.onerror = r; })))).then(() => setTimeout(go, 150));
-    const t = setTimeout(go, 4000);
-    return () => clearTimeout(t);
-  }, [co, ex]);
 
-  const signA = (c: Company) => <div className="sign-box sign-stack">{c.seal && <img src={c.seal} alt="" />}{c.sign && <img src={c.sign} alt="" />}</div>;
+  const signA = (c: Company) => <div className="sign-box sign-stack">{stamp && c.seal && <img src={c.seal} alt="" />}{stamp && c.sign && <img src={c.sign} alt="" />}</div>;
+  const nameA = (c: Company) => (!stamp || c.signName ? <b>{c.director}</b> : null);
   const quocHieu = <div className="c"><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><div><b><u>Độc lập - Tự do - Hạnh phúc</u></b></div></div>;
 
   return (
     <div className="lenh-overlay">
       <div className="lenh-bar no-print">
         <b>{docs.length === 1 ? `Hợp đồng ${docs[0].contract_no}` : `${docs.length} hợp đồng`}</b>
-        <button className="btn small primary" onClick={() => window.print()}>In / lưu PDF</button>
+        <label className="check"><input type="checkbox" checked={stamp} onChange={(e) => setStamp(e.target.checked)} /> Chèn chữ ký, con dấu</label>
+        <button className="btn small primary" disabled={!co || !ex} onClick={() => window.print()}>In / lưu PDF</button>
         <button className="btn small" onClick={onClose}>Đóng</button>
       </div>
       <div ref={ref} className="print-stack">
@@ -126,12 +121,11 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
                 Điện thoại: <V v={co.phone} /> · Email: <V v={co.email} /> · Tài khoản ngân hàng: {dots(22)} tại Ngân hàng {dots(16)}<br />
                 Giấy phép kinh doanh vận tải bằng xe ô tô số: <V v={co.transport_license_no} /> do <V v={co.transport_license_issuer} n={18} /> cấp ngày <V v={co.transport_license_date ? dmy(co.transport_license_date) : null} n={12} /> (loại hình: kinh doanh vận tải hành khách theo hợp đồng).</p>
               {/* Bên B: mỗi thông tin 1 dòng, chỗ trống kẻ chấm rộng để ghi tay */}
-              <p className="hd-fill"><b>BÊN THUÊ VẬN CHUYỂN (Bên B): {c.customer_name.toUpperCase()}</b><br />
-                <span>Mã số thuế / Số CCCD: <W v={c.customer_tax_code} /></span>
-                <span>Địa chỉ: <W v={c.customer_address} /></span>
+              <div className="hd-fill"><b>BÊN THUÊ VẬN CHUYỂN (Bên B): {c.customer_name.toUpperCase()}</b>
+                <span>Mã số thuế / Số CCCD: <W v={c.customer_tax_code} /></span><span>Điện thoại: <W v={c.customer_phone} /></span>
+                <span className="w2">Địa chỉ: <W v={c.customer_address} /></span>
                 <span>Người đại diện / Trưởng đoàn: <W v={c.customer_rep} /></span><span>Chức vụ: <W /></span>
-                <span>Điện thoại: <W v={c.customer_phone} /></span><span>Email: <W v={c.customer_email} /></span>
-                <span>Tài khoản ngân hàng (nếu có): <W /></span></p>
+                <span>Email: <W v={c.customer_email} /></span><span>Tài khoản ngân hàng (nếu có): <W /></span></div>
               <p>Hai bên thống nhất ký kết hợp đồng vận chuyển hành khách với các điều khoản sau:</p>
               <p><b>Điều 1. Nội dung, lịch trình và phương tiện</b><br />
                 1. Bên A vận chuyển hành khách cho Bên B theo hình thức vận tải hành khách theo hợp đồng: ☐ theo chuyến ☐ đưa đón cán bộ công nhân viên, học sinh ☐ phục vụ du lịch, sự kiện.<br />
@@ -163,7 +157,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
               <p><b>Điều 7. Hiệu lực hợp đồng</b><br />
                 Hợp đồng có hiệu lực từ khi ký đến khi hoàn thành chuyến đi và thanh lý. Danh sách hành khách và Lệnh vận chuyển là bộ phận không tách rời của hợp đồng. Hợp đồng lập thành 02 bản có giá trị như nhau, mỗi bên giữ 01 bản.</p>
               <table className="lenh-foot" style={{ width: '100%' }}><tbody><tr>
-                <td><b>ĐẠI DIỆN BÊN A</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div>{signA(co)}{co.signName && <b>{co.director}</b>}</td>
+                <td><b>ĐẠI DIỆN BÊN A</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div>{signA(co)}{nameA(co)}</td>
                 <td><b>ĐẠI DIỆN BÊN B</b><div><i>(Ký, ghi rõ họ tên, đóng dấu nếu có)</i></div><div className="sign-box" /><b>{c.customer_rep || c.customer_name}</b></td>
               </tr></tbody></table>
             </div>,
@@ -186,7 +180,7 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
               </table>
               <p>Tổng cộng: <b>{c.pax.length || c.passengers}</b> hành khách.</p>
               <table className="lenh-foot" style={{ width: '100%' }}><tbody><tr>
-                <td><b>ĐẠI DIỆN BÊN A</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div>{signA(co)}{co.signName && <b>{co.director}</b>}</td>
+                <td><b>ĐẠI DIỆN BÊN A</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div>{signA(co)}{nameA(co)}</td>
                 <td><b>ĐẠI DIỆN BÊN B / TRƯỞNG ĐOÀN</b><div><i>(Ký, ghi rõ họ tên)</i></div><div className="sign-box" /><b>{c.customer_rep || ''}</b></td>
               </tr></tbody></table>
             </div>,
@@ -221,9 +215,9 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
                 4. Tình trạng sức khỏe, nồng độ cồn của lái xe: ☐ Đủ điều kiện lái xe ☐ Không đạt</p>
               <p><b>IV. XÁC NHẬN THỰC HIỆN CHUYẾN ĐI</b></p>
               <table className="lenh-foot" style={{ width: '100%' }}><tbody><tr>
-                <td><b>NGƯỜI CẤP LỆNH / ĐIỀU HÀNH VẬN TẢI</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div><div><i>Ngày ..... tháng ..... năm .........</i></div>{signA(co)}{co.signName && <b>{co.director}</b>}</td>
+                <td><b>NGƯỜI CẤP LỆNH / ĐIỀU HÀNH VẬN TẢI</b><div><i>(Ký, ghi rõ họ tên, đóng dấu)</i></div><div><i>Ngày ..... tháng ..... năm .........</i></div>{signA(co)}{nameA(co)}</td>
                 <td><b>XÁC NHẬN CỦA LÁI XE</b><div><i>(Ký, ghi rõ họ tên)</i></div><div><i>Nhận lệnh lúc .....h..... ngày ...../...../.........</i></div>
-                  <div className="sign-box">{d1 && ex.signs.get(d1)?.img && <img src={ex.signs.get(d1)!.img!} alt="" />}</div>{(!d1 || showName(ex.signs.get(d1) ?? null)) && <b>{c.drivers[0] ?? ''}</b>}</td>
+                  <div className="sign-box">{stamp && d1 && ex.signs.get(d1)?.img && <img src={ex.signs.get(d1)!.img!} alt="" />}</div>{(!stamp || !d1 || showName(ex.signs.get(d1) ?? null)) && <b>{c.drivers[0] ?? ''}</b>}</td>
                 <td><b>XÁC NHẬN CỦA ĐẠI DIỆN BÊN THUÊ XE / TRƯỞNG ĐOÀN</b><div><i>(Ký xác nhận khi kết thúc hành trình)</i></div><div><i>Kết thúc lúc .....h..... ngày ...../...../.........</i></div><div><i>Số khách thực tế: ........ người</i></div><div className="sign-box" /><b>{c.customer_rep || ''}</b></td>
               </tr></tbody></table>
               <p><b>V. GHI CHÚ PHÁT SINH TRÊN HÀNH TRÌNH (nếu có)</b><br />

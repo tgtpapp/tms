@@ -39,7 +39,9 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","r
 select is(public.device_hello('dt-ban-ve-0001', 'Chrome · Android'), 'ok', 'Bán vé trên điện thoại: dùng mật khẩu được');
 select ok(app.current_tenant_id() is not null, 'Điện thoại thấy dữ liệu nhà xe');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000002"}';
-select is(public.device_hello('mt-ban-ve-0002', 'Chrome · Windows', null, null, false), 'chi_qr', 'Bán vé trên máy tính bằng mật khẩu: phải dùng QR (dù app báo là điện thoại)');
+select is(public.device_hello('mt-ban-ve-0002', 'Chrome · Windows', null, null, false), 'cho_quan_ly', 'Bán vé trên máy tính bằng mật khẩu: chờ quản lý duyệt (dù app báo là điện thoại)');
+select is(public.device_hello('mt-ban-ve-0002', 'Chrome · Windows', null, null, false), 'cho_quan_ly', 'Mở lại vẫn chờ');
+select is((select count(*)::int from public.pending_devices()), 0, 'Người xin không tự duyệt cho mình');
 select ok(app.current_tenant_id() is null, 'Phiên mật khẩu trên máy tính không thấy dữ liệu');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000003"}';
 select is(public.device_hello('mt-lai-xe-0003', 'Chrome · Windows'), 'ok', 'Lái xe không áp dụng');
@@ -54,6 +56,8 @@ insert into auth.sessions (id, user_id, created_at, updated_at, user_agent) valu
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000005"}';
 select is(public.device_hello('dt-chu-a-0005', 'Safari · iPhone'), 'ok', 'Chủ A trên điện thoại');
+select is((select count(*)::int from public.notifications where kind = 'thiet_bi'), 1, 'Chủ A nhận 1 thông báo ở chuông (không lặp khi mở lại)');
+select is((select count(*)::int from public.pending_devices() where session_id = '11111111-0000-0000-0000-000000000002'), 1, 'Chủ A thấy yêu cầu chờ duyệt');
 select ok(public.allow_desktop_password('00000000-0000-0000-0000-0000000000b3', true) > now(), 'Tạm cho phép 1 ngày');
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000002"}';
 select ok(app.current_tenant_id() is not null, 'Được tạm cho phép: máy tính dùng được');
@@ -77,5 +81,21 @@ select is(public.device_hello('mt-ban-ve-0006', 'Chrome · Windows', '44444444-0
 select ok(app.current_tenant_id() is not null, 'Phiên QR thấy dữ liệu');
 reset role;
 select is((select via from public.session_devices where session_id = '11111111-0000-0000-0000-000000000006'), 'qr', 'Ghi phiên vào bằng QR');
+
+-- Quản lý duyệt yêu cầu đăng nhập mật khẩu trên máy tính
+reset role;
+insert into auth.sessions (id, user_id, created_at, updated_at, user_agent) values
+  ('11111111-0000-0000-0000-000000000007', '00000000-0000-0000-0000-0000000000b3', now(), now(), 'Mozilla/5.0 (Windows NT 10.0) Chrome/130');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000007"}';
+select is(public.device_hello('mt-ban-ve-0006', 'Chrome · Windows'), 'cho_quan_ly', 'Máy tính khác bằng mật khẩu: chờ quản lý');
+select throws_ok($$ select public.approve_device('11111111-0000-0000-0000-000000000007', true) $$, '42501', null, 'Phiên đang chờ không tự duyệt');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated","session_id":"22222222-0000-0000-0000-000000000001"}';
+select throws_ok($$ select public.approve_device('11111111-0000-0000-0000-000000000007', true) $$, 'P0002', null, 'Chủ B không duyệt được người nhà xe A');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000005"}';
+select lives_ok($$ select public.approve_device('11111111-0000-0000-0000-000000000007', true) $$, 'Chủ A cho phép');
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated","session_id":"11111111-0000-0000-0000-000000000007"}';
+select is(public.device_hello('mt-ban-ve-0006', 'Chrome · Windows'), 'ok', 'Được cho phép: vào app');
+select ok(app.current_tenant_id() is not null, 'Được cho phép: thấy dữ liệu');
 select * from finish();
 rollback;

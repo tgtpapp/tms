@@ -7,20 +7,20 @@ import { deviceId, deviceName, qrJustUsed, setQrJustUsed } from '../lib/device';
 import { useToast } from '../lib/toast';
 
 /** Báo thiết bị khi mở app. Trả 'ok' / 'cho_duyet'; lỗi mạng coi như 'ok' (dữ liệu vẫn do database chặn). */
-export async function deviceHello(): Promise<'ok' | 'cho_duyet' | 'chi_qr'> {
+export async function deviceHello(): Promise<'ok' | 'cho_duyet' | 'chi_qr' | 'cho_quan_ly'> {
   const qr = qrJustUsed();
   try {
     const d = deviceName();
     const r = await rpc<string>('device_hello', { p_device_id: deviceId(), p_name: d.name, p_qr: qr?.id ?? null, p_qr_secret: qr?.secret ?? null, p_desktop: !d.mobile });
     if (qr) setQrJustUsed(null);
-    return r === 'cho_duyet' || r === 'chi_qr' ? r : 'ok';
+    return r === 'cho_duyet' || r === 'chi_qr' || r === 'cho_quan_ly' ? r : 'ok';
   } catch {
     return 'ok';
   }
 }
 
 /** Màn chờ: thiết bị lạ đăng nhập bằng mật khẩu, chờ cho phép từ thiết bị đang dùng */
-export function PendingDevice({ onOk }: { onOk: () => void }) {
+export function PendingDevice({ onOk, manager }: { onOk: () => void; manager?: boolean }) {
   useEffect(() => {
     const t = setInterval(() => { void deviceHello().then((r) => { if (r === 'ok') onOk(); }); }, 3000);
     return () => clearInterval(t);
@@ -28,9 +28,11 @@ export function PendingDevice({ onOk }: { onOk: () => void }) {
   return (
     <Centered>
       <section className="card form narrow">
-        <h2>Chờ cho phép thiết bị</h2>
-        <p>Đây là thiết bị mới đăng nhập tài khoản của bạn ({deviceName().name}).</p>
-        <p>Mở app trên điện thoại (hoặc máy) bạn vẫn đang dùng, bấm <b>Cho phép</b> ở thông báo "Có thiết bị mới đăng nhập". Hoặc nhờ người quản lý tài khoản trong nhà xe cho phép.</p>
+        <h2>{manager ? 'Chờ quản lý cho phép' : 'Chờ cho phép thiết bị'}</h2>
+        {manager
+          ? <p>Đã gửi thông báo cho người quản lý tài khoản trong nhà xe. Khi quản lý bấm <b>Cho phép</b>, máy tính này vào app bằng mật khẩu được.</p>
+          : <><p>Đây là thiết bị mới đăng nhập tài khoản của bạn ({deviceName().name}).</p>
+             <p>Mở app trên điện thoại (hoặc máy) bạn vẫn đang dùng, bấm <b>Cho phép</b> ở thông báo "Có thiết bị mới đăng nhập". Hoặc nhờ người quản lý tài khoản trong nhà xe cho phép.</p></>}
         <p className="muted small">Màn hình tự vào app ngay khi được cho phép.</p>
         <button type="button" className="btn" onClick={() => void supabase.auth.signOut({ scope: 'local' })}>Thoát</button>
       </section>
@@ -48,6 +50,12 @@ export function DeviceApprovals() {
   const [qr, setQr] = useState<{ id: string; name: string | null; status: string } | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [scan, setScan] = useState(false);
+  // Bấm thông báo "Xin đăng nhập bằng mật khẩu trên máy tính" ở chuông: mở ngay danh sách chờ duyệt
+  useEffect(() => {
+    const on = () => { setHidden([]); void rpc<Pending[]>('pending_devices').then(setList).catch(() => undefined); };
+    window.addEventListener('tms-thiet-bi', on);
+    return () => window.removeEventListener('tms-thiet-bi', on);
+  }, []);
   useEffect(() => {
     const open = () => setScan(true);
     window.addEventListener('tms-qr-scan', open);

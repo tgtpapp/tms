@@ -18,7 +18,7 @@ type View =
   | { kind: 'platform' }
   | { kind: 'tenant'; ctx: AccountContext }
   | { kind: 'no_access' }
-  | { kind: 'pending_device' };
+  | { kind: 'pending_device'; manager?: boolean };
 
 export function App() {
   return (
@@ -47,7 +47,7 @@ function Root() {
       }
       // Thiết bị lạ của nhân viên văn phòng / quản lý: chờ cho phép từ thiết bị đang dùng
       const dh = await deviceHello();
-      if (dh === 'cho_duyet') { setView({ kind: 'pending_device' }); return; }
+      if (dh === 'cho_duyet' || dh === 'cho_quan_ly') { setView({ kind: 'pending_device', manager: dh === 'cho_quan_ly' }); return; }
       // Nhà xe bật "máy tính chỉ đăng nhập bằng QR": phiên mật khẩu trên máy tính bị chặn → đăng xuất, màn đăng nhập hiện mã QR
       if (dh === 'chi_qr') {
         try { sessionStorage.setItem('tms.dang_nhap_bao', 'Máy tính chỉ đăng nhập bằng quét mã QR từ app trên điện thoại.'); } catch { /* bỏ qua */ }
@@ -114,7 +114,7 @@ function Root() {
     case 'login':
       return <LoginScreen />;
     case 'pending_device':
-      return <PendingDevice onOk={() => void resolve()} />;
+      return <PendingDevice manager={view.manager} onOk={() => void resolve()} />;
     case 'platform':
       return <><PlatformScreen /><DeviceApprovals /></>;
     case 'tenant':

@@ -16,4 +16,4 @@ jobs:
         run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
       - name: Mở trang thật, in lỗi
         working-directory: web
-        run: node ../.github/scripts/chan_doan_trang.mjs
+        run: cp ../.github/scripts/chan_doan_trang.mjs ./cdt.mjs && node cdt.mjs

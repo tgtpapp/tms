@@ -1,5 +1,5 @@
 // Mở https://thinhphat.pages.dev (chưa đăng nhập), in lỗi console / lỗi tải tệp và chữ đầu trang. Không đăng nhập, không ghi gì.
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test';
 const b = await chromium.launch();
 const p = await b.newPage();
 p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log('CONSOLE', m.type(), m.text().slice(0, 500)); });

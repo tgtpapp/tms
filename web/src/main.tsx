@@ -10,6 +10,7 @@ import './lib/push';   // gửi thông báo đẩy đang chờ sau mỗi thao t�
 import '@flaticon/flaticon-uicons/css/regular/rounded.css';   // bộ biểu tượng Uicons (Flaticon) – kiểu Regular Rounded
 import './styles.css';
 initPwa();
+try { sessionStorage.removeItem('tms.tai_lai_ban_moi'); } catch { /* trình duyệt chặn lưu */ }   // đã tải được tệp chính: lần sau gặp lỗi tải lại được tiếp
 installErrorLog();   // nhớ các lỗi gần nhất trên máy để gửi kèm khi báo sự cố
 
 initTheme();   // áp giao diện đã chọn trước khi vẽ (không nháy màu)

@@ -172,10 +172,10 @@ export function CharterPrint({ docs, tenantId, onClose }: { docs: CharterDoc[]; 
                 Hành trình: từ <b>{c.pickup_place}</b> đến <b>{c.destination}</b><br />
                 Thời gian khởi hành: {hm(c.start_at)}, ngày {vnDate(c.start_at)}</p>
               <table className="lenh-table hdvc-ds" style={{ ['--rh' as string]: rh }}>
-                <thead><tr><th>STT</th><th>Họ và tên hành khách</th><th>Năm sinh</th><th>Số CCCD / Hộ chiếu (nếu có)</th><th>Điểm đón</th><th>Điểm trả</th><th>Ghi chú</th></tr></thead>
+                <thead><tr><th>STT</th><th>Họ và tên hành khách</th><th>Năm sinh</th><th>Số CCCD / Hộ chiếu (nếu có)</th><th>Ghi chú</th></tr></thead>
                 <tbody>
-                  {c.pax.map((p, i) => <tr key={i}><td className="c">{i + 1}</td><td>{p.full_name}</td><td className="c">{p.birth_year ?? ''}</td><td /><td /><td /><td /></tr>)}
-                  {Array.from({ length: blank }, (_, i) => <tr key={`b${i}`}><td className="c">{c.pax.length + i + 1}</td><td /><td /><td /><td /><td /><td /></tr>)}
+                  {c.pax.map((p, i) => <tr key={i}><td className="c">{i + 1}</td><td>{p.full_name}</td><td className="c">{p.birth_year ?? ''}</td><td /><td /></tr>)}
+                  {Array.from({ length: blank }, (_, i) => <tr key={`b${i}`}><td className="c">{c.pax.length + i + 1}</td><td /><td /><td /><td /></tr>)}
                 </tbody>
               </table>
               <p>Tổng cộng: <b>{c.pax.length || c.passengers}</b> hành khách.</p>

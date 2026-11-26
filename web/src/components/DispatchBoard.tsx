@@ -157,6 +157,8 @@ export function GridView(props: { routes: BRoute[]; trips: BTrip[]; crew: BCrew[
   const [sold, setSold] = useState<Record<string, number>>({});
   const [cap, setCap] = useState<Record<string, number>>({});
   const ids = trips.map((t) => t.id).join(',');
+  // tải lại số ghế khi loại xe của chuyến đổi (đổi xe khác sơ đồ, vd 16 chỗ → 29 chỗ), không chỉ khi danh sách chuyến đổi
+  const typeKey = [...new Set(trips.map((t) => t.vehicle_type_id).filter(Boolean))].sort().join(',');
   useEffect(() => {
     const list = ids ? ids.split(',') : [];
     if (!list.length) return;
@@ -165,7 +167,7 @@ export function GridView(props: { routes: BRoute[]; trips: BTrip[]; crew: BCrew[
       for (const r of (data ?? []) as { trip_id: string }[]) m[r.trip_id] = (m[r.trip_id] ?? 0) + 1;
       setSold(m);
     });
-    const types = [...new Set(trips.map((t) => t.vehicle_type_id).filter(Boolean))] as string[];
+    const types = typeKey ? typeKey.split(',') : [];
     if (types.length) {
       void supabase.from('vehicle_type_seats').select('vehicle_type_id').in('vehicle_type_id', types).eq('is_sellable', true).then(({ data }) => {
         const m: Record<string, number> = {};
@@ -174,7 +176,7 @@ export function GridView(props: { routes: BRoute[]; trips: BTrip[]; crew: BCrew[
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids]);
+  }, [ids, typeKey]);
   const rowsKeys = [...new Set(trips.map((t) => `${t.route_id}|${t.direction}`))]
     .map((k) => { const [id, d] = k.split('|'); const r = routes.find((x) => x.id === id); return { k, r, d: d as Dir }; })
     .sort((a, b) => byPair(a.r?.name ?? '', a.d, b.r?.name ?? '', b.d));

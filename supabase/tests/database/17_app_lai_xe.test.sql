@@ -358,6 +358,18 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","r
 select throws_ok($$ select app.svc_auto_trip_marks() $$, '42501', null, 'Người dùng không gọi được tự ghi của máy chủ');
 reset role;
 
+-- ---------------------------------------------------------------- Lái xe báo điều hành (trợ lý giọng nói)
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select ok(public.crew_report((select v from t.ids where k = 'T1'), 'tre_gio', 'Kẹt xe, trễ 20 phút') >= 1, 'Lái xe báo trễ giờ về điều hành');
+select throws_ok(format('select public.crew_report(%L, %L, %L)', (select v from t.ids where k = 'T3'), 'su_co', 'x y'), 'P0002', null, 'Không báo cho chuyến không phải của mình');
+reset role;
+select ok(exists (select 1 from public.notifications where kind = 'lai_xe_bao' and body like '%trễ 20 phút%'), 'Điều hành nhận thông báo');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok(format('select public.crew_report(%L, %L, %L)', (select v from t.ids where k = 'T1'), 'nhan', 'x y'), 'P0002', null, 'Nhà xe B không báo vào chuyến của A');
+reset role;
+
 -- ---------------------------------------------------------------- Nhập lịch dán (Vexere): ghi đè cả lô, đổi tài giữa 2 chuyến chồng giờ, cả chuyến đã xuất bến
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';

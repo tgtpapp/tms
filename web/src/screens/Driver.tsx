@@ -498,6 +498,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName }: { trip:
       )}
       {trip.status === 'mo' && !trip.arrived_at && (
         <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
+                        onChanged={load}
                         onMark={async (ids, action, patch) => { if (!await act(tickets.filter((t) => ids.includes(t.id)), action, patch as Partial<Ticket>)) throw new Error('ghi lỗi'); }}
                         trip={{ depart_at: trip.depart_at, departed_at: trip.departed_at, arrived_at: trip.arrived_at, plate: trip.plate, routeName }} />
       )}

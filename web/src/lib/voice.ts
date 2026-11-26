@@ -7,7 +7,7 @@ export interface VTicket {
   passenger_name: string | null; passenger_phone: string | null; boarded: boolean; no_show: boolean; dropped: boolean;
 }
 export interface VParcel {
-  from_stop_id: string; to_stop_id: string; packages: number; receiver_name: string | null; receiver_phone: string;
+  id: string; from_stop_id: string; to_stop_id: string; packages: number; receiver_name: string | null; receiver_phone: string;
   fee: number; fee_payer: 'nguoi_gui' | 'nguoi_nhan'; fee_paid_at: string | null; cod_amount: number; cod_collected_at: string | null; status: string;
 }
 export interface VTrip { depart_at: string; departed_at: string | null; arrived_at: string | null; plate: string | null; routeName: string }
@@ -81,7 +81,8 @@ export function tripText(t: VTrip, tk: VTicket[], cap: number): string {
   return clean(head);
 }
 
-export type Intent = 'diem_toi' | 'thu_ho' | 'chuyen' | 'nhac_lai' | 'don' | 'tra' | 'vang' | 'hoan_tac' | 'khong_ro';
+export type Intent = 'diem_toi' | 'thu_ho' | 'chuyen' | 'nhac_lai' | 'don' | 'tra' | 'vang' | 'hoan_tac'
+  | 'giao' | 'do_dau' | 'chi_phi' | 'su_co' | 'tre_gio' | 'nhan' | 'khong_ro';
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'd').toLowerCase();
 /** Hiểu câu hỏi theo từ khóa (giai đoạn 1 chỉ có tra cứu) */
 export function intentOf(heard: string): Intent {
@@ -91,6 +92,12 @@ export function intentOf(heard: string): Intent {
   if (/khach vang|vang mat|bao vang|ghi vang|vang roi|khong co mat|khong ra|khong di|bo chuyen|khong thay khach/.test(s)) return 'vang';
   if (/da tra|tra du|tra xong|xuong xe|tra het/.test(s)) return 'tra';
   if (/da don|don du|don xong|don het|len xe|da len|don roi/.test(s)) return 'don';
+  if (/da giao|giao hang|giao xong|giao cho|giao roi/.test(s)) return 'giao';
+  if (/do dau|do xang|do nhien lieu|bom dau/.test(s)) return 'do_dau';
+  if (/cau duong|phi duong|tram thu phi|ve cau|chi phi|tien phi|sua xe|va lop|rua xe|gui xe|an uong/.test(s) && moneyOf(heard)) return 'chi_phi';
+  if (/bao dieu hanh|nhan dieu hanh|bao van phong|nhan van phong|nhan cho|chuyen loi/.test(s) && !/ket xe|\btre\b|\bcham\b|su co|tai nan/.test(s)) return 'nhan';
+  if (/su co|tai nan|va cham|hu xe|hong xe|xe hu|xe hong|thung lop|be lop|xit lop|chet may|qua nhiet|canh sat|csgt|bi phat/.test(s)) return 'su_co';
+  if (/\btre\b|\bcham\b|ket xe|tac duong|un tac/.test(s)) return 'tre_gio';
   if (/thu ho|cod|kien|tien hang|bao nhieu hang|con hang|tong tien/.test(s)) return 'thu_ho';
   if (/diem|toi dau|ke tiep|tiep theo|may khach|don ai|tra ai|khach nao|don khach|tra khach/.test(s)) return 'diem_toi';
   if (/chuyen|may gio|gio chay|xe nao|ban duoc|bao nhieu ghe/.test(s)) return 'chuyen';
@@ -183,3 +190,42 @@ export function mentioned(heard: string, pool: VTicket[]): VTicket[] {
   });
 }
 export const whoList = (ts: VTicket[]) => list(ts.map((t) => who(t.passenger_name, t.passenger_phone)));
+
+
+/* ---------------- Giai đoạn 3: giao hàng, đổ dầu, báo điều hành ---------------- */
+/** Đọc số tiền trong câu nói: "1 triệu 2", "1 triệu 200 nghìn", "500 nghìn", "500k", "1.200.000" → đồng; không có → 0 */
+export function moneyOf(heard: string): number {
+  const s = fold(heard).replace(/(\d)[.,](\d{3})/g, '$1$2').replace(/(\d)[.,](\d{3})/g, '$1$2');
+  const tr = /(\d+(?:[.,]\d+)?)\s*(?:trieu|tr\b|m\b)\s*(\d{1,3})?(?:\s*(?:nghin|ngan|k)\b)?/.exec(s);
+  if (tr) {
+    const main = Math.round(Number(tr[1].replace(',', '.')) * 1_000_000);
+    const rest = tr[2] ? Number(tr[2]) * (tr[2].length === 1 ? 100_000 : tr[2].length === 2 ? 10_000 : 1000) : 0;
+    return main + rest;
+  }
+  const ng = /(\d+)\s*(?:nghin|ngan|k)\b/.exec(s);
+  if (ng) return Number(ng[1]) * 1000;
+  const big = /(\d{4,})\s*(?:dong|d\b)?/.exec(s);
+  return big ? Number(big[1]) : 0;
+}
+/** Số lít trong câu nói: "60 lít" */
+export function litersOf(heard: string): number {
+  const m = /(\d+(?:[.,]\d+)?)\s*lit/.exec(fold(heard));
+  return m ? Number(m[1].replace(',', '.')) : 0;
+}
+/** Kiện hàng được nhắc tới: theo 3 số cuối điện thoại người nhận hoặc tên người nhận */
+export function mentionedParcels(heard: string, pool: VParcel[]): VParcel[] {
+  const digits = heard.replace(/\D/g, '');
+  if (digits.length >= 3) {
+    const by = pool.filter((p) => p.receiver_phone.replace(/\D/g, '').endsWith(digits.slice(-3)));
+    if (by.length) return by;
+  }
+  const s = ` ${fold(heard)} `;
+  return pool.filter((p) => {
+    const w = fold(p.receiver_name ?? '').split(/\s+/).filter((x) => x.length >= 2);
+    const last = w[w.length - 1];
+    return !!last && s.includes(` ${last} `);
+  });
+}
+export const parcelsOpen = openParcels;
+export const parcelDue = toCollect;
+export const receiverList = (ps: VParcel[]) => list(ps.map((p) => who(p.receiver_name, p.receiver_phone)), 2);

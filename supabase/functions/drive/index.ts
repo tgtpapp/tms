@@ -113,6 +113,33 @@ Deno.serve(async (req) => {
       return json(200, { name: it.data.file_name, mime: r.mime, data: r.data });
     }
 
+    // Chuyển dữ liệu cũ (Chủ nhà xe): đẩy file dữ liệu của khoảng ngày lên Drive, ghi lại để đối chiếu / xóa / phục hồi sau
+    if (b.action === 'archive_put') {
+      const from = String(b.from ?? ''), to = String(b.to ?? '');
+      const pv = await user.rpc('archive_preview', { p_from: from, p_to: to });   // kiểm Chủ nhà xe + khoảng ngày cũ hơn 12 tháng
+      if (pv.error) throw new HttpError(403, pv.error.message);
+      const data = typeof b.data === 'string' ? b.data : '';
+      if (!data) throw new HttpError(400, 'File trống');
+      if (data.length > MAX_B64) throw new HttpError(413, 'Dữ liệu của khoảng ngày này lớn hơn 10 MB sau khi nén. Hãy chọn khoảng ngày ngắn hơn');
+      const uid = (await user.auth.getUser()).data.user?.id;
+      if (!uid) throw new HttpError(401, 'Chưa đăng nhập');
+      const bin = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      const sha = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bin))].map((x) => x.toString(16).padStart(2, '0')).join('');
+      const stamp = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 16).replace(/[-:T]/g, '');
+      const fileName = `du-lieu-cu_${from}_${to}_${stamp}.json.gz`;
+      const r = await gas(cfg, { action: 'hs_put', path: ['Sao lưu dữ liệu', 'Dữ liệu đã chuyển'], name: fileName, mime: 'application/gzip', data }, 180000);
+      const sv = await admin.rpc('svc_archive_saved', { p_tenant: t.data, p_user: uid, p_from: from, p_to: to, p_drive_id: String(r.id), p_file_name: fileName,
+        p_size: bin.length, p_sha256: sha, p_counts: pv.data });
+      if (sv.error) { await gas(cfg, { action: 'hs_del', id: r.id }).catch(() => undefined); throw new HttpError(400, sv.error.message); }
+      return json(200, { id: sv.data, sha256: sha, file_name: fileName });
+    }
+    if (b.action === 'archive_get') {
+      const it = await user.from('data_archives').select('drive_id, file_name').eq('id', String(b.id ?? '')).maybeSingle();   // RLS: chỉ Chủ nhà xe
+      if (!it.data?.drive_id) throw new HttpError(404, 'Không tìm thấy bản dữ liệu đã chuyển');
+      const r = await gas(cfg, { action: 'hs_get', id: it.data.drive_id }, 180000);
+      return json(200, { name: it.data.file_name, data: r.data });
+    }
+
     if (b.action === 'put_lenh') {
       const uid = (await user.auth.getUser()).data.user?.id;
       if (!uid) throw new HttpError(401, 'Chưa đăng nhập');

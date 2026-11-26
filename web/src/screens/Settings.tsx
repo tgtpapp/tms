@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { CompanyInfo } from './CompanyInfo';
 import { LegacyImport } from './LegacyImport';
 import { BackupPanel } from '../components/BackupPanel';
+import { ArchivePanel } from '../components/ArchivePanel';
 import { StorageUsage } from '../components/StorageUsage';
 import { ZaloSettings } from '../components/ZaloSettings';
 import { DriveSettings } from '../components/DriveSettings';
@@ -332,6 +333,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       {canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}
       <StorageUsage />
       <BackupPanel />
+      <ArchivePanel />
       <LegacyImport tenantId={tenantId} />
     </>
   );

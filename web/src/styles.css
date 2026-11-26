@@ -1874,7 +1874,7 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .nl80-sgi { height: 13mm; display: flex; align-items: center; justify-content: center; }
 .nl80-sgi img { max-height: 13mm; max-width: 100%; object-fit: contain; }
 
-/* Lịch app lái xe: chấm dưới ngày có chuyến (như app cũ) */
-.mc-dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 1px; background: transparent; }
-.mc-dot.on { background: #38a3e8; }
-.mc-day.on .mc-dot.on { background: #fff; }
+/* Lịch app lái xe: số chuyến trong ngày dưới ngày */
+.mc-n { min-height: 15px; margin-top: 1px; font-size: .68rem; font-weight: 700; line-height: 15px; }
+.mc-n.on { min-width: 16px; padding: 0 4px; border-radius: 999px; background: #38a3e8; color: #fff; }
+.mc-day.on .mc-n.on { background: #fff; color: var(--primary); }

@@ -5,7 +5,7 @@ import { lunarText, toLunar } from '../lib/lunar';
 
 const WD = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-/** marks: ngày có chuyến (chấm dưới ngày, như app cũ); onMonth: đổi tháng đang xem (để tải các ngày có chuyến) */
+/** marks: số chuyến trong ngày (hiện dưới ngày); onMonth: đổi tháng đang xem (để tải các ngày có chuyến) */
 export function MiniCal({ day, onPick, marks, onMonth }: { day: string; onPick: (d: string) => void; marks?: Map<string, number>; onMonth?: (ym: string) => void }) {
   const [month, setMonth] = useState(day.slice(0, 7));
   useEffect(() => setMonth(day.slice(0, 7)), [day]);
@@ -40,7 +40,7 @@ export function MiniCal({ day, onPick, marks, onMonth }: { day: string; onPick: 
             <button key={d} type="button" className={cls} aria-label={`Ngày ${fmtDate(d)}${marks?.get(d) ? ` · ${marks.get(d)} chuyến` : ''}`} onClick={() => onPick(d)}>
               <span className="mc-solar">{i + 1}</span>
               <span className={red ? 'mc-lunar red' : 'mc-lunar'}>{l.day === 1 ? `${l.day}/${l.month}${l.leap ? 'N' : ''}` : l.day}</span>
-              {marks && <span className={marks.get(d) ? 'mc-dot on' : 'mc-dot'} />}
+              {marks && <span className={marks.get(d) ? 'mc-n on' : 'mc-n'}>{marks.get(d) || ''}</span>}
             </button>
           );
         })}

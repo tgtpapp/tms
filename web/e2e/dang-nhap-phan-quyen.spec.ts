@@ -326,8 +326,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.locator('.lvx-tbl').getByText('Đã duyệt', { exact: true })).toBeVisible();
   // Đơn xin nghỉ phép: tự điền từ đơn + hồ sơ theo mẫu chuẩn
   await page.locator('.lvx-tbl').getByRole('button', { name: 'Đơn', exact: true }).first().click();
-  await expect(page.getByText('ĐƠN XIN NGHỈ PHÉP')).toBeVisible();
-  await expect(page.getByText(/Lý do xin nghỉ:\s*Về quê/)).toBeVisible();
+  await expect(page.getByText('ĐƠN XIN NGHỈ PHÉP').first()).toBeVisible();
+  await expect(page.getByText(/Lý do xin nghỉ:\s*Về quê/).first()).toBeVisible();
   await page.getByRole('button', { name: /Đóng/ }).first().click();
   await page.getByRole('tab', { name: 'Hồ sơ', exact: true }).click();
   // Nhập Excel: xem trước (người mới → Thêm mới), chưa nhập

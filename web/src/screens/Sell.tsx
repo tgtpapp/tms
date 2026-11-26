@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { TripColorPicker } from '../components/TripColorPicker';
 import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { PrintHead } from '../components/PrintHead';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
@@ -296,6 +297,7 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
       <div className="vx">
         <aside className="vx-left">
           <RouteViewToggle view={rview} onChange={setRview} />
+          <TripColorPicker />
           {rview === 'o' ? <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
               {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>

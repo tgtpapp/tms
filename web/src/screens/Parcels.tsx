@@ -1,4 +1,5 @@
 // Giai đoạn 6.3 – Gửi hàng: nhận hàng (thu cước), gắn chuyến, đã đến, giao hàng (thu cước người nhận + thu hộ), trả thu hộ, hủy.
+import { TripColorPicker } from '../components/TripColorPicker';
 import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { personSign, type Sign } from '../lib/signatures';
 import { RouteCards, RouteViewToggle, useRouteView } from '../components/RouteCards';
@@ -238,6 +239,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
       <div className="vx">
         <aside className="vx-left">
           <RouteViewToggle view={rview} onChange={setRview} />
+          <TripColorPicker />
           {rview === 'o' ? <select className="vx-route" aria-label="Tuyến" value={rfOk} onChange={(e) => pickRoute(e.target.value)}>
               {routeOpts.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
             </select>

@@ -1,4 +1,5 @@
 import { dirName } from '../lib/routes';
+import { TripColorPicker } from '../components/TripColorPicker';
 import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { applyFilter, GridView, RouteFilterBar, useBoardFilter, VehicleUsage, type Group } from '../components/DispatchBoard';
 import { Modal } from '../components/Modal';
@@ -435,6 +436,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
       )}
 
       <RouteFilterBar routes={routes} trips={trips} crew={crew} f={f} setF={setF} canEditGroups={canEdit} view={view} setView={setView} onGroups={setGroups} />
+      {view === 'ds' && <TripColorPicker />}
       {trips.length === 0 && <p className="muted">Không có chuyến trong ngày.</p>}
       {view === 'bang' && (
         <>

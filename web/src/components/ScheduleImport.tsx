@@ -7,7 +7,8 @@ import { fmtDate } from './Documents';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { dirName, reverseName, type Dir } from '../lib/routes';
-import { parseVxPayload, type VxPayload } from '../lib/vexereTickets';
+import { parseVxLayoutPayload, parseVxPayload, type VxLayout, type VxPayload } from '../lib/vexereTickets';
+import { VexereSeatSync } from './VexereSeatSync';
 import { VexereTicketSync } from './VexereTicketSync';
 import { norm, parseRows, parseVexere, plateKey, routeKey, templateCsv, textToRows, titleCase, type Parsed } from '../lib/scheduleImport';
 
@@ -38,6 +39,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   const [msg, setMsg] = useState<{ ok: string; warn: string[] } | null>(null);
   const [P, setP] = useState<Parsed | null>(null);
   const [ve, setVe] = useState<VxPayload | null>(null);
+  const [sd, setSd] = useState<VxLayout[] | null>(null);
   const [src, setSrc] = useState('');
   const [opt, setOpt] = useState({ e: true, v: true, n: true });
   const [base, setBase] = useState<{ routes: Route[]; vehicles: Veh[]; staff: Staff[]; types: VType[]; defType: string } | null>(null);
@@ -179,6 +181,9 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
   useEffect(() => { setPick(new Set(rows.map((r, i) => (r.ok && !r.same ? i : -1)).filter((i) => i >= 0))); }, [rows]);
 
   function readText(raw: string) {
+    const lay = parseVxLayoutPayload(raw);
+    if (lay) { setP(null); setVe(null); setSd(lay); setMsg({ ok: `Đọc được ${lay.length} sơ đồ ghế Vexere.`, warn: [] }); return; }
+    setSd(null);
     const vx = parseVxPayload(raw);
     if (vx) { setP(null); setVe(vx); setMsg({ ok: `Đọc được vé Vexere ${vx.chuyen.length} chuyến, ngày ${fmtDate(vx.ngay)}.`, warn: [] }); return; }
     setVe(null);
@@ -354,6 +359,7 @@ export function ScheduleImport({ day, onClose, onDone }: { day: string; onClose:
                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void readFile(f); }} />
         </div>
 
+        {sd && <VexereSeatSync data={sd} />}
         {ve && base && <VexereTicketSync data={ve} routes={base.routes} onDone={onDone} />}
         {P && rows.length > 0 && (
           <>

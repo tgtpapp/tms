@@ -55,3 +55,39 @@ export function toSyncTicket(v: VxRaw): SyncTicket {
     ghi_chu: v.ghi?.trim() || undefined, tu_ma: tu.ma || undefined, tu_ten: tu.ten || undefined, den_ma: den.ma || undefined, den_ten: den.ten || undefined,
   };
 }
+
+// ---------------------------------------------------------------- Sơ đồ ghế Vexere → sơ đồ loại xe TMS
+// Gói: {"tms":"vexere_so_do","mau":[{"ten":"Ghế ngồi 14 chỗ","info":"<chuỗi info của seat_template>"}]}
+export interface VxLayoutRaw { ten: string; info: string }
+export interface VxCell { label: string; deck: number; row: number; col: number; kind: 'ghe' | 'tai_xe' | 'cua' }
+export interface VxLayout { ten: string; rows: number; cols: number; cells: VxCell[]; ghe: number }
+
+/** Chuỗi info: các phần cách nhau "~"; ô ghế dạng "1|stt|loại|ký hiệu|ký hiệu|tầng|hàng|cột|…" */
+export function parseVxLayout(m: VxLayoutRaw): VxLayout | null {
+  const cells: VxCell[] = [];
+  for (const seg of String(m.info ?? '').split('~')) {
+    const p = seg.split('|');
+    if (p.length < 8 || !/^\d+$/.test(p[1]) || !p[3] || p[3] !== p[4]) continue;
+    const deck = +p[5], row = +p[6], col = +p[7];
+    if (!(deck >= 1 && row >= 1 && col >= 1)) continue;
+    const up = p[3].trim().toUpperCase();
+    const kind: VxCell['kind'] = /TÀI XẾ|TAI XE/.test(up) ? 'tai_xe' : /CỬA|CUA/.test(up) ? 'cua' : 'ghe';
+    cells.push({ label: up, deck, row, col, kind });
+  }
+  if (!cells.some((c) => c.kind === 'ghe')) return null;
+  return { ten: String(m.ten ?? '').trim(), rows: Math.max(...cells.map((c) => c.row)), cols: Math.max(...cells.map((c) => c.col)),
+    cells, ghe: cells.filter((c) => c.kind === 'ghe').length };
+}
+
+export function parseVxLayoutPayload(raw: string): VxLayout[] | null {
+  const s = raw.trim();
+  if (!s.startsWith('{') || !s.includes('vexere_so_do')) return null;
+  try {
+    const j = JSON.parse(s) as { tms?: string; mau?: VxLayoutRaw[] };
+    if (j.tms !== 'vexere_so_do' || !Array.isArray(j.mau)) return null;
+    const out = j.mau.map(parseVxLayout).filter((x): x is VxLayout => !!x);
+    return out.length ? out : null;
+  } catch {
+    return null;
+  }
+}

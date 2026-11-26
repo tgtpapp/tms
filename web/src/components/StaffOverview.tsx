@@ -1,6 +1,6 @@
 // Lái xe & nhân viên: Tổng quan · Sơ đồ tổ chức · In thẻ nhân viên · Báo cáo nhân sự theo tháng.
 // Chỉ đọc dữ liệu đang có (hồ sơ, giấy tờ); không thêm bảng. Tuổi, sinh nhật chỉ có với người được xem hồ sơ riêng.
-import { letterhead, loadBrand } from '../lib/brand';
+import { letterhead, loadBrand, useBrand } from '../lib/brand';
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, initials } from './StaffAvatar';
 import { PaperView } from './ProfilePapers';
@@ -501,6 +501,7 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
   const [picked, setSel] = useState<Set<string> | null>(null);
   const sel = picked ?? new Set(act.map((s) => s.id));
   const [co, setCo] = useState('');
+  const logo = useBrand()?.logo ?? null;   // logo công ty (Thông tin công ty) thay biểu tượng xe trên dải màu
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<Page[] | null>(null);
   useEffect(() => { void company().then((c) => setCo(c.name)).catch(() => undefined); }, []);
@@ -511,10 +512,10 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
   const card = (s: OvStaff, photo: string | null) => {
     const c = color(s);
     return `<div style="width:85.6mm;height:54mm;border-radius:3.2mm;overflow:hidden;display:flex;background:#fff;border:1px solid #d9dfeb;box-shadow:0 6px 20px rgba(16,24,40,.12);font-family:Arial,sans-serif;color:#1b2333;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact">
-    <div style="flex:0 0 31mm;width:31mm;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.25),transparent 55%),linear-gradient(165deg,${shade(c, 0.45)},${c});display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2mm;color:#fff;padding:3mm 2mm">
-      <div style="width:7mm;height:7mm;border-radius:2mm;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:4mm">🚌</div>
-      ${photo ? `<img src="${photo}" alt="" style="width:23mm;height:23mm;border-radius:2.5mm;object-fit:cover;border:0.8mm solid #fff;background:#fff">`
-        : `<div style="width:23mm;height:23mm;border-radius:2.5mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
+    <div style="flex:0 0 31mm;width:31mm;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.25),transparent 55%),linear-gradient(165deg,${shade(c, 0.45)},${c});display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.8mm;color:#fff;padding:2.5mm 2mm">
+      ${logo ? `<div style="width:17mm;height:8mm;border-radius:1.6mm;background:#fff;display:flex;align-items:center;justify-content:center;padding:.6mm"><img src="${logo}" alt="" style="max-width:100%;max-height:100%;object-fit:contain"></div>` : ''}
+      ${photo ? `<img src="${photo}" alt="" style="width:20mm;height:25mm;border-radius:2.5mm;object-fit:cover;object-position:50% 0;border:0.8mm solid #fff;background:#fff">`
+        : `<div style="width:20mm;height:25mm;border-radius:2.5mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
       ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-weight:bold;font-size:7.5pt;letter-spacing:.5px;background:rgba(255,255,255,.2);border-radius:10px;padding:.3mm 3mm">${esc(POS[s.position])}</div>`}</div>
     <div style="flex:1 1 auto;min-width:0;padding:3.4mm 4mm 3mm;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(circle at 100% 0,${c}22,#fff 55%)">
       <div style="font-size:5.6pt;font-weight:bold;color:#6b7488;letter-spacing:.2px;line-height:1.3;max-height:2.6em;overflow:hidden">${esc(co.toUpperCase())}</div>

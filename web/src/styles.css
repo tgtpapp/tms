@@ -1951,3 +1951,12 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .tcp { display: flex; gap: 6px; align-items: center; }
 .tcp select { flex: 1 1 auto; min-width: 0; min-height: 34px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--surface); font: inherit; font-size: .85rem; }
 .tcp .btn { white-space: nowrap; }
+
+/* Hợp đồng vận chuyển: trang hợp đồng gói gọn 1 trang A4 */
+.hdvc.hdvc1 { font-size: 12.5px; line-height: 1.35; padding: 9mm 11mm 6mm; }
+.hdvc.hdvc1 p { margin: 3px 0; }
+.hdvc.hdvc1 h1 { font-size: 18px; margin: 4px 0 0; }
+.hdvc.hdvc1 .sign-box { height: 70px; }
+.hdvc.hdvc1 .sign-box.sign-stack img { max-height: 70px; }
+.hdvc h2 { font-size: 17px; margin: 0 0 2px; }
+.hdvc-ds td, .hdvc-ds th { padding: 4px 5px; font-size: 12.5px; height: 22px; }

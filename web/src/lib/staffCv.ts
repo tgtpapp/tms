@@ -63,7 +63,7 @@ export async function staffCvPages(tenantId: string, staffId: string, me: { id: 
   <h2 style="text-align:center;margin:16px 0 2px;font-size:20px">SƠ YẾU LÝ LỊCH NHÂN VIÊN</h2>
   <div style="display:flex;gap:16px;margin-top:12px;align-items:flex-start">
     <div style="width:30mm;height:40mm;border:1px solid #000;flex:0 0 auto;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:12px">
-      ${photo ? `<img src="${photo}" alt="" style="width:100%;height:100%;object-fit:cover">` : 'Ảnh 3x4'}</div>
+      ${photo ? `<img src="${photo}" alt="" style="width:100%;height:100%;object-fit:cover;object-position:50% 0">` : 'Ảnh 3x4'}</div>
     <div style="flex:1">${kv([
       ['Họ và tên', s.full_name.toUpperCase()], ['Giới tính', p?.gender === 'nam' ? 'Nam' : p?.gender === 'nu' ? 'Nữ' : ''], ['Ngày sinh', d(p?.birth_date)],
       ['Số CCCD', cccd?.doc_no ?? ''], ['Ngày cấp, nơi cấp', [d(cccd?.issued_on), cccd?.issuer].filter(Boolean).join(', ')],

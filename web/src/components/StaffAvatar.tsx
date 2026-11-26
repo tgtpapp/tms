@@ -56,7 +56,7 @@ export function StaffAvatar({ tenantId, staffId, name, canEdit, dir = 'anh_dai_d
           {url && <button type="button" className="btn small" onClick={() => void drop()}>Bỏ ảnh</button>}
         </div>
       )}
-      {crop && <Cropper file={crop} title={`Cắt ${what} (lấy phần giữa hình vuông)`} onCancel={() => setCrop(null)} onDone={(f) => { setCrop(null); void save(f); }} />}
+      {crop && <Cropper file={crop} title={`Cắt ${what}`} onCancel={() => setCrop(null)} onDone={(f) => { setCrop(null); void save(f); }} />}
     </div>
   );
 }

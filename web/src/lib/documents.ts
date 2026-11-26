@@ -286,25 +286,25 @@ export async function removeFile(full: string): Promise<void> {
 export type AvaDir = 'anh_dai_dien' | 'anh_xe';
 const avatarPath = (tenantId: string, staffId: string, dir: AvaDir = 'anh_dai_dien') => `${tenantId}/${dir}/${staffId}.jpg`;
 
-/** Thu ảnh về khung vuông 320px (cắt giữa), JPEG ~20-40 KB. */
-/** px: cạnh ảnh vuông tối đa; q: chất lượng JPEG. Ảnh đại diện nhân viên ~15 KB (240 px, 0,78). */
+/** Thu nhỏ ảnh, GIỮ NGUYÊN khung ảnh (không cắt giữa thành hình vuông – cắt vuông làm mất chỏm đầu của ảnh chân dung).
+ *  px: cạnh dài tối đa; q: chất lượng JPEG. Ảnh đại diện nhân viên ~20 KB (320 px, 0,8). Khung tròn / thẻ tự canh phần đầu khi hiện. */
 async function prepareAvatar(file: Blob, px = 320, q = 0.85): Promise<Blob> {
   if (!file.type.startsWith('image/')) throw new Error('Chỉ nhận ảnh');
   const bmp = await createImageBitmap(file);
-  const side = Math.min(bmp.width, bmp.height);
-  const S = Math.min(px, side);
+  const k = Math.min(1, px / Math.max(bmp.width, bmp.height));
+  const W = Math.max(1, Math.round(bmp.width * k)), H = Math.max(1, Math.round(bmp.height * k));
   const canvas = document.createElement('canvas');
-  canvas.width = S; canvas.height = S;
+  canvas.width = W; canvas.height = H;
   const g = canvas.getContext('2d');
   if (!g) throw new Error('Trình duyệt không xử lý được ảnh');
-  g.fillStyle = '#fff'; g.fillRect(0, 0, S, S);
-  g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, S, S);
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.drawImage(bmp, 0, 0, W, H);
   bmp.close();
   return new Promise((ok, bad) => canvas.toBlob((b) => (b ? ok(b) : bad(new Error('Không nén được ảnh'))), 'image/jpeg', q));
 }
 
 export async function uploadAvatar(tenantId: string, staffId: string, file: Blob, dir: AvaDir = 'anh_dai_dien'): Promise<void> {
-  const blob = dir === 'anh_dai_dien' ? await prepareAvatar(file, 240, 0.78) : await prepareAvatar(file);
+  const blob = dir === 'anh_dai_dien' ? await prepareAvatar(file, 320, 0.8) : await prepareAvatar(file);
   await putImage(avatarPath(tenantId, staffId, dir), blob, 'image/jpeg');
   window.dispatchEvent(new Event('tms-avatar'));
 }

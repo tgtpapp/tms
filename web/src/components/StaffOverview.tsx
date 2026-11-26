@@ -416,7 +416,7 @@ export function StaffOrg({ staff, avas, onOpen, branches = [], canConfig }: Comm
       // Bản in như mẫu: hàng lãnh đạo (thẻ đầu nền xanh đậm), các cột bộ phận có viền màu, trưởng bộ phận ở đầu cột, nhân viên bên dưới
       const b = await loadBrand();
       const ava = (s: OvStaff, px: number, ring = '#fff') => avas[s.id]
-        ? `<img src="${avas[s.id]}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;border:2px solid ${ring};display:block;margin:0 auto">`
+        ? `<img src="${avas[s.id]}" alt="" style="width:${px}px;height:${px}px;border-radius:50%;object-fit:cover;object-position:50% 22%;border:2px solid ${ring};display:block;margin:0 auto">`
         : `<div style="width:${px}px;height:${px}px;border-radius:50%;border:2px solid ${ring};background:#e2e8f0;color:#334155;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(px / 2.8)}px;margin:0 auto">${esc(initials(s.full_name))}</div>`;
       const boss = (s: OvStaff, i: number) => i === 0
         ? `<div style="display:inline-block;vertical-align:top;margin:0 8px;padding:12px 28px;border-radius:12px;background:linear-gradient(135deg,#1e3a8a,#3b5bdb);color:#fff;text-align:center;min-width:150px">${ava(s, 64)}<div style="font-weight:700;font-size:13px;margin-top:6px">${esc(s.full_name)}</div><div style="font-size:11px;opacity:.85">${esc(job(s))}</div></div>`
@@ -517,7 +517,8 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
       ${photo ? `<img src="${photo}" alt="" style="width:20mm;height:25mm;border-radius:2.5mm;object-fit:cover;object-position:50% 0;border:0.8mm solid #fff;background:#fff">`
         : `<div style="width:20mm;height:25mm;border-radius:2.5mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
       ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-weight:bold;font-size:7.5pt;letter-spacing:.5px;background:rgba(255,255,255,.2);border-radius:10px;padding:.3mm 3mm">${esc(POS[s.position])}</div>`}</div>
-    <div style="flex:1 1 auto;min-width:0;padding:3.4mm 4mm 3mm;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(circle at 100% 0,${c}22,#fff 55%)">
+    <div style="position:relative;flex:1 1 auto;min-width:0;padding:3.4mm 4mm 3mm;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(circle at 100% 0,${c}22,#fff 55%)">
+      ${logo ? `<img src="${logo}" alt="" style="position:absolute;right:3mm;top:50%;transform:translateY(-50%);width:36mm;max-height:40mm;object-fit:contain;opacity:.09;pointer-events:none">` : ''}
       <div style="font-size:5.6pt;font-weight:bold;color:#6b7488;letter-spacing:.2px;line-height:1.3;max-height:2.6em;overflow:hidden">${esc(co.toUpperCase())}</div>
       <div style="font-size:7pt;font-weight:800;color:${c};letter-spacing:1.6px;margin-top:1.6mm">THẺ NHÂN VIÊN</div>
       <div style="font-size:12.5pt;font-weight:800;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>

@@ -844,7 +844,7 @@ button.chip.on { background: var(--primary); border-color: var(--primary); color
 .sc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .sc-open { position: absolute; top: 10px; right: 10px; }
 .staff-tabs { padding: 0; margin-bottom: 10px; flex-wrap: wrap; }
-img.sc-ava { object-fit: cover; background: #e5e7eb; }
+img.sc-ava { object-fit: cover; object-position: 50% 22%; background: #e5e7eb; }   /* ảnh chân dung: canh phần đầu, không mất chỏm đầu */
 .ava-field { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .ava-act { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 /* Lái xe & nhân viên: hàng trên cùng (thẻ chọn chức vụ + chuông cảnh báo) */

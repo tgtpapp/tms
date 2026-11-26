@@ -74,7 +74,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     // vắng: phải nói rõ khách nào, rồi xác nhận
     const wait = tk.filter((t) => !t.boarded);
     let g = mentioned(q, wait);
-    if (!g.length) g = mentioned(await ask('Khách nào vắng ạ? Anh nói tên hoặc 4 số cuối điện thoại.'), wait);
+    if (!g.length) g = mentioned(await ask('Khách nào vắng ạ? Anh nói tên hoặc 3 số cuối điện thoại.'), wait);
     if (!g.length) return 'Em không tìm thấy khách đó. Chưa ghi gì.';
     if (!isYes(await ask(`Xác nhận ${whoList(g)} vắng, đúng không ạ?`))) return 'Đã bỏ qua, chưa ghi.';
     const after = await mark(g.map((t) => t.id), 'vang', { no_show: true });

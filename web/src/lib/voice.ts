@@ -1,6 +1,6 @@
 // Trợ lý giọng nói cho lái xe – giai đoạn 1: CHỈ TRA CỨU (không ghi dữ liệu).
 // Nghe / đọc bằng tính năng sẵn có của trình duyệt (không cài thêm thư viện, không gọi AI): hiểu câu hỏi theo từ khóa.
-// Câu trả lời: 1–3 câu ngắn, kiểu văn nói, không ký tự đặc biệt; giờ "14 giờ 30", tiền "1 triệu 200 nghìn", số điện thoại "đuôi 4512".
+// Câu trả lời: 1–3 câu ngắn, kiểu văn nói, không ký tự đặc biệt; giờ "14 giờ 30", tiền "1 triệu 200 nghìn", số điện thoại "đuôi 512" (3 số cuối).
 
 export interface VTicket {
   id: string; from_stop_id: string; to_stop_id: string; from_idx: number; to_idx: number | null; price: number; status: 'dat' | 'da_tt';
@@ -26,7 +26,7 @@ export function sayMoney(n: number): string {
   const parts = [tr && `${tr} triệu`, ng && `${ng} nghìn`, d && `${d} đồng`].filter(Boolean);
   return parts.join(' ');
 }
-const tail = (p: string | null | undefined) => (p && p.replace(/\D/g, '').length >= 4 ? `đuôi ${p.replace(/\D/g, '').slice(-4)}` : '');
+const tail = (p: string | null | undefined) => (p && p.replace(/\D/g, '').length >= 3 ? `đuôi ${p.replace(/\D/g, '').slice(-3)}` : '');
 const who = (name: string | null | undefined, phone: string | null | undefined) => clean([name?.trim() || 'khách', tail(phone)].filter(Boolean).join(' '));
 const list = (xs: string[], max = 3) => (xs.length <= max ? xs.join(', ') : `${xs.slice(0, max).join(', ')} và ${xs.length - max} người nữa`);
 
@@ -168,11 +168,11 @@ export function currentStop(tk: VTicket[], mode: 'don' | 'tra'): string {
   }
   return stop;
 }
-/** Khách được nhắc tới trong câu nói: theo 4 số cuối điện thoại hoặc theo tên (bỏ dấu); không nhắc ai thì [] */
+/** Khách được nhắc tới trong câu nói: theo 3 số cuối điện thoại hoặc theo tên (bỏ dấu); không nhắc ai thì [] */
 export function mentioned(heard: string, pool: VTicket[]): VTicket[] {
   const digits = heard.replace(/\D/g, '');
   if (digits.length >= 3) {
-    const by = pool.filter((t) => (t.passenger_phone ?? '').replace(/\D/g, '').endsWith(digits.slice(-4)));
+    const by = pool.filter((t) => (t.passenger_phone ?? '').replace(/\D/g, '').endsWith(digits.slice(-3)));
     if (by.length) return by;
   }
   const s = ` ${fold(heard)} `;

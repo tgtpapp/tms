@@ -1965,5 +1965,5 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 .hdvc-ds td { height: var(--rh, 22px); }
 .hd-fill { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; row-gap: 1px; margin: 2px 0; }
 .hd-fill > b, .hd-fill > .w2 { grid-column: 1 / -1; }
-.hd-fill > span { display: flex; gap: 4px; align-items: baseline; }
-.hd-blank { flex: 1 1 auto; border-bottom: 1px dotted #000; min-width: 40mm; height: 1em; }
+.hd-fill > span { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; min-width: 0; }
+.hd-blank { flex: 1 1 auto; border-bottom: 1px dotted #000; min-width: 10mm; height: 1em; }

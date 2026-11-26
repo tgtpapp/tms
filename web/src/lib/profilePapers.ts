@@ -4,7 +4,7 @@
 //   <năm> / 02. Nhân sự / Lý lịch hành nghề      (1 tệp / lái xe, lưu lại thì thay bản cũ)
 //   <năm> / 03. Phương tiện / Lý lịch phương tiện (1 tệp / xe)
 // Căn cứ pháp lý của hai mẫu sổ: cần xác minh.
-import { fetchAll, supabase } from './supabase';
+import { fetchAll, rpc, supabase } from './supabase';
 import { loadSigns, showName, type Sign } from './signatures';
 import { signatureUrl } from './documents';
 import { toDataUrl } from './pdfMaker';
@@ -14,6 +14,7 @@ export interface Page { html: string; land: boolean }
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const d = (x: string | null | undefined) => (x ? x.slice(0, 10).split('-').reverse().join('/') : '');
 const money = (n: number) => n.toLocaleString('vi-VN');
+const fold = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/\s+/g, ' ').trim();
 const uniq = (a: (string | null | undefined)[]) => [...new Set(a.map((x) => (x ?? '').trim()).filter(Boolean))];
 const chunks = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
 
@@ -29,10 +30,14 @@ export async function company(): Promise<Company> {
 export async function boss(tenantId: string, me: { id: string | null; name: string }, extra: string[] = []): Promise<{ b: Boss; m: Map<string, Sign> }> {
   const ss = ((await supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.giam_doc', 'in.chu_ky_giam_doc', 'in.con_dau'])).data ?? []) as { key: string; value: unknown }[];
   const raw = (k: string) => ss.find((x) => x.key === k)?.value;
-  const m = await loadSigns(tenantId, ['giam_doc', me.id, ...extra], true);
+  // chữ ký người lập (người đang dùng): chữ ký trong hồ sơ nhân viên trước, chưa có thì chữ ký của tài khoản
+  const mine = me.id ? (((await supabase.from('staff_members').select('id').eq('user_id', me.id).limit(1)).data ?? []) as { id: string }[])[0] : undefined;
+  const nv = mine ? `nv_${mine.id}` : null;
+  const m = await loadSigns(tenantId, ['giam_doc', me.id, nv, ...extra], true);
+  const meSign = [nv, me.id].map((k) => (k ? m.get(k) : undefined)).find((x) => x?.img) ?? { img: null, hasName: false };
   const seal = raw('in.con_dau') !== false ? await toDataUrl(await signatureUrl(tenantId, 'con_dau').catch(() => null)) : null;
   return { m, b: { gd: raw('in.chu_ky_giam_doc') === false ? null : m.get('giam_doc') ?? null, gdName: String(raw('cong_ty.giam_doc') ?? ''), seal,
-    me: (me.id && m.get(me.id)) || { img: null, hasName: false }, meName: me.name } };
+    me: meSign, meName: me.name } };
 }
 export const head = (c: Company) => `<table style="width:100%;border-collapse:collapse"><tr>
   <td style="width:45%;text-align:center;vertical-align:top"><b>${esc(c.name.toUpperCase())}</b><br><span style="font-size:12px">${esc(c.address)}</span></td>
@@ -87,7 +92,11 @@ export async function loadDriverPaper(tenantId: string, staffId: string, me: { i
   const vs = runs.map((r) => (r.vehicle_id ? base.veh.get(r.vehicle_id) : undefined)).filter((x): x is VehInfo => !!x);
   const days = runs.map((r) => r.day).sort();
   const who = `nv_${staffId}`;
-  const { b, m } = await boss(tenantId, me, [who, s.user_id ?? '']);
+  // Lái xe tự mở lý lịch của mình: người lập là người quản lý cập nhật hồ sơ gần nhất (chưa có thì Chủ nhà xe), không phải lái xe
+  const self = !!me.id && s.user_id === me.id;
+  const maker = self ? await rpc<{ user_id: string; staff_id: string | null; name: string } | null>('paper_maker', { p_staff_id: staffId }).catch(() => null) : null;
+  const { b, m } = await boss(tenantId, maker ? { id: maker.user_id, name: maker.name } : me, [who, s.user_id ?? '']);
+  if (self && !maker) { b.me = { img: null, hasName: false }; b.meName = ''; }
   const own = m.get(who);
   return {
     company: base.company, boss: b, driverSign: own?.img ? own : (s.user_id && m.get(s.user_id)) || { img: null, hasName: false },
@@ -119,7 +128,13 @@ export function driverPages(x: DriverPaper): Page[] {
   const th: [string, string[]][] = [
     ...x.docs.filter((g) => g.doc_type === 'tap_huan').map((g): [string, string[]] => [g.issued_on ?? '', ['Tập huấn nghiệp vụ' + (g.doc_no ? ` (GCN số ${esc(g.doc_no)})` : ''), d(g.issued_on), esc(g.issuer ?? ''), d(g.expires_on)]]),
     ...recs('dao_tao').map((r): [string, string[]] => [r.occurred_on, [esc(r.title) + (r.doc_no ? ` (GCN số ${esc(r.doc_no)})` : ''), d(r.occurred_on), esc(String(r.data?.co_so ?? '')), d(String(r.data?.het_han ?? '') || null)]]),
-  ].sort((a, b) => a[0].localeCompare(b[0]));
+  ].sort((a, b) => a[0].localeCompare(b[0]))
+    // cùng 1 lần tập huấn (vừa có giấy chứng nhận vừa có dòng lý lịch): cùng hạn + cùng đơn vị → lấy 1 (ưu tiên dòng có số GCN)
+    .filter((r, i, A) => {
+      const key = (x: [string, string[]]) => (x[1][3] ? `${x[1][3]}|${fold(x[1][2] ?? '')}` : `${x[1][1]}|${fold(x[1][0] ?? '')}`);
+      const gcn = (x: [string, string[]]) => /GCN số/.test(x[1][0] ?? '');
+      return !A.some((o, j) => j !== i && key(o) === key(r) && ((gcn(o) && !gcn(r)) || (gcn(o) === gcn(r) && j < i)));
+    });
   const vp = recs('vi_pham').map((r) => [d(r.occurred_on), esc(r.title) + (plate(r) ? ` (xe ${esc(plate(r))})` : ''),
     esc([r.data?.hinh_thuc, r.data?.so_tien ? `phạt ${money(Number(r.data.so_tien))} đ` : '', r.data?.tru_diem ? `trừ ${r.data.tru_diem} điểm GPLX` : ''].filter(Boolean).join('; ')),
     esc([r.doc_no && `QĐ/BB số ${r.doc_no}`, r.data?.co_quan].filter(Boolean).join(' · '))]);
@@ -209,7 +224,9 @@ export async function loadVehiclePaper(tenantId: string, vehicleId: string, me: 
   const inc = [...((i.data ?? []) as VehiclePaper['inc']),
     ...((a.data ?? []) as { occurred_on: string; title: string; data: Record<string, unknown> | null }[]).map((x) => ({
       occurred_on: x.occurred_on, place: String(x.data?.dia_diem ?? '') || null, summary: x.title, damage: String(x.data?.thiet_hai ?? '') || null, resolution: String(x.data?.trach_nhiem ?? x.data?.xu_ly ?? '') || null }))]
-    .sort((p, q) => p.occurred_on.localeCompare(q.occurred_on));
+    .sort((p, q) => p.occurred_on.localeCompare(q.occurred_on))
+    // sự cố ghi ở xe và tai nạn ghi ở lý lịch lái xe trùng nhau: cùng ngày + cùng nội dung → lấy 1
+    .filter((x, i, A) => A.findIndex((o) => o.occurred_on === x.occurred_on && fold(o.summary) === fold(x.summary)) === i);
   const M: Record<string, { days: Set<string>; trips: number }> = {};
   for (const r of tr) { const m = r.service_date.slice(0, 7); (M[m] ??= { days: new Set(), trips: 0 }).trips++; M[m].days.add(r.service_date); }
   const K: Record<string, { km: number; days: number; run: number }> = {};

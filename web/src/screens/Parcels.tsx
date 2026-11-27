@@ -158,7 +158,12 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     const ids = ordered(t.route_id, t.direction);
     const nm = (id: string | undefined) => (id ? upper(stopName(id)) : '');
     const names = ids.map((id) => norm(stopName(id)));
-    setF((x) => ({ ...x, trip_id: t.id, from: names.includes(norm(x.from)) ? x.from : nm(ids[0]) || x.from, to: names.includes(norm(x.to)) ? x.to : nm(ids[ids.length - 1]) || x.to }));
+    setF((x) => {
+      const fi = names.indexOf(norm(x.from)), ti = names.indexOf(norm(x.to));
+      // Nơi gửi / nhận đang chọn ngược chiều chuyến mới → đặt lại theo đầu, cuối tuyến của chuyến
+      if (fi >= 0 && ti >= 0 && fi > ti) return { ...x, trip_id: t.id, from: nm(ids[0]) || x.from, to: nm(ids[ids.length - 1]) || x.to };
+      return { ...x, trip_id: t.id, from: fi >= 0 ? x.from : nm(ids[0]) || x.from, to: ti >= 0 ? x.to : nm(ids[ids.length - 1]) || x.to };
+    });
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
   const pickRoute = (key: string) => {
@@ -192,6 +197,11 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     e?.preventDefault();
     if (!formRef.current?.reportValidity()) return;
     if (norm(f.from) === norm(f.to)) return toast('error', 'Nơi gửi và nơi nhận phải khác nhau');
+    if (cur) {
+      const names = ordered(cur.route_id, cur.direction).map((id) => norm(stopName(id)));
+      const fi = names.indexOf(norm(f.from)), ti = names.indexOf(norm(f.to));
+      if (fi >= 0 && ti >= 0 && fi > ti) return toast('error', `Nơi gửi / nhận ngược chiều chuyến đã chọn (${hhmm(cur.depart_at)} ${routeName(cur)}). Chọn lại chuyến đúng chiều.`);
+    }
     setBusy(true);
     try {
       // Nơi gửi / nhận chưa có thì thêm mới (chữ in hoa)

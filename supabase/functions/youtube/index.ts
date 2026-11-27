@@ -1,5 +1,6 @@
 // Edge Function: tìm video YouTube cho mục Giải trí (chỉ người đã đăng nhập vào nhà xe).
 // Khóa YouTube Data API đặt trong secret YOUTUBE_API_KEY của Supabase (không bao giờ ở trình duyệt). Chưa có khóa: báo để dán link.
+// (Khóa đặt ở GitHub secret YOUTUBE_API_KEY, CI tự chép sang Supabase khi đưa Edge Function lên.)
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';

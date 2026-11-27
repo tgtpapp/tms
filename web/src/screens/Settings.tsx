@@ -78,9 +78,12 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
     e.preventDefault();
     const suffix = (sale['lenh.hau_to'] ?? '').trim().toUpperCase();
     if (!/^[A-Z0-9]{1,10}$/.test(suffix)) return toast('error', 'Hậu tố số lệnh: 1–10 chữ in hoa hoặc số, không dấu (vd TGTP)');
+    const dong = Number(sale['lenh.dong_sau_phut'] ?? '0');
+    if (!Number.isInteger(dong) || dong < 0 || dong > 240) return toast('error', 'Đóng lệnh xuất bến sau: 0–240 phút');
     setBusy(true);
     const { error } = await supabase.from('tenant_settings').upsert([
       { key: 'lenh.hau_to', value: suffix },
+      { key: 'lenh.dong_sau_phut', value: dong },
       { key: 'cong_ty.giam_doc', value: (sale['cong_ty.giam_doc'] ?? '').trim() },
       { key: 'cong_ty.chuc_danh_ky', value: (sale['cong_ty.chuc_danh_ky'] ?? '').trim() || 'Giám đốc' },
     ], { onConflict: 'tenant_id,key' });
@@ -309,6 +312,9 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         <label>Họ tên người ký lệnh
           <input value={sale['cong_ty.giam_doc'] ?? ''} onChange={(e) => setSale({ ...sale, 'cong_ty.giam_doc': e.target.value })} placeholder="vd: Hà Văn Thịnh" />
         </label>
+        <label>Đóng lệnh xuất bến sau (phút)
+          <input type="number" inputMode="numeric" min={0} max={240} value={sale['lenh.dong_sau_phut'] ?? '0'} onChange={(e) => setSale({ ...sale, 'lenh.dong_sau_phut': e.target.value })} />
+        </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình lệnh vận chuyển</button>
       </form>
       <form className="card form" onSubmit={(e) => void saveDispatch(e)}>
@@ -328,7 +334,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         <label>Tự ghi xuất bến / đến bến khi lái xe chưa bấm
           <select value={sale[AUTO_ARRIVE] ?? '4'} onChange={(e) => setSale({ ...sale, [AUTO_ARRIVE]: e.target.value })}>
             <option value="0">Tắt: chỉ lái xe / điều hành bấm</option>
-            {[2, 3, 4, 5, 6, 8, 10, 12].map((h) => <option key={h} value={String(h)}>Xuất bến đúng giờ chạy, đến bến sau {h} tiếng</option>)}
+            {[2, 3, 4, 5, 6, 8, 10, 12].map((h) => <option key={h} value={String(h)}>Tự xuất bến khi đóng lệnh, đến bến sau {h} tiếng</option>)}
           </select>
         </label>
         <label>Sơ đồ ghế mặc định khi chuyến chưa xếp xe

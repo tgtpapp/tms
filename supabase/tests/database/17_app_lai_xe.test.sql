@@ -357,6 +357,22 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
 select throws_ok($$ select app.svc_auto_trip_marks() $$, '42501', null, 'Người dùng không gọi được tự ghi của máy chủ');
 reset role;
+-- Đóng lệnh xuất bến sau 15 phút: mới quá 10 phút chưa tự xuất bến; quá 20 phút thì xuất bến = giờ chạy + 15 phút
+insert into public.tenant_settings (tenant_id, key, value)
+select tenant_id, 'lenh.dong_sau_phut', '15'::jsonb from public.trips where id = (select v from t.ids where k = 'T0')
+on conflict (tenant_id, key) do update set value = excluded.value;
+set local session_replication_role = replica;
+update public.trips set departed_at = null, departed_auto = false, arrived_at = null, arrived_auto = false,
+  depart_at = now() - interval '10 minutes' where id = (select v from t.ids where k = 'T0');
+set local session_replication_role = origin;
+select lives_ok($$ select app.svc_auto_trip_marks() $$, 'Chạy tự ghi (đóng lệnh sau 15 phút)');
+select ok((select departed_at is null from public.trips where id = (select v from t.ids where k = 'T0')), 'Mới quá giờ chạy 10 phút: chưa đóng lệnh');
+set local session_replication_role = replica;
+update public.trips set depart_at = now() - interval '20 minutes' where id = (select v from t.ids where k = 'T0');
+set local session_replication_role = origin;
+select lives_ok($$ select app.svc_auto_trip_marks() $$, 'Chạy tự ghi lần sau');
+select ok((select departed_at = depart_at + interval '15 minutes' and departed_auto from public.trips where id = (select v from t.ids where k = 'T0')),
+  'Quá 15 phút: đóng lệnh, ghi xuất bến = giờ chạy + 15 phút');
 
 -- ---------------------------------------------------------------- Nhập lịch dán (Vexere): ghi đè cả lô, đổi tài giữa 2 chuyến chồng giờ, cả chuyến đã xuất bến
 set local role authenticated;

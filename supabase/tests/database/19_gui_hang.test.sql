@@ -176,5 +176,48 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","r
 select throws_ok($$ select public.parcel_stop('Bến mới') $$, '42501', null, 'Lái xe (không có quyền nhận hàng) không thêm được');
 reset role;
 
+
+-- Sửa phiếu gửi hàng: đã thu cước thì ghi chênh lệch (thu thêm / hoàn bớt), sổ cái vẫn cân
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select lives_ok($$ select public.create_shipment(jsonb_build_object('from_stop_id', (select id from public.stops where code = 'HN'),
+  'to_stop_id', (select id from public.stops where code = 'VT'), 'sender_phone', '0911111111', 'receiver_phone', '0955555555', 'description', 'Bao gạo',
+  'packages', 1, 'fee', 40000, 'fee_payer', 'nguoi_gui'), 'tien_mat', '88888888-8888-8888-8888-888888888884') $$, 'Phiếu 4: thu cước 40.000');
+select set_config('t.p4', (select id::text from public.shipments where request_id = '88888888-8888-8888-8888-888888888884'), true);
+select set_config('t.sp', jsonb_build_object('sender_name', 'Anh Ba', 'sender_phone', '0911111111', 'receiver_name', 'Cô Tư', 'receiver_phone', '0955555555',
+  'description', 'Bao gạo 25kg', 'packages', 2, 'fee', 50000, 'fee_payer', 'nguoi_gui', 'cod_amount', 0, 'note', 'Hàng nặng')::text, true);
+select is(public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb, 'tien_mat') ->> 'chenh_lech', '10000', 'Sửa cước 40.000 → 50.000: thu thêm 10.000');
+select is((select description || '|' || packages || '|' || fee || '|' || receiver_name from public.shipments where id = current_setting('t.p4')::uuid),
+  'Bao gạo 25kg|2|50000|Cô Tư', 'Thông tin phiếu đã sửa');
+select is(public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb || '{"fee": 35000}', 'tien_mat') ->> 'chenh_lech', '-15000', 'Giảm cước còn 35.000: hoàn bớt 15.000');
+select throws_ok($$ select public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb || '{"fee_payer": "nguoi_nhan", "fee": 35000}', 'tien_mat') $$,
+  '22023', null, 'Đã thu cước thì không đổi sang người nhận trả');
+select throws_ok($$ select public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb || '{"fee": 36000}', null) $$,
+  '22023', null, 'Có tiền chênh lệch phải chọn cách thu / hoàn');
+select lives_ok($$ select public.create_shipment(jsonb_build_object('from_stop_id', (select id from public.stops where code = 'HN'),
+  'to_stop_id', (select id from public.stops where code = 'VT'), 'sender_phone', '0911111111', 'receiver_phone', '0966666666', 'description', 'Hộp',
+  'fee', 20000, 'fee_payer', 'nguoi_nhan'), null, '88888888-8888-8888-8888-888888888885') $$, 'Phiếu 5: người nhận trả');
+select is(public.update_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888885'),
+  jsonb_build_object('sender_phone', '0911111111', 'receiver_phone', '0966666666', 'description', 'Hộp', 'packages', 1, 'fee', 25000, 'fee_payer', 'nguoi_nhan'), null) ->> 'chenh_lech',
+  '0', 'Người nhận trả: sửa cước không động sổ');
+select is(public.update_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888885'),
+  jsonb_build_object('sender_phone', '0911111111', 'receiver_phone', '0966666666', 'description', 'Hộp', 'packages', 1, 'fee', 25000, 'fee_payer', 'nguoi_gui'), 'chuyen_khoan') ->> 'chenh_lech',
+  '25000', 'Đổi sang người gửi trả: thu cước ngay');
+select ok((select fee_paid_at is not null from public.shipments where request_id = '88888888-8888-8888-8888-888888888885'), 'Phiếu 5 đã thu cước');
+select throws_ok($$ select public.update_shipment('88888888-8888-8888-8888-888888888881'::uuid, '{}', 'tien_mat') $$, 'P0002', null, 'Mã không có: không tìm thấy');
+select throws_ok($$ select public.update_shipment((select id from public.shipments where status = 'giao' limit 1), current_setting('t.sp')::jsonb, 'tien_mat') $$,
+  '22023', null, 'Phiếu đã giao không sửa được');
+select is((select sum(credit - debit) from public.ledger_lines where account = 'doanh_thu_hang')::int, 80000 + 35000 + 25000, 'Doanh thu hàng khớp sau khi sửa');
+select is((select sum(debit) - sum(credit) from public.ledger_lines)::int, 0, 'Sổ cái vẫn cân');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb, 'tien_mat') $$, 'P0002', null, 'Chủ B sửa phiếu nhà xe A: không tìm thấy');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select throws_ok($$ select public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb, 'tien_mat') $$, 'P0002', null, 'Lái xe không sửa được phiếu');
+reset role;
+
 select * from finish();
 rollback;

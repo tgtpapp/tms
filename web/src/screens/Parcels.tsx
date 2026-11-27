@@ -395,8 +395,14 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
   hl?: boolean;
 }) {
   const toast = useToast();
-  const [act, setAct] = useState<'' | 'xe' | 'giao' | 'huy'>('');
+  const [act, setAct] = useState<'' | 'xe' | 'giao' | 'huy' | 'sua'>('');
   const [v, setV] = useState({ trip: s.trip_id ?? '', receiver: s.receiver_name ?? '', method: 'tien_mat', reason: '' });
+  const editOf = () => ({ sender_name: s.sender_name ?? '', sender_phone: s.sender_phone, receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone,
+    description: s.description, packages: String(s.packages), unit: '', weight: s.weight_kg ? String(s.weight_kg) : '', fee: String(s.fee),
+    payer: s.fee_payer, cod: s.cod_amount ? String(s.cod_amount) : '', note: s.note ?? '', method: 'tien_mat' });
+  const [ed, setEd] = useState(editOf);
+  // Tiền chênh lệch khi lưu: đã thu cước thì thu thêm / hoàn bớt; đổi sang người gửi trả thì thu cả cước
+  const edDiff = s.fee_paid_at ? (Number(ed.fee) || 0) - s.fee : ed.payer === 'nguoi_gui' ? Number(ed.fee) || 0 : 0;
   const due = dueOnDelivery(s);
   async function run(fn: () => Promise<unknown>, ok: string) {
     try {
@@ -429,6 +435,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
               <button className="btn small" onClick={() => void run(() => rpc('set_shipment_status', { p_id: s.id, p_status: 'den', p_trip_id: null, p_reason: null }).then(zaloKick), `Phiếu ${s.code} đã đến`)}>Đã đến</button>
             )}
             <button className="btn small primary" onClick={() => setAct('giao')}>Giao hàng{due ? ` · thu ${money(due)}` : ''}</button>
+            {manage && <button className="btn small" aria-label={`Sửa phiếu ${s.code}`} onClick={() => { setEd(editOf()); setAct('sua'); }}>Sửa</button>}
             {manage && <button className="btn small link" onClick={() => setAct('huy')}>Hủy</button>}
           </div>
         )}
@@ -461,6 +468,43 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
             `Đã giao phiếu ${s.code}${due ? ` · thu ${money(due)}` : ''}`)}>Xác nhận giao</button>
           <button className="btn small link" onClick={() => setAct('')}>Thôi</button>
         </div>
+      )}
+      {act === 'sua' && (
+        <form className="inline-form gh-edit" onSubmit={(e) => {
+          e.preventDefault();
+          void run(() => rpc('update_shipment', { p_id: s.id, p_method: edDiff ? ed.method : null, p: {
+            sender_name: ed.sender_name, sender_phone: ed.sender_phone, receiver_name: ed.receiver_name, receiver_phone: ed.receiver_phone,
+            description: ed.description, packages: Number(ed.packages) || 1, weight_kg: ed.weight || null,
+            fee: Number(ed.fee) || 0, fee_payer: ed.payer, cod_amount: Number(ed.cod) || 0, note: ed.note } }),
+            `Đã sửa phiếu ${s.code}${edDiff > 0 ? ` · thu thêm ${money(edDiff)}` : edDiff < 0 ? ` · hoàn ${money(-edDiff)}` : ''}`);
+        }}>
+          <label>SĐT người gửi<input inputMode="tel" value={ed.sender_phone} onChange={(e) => setEd({ ...ed, sender_phone: e.target.value })} required /></label>
+          <label>Tên người gửi<input value={ed.sender_name} onChange={(e) => setEd({ ...ed, sender_name: e.target.value })} /></label>
+          <label>SĐT người nhận<input inputMode="tel" value={ed.receiver_phone} onChange={(e) => setEd({ ...ed, receiver_phone: e.target.value })} required /></label>
+          <label>Tên người nhận<input value={ed.receiver_name} onChange={(e) => setEd({ ...ed, receiver_name: e.target.value })} /></label>
+          <label>Hàng gì<input value={ed.description} onChange={(e) => setEd({ ...ed, description: e.target.value })} required /></label>
+          <label>Số kiện<input type="number" min={1} inputMode="numeric" value={ed.packages}
+            onChange={(e) => setEd({ ...ed, packages: e.target.value, fee: ed.unit ? String((Number(e.target.value) || 0) * (Number(ed.unit) || 0)) : ed.fee })} /></label>
+          <label>Đơn giá / kiện (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={ed.unit}
+            onChange={(e) => setEd({ ...ed, unit: e.target.value, fee: e.target.value ? String((Number(ed.packages) || 0) * (Number(e.target.value) || 0)) : ed.fee })} /></label>
+          <label>Thành tiền (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={ed.fee} onChange={(e) => setEd({ ...ed, fee: e.target.value })} required /></label>
+          <label>Cân nặng (kg)<input type="number" min={0} step="0.1" inputMode="decimal" value={ed.weight} onChange={(e) => setEd({ ...ed, weight: e.target.value })} /></label>
+          <label>Người trả cước
+            <select value={ed.payer} onChange={(e) => setEd({ ...ed, payer: e.target.value as 'nguoi_gui' | 'nguoi_nhan' })}>
+              <option value="nguoi_gui">Người gửi</option>
+              {!s.fee_paid_at && <option value="nguoi_nhan">Người nhận (thu khi giao)</option>}
+            </select></label>
+          <label>Thu hộ (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={ed.cod} onChange={(e) => setEd({ ...ed, cod: e.target.value })} /></label>
+          <label>Ghi chú<input value={ed.note} onChange={(e) => setEd({ ...ed, note: e.target.value })} /></label>
+          {edDiff !== 0 && (
+            <label>{edDiff > 0 ? `Thu thêm ${money(edDiff)} bằng` : `Hoàn ${money(-edDiff)} bằng`}<select value={ed.method} onChange={(e) => setEd({ ...ed, method: e.target.value })}>
+              <option value="tien_mat">Tiền mặt</option>
+              <option value="chuyen_khoan">Chuyển khoản</option>
+            </select></label>
+          )}
+          <button className="btn small primary">Lưu phiếu</button>
+          <button type="button" className="btn small link" onClick={() => setAct('')}>Thôi</button>
+        </form>
       )}
       {act === 'huy' && (
         <div className="inline-form">

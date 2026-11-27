@@ -18,7 +18,7 @@ const numf = (n: number) => (Math.round(n * 100) / 100).toLocaleString('vi-VN');
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const nowYm = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7);
 const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
-const PAGE = 20;
+const PAGE = 50;
 
 /** Lấy hết các dòng (Supabase trả tối đa 1000 dòng / lần). */
 async function all<T>(q: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<T[]> {
@@ -377,7 +377,7 @@ export function TimesheetScreen({ ctx, perms }: { ctx: AccountContext; perms: Pe
               return [
                 gh && <tr key={`g:${g}`} className="cc-grp"><td colSpan={span}><div className="cc-gs">{g.replace(/^~+/, '')} <span>{gCount[g]} người</span></div></td></tr>,
                 <tr key={e.id}>
-                  <td className="nm"><b>{e.full_name}</b>{s.drv && <span className="cc-drv" title="Ngày công tự lấy từ chuyến đã chạy"> 🚌</span>}
+                  <td className="nm"><b>{e.full_name}</b>
                     {m && x > 0 && <span className="cc-x" title={`Nhóm ${m.n}, có chạy ${m.o.n} (chiều đi và về) ${numf(x)} công`}>+{numf(x)} công {m.o.s}</span>}</td>
                   {days.map((k) => {
                     const c = cell(e, k), col = c.text ? CODES.X : undefined;

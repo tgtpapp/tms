@@ -68,6 +68,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   useEffect(() => { const on = () => { try { setPinnedState(localStorage.getItem('menu.ghim') !== '0'); } catch { /* bỏ qua */ } }; window.addEventListener('tms-ui', on); return () => window.removeEventListener('tms-ui', on); }, []);
   const [tab, setTab] = useState<Tab | null>(null);
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
+  const [isDriver, setIsDriver] = useState(false);   // hồ sơ là lái xe: có mục Việc của tôi
   const [myStaff, setMyStaff] = useState<string | null>(null);
   const avas = useAvatars(ctx.tenant_id);
   // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
@@ -101,17 +102,19 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
       ]);
       const crew = !!me.data;   // lái xe, phụ xe, người chạy trung chuyển (có hồ sơ nhân viên)
       setIsCrew(crew);
+      const drv = (me.data as { position?: string } | null)?.position === 'lai_xe';
+      setIsDriver(drv);
       setMyStaff((me.data as { id: string } | null)?.id ?? null);
       setPerms(p);
       // Chủ nhà xe: tệp còn ở kho cũ tự chuyển dần lên Google Drive (chạy nền)
       if (p.has('settings.edit')) void moveOldFiles();
       // Mở app vào thẳng Bán vé (ai có quyền bán vé); không có thì như cũ
-      setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : crew ? 'driver' : 'account'));
+      setTab((cur) => cur ?? (p.has('sell.view') ? 'sell' : p.hasAnywhere('user.view') ? 'users' : drv ? 'driver' : crew ? 'staff' : 'account'));
       if (hasShare()) {
         const files = (await takeSharedFiles()).filter((f) => f.type.startsWith('image/'));
         if (!files.length) setShareMsg('Không nhận được ảnh chia sẻ, thử chia sẻ lại.');
         else if (p.has('fuel.add')) { setShare({ to: 'fuel', files }); setTab('fuel'); }
-        else if (crew) { setShare({ to: 'driver', files }); setTab('driver'); }
+        else if (drv) { setShare({ to: 'driver', files }); setTab('driver'); }
         else setShareMsg('Tài khoản này chưa được tạo phiếu nhiên liệu hay báo đổ dầu.');
       }
     } catch (e) {
@@ -166,7 +169,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
 
   const mySelf = !perms.has('staff.view_all') && (perms.has('staff.view') || isCrew);   // có mục Thông tin của tôi
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
-    { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isCrew },
+    { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isDriver },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
     { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },

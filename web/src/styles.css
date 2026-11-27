@@ -1991,3 +1991,4 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
   .shell.unpinned .sidebar:not(:hover):not(:has(.nb-pop)) .side-link:hover { background: transparent; box-shadow: none; }
   .shell.unpinned .sidebar:not(:hover):not(:has(.nb-pop)) .side-link.on .fi { box-shadow: 0 0 0 2px var(--surface, #fff), 0 0 0 4px var(--primary); }
 }
+table.cc { width: 100%; }

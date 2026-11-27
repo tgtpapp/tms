@@ -1992,3 +1992,5 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
   .shell.unpinned .sidebar:not(:hover):not(:has(.nb-pop)) .side-link.on .fi { box-shadow: 0 0 0 2px var(--surface, #fff), 0 0 0 4px var(--primary); }
 }
 table.cc { width: 100%; }
+/* Khung xem bản in: mỗi trang có viền + bóng để thấy rõ mép giấy trên nền tối (không in ra giấy) */
+@media screen { .print-stack > .lenh { border: 1px solid #94a3b8; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); } }

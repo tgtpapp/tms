@@ -33,13 +33,13 @@ const BUSINESS = { tuyen_co_dinh: 'Tuyến cố định', hop_dong: 'Hợp đồ
 const VEHICLE_DOCS = DOC_TYPES.filter((d) => d.owner === 'xe');
 
 /** Niên hạn xe khách theo NĐ 158/2024 (Điều 13): tuyến > 300 km 15 năm, ≤ 300 km 20 năm (cần xác minh cách tính năm cuối). */
-export function lifeLimit(year: number | null): { text: string; state: 'het_han' | 'sap_het' | 'con_han' } | null {
+export function lifeLimit(year: number | null): { text: string; short: string; state: 'het_han' | 'sap_het' | 'con_han' } | null {
   if (!year) return null;
   const now = Number(today().slice(0, 4));
   const y15 = year + 15;
   const y20 = year + 20;
   const text = `Niên hạn: tuyến trên 300 km đến hết ${y15}, tuyến từ 300 km trở xuống đến hết ${y20}`;
-  return { text, state: now > y20 ? 'het_han' : now > y15 || now === y20 ? 'sap_het' : 'con_han' };
+  return { text, short: `${y15} / ${y20}`, state: now > y20 ? 'het_han' : now > y15 || now === y20 ? 'sap_het' : 'con_han' };
 }
 
 /* ------------------------------------------------------------------ Thêm xe (đọc nhanh từ giấy tờ) */
@@ -299,7 +299,7 @@ export function VehicleList(props: {
                     <tr key={v.id} id={`xe-${v.id}`} className={`veh-card${v.is_active ? '' : ' off'}`}>
                       <td><div className="nsx-who"><Avatar name={v.plate} url={avas[v.id]} text="🚌" size={36} /><div><b>{v.plate}</b><span className="sc-job">{typeName(v.vehicle_type_id)}</span></div></div></td>
                       <td>{v.manufacture_year ?? '—'}</td>
-                      <td className={life ? `state-${life.state}` : 'muted'}>{life?.text ?? '—'}</td>
+                      <td className={life ? `state-${life.state}` : 'muted'} title={life?.text}>{life?.short ?? '—'}</td>
                       <td>{kd?.expires_on ? fmtDate(kd.expires_on) : <span className="muted">Chưa có</span>}</td>
                       <td>{BUSINESS[v.business_type]}</td>
                       <td>{OWNERSHIP[v.ownership]}</td>
@@ -332,7 +332,7 @@ export function VehicleList(props: {
                   </span>
                   <span className="nsx-emp-ft">
                     <span><small>Đăng kiểm</small>{kd?.expires_on ? fmtDate(kd.expires_on) : 'Chưa có'}</span>
-                    <span><small>Niên hạn</small>{life?.text ?? '—'}</span>
+                    <span title={life?.text}><small>Niên hạn</small>{life?.short ?? '—'}</span>
                   </span>
                   <span className="nsx-emp-acts"><span className="actions">{openBtn(v)}</span></span>
                 </div>

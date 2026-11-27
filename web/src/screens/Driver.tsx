@@ -19,7 +19,7 @@ import { learnStop, lookupMissing, type StopGeo } from '../lib/geo';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
-  plate: string | null; my_role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe'; departed_at: string | null; arrived_at: string | null; order_no: string | null;
+  plate: string | null; my_role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe' | null;   // null: Admin xem chuyến mình không chạy departed_at: string | null; arrived_at: string | null; order_no: string | null;
   departed_auto?: boolean; arrived_auto?: boolean;
 }
 type Call = 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy';
@@ -48,7 +48,8 @@ const addDays = (d: string, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 
-export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { tenantId?: string | null; staffId?: string | null; shareFiles?: File[] | null; onShareDone?: () => void } = {}) {
+export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone, admin = false }: { tenantId?: string | null; staffId?: string | null; shareFiles?: File[] | null; onShareDone?: () => void; admin?: boolean } = {}) {
+  const tripsFn = admin ? 'admin_trips' : 'my_trips';   // Admin của nhà xe xem mọi chuyến
   const toast = useToast();
   const [day, setDay] = useState(today());
   const [trips, setTrips] = useState<MyTrip[]>([]);
@@ -65,7 +66,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   const load = useCallback(async () => {
     try {
       const [t, r, st] = await Promise.all([
-        rpc<MyTrip[]>('my_trips', { p_from: day, p_to: day }),
+        rpc<MyTrip[]>(tripsFn, { p_from: day, p_to: day }),
         supabase.from('routes').select('id, name, name_ve'),
         supabase.from('stops').select('id, name, address, province, lat, lng'),
       ]);
@@ -78,7 +79,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
     } catch (e) {
       toast('error', errMsg(e));
     }
-  }, [day, toast]);
+  }, [day, toast, tripsFn]);
 
   useEffect(() => {
     void load();
@@ -108,12 +109,12 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
   const loadMarks = useCallback((ym: string) => {
     const [y, m] = ym.split('-').map(Number);
     const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
-    void rpc<MyTrip[]>('my_trips', { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).then((t) => {
+    void rpc<MyTrip[]>(tripsFn, { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).then((t) => {
       const c = new Map<string, number>();
       for (const x of t) if (x.status !== 'huy') c.set(x.service_date, (c.get(x.service_date) ?? 0) + 1);
       setMarks(c);
     }).catch(() => undefined);
-  }, []);
+  }, [tripsFn]);
   const sorted = [...trips].sort((a, b) => Number(isUpcoming(b, trips, now)) - Number(isUpcoming(a, trips, now)) || a.depart_at.localeCompare(b.depart_at));
   const first = sorted.find((t) => isUpcoming(t, trips, now));
   const open = picked === '' ? null : picked ?? first?.trip_id ?? (trips.length === 1 ? trips[0]!.trip_id : null);
@@ -123,7 +124,7 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
     <button key={t.trip_id} className={['trip-chip', open === t.trip_id && 'on', !isUpcoming(t, trips, now) ? 'past' : t === first ? 'next' : 'later'].filter(Boolean).join(' ')}
             onClick={() => setOpen(open === t.trip_id ? '' : t.trip_id)} aria-label={`Chuyến ${hhmm(t.depart_at)} ${dirName(routes[t.route_id], t.direction)}`}>
       <b>{hhmm(t.depart_at)}</b> {dirName(routes[t.route_id], t.direction)}
-      <span className="small">{t.plate ?? 'chưa có xe'} · {ROLE[t.my_role]}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
+      <span className="small">{t.plate ?? 'chưa có xe'}{t.my_role ? ` · ${ROLE[t.my_role]}` : ''}{t.order_no ? ` · Lệnh ${t.order_no}` : ''}</span>
       <span className={`badge ${t.status === 'huy' ? 'locked' : t.arrived_at ? '' : t.departed_at ? 'warn-badge' : 'idle'}`}>
         {t.status === 'huy' ? 'Đã hủy' : t.arrived_at ? `Đã đến bến ${hhmm(t.arrived_at)}` : t.departed_at ? `Đã xuất bến ${hhmm(t.departed_at)}` : 'Chưa xuất bến'}
       </span>
@@ -154,13 +155,13 @@ export function DriverScreen({ tenantId, staffId, shareFiles, onShareDone }: { t
       {tenantId && staffId && <FuelReportCard tenantId={tenantId} staffId={staffId} plates={plates} shareFiles={shareFiles} onShareDone={onShareDone} />}
       <MyTransfers day={day} />
       <MyCharters />
-      <MyMonthTrips routes={routes} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
+      <MyMonthTrips routes={routes} tripsFn={tripsFn} onPick={(d, id) => { setDay(d); setOpen(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
     </>
   );
 }
 
 /** Tất cả chuyến của tôi trong tháng (như app cũ "Thông tin của tôi"): ngày, giờ, tuyến, xe, số khách, trạng thái; bấm 1 dòng để mở chuyến */
-function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: string; name_ve: string | null }>; onPick: (day: string, tripId: string) => void }) {
+function MyMonthTrips({ routes, onPick, tripsFn }: { routes: Record<string, { name: string; name_ve: string | null }>; onPick: (day: string, tripId: string) => void; tripsFn: string }) {
   const [ym, setYm] = useState(today().slice(0, 7));
   const [list, setList] = useState<MyTrip[]>([]);
   const [pax, setPax] = useState<Record<string, number>>({});
@@ -170,7 +171,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
     const last = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
     let on = true;
     void (async () => {
-      const t = await rpc<MyTrip[]>('my_trips', { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).catch(() => [] as MyTrip[]);
+      const t = await rpc<MyTrip[]>(tripsFn, { p_from: `${ym}-01`, p_to: `${ym}-${String(last).padStart(2, '0')}` }).catch(() => [] as MyTrip[]);
       if (!on) return;
       setList(t);
       const ids = t.map((x) => x.trip_id), c: Record<string, number> = {};
@@ -181,7 +182,7 @@ function MyMonthTrips({ routes, onPick }: { routes: Record<string, { name: strin
       if (on) setPax(c);
     })();
     return () => { on = false; };
-  }, [ym]);
+  }, [ym, tripsFn]);
   const td = today(), done = list.filter((t) => t.status !== 'huy');
   return (
     <section className="card">
@@ -308,7 +309,8 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
     try { for (const t of list) await rpc('crew_mark', { p_ticket_id: t.id, p_action: action }); }
     catch (e) { ok = false; toast('error', errMsg(e)); }
     // học vị trí điểm dừng từ GPS lúc báo đón / trả (trợ lý nhắc sắp tới điểm ở các chuyến sau)
-    if (ok && list[0] && (action === 'len' || action === 'tra')) learnStop(trip.trip_id, action === 'len' ? list[0].from_stop_id : list[0].to_stop_id);
+    // chỉ người chạy chuyến (không học từ máy Admin xem ở văn phòng)
+    if (ok && list[0] && trip.my_role && (action === 'len' || action === 'tra')) learnStop(trip.trip_id, action === 'len' ? list[0].from_stop_id : list[0].to_stop_id);
     await load();
     return ok;
   }
@@ -411,7 +413,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
       )}
       {trip.status === 'mo' && !trip.arrived_at && (
         <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
-                        onChanged={load} geo={geo}
+                        onChanged={load} geo={geo} learn={!!trip.my_role}
                         onMark={async (ids, action, patch) => { if (!await act(tickets.filter((t) => ids.includes(t.id)), action, patch as Partial<Ticket>)) throw new Error('ghi lỗi'); }}
                         trip={{ depart_at: trip.depart_at, departed_at: trip.departed_at, arrived_at: trip.arrived_at, plate: trip.plate, routeName }} />
       )}

@@ -13,9 +13,9 @@ const UNDO = { len: ['bo_len', { boarded: false, dropped: false }], tra: ['bo_tr
 
 const greeted = new Set<string>();   // chuyến đã đọc câu mở đầu trong phiên này
 
-export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, onMark, onChanged, geo }: {
+export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, onMark, onChanged, geo, learn = true }: {
   tripId: string; trip: VTrip; tickets: VTicket[]; parcels: VParcel[]; cap: number; stopName: (id: string) => string; onMark: Mark;
-  onChanged: () => Promise<void>; geo: Record<string, StopGeo>;
+  onChanged: () => Promise<void>; geo: Record<string, StopGeo>; learn?: boolean;   // learn: học vị trí điểm dừng từ GPS máy này (chỉ người chạy chuyến)
 }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<'doc' | 'nghe' | 'cho'>('cho');
@@ -152,7 +152,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       const due = g.reduce((a, p) => a + parcelDue(p), 0), n = g.reduce((a, p) => a + p.packages, 0);
       if (!isYes(await ask(`Xác nhận giao ${n} kiện cho ${receiverList(g)}${due ? `, thu ${sayMoney(due)} ${ck ? 'chuyển khoản' : 'tiền mặt'}` : ''}, đúng không ạ?`))) return 'Đã bỏ qua, chưa ghi.';
       for (const p of g) await rpc('deliver_shipment', { p_id: p.id, p_receiver: null, p_method: ck ? 'chuyen_khoan' : 'tien_mat' });
-      learnStop(tripId, g[0].to_stop_id);
+      if (learn) learnStop(tripId, g[0].to_stop_id);
       await onChanged();
       return `Đã ghi giao ${n} kiện${due ? `, đã thu ${sayMoney(due)}` : ''}.`;
     }

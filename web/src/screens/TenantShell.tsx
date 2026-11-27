@@ -71,6 +71,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [tab, setTab] = useState<Tab | null>(null);
   const [isCrew, setIsCrew] = useState(false);   // tài khoản gắn với hồ sơ lái xe / phụ xe / nhân viên
   const [isDriver, setIsDriver] = useState(false);   // hồ sơ là lái xe: có mục Việc của tôi
+  const [isAdmin, setIsAdmin] = useState(false);   // Admin của nhà xe (Chủ nhà xe / Quản trị): xem được mọi thứ, kể cả Việc của tôi
   const [myStaff, setMyStaff] = useState<string | null>(null);
   const avas = useAvatars(ctx.tenant_id);
   // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
@@ -98,10 +99,12 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
 
   const load = useCallback(async () => {
     try {
-      const [p, me] = await Promise.all([
+      const [p, me, adm] = await Promise.all([
         loadPermissions(),
         ctx.user_id ? supabase.from('staff_members').select('id, position').eq('user_id', ctx.user_id).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.rpc('my_is_admin').then((r) => r.data === true, () => false),
       ]);
+      setIsAdmin(adm);
       const crew = !!me.data;   // lái xe, phụ xe, người chạy trung chuyển (có hồ sơ nhân viên)
       setIsCrew(crew);
       const drv = (me.data as { position?: string } | null)?.position === 'lai_xe';
@@ -171,7 +174,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
 
   const mySelf = !perms.has('staff.view_all') && (perms.has('staff.view') || isCrew);   // có mục Thông tin của tôi
   const tabs: { key: Tab; label: string; icon: string; group: string; show: boolean }[] = [
-    { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isDriver },
+    { key: 'driver', label: 'Việc của tôi', icon: 'marker', group: 'Bán vé & điều hành', show: isDriver || isAdmin },
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
     { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },
@@ -249,7 +252,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           <ScreenGuard key={tab} name={tabs.find((x) => x.key === tab)?.label ?? ''}
                        onReport={(text) => { setLastScreen(tab ?? ''); setReport(text); setTab('support'); }}>
           {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
-          {tab === 'driver' && <DriverScreen tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
+          {tab === 'driver' && <DriverScreen admin={isAdmin} tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}

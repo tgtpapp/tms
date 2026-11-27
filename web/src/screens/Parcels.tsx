@@ -172,6 +172,25 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     const next = l.find((t) => new Date(t.depart_at).getTime() >= Date.now()) ?? l[l.length - 1];
     if (key && next) pickTrip(next); else setF((x) => ({ ...x, trip_id: '' }));
   };
+  // Phiếu theo tuyến đang chọn: phiếu đã gắn chuyến → theo chiều của chuyến; chưa gắn chuyến → theo thứ tự nơi gửi, nơi nhận trên tuyến
+  const routeList = useMemo(() => {
+    if (!rfOk) return list;
+    const [rid, d] = rfOk.split('|') as [string, Dir];
+    const ids = ordered(rid, d);
+    return list.filter((x) => {
+      const t = x.trip_id ? trips.find((y) => y.id === x.trip_id) : null;
+      if (t) return t.route_id === rid && t.direction === d;
+      const fi = ids.indexOf(x.from_stop_id), ti = ids.indexOf(x.to_stop_id);
+      return fi >= 0 && ti >= 0 && fi < ti;
+    });
+  }, [list, rfOk, trips, ordered]);
+  // Phiếu vừa chọn từ ô tìm kiếm nằm ở tuyến khác → chuyển sang tuyến của phiếu để thấy phiếu
+  useEffect(() => {
+    if (!focus || routeList.some((x) => x.id === focus)) return;
+    const x = list.find((y) => y.id === focus);
+    const t = x?.trip_id ? trips.find((y) => y.id === x.trip_id) : null;
+    if (t) setRf(`${t.route_id}|${t.direction}`);
+  }, [focus, list, trips, routeList]);
   const counts = useMemo(() => { const c: Record<string, number> = {}; for (const s of list) if (s.trip_id && s.status !== 'huy') c[s.trip_id] = (c[s.trip_id] ?? 0) + 1; return c; }, [list]);
 
   /** Dữ liệu phiếu từ form (xem trước) hoặc phiếu đã lưu */
@@ -326,10 +345,10 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
           </form>
 
           <section className="card">
-            <h2>Phiếu gửi hàng ngày {fmtDate(day)} ({list.length})</h2>
-            {list.length === 0 && <p className="muted">Chưa có phiếu.</p>}
+            <h2>Phiếu gửi hàng ngày {fmtDate(day)} ({routeList.length})</h2>
+            {routeList.length === 0 && <p className="muted">Chưa có phiếu.</p>}
             <ul className="list">
-              {list.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
+              {routeList.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
             </ul>
           </section>
         </div>

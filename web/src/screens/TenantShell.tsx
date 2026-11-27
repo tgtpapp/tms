@@ -182,9 +182,10 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'km', label: 'Km xe', icon: 'road', group: 'Danh mục', show: perms.has('km.view') },
     { key: 'vehicles', label: 'Xe', icon: 'bus', group: 'Danh mục', show: perms.has('vehicle.view') },
     { key: 'staff', label: perms.has('staff.view_all') ? 'Lái xe & nhân viên' : 'Thông tin của tôi', icon: 'id-badge', group: 'Danh mục', show: perms.has('staff.view') || isCrew },
-    // người chỉ xem của mình (Thông tin của tôi): hợp đồng lao động + bảng chấm công nằm thành tab trong Thông tin của tôi
-    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: perms.has('labor.view') && (perms.has('labor.view_all') || !mySelf) },
-    { key: 'timesheet', label: 'Bảng chấm công', icon: 'calendar-check', group: 'Danh mục', show: perms.has('timesheet.view') && (perms.has('timesheet.view_all') || !mySelf) },
+    // Hợp đồng lao động + bảng chấm công: người quản lý nhân sự xem trong Lái xe & nhân viên (thẻ riêng); người chỉ xem của mình xem trong
+    // Thông tin của tôi. Chỉ còn ở thanh bên cho người có quyền HĐLĐ / chấm công nhưng không vào được Lái xe & nhân viên.
+    { key: 'labor', label: 'Hợp đồng lao động', icon: 'document', group: 'Danh mục', show: !perms.has('staff.view_all') && perms.has('labor.view') && (perms.has('labor.view_all') || !mySelf) },
+    { key: 'timesheet', label: 'Bảng chấm công', icon: 'calendar-check', group: 'Danh mục', show: !perms.has('staff.view_all') && perms.has('timesheet.view') && (perms.has('timesheet.view_all') || !mySelf) },
     { key: 'branches', label: 'Chi nhánh & phòng vé', icon: 'building', group: 'Danh mục', show: perms.hasAnywhere('branch.view') || perms.hasAnywhere('office.view') },
     { key: 'docs', label: 'Văn bản', icon: 'document-signed', group: 'Quản trị', show: perms.has('doc.view') },
     { key: 'archive', label: 'Lưu trữ hồ sơ', icon: 'folder', group: 'Quản trị', show: perms.has('archive.view') },

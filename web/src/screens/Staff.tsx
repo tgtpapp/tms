@@ -15,6 +15,7 @@ import { FilePreviews } from '../components/FilePreview';
 import { DeleteButton } from '../components/DeleteButton';
 import { MyCarPapers } from '../components/MyCarPapers';
 import { TimesheetScreen } from './Timesheet';
+import { LaborScreen } from './Labor';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   DeleteDupButton, DOC_COLS, DocFields, DocRow, docState, FilesButton, isDupDoc, paperNo, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
@@ -103,7 +104,7 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [tab, setTab] = useState('');   // '' = Tất cả; còn lại = khóa chức vụ (chữ thường)
   const [showLeft, setShowLeft] = useState(false);
-  const [mod, setMod] = useState<'hs' | 'tq' | 'sd' | 'np' | 'the' | 'bc'>('hs');   // tab của module
+  const [mod, setMod] = useState<'hs' | 'tq' | 'sd' | 'np' | 'hd' | 'cc' | 'the' | 'bc'>('hs');   // tab của module
   const canEdit = perms.has('staff.manage');
   const canView = perms.has('staff.view_all');   // không có: chỉ thấy hồ sơ của chính mình
 
@@ -171,6 +172,9 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const MODS: { k: typeof mod; label: string; show: boolean }[] = [
     { k: 'hs', label: 'Hồ sơ', show: true }, { k: 'tq', label: 'Tổng quan', show: true }, { k: 'sd', label: 'Sơ đồ tổ chức', show: true },
     { k: 'np', label: 'Nghỉ phép', show: perms.has('leave.view_all') },
+    // nhân sự gom về 1 chỗ: hợp đồng lao động, bảng chấm công (trước ở thanh bên)
+    { k: 'hd', label: 'Hợp đồng lao động', show: perms.has('labor.view') },
+    { k: 'cc', label: 'Bảng chấm công', show: perms.has('timesheet.view') },
     { k: 'the', label: 'In thẻ', show: canEdit }, { k: 'bc', label: 'Báo cáo nhân sự', show: true },
   ];
   const ov = { staff, priv, avas, onOpen: openFromTab };
@@ -188,6 +192,8 @@ export function StaffScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
       {canView && mod === 'sd' && <section className="card"><StaffOrg {...ov} branches={branches} canConfig={perms.has('settings.edit')} /></section>}
       {canView && canEdit && mod === 'the' && <section className="card"><StaffCards {...ov} branches={branches} /></section>}
       {canView && mod === 'bc' && <section className="card"><StaffReport {...ov} /></section>}
+      {canView && mod === 'hd' && perms.has('labor.view') && <LaborScreen ctx={ctx} perms={perms} />}
+      {canView && mod === 'cc' && perms.has('timesheet.view') && <TimesheetScreen ctx={ctx} perms={perms} />}
       {canView && mod === 'np' && perms.has('leave.view_all') && <LeavePage staff={staff} perms={common.leave} myUserId={ctx.user_id} avas={avas} onOpen={openFromTab} tenantId={tenantId} me={me} />}
       {(!canView || mod === 'hs') && <>
       <div className="staff-top">

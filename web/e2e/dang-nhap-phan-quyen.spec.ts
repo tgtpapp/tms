@@ -472,7 +472,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('dialog').getByRole('button', { name: 'Khôi phục', exact: true }).click();
   await expect(page.getByText('Dữ liệu đang đủ, không có dòng nào cần khôi phục')).toBeVisible({ timeout: 60000 });
   // 5j5b. Bảng chấm công (như app cũ): lái xe chưa có chuyến nằm ở nhóm "Lái xe chưa có lịch chạy", Lương CK lấy từ bảng tháng
-  await page.getByRole('button', { name: 'Bảng chấm công', exact: true }).click();
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByRole('tab', { name: 'Bảng chấm công', exact: true }).click();
   await expect(page.getByRole('heading', { name: /^Bảng chấm công tháng/ })).toBeVisible();
   await expect(page.locator('table.cc').getByText('Lái xe chưa có lịch chạy')).toBeVisible();
   await expect(page.locator('table.cc tr', { hasText: 'Nguyễn Văn Tài' }).getByText('7.000.000')).toBeVisible();
@@ -592,7 +593,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.locator('.paper-top').getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j6. Hợp đồng lao động: lập HĐ, số 001 tự cấp, lương lấy từ lương chuyển khoản của tháng bắt đầu (sửa được), xem bản in
   const thang = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 7);
-  await page.getByRole('button', { name: 'Hợp đồng lao động', exact: true }).click();
+  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByRole('tab', { name: 'Hợp đồng lao động', exact: true }).click();
   await page.getByRole('button', { name: 'Lập HĐ Nguyễn Văn Tài' }).click();
   await page.getByLabel('Từ ngày', { exact: true }).fill(`${thang}-01`);
   await page.getByRole('button', { name: 'Lấy lại' }).click();
@@ -606,7 +608,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(hd.getByText(/PHỤ LỤC II/)).toBeVisible();
   await hd.getByRole('button', { name: 'Đóng', exact: true }).click();
   // Hợp đồng lao động ngay trong hồ sơ Lái xe & nhân viên: thấy HĐ đã lập, xem trước được
-  await page.getByRole('button', { name: 'Lái xe & nhân viên', exact: true }).click();
+  await page.getByRole('tab', { name: 'Hồ sơ', exact: true }).click();
   await page.getByRole('button', { name: 'Xem hồ sơ Nguyễn Văn Tài', exact: true }).click();
   await page.getByRole('tab', { name: 'Hợp đồng', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Hợp đồng lao động (1)' })).toBeVisible();

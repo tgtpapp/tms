@@ -79,4 +79,22 @@ export async function rememberSplash(name: string, logo: string | null) {
     } catch { small = null; }
   }
   try { localStorage.setItem(SPLASH_KEY, JSON.stringify({ name, logo: small })); } catch { /* bỏ qua */ }
+  setFavicon(small);
+}
+
+/** Biểu tượng trên thanh địa chỉ / thẻ trình duyệt = logo nhà xe (vuông, nền trong); chưa có logo thì giữ biểu tượng mặc định */
+export function setFavicon(logo: string | null | undefined) {
+  if (!logo) return;
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const n = 64, c = document.createElement('canvas'); c.width = n; c.height = n;
+      const k = Math.min(n / img.naturalWidth, n / img.naturalHeight), w = img.naturalWidth * k, h = img.naturalHeight * k;
+      c.getContext('2d')?.drawImage(img, (n - w) / 2, (n - h) / 2, w, h);
+      let l = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+      if (!l) { l = document.createElement('link'); l.rel = 'icon'; document.head.appendChild(l); }
+      l.type = 'image/png'; l.href = c.toDataURL('image/png');
+    } catch { /* giữ biểu tượng mặc định */ }
+  };
+  img.src = logo;
 }

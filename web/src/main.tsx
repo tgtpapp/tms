@@ -4,6 +4,7 @@ import { App } from './App';
 import { LenhUpload } from './screens/LenhUpload';
 import { initTheme } from './lib/theme';
 import { initPwa } from './lib/pwa';
+import { setFavicon, splashBrand } from './lib/brand';
 import { installErrorLog } from './lib/support';
 import { newVersionAvailable } from './lib/version';
 import './lib/push';   // gửi thông báo đẩy đang chờ sau mỗi thao tác bán vé, xếp chuyến…
@@ -13,6 +14,7 @@ initPwa();
 try { sessionStorage.removeItem('tms.tai_lai_ban_moi'); } catch { /* trình duyệt chặn lưu */ }   // đã tải được tệp chính: lần sau gặp lỗi tải lại được tiếp
 installErrorLog();   // nhớ các lỗi gần nhất trên máy để gửi kèm khi báo sự cố
 
+setFavicon(splashBrand()?.logo);   // logo nhà xe đăng nhập lần trước trên máy này hiện ngay trên thanh địa chỉ
 initTheme();   // áp giao diện đã chọn trước khi vẽ (không nháy màu)
 
 // Quét mã QR trên lệnh vận chuyển (Zalo / camera): trang lưu lệnh đã đóng dấu, không cần đăng nhập

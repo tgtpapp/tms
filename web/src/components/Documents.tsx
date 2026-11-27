@@ -381,6 +381,7 @@ export function isDupDoc(d: Doc, all: Doc[]): boolean {
   const no = paperNo(d.doc_no);
   return all.some((x) => x.id !== d.id && x.doc_type === d.doc_type && x.staff_id === d.staff_id && x.vehicle_id === d.vehicle_id
     && ((!!no && paperNo(x.doc_no) === no && x.expires_on === d.expires_on)
+      || (!d.files.length && x.files.length > 0 && x.expires_on === d.expires_on)
       || (x.issued_on === d.issued_on && x.expires_on === d.expires_on && (!no || !paperNo(x.doc_no) || paperNo(x.doc_no) === no))));
 }
 
@@ -420,7 +421,7 @@ export function OldDocs({ docs, canDelete, onDeleted }: { docs: Doc[]; canDelete
           {old.map((d) => (
             <li key={d.id} className="muted">
               {docTypeOf(d.doc_type)?.name ?? d.doc_type} · {d.doc_no ?? 'không số'} · {d.expires_on ? `hết hạn ${fmtDate(d.expires_on)}` : 'không thời hạn'}
-              <FilesButton files={d.files} />
+              {d.files.length ? <FilesButton files={d.files} /> : <> · không có tệp</>}
               {canDelete && onDeleted && isDupDoc(d, docs) && <DeleteDupButton kind="giay_to" id={d.id} label={`bản trùng ${docTypeOf(d.doc_type)?.name ?? d.doc_type}`} onDone={onDeleted} />}
             </li>
           ))}

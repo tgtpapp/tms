@@ -82,6 +82,17 @@ select throws_ok($$ select public.update_document((select id from public.documen
 select throws_ok($$ update public.documents set doc_no = 'Z' $$, '42501', null, 'Trình duyệt không sửa thẳng bảng giấy tờ');
 select ok(exists (select 1 from public.audit_logs where entity = 'documents'), 'Nhật ký ghi thao tác giấy tờ');
 reset role;
+-- Giấy cũ không có tệp (nhập từ app cũ) cùng loại, cùng hạn với giấy có tệp → xóa được; giấy cũ có tệp khác hạn → không xóa
+insert into public.documents (tenant_id, owner_kind, vehicle_id, doc_type, expires_on, files, is_current)
+select tenant_id, 'xe', vehicle_id, 'bh_vat_chat', expires_on, '{}', false from public.documents where doc_no = 'VC-01A';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select throws_ok($$ select public.delete_duplicate_paper('giay_to', (select id from public.documents where doc_no = 'KD1')) $$,
+  '22023', null, 'Giấy cũ có tệp, khác hạn: không xóa');
+select lives_ok($$ select public.delete_duplicate_paper('giay_to', (select id from public.documents where doc_type = 'bh_vat_chat' and not is_current)) $$,
+  'Giấy cũ không tệp, cùng hạn với giấy có tệp: xóa được');
+select is((select count(*)::int from public.documents where doc_type = 'bh_vat_chat'), 1, 'Còn đúng 1 giấy bảo hiểm');
+reset role;
 
 -- ---------------------------------------------------------------- Bán vé A: xem được, không sửa được
 set local role authenticated;

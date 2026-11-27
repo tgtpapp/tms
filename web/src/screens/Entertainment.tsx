@@ -34,6 +34,24 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
   const [show, setShow] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
 
+  // Đang phát thì giữ màn hình luôn sáng (máy hỗ trợ Wake Lock); quay lại app thì xin lại, dừng phát thì trả.
+  const playing = !!play || show;
+  useEffect(() => {
+    if (!playing) return;
+    type Lock = { release: () => Promise<void> };
+    const wl = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<Lock> } }).wakeLock;
+    if (!wl) return;
+    let lock: Lock | null = null;
+    let off = false;
+    const grab = () => {
+      if (off || document.visibilityState !== 'visible') return;
+      void wl.request('screen').then((l) => { if (off) void l.release().catch(() => undefined); else lock = l; }).catch(() => undefined);
+    };
+    grab();
+    document.addEventListener('visibilitychange', grab);
+    return () => { off = true; document.removeEventListener('visibilitychange', grab); void lock?.release().catch(() => undefined); };
+  }, [playing]);
+
   useEffect(() => {
     void supabase.from('tenant_settings').select('value').eq('key', KEY).maybeSingle()
       .then((r) => setList(Array.isArray(r.data?.value) ? (r.data!.value as Vid[]).filter((x) => x && /^[\w-]{11}$/.test(x.id)) : []));

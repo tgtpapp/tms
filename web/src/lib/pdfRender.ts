@@ -17,7 +17,7 @@ export interface PdfDoc { pages: number; render: (n: number, width: number) => P
 /** Mở PDF từ dữ liệu; render(n, rộng px) trả ảnh JPEG (data URL) của trang n (bắt đầu từ 1). */
 export async function openPdf(bytes: Uint8Array): Promise<PdfDoc> {
   const m = await pdfjs();
-  const doc = await m.getDocument({ data: bytes.slice(), isEvalSupported: false }).promise;
+  const doc = await m.getDocument({ data: bytes.slice() }).promise;
   return {
     pages: doc.numPages,
     render: async (n, width) => {

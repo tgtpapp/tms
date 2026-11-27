@@ -2,6 +2,7 @@
 // PDF scan / PDF do app tạo: lấy ảnh từng trang (JPEG) ngay trong file để xem trước, không cần thư viện.
 import { useEffect, useMemo, useState } from 'react';
 import { pdfPageImages } from '../lib/pdfImages';
+import { pdfAllPages, pdfThumb } from '../lib/pdfRender';
 import { Modal } from './Modal';
 import { openBase64 } from '../lib/drive';
 
@@ -42,15 +43,33 @@ export function FrameView({ url, name }: { url: string; name: string }) {
   );
 }
 
+/** Xem lớn PDF: vẽ từng trang bằng pdf.js; máy không vẽ được thì dùng khung PDF của trình duyệt */
+export function PdfPages({ bytes, url, name }: { bytes: Uint8Array; url: string; name: string }) {
+  const [pages, setPages] = useState<string[] | null>(null);
+  const [fail, setFail] = useState(false);
+  useEffect(() => {
+    let on = true;
+    setPages(null); setFail(false);
+    void pdfAllPages(bytes).then((p) => { if (on) setPages(p); }).catch(() => { if (on) setFail(true); });
+    return () => { on = false; };
+  }, [bytes]);
+  if (fail) return <FrameView url={url} name={name} />;
+  if (!pages) return <p className="muted doc-loading">Đang mở tệp PDF…</p>;
+  return <div className="doc-big-pages">{pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div>;
+}
+
 export function DocViewer({ title, name, mime, b64, onClose }: { title: string; name: string; mime: string; b64: string; onClose: () => void }) {
   const [big, setBig] = useState(false);
   const isImg = mime.startsWith('image/'), isPdf = mime === 'application/pdf' || /\.pdf$/i.test(name);
   const [pages, setPages] = useState<string[]>(() => (isImg ? [`data:${mime};base64,${b64}`] : []));
+  const bytes = useMemo(() => (isPdf ? b64Bytes(b64) : null), [b64, isPdf]);
+  const [count, setCount] = useState(0);
   useEffect(() => {
-    if (!isPdf) return;
-    const u = b64Bytes(b64);
-    void pdfPageImages(u, pdfJpegs).catch(() => [] as string[]).then(setPages);
-  }, [b64, isPdf]);
+    if (!bytes) return;
+    // PDF: ảnh trang đầu bằng pdf.js; lỗi thì thử lấy ảnh scan nằm trong tệp như trước
+    void pdfThumb(bytes).then((t) => { setPages([t.thumb]); setCount(t.pages); })
+      .catch(() => pdfPageImages(bytes, pdfJpegs).catch(() => [] as string[]).then((p) => { setPages(p); setCount(p.length); }));
+  }, [bytes]);
   const blobUrl = useMemo(() => URL.createObjectURL(new Blob([b64Bytes(b64) as BlobPart], { type: mime || 'application/octet-stream' })), [b64, mime]);
   useEffect(() => () => URL.revokeObjectURL(blobUrl), [blobUrl]);
   const openBig = () => setBig(true);
@@ -60,7 +79,8 @@ export function DocViewer({ title, name, mime, b64, onClose }: { title: string; 
       <div className="doc-big" role="dialog" aria-label={title}>
         <div className="doc-big-bar"><b>{title}</b><button className="btn small" onClick={() => openBase64(name, mime, b64, true)}>Tải về</button>
           <button className="btn small" onClick={() => setBig(false)}>Đóng</button></div>
-        {pages.length ? <div className="doc-big-pages">{pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div> : <FrameView url={blobUrl} name={name} />}
+        {bytes ? <PdfPages bytes={bytes} url={blobUrl} name={name} />
+          : pages.length ? <div className="doc-big-pages">{pages.map((p, i) => <img key={i} src={p} alt={`Trang ${i + 1}`} />)}</div> : <FrameView url={blobUrl} name={name} />}
       </div>
     );
   }
@@ -70,7 +90,7 @@ export function DocViewer({ title, name, mime, b64, onClose }: { title: string; 
         {pages.length ? (
           <button type="button" className="doc-thumb" onClick={openBig} aria-label="Xem lớn">
             <img src={pages[0]} alt={title} onError={() => { if (isPdf) setPages([]); }} />
-            {pages.length > 1 && <span className="doc-pages">{pages.length} trang</span>}
+            {(bytes ? count : pages.length) > 1 && <span className="doc-pages">{bytes ? count : pages.length} trang</span>}
           </button>
         ) : <div className="doc-thumb empty"><span>{isPdf ? 'PDF' : (name.split('.').pop() ?? '').toUpperCase() || 'Tệp'}</span><small>{name}</small></div>}
         <div className="actions">

@@ -2051,3 +2051,4 @@ table.cc { width: 100%; }
 .qr-ok-note { margin: 10px 0 0; font-size: .92rem; color: var(--muted); max-width: 340px; }
 .qr-ok-acts { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 24px; max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 .qr-ok-acts .btn { min-height: 54px; font-size: 1.05rem; width: 100%; }
+.doc-big .doc-loading { color: #e2e8f0; text-align: center; padding: 32px 12px; }

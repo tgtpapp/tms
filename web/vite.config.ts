@@ -23,13 +23,15 @@ function manifest(name: string): Plugin {
 
 /** Chính sách bảo mật nội dung (CSP) + header bảo mật: chỉ chạy mã của chính app, chỉ kết nối tới máy chủ Supabase của cấu hình,
  *  không cho trang khác nhúng app (chống lừa bấm), không đoán kiểu tệp. Địa chỉ máy chủ lấy từ VITE_SUPABASE_URL (không viết cứng). */
-function security(supabaseUrl: string): Plugin {
-  let sb = '';
+function security(supabaseUrl: string, geocodeUrl: string): Plugin {
+  let sb = '', geo = '';
   try { const u = new URL(supabaseUrl); sb = `${u.origin} ${u.origin.replace(/^http/, 'ws')}`; } catch { /* thiếu cấu hình: chỉ 'self' */ }
+  // Dịch vụ tra tọa độ điểm dừng (VITE_GEOCODE_URL): trình duyệt gọi thẳng nên phải cho phép kết nối, nếu không CSP chặn mất
+  try { if (geocodeUrl) geo = new URL(geocodeUrl).origin; } catch { /* sai dạng: không mở */ }
   // fonts.googleapis.com / fonts.gstatic.com: font chữ tự chọn trong Giao diện của tôi (Google Fonts)
   const csp = [
     "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", `img-src 'self' data: blob: https://i.ytimg.com ${sb}`,
-    "font-src 'self' data: https://fonts.gstatic.com", `connect-src 'self' data: blob: ${sb}`, `frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com ${sb}`, "worker-src 'self'", `manifest-src 'self' ${sb}`,
+    "font-src 'self' data: https://fonts.gstatic.com", `connect-src 'self' data: blob: ${sb} ${geo}`.trimEnd(), `frame-src 'self' blob: https://www.youtube-nocookie.com https://www.youtube.com ${sb}`, "worker-src 'self'", `manifest-src 'self' ${sb}`,
     `media-src 'self' blob: ${sb}`, "object-src 'none'", "base-uri 'self'", "form-action 'self'",
   ].join('; ');
   const headers = `/*
@@ -59,7 +61,7 @@ function security(supabaseUrl: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   return {
-    plugins: [react(), manifest(env.VITE_INSTALL_NAME || env.VITE_APP_NAME || 'TMS'), security(env.VITE_SUPABASE_URL ?? '')],
+    plugins: [react(), manifest(env.VITE_INSTALL_NAME || env.VITE_APP_NAME || 'TMS'), security(env.VITE_SUPABASE_URL ?? '', env.VITE_GEOCODE_URL ?? '')],
     build: {
       outDir: 'dist',
       sourcemap: true,

@@ -2035,3 +2035,7 @@ table.cc { width: 100%; }
 .gt-show { position: fixed; inset: 0; z-index: 1200; background: #000; }
 .gt-show iframe { width: 100%; height: 100%; border: 0; }
 .gt-x { position: absolute; top: 10px; right: 10px; z-index: 2; border: 0; border-radius: 999px; padding: 8px 14px; background: rgba(255, 255, 255, .85); font-weight: 700; cursor: pointer; }
+.gt-topics { display: flex; flex-direction: column; gap: 12px; margin: 6px 0 12px; }
+.gt-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.gt-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
+.gt-chip:hover { border-color: var(--primary); color: var(--primary); }

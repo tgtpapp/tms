@@ -6,6 +6,11 @@ import { useToast } from '../lib/toast';
 
 interface Vid { id: string; title: string; channel?: string; thumb?: string }
 const KEY = 'giai_tri.ds';
+/** Chủ đề nhạc gợi ý: bấm là tìm ngay */
+const TOPICS: { nhom: string; ds: string[] }[] = [
+  { nhom: 'Việt Nam', ds: ['Nhạc trẻ hay nhất', 'Bolero trữ tình', 'Nhạc Trịnh Công Sơn', 'Nhạc vàng xưa', 'Nhạc quê hương', 'Nhạc cách mạng', 'Nhạc không lời Việt Nam', 'Nhạc Tết', 'Nhạc thiếu nhi', 'Lofi Việt chill'] },
+  { nhom: 'Anh Quốc', ds: ['UK top hits', 'The Beatles', 'Adele', 'Ed Sheeran', 'Coldplay', 'Queen', 'Elton John', 'Dua Lipa', 'British rock classics', 'UK chill acoustic'] },
+];
 const thumbOf = (id: string) => `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 const embed = (id: string, q: Record<string, string>) => `https://www.youtube-nocookie.com/embed/${id}?${new URLSearchParams({ rel: '0', modestbranding: '1', playsinline: '1', ...q })}`;
 /** Lấy mã video từ link YouTube (watch?v=, youtu.be/, shorts/, embed/) */
@@ -34,13 +39,14 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
       .then((r) => setList(Array.isArray(r.data?.value) ? (r.data!.value as Vid[]).filter((x) => x && /^[\w-]{11}$/.test(x.id)) : []));
   }, []);
 
-  async function search(page?: string) {
-    const id = ytId(q);
-    if (id) { setPlay({ id, title: q.trim() }); return; }
-    if (!q.trim()) return;
+  async function search(page?: string, term?: string) {
+    const qq = term ?? q;
+    const id = ytId(qq);
+    if (id) { setPlay({ id, title: qq.trim() }); return; }
+    if (!qq.trim()) return;
     setBusy(true); setNote('');
     try {
-      const { data, error } = await supabase.functions.invoke('youtube', { body: { q, page: page ?? '' } });
+      const { data, error } = await supabase.functions.invoke('youtube', { body: { q: qq, page: page ?? '' } });
       const d = data as { items?: Vid[]; next?: string | null; error?: string; no_key?: boolean } | null;
       if (error || !d?.items) {
         let m = d?.error ?? '';
@@ -79,6 +85,15 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
           <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Đang tìm…' : 'Tìm'}</button>
         </form>
         {note && <p className="small state-sap_het">{note}</p>}
+        {!hits && !play && (
+          <div className="gt-topics">
+            {TOPICS.map((g) => (
+              <div key={g.nhom}><b>{g.nhom}</b>
+                <div className="gt-chips">{g.ds.map((t) => <button key={t} type="button" className="gt-chip" onClick={() => { setQ(t); void search(undefined, t); }}>{t}</button>)}</div>
+              </div>
+            ))}
+          </div>
+        )}
         {play && (
           <div className="gt-player">
             <iframe src={embed(play.id, { autoplay: '1' })} title={play.title} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />

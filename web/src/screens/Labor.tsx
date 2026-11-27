@@ -32,6 +32,8 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const C = useContracts(tenantId, me, canArchive);
   const busy = busy0 || C.busy;
   const [showOld, setShowOld] = useState(false);
+  const [kieu, setKieuS] = useState<'bang' | 'the'>(() => { try { return localStorage.getItem('tms.hdld.kieu') === 'the' ? 'the' : 'bang'; } catch { return 'bang'; } });
+  const setKieu = (v: 'bang' | 'the') => { setKieuS(v); try { localStorage.setItem('tms.hdld.kieu', v); } catch { /* chỉ đổi trong phiên */ } };
 
   const load = useCallback(async () => {
     const [s, c, p, m, t] = await Promise.all([
@@ -98,41 +100,51 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   };
   const actives = list.filter((k) => k.status === 'hieu_luc');
 
+  /** Nút thao tác 1 người (dùng chung cho kiểu bảng và kiểu thẻ) */
+  const acts = (s: (typeof people)[number], k: ReturnType<typeof active>) => !k
+    ? (canAdd && s.user_id !== ctx.user_id ? <button className="btn small" aria-label={`Lập HĐ ${s.full_name}`} onClick={() => setF(defaultsOf(s))}>Lập HĐ</button> : null)
+    : <>
+      {canEdit && s.user_id !== ctx.user_id
+        ? <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.show(k, s.full_name)}>Xem / in</button>
+        : <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.showPdf(k, s.full_name)}>Xem hợp đồng (PDF)</button>}
+      {canEdit && s.user_id !== ctx.user_id && <button className="btn small" aria-label={`Sửa HĐ ${s.full_name}`} onClick={() => setF(formOf(k, s))}>Sửa</button>}
+      {canEdit && canArchive && s.user_id !== ctx.user_id && <button className="btn small" disabled={!!busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
+      {canDel && s.user_id !== ctx.user_id && <button className="btn small link danger-text" onClick={() => void cancel(k)}>Hủy</button>}
+    </>;
+
   return (
     <section className="card">
-      <div className="item-head">
+      <div className="hd-bar">
         <h2>Hợp đồng lao động năm {year} ({actives.length})</h2>
-        <label className="inline">Năm <input type="number" min={2000} max={2100} value={year} style={{ width: 90 }} onChange={(e) => Number(e.target.value) >= 2000 && setYear(Number(e.target.value))} /></label>
+        <div className="hd-tools">
+          {canAdd && missing.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={() => void createAll()}>Lập HĐ cho {missing.length} người chưa có</button>}
+          {canEdit && canArchive && actives.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void C.archiveMany(actives)}>Lưu hồ sơ tất cả ({actives.length})</button>}
+          {list.some((k) => k.status === 'da_huy') && <button className="btn small" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn HĐ đã hủy' : 'Hiện HĐ đã hủy'}</button>}
+          <div className="seg" role="group" aria-label="Kiểu xem">
+            <button type="button" className={kieu === 'bang' ? 'on' : ''} aria-pressed={kieu === 'bang'} onClick={() => setKieu('bang')}>Bảng</button>
+            <button type="button" className={kieu === 'the' ? 'on' : ''} aria-pressed={kieu === 'the'} onClick={() => setKieu('the')}>Thẻ</button>
+          </div>
+          <span className="hd-year">Năm <input type="number" min={2000} max={2100} value={year} aria-label="Năm" onChange={(e) => Number(e.target.value) >= 2000 && setYear(Number(e.target.value))} /></span>
+        </div>
       </div>
-      <div className="actions" style={{ flexWrap: 'wrap' }}>
-        {canAdd && missing.length > 0 && <button className="btn small primary" disabled={!!busy} onClick={() => void createAll()}>Lập HĐ cho {missing.length} người chưa có</button>}
-        {canEdit && canArchive && actives.length > 0 && <button className="btn small" disabled={!!busy} onClick={() => void C.archiveMany(actives)}>Lưu hồ sơ tất cả ({actives.length})</button>}
-        {list.some((k) => k.status === 'da_huy') && <button className="btn small" onClick={() => setShowOld(!showOld)}>{showOld ? 'Ẩn HĐ đã hủy' : 'Hiện HĐ đã hủy'}</button>}
-        {busy && <span className="small muted">{busy}</span>}
-      </div>
+      {busy && <p className="small muted">{busy}</p>}
+      {kieu === 'bang' ? (
       <div className="table-wrap">
-        <table className="plist">
+        <table className="plist hd-tbl">
           <thead><tr><th>Số HĐLĐ</th><th>Họ và tên</th><th>Loại HĐ</th><th>Từ ngày</th><th>Đến ngày</th><th>Lương</th><th>Tình trạng</th><th /></tr></thead>
           <tbody>
             {people.map((s) => {
               const k = active(s.id);
               if (!k) return (
                 <tr key={s.id}><td className="muted">Chưa lập</td><td><b>{s.full_name}</b><div className="small muted">{s.job_title || POSITION[s.position]}</div></td><td colSpan={5} />
-                  <td>{canAdd && s.user_id !== ctx.user_id && <button className="btn small" aria-label={`Lập HĐ ${s.full_name}`} onClick={() => setF(defaultsOf(s))}>Lập HĐ</button>}</td></tr>
+                  <td className="actions">{acts(s, k)}</td></tr>
               );
               const [st, cls] = state(k);
               return (
                 <tr key={s.id}>
                   <td><b>{k.number}</b></td><td><b>{s.full_name}</b><div className="small muted">{k.position}</div></td><td>{KIND_NAME[k.kind]}</td>
                   <td>{fmtDate(k.start_on)}</td><td>{k.end_on ? fmtDate(k.end_on) : '—'}</td><td className="r">{num(Number(k.salary))}</td><td className={cls}>{st}</td>
-                  <td className="actions">
-                    {canEdit && s.user_id !== ctx.user_id
-                      ? <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.show(k, s.full_name)}>Xem / in</button>
-                      : <button className="btn small" aria-label={`Xem HĐ ${s.full_name}`} disabled={!!busy} onClick={() => void C.showPdf(k, s.full_name)}>Xem hợp đồng (PDF)</button>}
-                    {canEdit && s.user_id !== ctx.user_id && <button className="btn small" aria-label={`Sửa HĐ ${s.full_name}`} onClick={() => setF(formOf(k, s))}>Sửa</button>}
-                    {canEdit && canArchive && s.user_id !== ctx.user_id && <button className="btn small" disabled={!!busy} onClick={() => void C.archive(k)}>Lưu hồ sơ</button>}
-                    {canDel && s.user_id !== ctx.user_id && <button className="btn small link danger-text" onClick={() => void cancel(k)}>Hủy</button>}
-                  </td>
+                  <td className="actions">{acts(s, k)}</td>
                 </tr>
               );
             })}
@@ -142,6 +154,29 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
           </tbody>
         </table>
       </div>
+      ) : (
+      <div className="hd-cards">
+        {people.map((s) => {
+          const k = active(s.id);
+          const [st, cls] = k ? state(k) : ['Chưa lập', 'muted'];
+          return (
+            <div key={s.id} className="hd-card">
+              <div className="hd-card-h"><b>{s.full_name}</b><span className={`small ${cls}`}>{st}</span></div>
+              <div className="small muted">{k ? k.position : (s.job_title || POSITION[s.position])}</div>
+              {k ? <div className="small">
+                <div><b>{k.number}</b> · {KIND_NAME[k.kind]}</div>
+                <div>{fmtDate(k.start_on)} → {k.end_on ? fmtDate(k.end_on) : 'không thời hạn'} · Lương {num(Number(k.salary))}</div>
+              </div> : <div className="small muted">Chưa lập hợp đồng năm {year}</div>}
+              <div className="actions">{acts(s, k)}</div>
+            </div>
+          );
+        })}
+        {showOld && list.filter((k) => k.status === 'da_huy').map((k) => (
+          <div key={k.id} className="hd-card muted"><div className="hd-card-h"><b>{nameOf(k.staff_id)}</b><span className="small">{k.number}</span></div>
+            <div className="error-text small">Đã hủy: {k.cancel_reason}</div></div>
+        ))}
+      </div>
+      )}
 
       {canTerms && <div className="sub form">
         <h3>Điều khoản chung trong hợp đồng</h3>

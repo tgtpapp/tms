@@ -2002,3 +2002,15 @@ table.cc { width: 100%; }
   .lenh-overlay > .print-stack > .lenh:last-child { margin-bottom: 0; }
   .lenh-overlay:has(> .print-stack) > .lenh-bar { width: max-content; min-width: min(232mm, 100%); max-width: none; box-sizing: border-box; }
 }
+/* Hợp đồng lao động: tiêu đề + nút + kiểu xem + Năm trên 1 hàng ngang; bảng giãn hết bề ngang; kiểu thẻ */
+.hd-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.hd-bar h2 { margin: 0; }
+.hd-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hd-year { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: .9rem; }
+.hd-year input { width: 90px; min-height: 36px; padding: 6px 10px; }
+.hd-tbl { width: 100%; }
+.hd-tbl td.actions { white-space: nowrap; text-align: right; }
+.hd-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.hd-card { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; background: var(--surface); }
+.hd-card-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.hd-card .actions { margin-top: auto; padding-top: 6px; flex-wrap: wrap; }

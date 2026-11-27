@@ -42,6 +42,7 @@ import { UsersScreen } from './Users';
 import { VehiclesScreen } from './Vehicles';
 import { SupportScreen } from './Support';
 import { ScreenGuard } from '../components/ScreenGuard';
+import { MusicDock } from '../components/MusicDock';
 
 type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
 
@@ -280,6 +281,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           </ScreenGuard>
         </main>
       </div>
+      <MusicDock />
     </div>
   );
 }

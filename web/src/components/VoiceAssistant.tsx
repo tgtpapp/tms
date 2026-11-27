@@ -2,9 +2,10 @@
 // Bấm nút lớn → lần đầu đọc tình hình chuyến + điểm tới rồi hỏi "Anh cần gì?"; các lần sau chỉ bíp rồi nghe.
 // Màn trợ lý phủ kín: chạm bất kỳ đâu để nói tiếp (không cần nhìn), nút Đóng ở góc.
 import { useEffect, useRef, useState } from 'react';
-import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, mentionedParcels, moneyOf, nextStopText,
-  parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type VParcel, type VTicket, type VTrip } from '../lib/voice';
+import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, musicOf, mentionedParcels, moneyOf, nextStopText,
+  parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type MusicCmd, type VParcel, type VTicket, type VTrip } from '../lib/voice';
 import { rpc } from '../lib/supabase';
+import { hold, musicState, next as nextSong, pause as pauseSong, playList, prev as prevSong, release, resume as resumeSong, searchSongs, stopMusic, tenantPlaylist, volume } from '../lib/music';
 import { distM, learnStop, type StopGeo } from '../lib/geo';
 
 type Mark = (ids: string[], action: 'len' | 'bo_len' | 'tra' | 'bo_tra' | 'vang' | 'bo_vang', patch: Partial<VTicket>) => Promise<void>;
@@ -207,12 +208,39 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
   /** Ghi kết quả gọi khách sau khi gọi xong */
   async function callResult(q: string): Promise<string> {
     const cb = callBack.current; callBack.current = null;
+    release();   // gọi xong: phát nhạc lại
     if (!cb) return '';
     const r = callResultOf(q);
     if (!r) return 'Em chưa rõ kết quả, chưa ghi. Anh ghi trên màn hình giúp em.';
     await rpc('crew_mark', { p_ticket_id: cb.ticketId, p_action: r });
     await onChanged();
     return r === 'nghe_may' ? `Đã ghi ${cb.name} nghe máy, sẽ ra đón.` : r === 'thue_bao' ? `Đã ghi ${cb.name} thuê bao, không nghe máy.` : `Đã ghi ${cb.name} báo hủy.`;
+  }
+  /** Điều khiển nhạc bằng giọng nói */
+  async function music(c: MusicCmd): Promise<string> {
+    if (c.act === 'mo') {
+      if (c.q) {
+        const found = await searchSongs(/^nh\u1ea1c\b/i.test(c.q) ? c.q : `nhạc ${c.q}`).catch(() => null);
+        if (found?.length) { playList(found, `Nhạc: ${c.q}`); return `Em mở nhạc ${c.q}.`; }
+        if (found) return `Em không tìm thấy nhạc ${c.q}. Anh nói tên khác giúp em.`;
+      }
+      const l = await tenantPlaylist().catch(() => []);
+      if (!l.length) return c.q ? 'Chưa tìm được nhạc, nhà xe cũng chưa có danh sách phát trên xe.' : 'Nhà xe chưa có danh sách phát trên xe. Anh nói mở nhạc kèm tên bài, ví dụ mở nhạc bolero.';
+      playList(l, 'Danh sách phát trên xe');
+      return c.q ? 'Chưa tìm được bài theo yêu cầu, em mở danh sách nhạc của xe.' : 'Em mở danh sách nhạc của xe.';
+    }
+    if (!musicState().list.length) return 'Chưa mở nhạc. Anh nói mở nhạc để nghe.';
+    switch (c.act) {
+      case 'tiep': nextSong(); return 'Đã chuyển bài.';
+      case 'truoc': prevSong(); return 'Đã quay lại bài trước.';
+      case 'dung': pauseSong(); return 'Đã tạm dừng nhạc.';
+      case 'phat': resumeSong(); return 'Dạ.';
+      case 'tat': stopMusic(); return 'Đã tắt nhạc.';
+      default: {
+        if (/iP(hone|ad|od)/.test(navigator.userAgent)) return 'Máy này không cho chỉnh âm lượng nhạc, anh bấm nút âm lượng của điện thoại.';
+        return `Âm lượng nhạc ${volume(c.act === 'to' ? 20 : -20)} phần trăm.`;
+      }
+    }
   }
   function answer(q: string): string {
     const d = data.current;
@@ -221,7 +249,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       case 'thu_ho': return codText(d.parcels);
       case 'chuyen': return tripText(d.trip, d.tickets, d.cap);
       case 'nhac_lai': return last.current || nextStopText(d.tickets, d.parcels, d.stopName);
-      default: return 'Em chưa hiểu. Anh hỏi điểm tới, thu hộ, hoặc báo đã đón, đã trả, khách vắng, đã giao hàng, đổ dầu, sự cố.';
+      default: return 'Em chưa hiểu. Anh hỏi điểm tới, thu hộ, hoặc báo đã đón, đã trả, khách vắng, đã giao hàng, đổ dầu, sự cố, hoặc nói mở nhạc.';
     }
   }
   async function turn() {
@@ -237,10 +265,12 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     const q = await l.done;
     setHeard(q);
     const it: Intent = q ? intentOf(q) : 'khong_ro';
+    const mc = q && !callBack.current ? musicOf(q) : null;
     let out: string;
     try {
       out = q && callBack.current ? await callResult(q)
         : !q ? 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.'
+        : mc ? await music(mc)
         : it === 'goi' ? await call(q)
         : it === 'don' || it === 'tra' || it === 'vang' || it === 'hoan_tac' ? await update(q, it)
         : it === 'giao' || it === 'do_dau' || it === 'chi_phi' || it === 'su_co' || it === 'tre_gio' || it === 'nhan' ? await report(q, it)
@@ -258,7 +288,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     }
     await turn();
   }
-  function close() { stopSpeak(); stopRef.current(); setOpen(false); setPhase('cho'); setDial(null); callBack.current = null; }
+  function close() { stopSpeak(); stopRef.current(); setOpen(false); setPhase('cho'); setDial(null); callBack.current = null; release(); }
 
   return (
     <>
@@ -270,6 +300,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
             stopSpeak();
             if (dial.ticketId) { callBack.current = { ticketId: dial.ticketId, name: dial.name }; void rpc('crew_mark', { p_ticket_id: dial.ticketId, p_action: 'goi' }).catch(() => undefined); }
             const tel = dial.phone; setDial(null);
+            hold();   // đang gọi điện: dừng nhạc đến khi ghi xong kết quả cuộc gọi
             window.location.href = `tel:${tel}`;
             return;
           }

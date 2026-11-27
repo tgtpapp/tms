@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { errMsg, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { stopMusic } from '../lib/music';
 
 interface Vid { id: string; title: string; channel?: string; thumb?: string }
 const KEY = 'giai_tri.ds';
@@ -36,6 +37,7 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
 
   // Đang phát thì giữ màn hình luôn sáng (máy hỗ trợ Wake Lock); quay lại app thì xin lại, dừng phát thì trả.
   const playing = !!play || show;
+  useEffect(() => { if (playing) stopMusic(); }, [playing]);   // đang xem ở đây: tắt khung nhạc của trợ lý (không phát 2 tiếng cùng lúc)
   useEffect(() => {
     if (!playing) return;
     type Lock = { release: () => Promise<void> };

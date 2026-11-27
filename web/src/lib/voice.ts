@@ -2,6 +2,8 @@
 // Nghe / đọc bằng tính năng sẵn có của trình duyệt (không cài thêm thư viện, không gọi AI): hiểu câu hỏi theo từ khóa.
 // Câu trả lời: 1–3 câu ngắn, kiểu văn nói, không ký tự đặc biệt; giờ "14 giờ 30", tiền "1 triệu 200 nghìn", số điện thoại "đuôi 512" (3 số cuối).
 
+import { duck, unduck } from './music';
+
 export interface VTicket {
   id: string; from_stop_id: string; to_stop_id: string; from_idx: number; to_idx: number | null; price: number; status: 'dat' | 'da_tt';
   passenger_name: string | null; passenger_phone: string | null; boarded: boolean; no_show: boolean; dropped: boolean;
@@ -105,6 +107,36 @@ export function intentOf(heard: string): Intent {
   return 'khong_ro';
 }
 
+/** Lệnh nhạc ("mở nhạc bolero", "bài tiếp", "nhỏ lại"…); null = không phải lệnh nhạc. q: nội dung cần tìm ('' = danh sách phát của xe) */
+export type MusicCmd = { act: 'mo'; q: string } | { act: 'tiep' | 'truoc' | 'dung' | 'phat' | 'to' | 'nho' | 'tat' };
+export function musicOf(heard: string): MusicCmd | null {
+  const s = fold(heard).replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/\b(tat|thoi|bo) (nhac|bai hat|video)\b/.test(s)) return { act: 'tat' };
+  if (/\btam dung\b|\b(dung|ngung) (nhac|bai|phat)\b/.test(s)) return { act: 'dung' };
+  if (/\bphat tiep\b|\b(mo|bat) lai nhac\b|\btiep tuc (nhac|phat)\b/.test(s)) return { act: 'phat' };
+  if (/\bbai (tiep|sau|khac|moi)\b|\b(qua|chuyen|doi|sang) bai\b/.test(s)) return { act: 'tiep' };
+  if (/\bbai truoc\b|\b(lui|quay lai) bai\b/.test(s)) return { act: 'truoc' };
+  if (/\b(to|lon|tang) (len|tieng|am luong|nhac|them)\b|\bnhac to\b|\bvan to\b/.test(s)) return { act: 'to' };
+  if (/\b(nho|giam|bot) (lai|xuong|tieng|am luong|nhac|di|bot)\b|\bnhac nho\b|\bvan nho\b/.test(s)) return { act: 'nho' };
+  // "mở nhạc …" / "nhạc …": phần sau là nội dung cần tìm (bỏ các chữ đệm "đi, nhé, cho khách nghe…")
+  const ws = s.split(' '), orig = heard.replace(/[.,!?]/g, ' ').trim().split(/\s+/);
+  let i = -1;
+  for (let k = 0; k < ws.length - 1 && i < 0; k++) {
+    if (/^(mo|bat|phat|nghe)$/.test(ws[k]!) && /^(nhac|bai|video)$/.test(ws[k + 1]!)) i = k + 2;
+  }
+  if (i < 0 && ws[0] === 'nhac') i = 1;
+  if (i < 0) return null;
+  if (ws[i] === 'hat' && ws[i - 1] === 'bai') i++;
+  let j = ws.length;
+  while (i < j && /^(di|nao|giup|voi|nhe|ne|nha)$/.test(ws[i]!)) i++;
+  if (ws[i] === 'cho') { i++; if (/^(khach|anh|em|minh|ca xe)$/.test(ws[i] ?? '')) i++; if (ws[i] === 'nghe') i++; }
+  while (j > i && /^(di|nao|nhe|ne|nha|voi|giup|a|nhac)$/.test(ws[j - 1]!)) j--;
+  const q = ws.slice(i, j).join(' ');
+  if (!q || /\b(danh sach|cua xe|tren xe|nha xe|mac dinh|thuong mo)\b/.test(q)) return { act: 'mo', q: '' };
+  // lấy đúng các chữ của câu gốc (còn dấu) để tìm trên YouTube
+  return { act: 'mo', q: ws.length === orig.length ? orig.slice(i, j).join(' ') : q };
+}
+
 /* ---------------- Đọc / nghe bằng trình duyệt ---------------- */
 interface Rec { lang: string; interimResults: boolean; maxAlternatives: number; continuous: boolean; start(): void; abort(): void;
   onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: ((e: { error: string }) => void) | null; onend: (() => void) | null }
@@ -137,7 +169,11 @@ export function speak(text: string): Promise<void> {
     const c = voiceCfg();
     u.lang = 'vi-VN'; u.rate = c.rate; u.volume = c.volume;
     const v = viVoice(); if (v) u.voice = v;
-    u.onend = () => res(); u.onerror = () => res();
+    duck();   // nhạc nhỏ lại khi trợ lý đọc
+    let done = false;
+    const fin = () => { if (done) return; done = true; clearTimeout(t); unduck(); res(); };
+    const t = setTimeout(fin, 8000 + text.length * 150);   // máy không báo đọc xong (lỗi một số máy Android): không để nhạc nhỏ mãi
+    u.onend = fin; u.onerror = fin;
     window.speechSynthesis.speak(u);
   });
 }
@@ -164,9 +200,11 @@ export function listen(onStart?: () => void): { done: Promise<string>; stop: () 
   const done = new Promise<string>((res) => {
     r.onresult = (e) => { text = e.results[0]?.[0]?.transcript ?? ''; };
     r.onerror = () => undefined;
-    r.onend = () => res(text.trim());
+    r.onend = () => { if (ducked) { ducked = false; unduck(); } res(text.trim()); };
   });
-  try { r.start(); onStart?.(); } catch { /* đang nghe */ }
+  let ducked = true;
+  duck();   // nhạc nhỏ lại để máy nghe rõ giọng lái xe
+  try { r.start(); onStart?.(); } catch { ducked = false; unduck(); /* đang nghe */ }
   return { done, stop: () => { try { r.abort(); } catch { /* bỏ qua */ } } };
 }
 

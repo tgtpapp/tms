@@ -2040,6 +2040,13 @@ table.cc { width: 100%; }
 .gt-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .gt-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
 .gt-chip:hover { border-color: var(--primary); color: var(--primary); }
+/* Khung nhạc dùng chung (trợ lý giọng nói mở nhạc): góc dưới, không mất khi chuyển màn hình; khung video tối thiểu 200px theo quy định nhúng YouTube */
+.music-dock { position: fixed; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 950; width: min(calc(100vw - 16px), 356px); background: #0b1220; color: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 24px rgba(0, 0, 0, .3); }
+.music-dock iframe { display: block; width: 100%; height: 200px; border: 0; background: #000; }
+.music-bar { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+.music-t { flex: 1 1 auto; min-width: 0; font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-bar .btn { min-width: 40px; }
+body.has-music .content { padding-bottom: 270px; }
 /* Điện thoại cho máy tính đăng nhập bằng QR: toàn màn hình, cân đối */
 .qr-ok { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; background: var(--surface, #fff); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 .qr-ok-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 1.1rem; }

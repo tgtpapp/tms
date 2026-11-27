@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { deviceId, deviceName, qrJustUsed, setQrJustUsed } from '../lib/device';
 import { useToast } from '../lib/toast';
+import { bioAvailable, bioConfirm } from '../lib/bioLock';
 
 /** Báo thiết bị khi mở app. Trả 'ok' / 'cho_duyet'; lỗi mạng coi như 'ok' (dữ liệu vẫn do database chặn). */
 export async function deviceHello(): Promise<'ok' | 'cho_duyet' | 'chi_qr' | 'cho_quan_ly'> {
@@ -48,6 +49,8 @@ export function DeviceApprovals() {
   const [list, setList] = useState<Pending[]>([]);
   const [busy, setBusy] = useState(false);
   const [qr, setQr] = useState<{ id: string; name: string | null; status: string } | null>(null);
+  const [bio, setBio] = useState(false);
+  useEffect(() => { void bioAvailable().then(setBio); }, []);
   const [hidden, setHidden] = useState<string[]>([]);
   const [scan, setScan] = useState(false);
   // Bấm thông báo "Xin đăng nhập bằng mật khẩu trên máy tính" ở chuông: mở ngay danh sách chờ duyệt
@@ -102,6 +105,13 @@ export function DeviceApprovals() {
       await load();
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
   }
+  /** Đồng ý sau khi chủ máy xác nhận vân tay / Face ID / mã khóa máy */
+  async function qrConfirm() {
+    const { data } = await supabase.auth.getUser();
+    const uid = data.user?.id ?? '';
+    if (!uid || !(await bioConfirm(uid, data.user?.email ?? 'TMS'))) { toast('error', 'Chưa xác nhận được vân tay / Face ID / mã khóa máy'); return; }
+    await qrDecide(true);
+  }
   async function qrDecide(ok: boolean) {
     if (!qr) return;
     setBusy(true);
@@ -117,18 +127,24 @@ export function DeviceApprovals() {
     <>
       {scan && <QrScanner onFound={found} onClose={() => setScan(false)} />}
       {qr && (
-        <Modal title="Đăng nhập trên máy tính" onClose={() => setQr(null)}>
-          {qr.status === 'cho' ? (
-            <div className="form">
-              <p>Cho phép <b>{qr.name ?? 'máy tính'}</b> đăng nhập tài khoản của bạn?</p>
-              <p className="muted small">Chỉ đồng ý khi chính bạn vừa mở mã QR trên máy tính đó.</p>
-              <div className="actions">
-                <button type="button" className="btn primary" disabled={busy} onClick={() => void qrDecide(true)}>Đồng ý</button>
-                <button type="button" className="btn" disabled={busy} onClick={() => void qrDecide(false)}>Từ chối</button>
-              </div>
+        <div className="qr-ok" role="dialog" aria-modal="true" aria-label="Đăng nhập trên máy tính">
+          <div className="qr-ok-top"><b>Đăng nhập trên máy tính</b>
+            <button type="button" className="qr-ok-x" aria-label="Đóng" onClick={() => setQr(null)}>✕</button></div>
+          {qr.status === 'cho' ? <>
+            <div className="qr-ok-mid">
+              <div className="qr-ok-ic" aria-hidden="true">💻</div>
+              <p className="qr-ok-q">Cho phép đăng nhập tài khoản của bạn trên</p>
+              <p className="qr-ok-dev">{qr.name ?? 'máy tính'}</p>
+              <p className="qr-ok-note">Chỉ đồng ý khi chính bạn vừa mở mã QR trên máy tính đó.</p>
             </div>
-          ) : <p>Mã QR đã hết hạn hoặc đã dùng. Bấm <b>Làm mới mã</b> trên máy tính rồi quét lại.</p>}
-        </Modal>
+            <div className="qr-ok-acts">
+              {bio ? <button type="button" className="btn primary" disabled={busy} onClick={() => void qrConfirm()}>🔒 Đồng ý · xác nhận vân tay / Face ID / mã khóa máy</button>
+                : <button type="button" className="btn primary" disabled={busy} onClick={() => void qrDecide(true)}>Đồng ý</button>}
+              <button type="button" className="btn" disabled={busy} onClick={() => void qrDecide(false)}>Từ chối</button>
+            </div>
+          </> : <div className="qr-ok-mid"><div className="qr-ok-ic" aria-hidden="true">⌛</div>
+            <p className="qr-ok-q">Mã QR đã hết hạn hoặc đã dùng.</p><p className="qr-ok-note">Bấm <b>Làm mới mã</b> trên máy tính rồi quét lại.</p></div>}
+        </div>
       )}
       {!qr && shown.length > 0 && (
         <Modal title="Có thiết bị mới đăng nhập" onClose={() => setHidden([...hidden, ...shown.map((x) => x.session_id)])}>

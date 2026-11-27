@@ -2039,3 +2039,14 @@ table.cc { width: 100%; }
 .gt-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .gt-chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
 .gt-chip:hover { border-color: var(--primary); color: var(--primary); }
+/* Điện thoại cho máy tính đăng nhập bằng QR: toàn màn hình, cân đối */
+.qr-ok { position: fixed; inset: 0; z-index: 1100; display: flex; flex-direction: column; background: var(--surface, #fff); padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.qr-ok-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); font-size: 1.1rem; }
+.qr-ok-x { border: 0; background: transparent; font-size: 22px; padding: 6px 10px; cursor: pointer; color: var(--text); }
+.qr-ok-mid { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 6px; }
+.qr-ok-ic { width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; font-size: 56px; background: color-mix(in srgb, var(--primary) 12%, #fff); margin-bottom: 10px; }
+.qr-ok-q { margin: 0; font-size: 1.05rem; color: var(--muted); }
+.qr-ok-dev { margin: 0; font-size: 1.45rem; font-weight: 800; }
+.qr-ok-note { margin: 10px 0 0; font-size: .92rem; color: var(--muted); max-width: 340px; }
+.qr-ok-acts { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 24px; max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+.qr-ok-acts .btn { min-height: 54px; font-size: 1.05rem; width: 100%; }

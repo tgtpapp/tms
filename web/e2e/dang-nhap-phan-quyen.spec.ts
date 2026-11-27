@@ -87,6 +87,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
 
   // 5b. Cấu hình bán vé: mặc định 5 phút → đổi 7 phút
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByRole('tab', { name: 'Bán vé', exact: true }).click();
   await expect(page.getByLabel('Giữ ghế tại quầy (phút)')).toHaveValue('5');
   await page.getByLabel('Giữ ghế tại quầy (phút)').fill('7');
   await page.getByRole('button', { name: 'Lưu cấu hình bán vé' }).click();
@@ -455,14 +456,17 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await vb.getByRole('button', { name: 'Đóng', exact: true }).click();
   // 5j5. Cấu hình › Đóng BHXH & lương chuyển khoản theo tháng: nhập xong tự lưu, mở lại vẫn còn
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByRole('tab', { name: 'Lương', exact: true }).click();
   await page.getByLabel('Đóng BHXH Nguyễn Văn Tài').check();
   await page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài').fill('7000000');
   await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
   await expect(page.locator('.pay-bar').getByText('Đã lưu', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Văn bản', exact: true }).click();
   await page.getByRole('button', { name: 'Cấu hình', exact: true }).click();
+  await page.getByRole('tab', { name: 'Lương', exact: true }).click();
   await expect(page.getByLabel('Lương chuyển khoản Nguyễn Văn Tài')).toHaveValue('7.000.000');
   await expect(page.getByLabel('Đóng BHXH Nguyễn Văn Tài')).toBeChecked();
+  await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   // Sao lưu & khôi phục (Chủ nhà xe): tải file .json.gz rồi khôi phục lại từ chính file đó (dữ liệu đủ: không thêm dòng nào)
   const slDl = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Tải bản sao lưu về máy' }).click();
@@ -664,6 +668,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByRole('button', { name: 'Bỏ ảnh' })).toHaveCount(1);
   await page.getByRole('button', { name: 'Lưu thông tin công ty' }).click();
   await expect(page.getByText('Đã lưu thông tin công ty')).toBeVisible();
+  await page.getByRole('tab', { name: 'Điều hành', exact: true }).click();
   await page.getByLabel('Hậu tố số lệnh (viết tắt công ty)').fill('TGTP');
   await page.getByLabel('Họ tên người ký lệnh').fill('Hà Văn Thịnh');
   await page.getByRole('button', { name: 'Lưu cấu hình lệnh vận chuyển' }).click();
@@ -784,6 +789,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
                   cccd: '012345678901', cccdTruoc: `data:image/png;base64,${px}`, bangHang: 'D', bangSo: '790123456789', bangHetHan: '2030-01-01' }],
     vehicles: [{ id: 'v1', bks: '60B-999.99', loai: 'Hyundai', soCho: 6, kdSo: 'KD001', hhDangKiem: ngay(300), dangKiem: 'nxdrv:abc' }],
   })), name: 'Sao luu.json', mimeType: 'application/json' };
+  await page.getByRole('tab', { name: 'Dữ liệu', exact: true }).click();
   await page.getByLabel('File sao lưu app cũ').setInputFiles(backup);
   await expect(page.getByText(/Nhân viên: 1 mới, 0 đã có · 2 giấy tờ/)).toBeVisible();
   await page.getByLabel('Loại xe cho Hyundai 6 chỗ').selectOption({ label: 'Giường nằm 6 chỗ (GN6)' });
@@ -793,6 +799,7 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await expect(page.getByText(/Nhân viên: 0 mới, 1 đã có/)).toBeVisible();
   await page.getByRole('button', { name: 'Nhập dữ liệu' }).click();
   await expect(page.getByText('Đã nhập 0 nhân viên, 0 xe, 0 giấy tờ').first()).toBeVisible();
+  await page.getByRole('tab', { name: 'Bán vé', exact: true }).click();
   await page.getByRole('combobox', { name: /^Ngân hàng/ }).selectOption({ label: 'Vietcombank' });
   await page.getByLabel('Số tài khoản').fill('0123456789');
   await page.getByLabel('Tên chủ tài khoản').fill('CONG TY TNHH TUONG GIA THINH PHAT');

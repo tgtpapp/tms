@@ -35,6 +35,7 @@ const DISPATCH_SETTINGS = [
 interface Tier { truoc_gio: number; phi_pt: number }
 
 export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenantId: string; me: Me; canSalary: boolean; canArchive: boolean }) {
+  const [tab, setTab] = useState<'cty' | 'bm' | 'bv' | 'dh' | 'luong' | 'dl'>('cty');   // chia thẻ cho gọn
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
@@ -182,14 +183,26 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
   }
 
 
+  const TABS: { k: typeof tab; label: string; show: boolean }[] = [
+    { k: 'cty', label: 'Công ty', show: true }, { k: 'bm', label: 'Bảo mật', show: true }, { k: 'bv', label: 'Bán vé', show: true },
+    { k: 'dh', label: 'Điều hành', show: true }, { k: 'luong', label: 'Lương', show: canSalary }, { k: 'dl', label: 'Dữ liệu', show: true },
+  ];
   return (
     <>
+      <div className="nsx-mtabs" role="tablist" aria-label="Cấu hình">
+        {TABS.filter((t) => t.show).map((t) => (
+          <button key={t.k} type="button" role="tab" aria-selected={tab === t.k} className={tab === t.k ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'cty' && <>
       <CompanyInfo tenantId={tenantId} />
       <ZaloSettings />
       <DriveSettings />
-      {!loaded && <p className="muted">Đang tải cấu hình…</p>}
+      <AppLinkQr />
+      </>}
+      {!loaded && tab !== 'cty' && tab !== 'luong' && tab !== 'dl' && <p className="muted">Đang tải cấu hình…</p>}
       {loaded && (<>
-      <section className="card form">
+      {tab === 'bm' && <section className="card form">
         <h2>Bảo mật đăng nhập</h2>
         <label className="check"><input type="checkbox" checked={sale['bao_mat.duyet_thiet_bi'] === 'true'} disabled={busy}
           onChange={(e) => void (async () => {
@@ -203,8 +216,8 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
           })()} /> Nhân viên văn phòng, quản lý đăng nhập trên thiết bị lạ phải được cho phép</label>
         <p className="muted small">Lái xe, phụ xe không áp dụng. Muốn khác cho từng người: vào Người dùng, chọn ở ô "Duyệt thiết bị lạ" của người đó.</p>
         <DesktopQrPolicy />
-      </section>
-      <AppLinkQr />
+      </section>}
+      {tab === 'bv' && <>
       <form className="card form" onSubmit={saveSale}>
         <h2>Bán vé</h2>
         <div className="grid2">
@@ -282,9 +295,11 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         <label>Tên chủ tài khoản<input value={sale['tt.ten_tai_khoan'] ?? ''} onChange={(e) => setSale({ ...sale, 'tt.ten_tai_khoan': e.target.value.toUpperCase() })} /></label>
         <button className="btn primary" disabled={busy}>Lưu tài khoản nhận</button>
       </form>
+      </>}
+      {tab === 'dh' && <>
       <form className="card form" onSubmit={(e) => void saveOrder(e)}>
         <h2>Lệnh vận chuyển</h2>
-        <p className="muted small">Số lệnh: giờ chạy – ngày tháng năm / LVC – hậu tố, vd 0700-191126/LVC-TGTP. Tên công ty in trên lệnh lấy theo "Tên pháp lý" ở trên.</p>
+        <p className="muted small">Số lệnh: giờ chạy – ngày tháng năm / LVC – hậu tố, vd 0700-191126/LVC-TGTP. Tên công ty in trên lệnh lấy theo "Tên pháp lý" ở thẻ Công ty.</p>
         <label>Hậu tố số lệnh (viết tắt công ty)
           <input value={sale['lenh.hau_to'] ?? ''} maxLength={10} onChange={(e) => setSale({ ...sale, 'lenh.hau_to': e.target.value.toUpperCase() })} placeholder="vd: TGTP" required />
         </label>
@@ -333,12 +348,15 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
+      </>}
       </>)}
-      {canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}
+      {tab === 'luong' && canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}
+      {tab === 'dl' && <>
       <StorageUsage />
       <BackupPanel />
       <ArchivePanel />
       <LegacyImport tenantId={tenantId} />
+      </>}
     </>
   );
 }

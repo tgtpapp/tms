@@ -110,31 +110,85 @@ export function intentOf(heard: string): Intent {
 /** Lệnh nhạc ("mở nhạc bolero", "bài tiếp", "nhỏ lại"…); null = không phải lệnh nhạc. q: nội dung cần tìm ('' = danh sách phát của xe) */
 export type MusicCmd = { act: 'mo'; q: string } | { act: 'tiep' | 'truoc' | 'dung' | 'phat' | 'to' | 'nho' | 'tat' };
 export function musicOf(heard: string): MusicCmd | null {
-  const s = fold(heard).replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (/\b(tat|thoi|bo) (nhac|bai hat|video)\b/.test(s)) return { act: 'tat' };
-  if (/\btam dung\b|\b(dung|ngung) (nhac|bai|phat)\b/.test(s)) return { act: 'dung' };
-  if (/\bphat tiep\b|\b(mo|bat) lai nhac\b|\btiep tuc (nhac|phat)\b/.test(s)) return { act: 'phat' };
-  if (/\bbai (tiep|sau|khac|moi)\b|\b(qua|chuyen|doi|sang) bai\b/.test(s)) return { act: 'tiep' };
-  if (/\bbai truoc\b|\b(lui|quay lai) bai\b/.test(s)) return { act: 'truoc' };
-  if (/\b(to|lon|tang) (len|tieng|am luong|nhac|them)\b|\bnhac to\b|\bvan to\b/.test(s)) return { act: 'to' };
-  if (/\b(nho|giam|bot) (lai|xuong|tieng|am luong|nhac|di|bot)\b|\bnhac nho\b|\bvan nho\b/.test(s)) return { act: 'nho' };
+  // "nhạc" / "nhắc", "bài" / "bãi" bỏ dấu thì giống nhau: đánh dấu riêng chữ "nhạc", "bài" trước khi bỏ dấu (câu không dấu thì coi như đúng chữ)
+  const low = heard.normalize('NFC').toLowerCase(), plain = !/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/.test(low);
+  const mark = (t: string) => (plain ? t.replace(/\bnhac\b/g, 'zznhac').replace(/\bbai\b/g, 'zzbai') : t.replace(/nhạc/g, ' zznhac ').replace(/bài/g, ' zzbai '));
+  const s = fold(mark(low)).replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (/\b(tat|thoi|bo) (zznhac|zzbai hat|video)\b/.test(s)) return { act: 'tat' };
+  if (/\btam dung\b|\b(dung|ngung) (zznhac|zzbai|phat)\b/.test(s)) return { act: 'dung' };
+  if (/\bphat tiep\b|\b(mo|bat) lai zznhac\b|\btiep tuc (zznhac|phat)\b/.test(s)) return { act: 'phat' };
+  if (/\bzzbai (tiep|sau|khac|moi)\b|\b(qua|chuyen|doi|sang) zzbai\b/.test(s)) return { act: 'tiep' };
+  if (/\bzzbai truoc\b|\b(lui|quay lai) zzbai\b/.test(s)) return { act: 'truoc' };
+  if (/\b(to|lon|tang) (len|tieng|am luong|zznhac|them)\b|\bzznhac to\b|\bvan to\b/.test(s)) return { act: 'to' };
+  if (/\b(nho|giam|bot) (lai|xuong|tieng|am luong|zznhac|di|bot)\b|\bzznhac nho\b|\bvan nho\b/.test(s)) return { act: 'nho' };
   // "mở nhạc …" / "nhạc …": phần sau là nội dung cần tìm (bỏ các chữ đệm "đi, nhé, cho khách nghe…")
-  const ws = s.split(' '), orig = heard.replace(/[.,!?]/g, ' ').trim().split(/\s+/);
+  const ws = s.split(' '), orig = heard.normalize('NFC').replace(/[.,!?]/g, ' ').trim().split(/\s+/);
   let i = -1;
   for (let k = 0; k < ws.length - 1 && i < 0; k++) {
-    if (/^(mo|bat|phat|nghe)$/.test(ws[k]!) && /^(nhac|bai|video)$/.test(ws[k + 1]!)) i = k + 2;
+    if (/^(mo|bat|phat|nghe)$/.test(ws[k]!) && /^(zznhac|zzbai|video)$/.test(ws[k + 1]!)) i = k + 2;
   }
-  if (i < 0 && ws[0] === 'nhac') i = 1;
+  if (i < 0 && ws[0] === 'zznhac') i = 1;
   if (i < 0) return null;
-  if (ws[i] === 'hat' && ws[i - 1] === 'bai') i++;
+  if (ws[i] === 'hat' && ws[i - 1] === 'zzbai') i++;
   let j = ws.length;
   while (i < j && /^(di|nao|giup|voi|nhe|ne|nha)$/.test(ws[i]!)) i++;
   if (ws[i] === 'cho') { i++; if (/^(khach|anh|em|minh|ca xe)$/.test(ws[i] ?? '')) i++; if (ws[i] === 'nghe') i++; }
-  while (j > i && /^(di|nao|nhe|ne|nha|voi|giup|a|nhac)$/.test(ws[j - 1]!)) j--;
-  const q = ws.slice(i, j).join(' ');
+  while (j > i && /^(di|nao|nhe|ne|nha|voi|giup|a|zznhac)$/.test(ws[j - 1]!)) j--;
+  const q = ws.slice(i, j).join(' ').replace(/zz(nhac|bai)/g, '$1');
   if (!q || /\b(danh sach|cua xe|tren xe|nha xe|mac dinh|thuong mo)\b/.test(q)) return { act: 'mo', q: '' };
   // lấy đúng các chữ của câu gốc (còn dấu) để tìm trên YouTube
   return { act: 'mo', q: ws.length === orig.length ? orig.slice(i, j).join(' ') : q };
+}
+
+/* ---------------- Tự học câu nói (câu chưa hiểu → hỏi lại → lưu dùng chung cả nhà xe) ---------------- */
+export type LearnIntent = Exclude<Intent, 'khong_ro'> | `nhac:${Exclude<MusicCmd['act'], never>}`;
+export interface Phrase { id: string; phrase_key: string; intent: LearnIntent }
+/** Từ tục tĩu (so trên chữ có dấu nên "đèo", "đụng", "đĩa"… không bị nhầm); máy chủ kiểm lại lần nữa */
+const BAD = ['đm', 'đmm', 'dm', 'dmm', 'đcm', 'dcm', 'đkm', 'dkm', 'đcmm', 'vcl', 'vkl', 'vl', 'vãi lồn', 'vãi l', 'clgt', 'cl', 'cc', 'đéo', 'đếch', 'địt', 'đjt', 'djt',
+  'đụ', 'đù má', 'đù', 'lồn', 'buồi', 'cặc', 'đĩ', 'đỉ', 'mẹ mày', 'má mày', 'con mẹ', 'mẹ kiếp', 'bố mày', 'thằng chó', 'con chó', 'đồ chó', 'chó chết', 'óc chó',
+  'khốn nạn', 'súc vật', 'ngu như', 'fuck', 'shit', 'bitch'];
+const BAD_RE = new RegExp(`(^|[^\\p{L}\\p{N}])(${BAD.sort((a, b) => b.length - a.length).join('|')})(?=$|[^\\p{L}\\p{N}])`, 'gu');
+export const hasBad = (t: string) => { BAD_RE.lastIndex = 0; return BAD_RE.test(t.normalize('NFC').toLowerCase()); };
+/** Bỏ từ tục chen trong câu (để vẫn hiểu lệnh) */
+export const dropBad = (t: string) => t.normalize('NFC').toLowerCase().replace(BAD_RE, '$1 ').replace(/\s+/g, ' ').trim();
+/** Mã so khớp của câu: bỏ dấu, bỏ từ tục, bỏ chữ đệm (à, ơi, nhé…) */
+export function phraseKey(t: string): string {
+  return fold(dropBad(t)).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w && !/^(a|ah|oi|nhe|nha|ne|u|uh|um|ha|nhi|vay|the)$/.test(w))
+    .slice(0, 30).join(' ').slice(0, 200).trim();
+}
+/** Câu đã học khớp với câu vừa nói: trùng hẳn, hoặc câu đã học (từ 2 chữ) nằm trọn theo thứ tự trong câu vừa nói (lấy câu dài nhất) */
+export function learnedOf(heard: string, list: Phrase[]): Phrase | null {
+  const k = phraseKey(heard);
+  if (!k) return null;
+  const exact = list.find((p) => p.phrase_key === k);
+  if (exact) return exact;
+  const ws = k.split(' ');
+  const inside = (p: Phrase) => { const ps = p.phrase_key.split(' '); if (ps.length < 2) return false; let i = 0; for (const w of ws) if (w === ps[i]) i++; return i === ps.length; };
+  return list.filter(inside).sort((a, b) => b.phrase_key.length - a.phrase_key.length)[0] ?? null;
+}
+/** Câu hỏi lại khi chưa hiểu */
+export const MENU_ASK = 'Em chưa hiểu. Anh muốn: điểm tới, đón khách, trả khách, khách vắng, gọi khách, giao hàng, thu hộ, đổ dầu, chi phí, sự cố, trễ giờ, nhắn điều hành, thông tin chuyến, hay mở nhạc? Nói không nếu thôi.';
+/** Hiểu câu trả lời cho câu hỏi lại (tên lệnh); null = thôi / không rõ */
+export function menuOf(answer: string): LearnIntent | null {
+  const m = musicOf(answer);
+  if (m) return `nhac:${m.act}`;
+  const s = fold(answer);
+  if (/nhac lai|noi lai|lap lai/.test(s)) return 'nhac_lai';
+  if (/hoan tac/.test(s)) return 'hoan_tac';
+  if (/vang/.test(s)) return 'vang';
+  if (/\bgoi\b/.test(s)) return 'goi';
+  if (/giao/.test(s)) return 'giao';
+  if (/thu ho/.test(s)) return 'thu_ho';
+  if (/do dau|xang|nhien lieu/.test(s)) return 'do_dau';
+  if (/chi phi/.test(s)) return 'chi_phi';
+  if (/su co|tai nan|hu xe|hong xe/.test(s)) return 'su_co';
+  if (/\btre\b|\bcham\b/.test(s)) return 'tre_gio';
+  if (/nhan|dieu hanh|van phong/.test(s)) return 'nhan';
+  if (/chuyen|thong tin/.test(s)) return 'chuyen';
+  if (/diem|\btoi\b/.test(s)) return 'diem_toi';
+  if (/\bdon\b/.test(s)) return 'don';
+  if (/\btra\b/.test(s)) return 'tra';
+  return null;
 }
 
 /* ---------------- Đọc / nghe bằng trình duyệt ---------------- */

@@ -13,6 +13,7 @@ import { DriveSettings } from '../components/DriveSettings';
 import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { VoicePhrases } from '../components/VoicePhrases';
 
 /** Cấu hình nghiệp vụ hiển thị trên màn hình. Giá trị mặc định nằm trong database. */
 const SALE_SETTINGS = [
@@ -354,6 +355,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
         </label>
         <button className="btn primary" disabled={busy}>Lưu cấu hình giấy tờ</button>
       </form>
+      <VoicePhrases />
       </>}
       </>)}
       {tab === 'luong' && canSalary && <PayMonths tenantId={tenantId} me={me} canArchive={canArchive} />}

@@ -2,9 +2,9 @@
 // Bấm nút lớn → lần đầu đọc tình hình chuyến + điểm tới rồi hỏi "Anh cần gì?"; các lần sau chỉ bíp rồi nghe.
 // Màn trợ lý phủ kín: chạm bất kỳ đâu để nói tiếp (không cần nhìn), nút Đóng ở góc.
 import { useEffect, useRef, useState } from 'react';
-import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, musicOf, mentionedParcels, moneyOf, nextStopText,
-  parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type MusicCmd, type VParcel, type VTicket, type VTrip } from '../lib/voice';
-import { rpc } from '../lib/supabase';
+import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, musicOf, dropBad, hasBad, learnedOf, menuOf, phraseKey, MENU_ASK, mentionedParcels, moneyOf, nextStopText,
+  parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type LearnIntent, type MusicCmd, type Phrase, type VParcel, type VTicket, type VTrip } from '../lib/voice';
+import { rpc, supabase } from '../lib/supabase';
 import { hold, musicState, next as nextSong, pause as pauseSong, playList, prev as prevSong, release, resume as resumeSong, searchSongs, stopMusic, tenantPlaylist, volume } from '../lib/music';
 import { distM, learnStop, type StopGeo } from '../lib/geo';
 
@@ -56,6 +56,13 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
   }, [tickets, parcels]);
   const undo = useRef<{ ids: string[]; act: 'len' | 'tra' | 'vang' } | null>(null);
   const stopRef = useRef<() => void>(() => undefined);
+  // Câu nói đã học của nhà xe (trợ lý tự học khi chưa hiểu)
+  const phrases = useRef<Phrase[]>([]);
+  const loadPhrases = async () => {
+    const r = await supabase.from('voice_phrases').select('id, phrase_key, intent').limit(2000);
+    if (!r.error) phrases.current = (r.data ?? []) as Phrase[];
+  };
+  useEffect(() => { void loadPhrases().catch(() => undefined); }, []);
   const data = useRef({ trip, tickets, parcels, cap, stopName, geo });
   data.current = { trip, tickets, parcels, cap, stopName, geo };
   // Tự nhắc khi sắp tới điểm (GPS): chỉ sau khi đã bật trợ lý ở chuyến này và xe đã xuất bến; mỗi điểm nhắc 1 lần lúc còn khoảng 2 km
@@ -242,9 +249,33 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       }
     }
   }
-  function answer(q: string): string {
+  /** Làm theo lệnh (lệnh có sẵn hoặc lệnh đã học) */
+  async function run(it: LearnIntent, q: string): Promise<string> {
+    if (it.startsWith('nhac:')) {
+      const act = it.slice(5) as MusicCmd['act'];
+      return music(act === 'mo' ? { act: 'mo', q: '' } : ({ act } as MusicCmd));
+    }
+    const i = it as Exclude<Intent, 'khong_ro'>;
+    return i === 'goi' ? call(q)
+      : i === 'don' || i === 'tra' || i === 'vang' || i === 'hoan_tac' ? update(q, i)
+      : i === 'giao' || i === 'do_dau' || i === 'chi_phi' || i === 'su_co' || i === 'tre_gio' || i === 'nhan' ? report(q, i)
+      : answer(i);
+  }
+  /** Câu chưa hiểu: tìm trong câu đã học; chưa có thì hỏi lại lái xe là lệnh nào, làm theo rồi lưu câu (không lưu câu có từ tục) */
+  async function learnTurn(q: string): Promise<string> {
+    const hit = learnedOf(q, phrases.current);
+    if (hit) { void rpc('voice_used', { p_id: hit.id }).catch(() => undefined); return run(hit.intent, q); }
+    const a = await ask(MENU_ASK);
+    const li = a ? menuOf(a) : null;
+    if (!li) return 'Dạ, em chưa làm gì.';
+    const out = await run(li, q);
+    const key = phraseKey(q);
+    if (key && !hasBad(q)) void rpc<string>('voice_learn', { p_phrase: q, p_key: key, p_intent: li }).then(() => loadPhrases()).catch(() => undefined);
+    return out;
+  }
+  function answer(it: Intent): string {
     const d = data.current;
-    switch (intentOf(q)) {
+    switch (it) {
       case 'diem_toi': return nextStopText(d.tickets, d.parcels, d.stopName);
       case 'thu_ho': return codText(d.parcels);
       case 'chuyen': return tripText(d.trip, d.tickets, d.cap);
@@ -264,17 +295,15 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     stopRef.current = l.stop;
     const q = await l.done;
     setHeard(q);
-    const it: Intent = q ? intentOf(q) : 'khong_ro';
-    const mc = q && !callBack.current ? musicOf(q) : null;
+    const it: Intent = q ? intentOf(dropBad(q)) : 'khong_ro';
+    const mc = q && !callBack.current ? musicOf(dropBad(q)) : null;
     let out: string;
     try {
       out = q && callBack.current ? await callResult(q)
         : !q ? 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.'
         : mc ? await music(mc)
-        : it === 'goi' ? await call(q)
-        : it === 'don' || it === 'tra' || it === 'vang' || it === 'hoan_tac' ? await update(q, it)
-        : it === 'giao' || it === 'do_dau' || it === 'chi_phi' || it === 'su_co' || it === 'tre_gio' || it === 'nhan' ? await report(q, it)
-        : answer(q);
+        : it !== 'khong_ro' ? await run(it, q)
+        : await learnTurn(q);
     } catch { out = 'Ghi không được, anh thử lại sau.'; }
     await say(out);
     setPhase('cho');

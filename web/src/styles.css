@@ -2064,12 +2064,30 @@ body.has-music-big .content { padding-bottom: 270px; }
 .qr-ok-acts { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 24px; max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 .qr-ok-acts .btn { min-height: 54px; font-size: 1.05rem; width: 100%; }
 .doc-big .doc-loading { color: #e2e8f0; text-align: center; padding: 32px 12px; }
-/* Vị trí xe: bản đồ ảnh nền tự vẽ */
-.lm-map { position: relative; overflow: hidden; border-radius: 12px; background: #e5e7eb; margin-bottom: 10px; touch-action: none; cursor: grab; user-select: none; }
+/* Vị trí xe (kiểu Google Maps): bản đồ chiếm gần hết màn hình, thẻ danh sách kéo lên ở dưới */
+.lm-page { position: relative; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0, 0, 0, .08); }
+.lm-map { position: relative; overflow: hidden; height: max(420px, calc(100dvh - 230px)); background: #e8eaed; touch-action: none; cursor: grab; user-select: none; }
+.lm-map:active { cursor: grabbing; }
+.lm-none { display: grid; place-items: center; cursor: default; }
 .lm-map > img { position: absolute; width: 256px; height: 256px; pointer-events: none; }
-.lm-pin { position: absolute; transform: translate(-50%, -100%); border: 2px solid #fff; border-radius: 999px; padding: 3px 8px; background: var(--primary); color: #fff; font: inherit; font-size: .8rem; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); cursor: pointer; display: flex; align-items: center; gap: 4px; }
-.lm-pin.on { background: #dc2626; z-index: 2; }
+.lm-pin { position: absolute; transform: translate(-50%, -100%); border: 2px solid #fff; border-radius: 999px; padding: 4px 10px; background: #1a73e8; color: #fff; font: inherit; font-size: .8rem; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.lm-pin::after { content: ''; position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #1a73e8; }
+.lm-pin.on { background: #ea4335; z-index: 2; }
+.lm-pin.on::after { border-top-color: #ea4335; }
 .lm-pin i { font-style: normal; display: inline-block; font-size: .7rem; }
-.lm-zoom { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
-.lm-zoom .btn { min-width: 36px; }
-tr.lm-on td { background: #fef3c7; }
+.lm-zoom { position: absolute; right: 12px; top: 12px; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); overflow: hidden; }
+.lm-zoom button { width: 44px; height: 44px; border: 0; background: #fff; font-size: 1.4rem; color: #444; cursor: pointer; }
+.lm-zoom button + button { border-top: 1px solid #e5e7eb; }
+.lm-fit { position: absolute; right: 12px; bottom: 84px; width: 48px; height: 48px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); font-size: 1.5rem; color: #1a73e8; cursor: pointer; }
+.lm-attr { position: absolute; left: 8px; top: 8px; font-size: 10px; background: rgba(255, 255, 255, .8); padding: 1px 4px; border-radius: 4px; color: #555; }
+.lm-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface, #fff); border-radius: 16px 16px 0 0; box-shadow: 0 -2px 12px rgba(0, 0, 0, .15); max-height: 64px; overflow: hidden; transition: max-height .25s ease; display: flex; flex-direction: column; }
+.lm-sheet.open { max-height: 65%; }
+.lm-grip { border: 0; background: none; font: inherit; padding: 6px 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: inherit; }
+.lm-handle { width: 40px; height: 4px; border-radius: 2px; background: #c4c7cc; }
+.lm-list { overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.lm-item { display: flex; align-items: center; gap: 10px; text-align: left; border: 0; border-radius: 10px; background: none; padding: 10px; font: inherit; color: inherit; cursor: pointer; }
+.lm-item:hover:not(:disabled), .lm-item.on { background: #e8f0fe; }
+.lm-item:disabled { cursor: default; opacity: .75; }
+.lm-it { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lm-dot { width: 12px; height: 12px; border-radius: 50%; background: #1a73e8; flex: none; border: 2px solid #fff; box-shadow: 0 0 0 1px #1a73e8; }
+.lm-dot.off { background: #c4c7cc; box-shadow: 0 0 0 1px #c4c7cc; }

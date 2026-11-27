@@ -207,6 +207,9 @@ select ok((select fee_paid_at is not null from public.shipments where request_id
 select throws_ok($$ select public.update_shipment('88888888-8888-8888-8888-888888888881'::uuid, '{}', 'tien_mat') $$, 'P0002', null, 'Mã không có: không tìm thấy');
 select throws_ok($$ select public.update_shipment((select id from public.shipments where status = 'giao' limit 1), current_setting('t.sp')::jsonb, 'tien_mat') $$,
   '22023', null, 'Phiếu đã giao không sửa được');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select sum(credit - debit) from public.ledger_lines where account = 'doanh_thu_hang')::int, 80000 + 35000 + 25000, 'Doanh thu hàng khớp sau khi sửa');
 select is((select sum(debit) - sum(credit) from public.ledger_lines)::int, 0, 'Sổ cái vẫn cân');
 reset role;

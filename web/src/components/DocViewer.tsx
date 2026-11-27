@@ -1,7 +1,7 @@
 // Xem hồ sơ như app cũ: cửa sổ có tiêu đề, ảnh xem trước của tài liệu, nút "Xem lớn", "Tải về", "Đóng".
 // PDF scan / PDF do app tạo: lấy ảnh từng trang (JPEG) ngay trong file để xem trước, không cần thư viện.
 import { useEffect, useMemo, useState } from 'react';
-import { pdfImages } from '../lib/pdfImages';
+import { pdfPageImages } from '../lib/pdfImages';
 import { Modal } from './Modal';
 import { openBase64 } from '../lib/drive';
 
@@ -49,7 +49,7 @@ export function DocViewer({ title, name, mime, b64, onClose }: { title: string; 
   useEffect(() => {
     if (!isPdf) return;
     const u = b64Bytes(b64);
-    void pdfImages(u).catch(() => [] as string[]).then((p) => setPages(p.length ? p : pdfJpegs(u)));
+    void pdfPageImages(u, pdfJpegs).catch(() => [] as string[]).then(setPages);
   }, [b64, isPdf]);
   const blobUrl = useMemo(() => URL.createObjectURL(new Blob([b64Bytes(b64) as BlobPart], { type: mime || 'application/octet-stream' })), [b64, mime]);
   useEffect(() => () => URL.revokeObjectURL(blobUrl), [blobUrl]);

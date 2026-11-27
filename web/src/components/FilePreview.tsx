@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { signedUrl } from '../lib/documents';
 import { FrameView, pdfJpegs } from './DocViewer';
-import { pdfImages } from '../lib/pdfImages';
+import { pdfPageImages } from '../lib/pdfImages';
 
 interface Item { url: string; thumb: string | null; pages: string[]; pdf: boolean; name: string }
 const isPdf = (p: string) => /\.pdf$/i.test(p);
@@ -13,8 +13,7 @@ async function load(path: string): Promise<Item> {
   if (!isPdf(path)) return { url, thumb: url, pages: [url], pdf: false, name };
   try {
     const u = new Uint8Array(await (await fetch(url)).arrayBuffer());
-    let pages = await pdfImages(u).catch(() => [] as string[]);
-    if (!pages.length) pages = pdfJpegs(u);
+    const pages = await pdfPageImages(u, pdfJpegs).catch(() => [] as string[]);
     return { url, thumb: pages[0] ?? null, pages, pdf: true, name };
   } catch {
     return { url, thumb: null, pages: [], pdf: true, name };

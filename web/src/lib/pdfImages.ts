@@ -43,6 +43,10 @@ async function png(raw: Uint8Array, w: number, h: number, bits: number, ctype: n
 
 /** Ảnh các trang trong PDF (tối đa 40), theo thứ tự trong file */
 export async function pdfImages(u: Uint8Array): Promise<string[]> {
+  return (await pdfImagesSized(u)).map((x) => x.url);
+}
+
+async function pdfImagesSized(u: Uint8Array): Promise<Img[]> {
   const text = enc.decode(u), out: Img[] = [];
   const re = /\/Subtype\s*\/Image/g;
   let m: RegExpExecArray | null;
@@ -82,5 +86,27 @@ export async function pdfImages(u: Uint8Array): Promise<string[]> {
       }
     } catch { /* ảnh không đọc được: bỏ qua */ }
   }
-  return out.map((x) => x.url);
+  return out;
+}
+
+/** Số trang của PDF (đếm đối tượng /Type /Page, không tính /Pages) */
+export function pdfPageCount(u: Uint8Array): number {
+  return (enc.decode(u).match(/\/Type\s*\/Page(?![a-zA-Z])/g) ?? []).length;
+}
+
+/** Ảnh cỡ trang giấy: đủ lớn và tỷ lệ gần khổ giấy (loại logo, mã vạch, chữ ký, con dấu nhỏ) */
+const pageLike = (w: number, h: number) => Math.min(w, h) >= 400 && Math.max(w, h) / Math.min(w, h) <= 1.6;
+
+/**
+ * Ảnh từng trang để xem trước — CHỈ khi PDF là bản scan (mỗi trang là 1 ảnh cỡ trang).
+ * PDF chữ (bảo hiểm điện tử, hóa đơn…) trả về [] để xem bằng khung PDF, không bày logo / mã vạch lộn xộn.
+ */
+export async function pdfPageImages(u: Uint8Array, jpegs: (u: Uint8Array) => string[]): Promise<string[]> {
+  const pages = pdfPageCount(u);
+  const imgs = (await pdfImagesSized(u).catch(() => [] as Img[])).filter((x) => pageLike(x.w, x.h));
+  if (pages > 0 && imgs.length >= pages) return imgs.map((x) => x.url);
+  if (pages === 0 && imgs.length) return imgs.map((x) => x.url);
+  // Không đọc được kích thước ảnh: chỉ dùng cách dò JPEG khi số ảnh đúng bằng số trang (bản scan thuần)
+  if (!imgs.length) { const j = jpegs(u); if (j.length && j.length === pages) return j; }
+  return [];
 }

@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.qr-login]
 verify_jwt = false
+
+[functions.youtube]
+verify_jwt = false

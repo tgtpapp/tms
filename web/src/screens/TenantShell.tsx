@@ -26,6 +26,7 @@ import { FuelPriceAlert } from '../components/FuelPriceAlert';
 import { FuelReportAlert } from '../components/FuelReportAlert';
 import { hasShare, takeSharedFiles } from '../lib/shareIn';
 import { brandApp, iosIconFrom } from '../lib/pwa';
+import { EntertainmentScreen } from './Entertainment';
 import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
@@ -42,7 +43,7 @@ import { VehiclesScreen } from './Vehicles';
 import { SupportScreen } from './Support';
 import { ScreenGuard } from '../components/ScreenGuard';
 
-type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support';
+type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 /** Màu ô biểu tượng menu (như app cũ): mỗi mục 1 màu cố định theo mã mục */
@@ -194,6 +195,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.view') },
     { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.view') },
     { key: 'audit', label: 'Nhật ký', icon: 'time-past', group: 'Quản trị', show: perms.has('audit.view') },
+    { key: 'giaitri', label: 'Giải trí', icon: 'play', group: 'Cá nhân', show: true },
     { key: 'account', label: 'Tài khoản của tôi', icon: 'user', group: 'Cá nhân', show: true },
     { key: 'support', label: 'Báo sự cố', icon: 'headset', group: 'Cá nhân', show: true },
   ];
@@ -266,6 +268,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'sell' && <SellScreen ctx={ctx} perms={perms} />}
           {tab === 'trips' && <TripsScreen ctx={ctx} perms={perms} />}
           {tab === 'staff' && <StaffScreen ctx={ctx} perms={perms} />}
+          {tab === 'giaitri' && <EntertainmentScreen canEdit={perms.has('settings.edit')} />}
           {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
           {tab === 'branches' && <BranchesScreen perms={perms} />}
           {tab === 'roles' && <RolesScreen perms={perms} />}

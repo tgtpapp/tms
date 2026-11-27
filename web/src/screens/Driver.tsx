@@ -19,7 +19,7 @@ import { learnStop, lookupMissing, type StopGeo } from '../lib/geo';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
-  plate: string | null; my_role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe' | null;   // null: Admin xem chuyến mình không chạy departed_at: string | null; arrived_at: string | null; order_no: string | null;
+  plate: string | null; my_role: 'lai_xe_1' | 'lai_xe_2' | 'phu_xe' | null; /* null: Admin xem chuyến mình không chạy */ departed_at: string | null; arrived_at: string | null; order_no: string | null;
   departed_auto?: boolean; arrived_auto?: boolean;
 }
 type Call = 'da_goi' | 'nghe_may' | 'thue_bao' | 'bao_huy';

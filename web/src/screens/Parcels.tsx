@@ -39,7 +39,7 @@ interface Route { id: string; name: string; name_ve: string | null }
 interface RouteStop { route_id: string; seq: number; stop_id: string }
 type Co = SlipData['company'];
 const EMPTY = { trip_id: '', from: '', to: '', sender_name: '', sender_phone: '', receiver_name: '', receiver_phone: '', description: '',
-  packages: '1', weight: '', value: '', fee: '', payer: 'nguoi_gui' as 'nguoi_gui' | 'nguoi_nhan', cod: '', method: 'tien_mat', note: '' };
+  packages: '1', unit: '', weight: '', value: '', fee: '', payer: 'nguoi_gui' as 'nguoi_gui' | 'nguoi_nhan', cod: '', method: 'tien_mat', note: '' };
 const ROUTE_KEY = 'gui_hang.tuyen';
 
 /** Thông tin chuyến in trên phiếu: biển số, lái xe 1 + SĐT */
@@ -280,10 +280,13 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
                 <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} required /></label>
                 <label>Tên người nhận<input value={f.receiver_name} onChange={(e) => setF({ ...f, receiver_name: e.target.value })} /></label>
                 <label>Hàng gì<input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="vd 1 thùng trái cây" required /></label>
-                <label>Số kiện<input type="number" min={1} inputMode="numeric" value={f.packages} onChange={(e) => setF({ ...f, packages: e.target.value })} /></label>
+                <label>Số kiện<input type="number" min={1} inputMode="numeric" value={f.packages}
+                  onChange={(e) => setF({ ...f, packages: e.target.value, fee: f.unit ? String((Number(e.target.value) || 0) * (Number(f.unit) || 0)) : f.fee })} /></label>
+                <label>Đơn giá / kiện (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.unit}
+                  onChange={(e) => setF({ ...f, unit: e.target.value, fee: e.target.value ? String((Number(f.packages) || 0) * (Number(e.target.value) || 0)) : f.fee })} /></label>
+                <label>Thành tiền (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.fee} onChange={(e) => setF({ ...f, fee: e.target.value })} required /></label>
                 <label>Cân nặng (kg)<input type="number" min={0} step="0.1" inputMode="decimal" value={f.weight} onChange={(e) => setF({ ...f, weight: e.target.value })} /></label>
                 <label>Giá trị khai báo (đồng)<input type="number" min={0} inputMode="numeric" value={f.value} onChange={(e) => setF({ ...f, value: e.target.value })} /></label>
-                <label>Cước (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.fee} onChange={(e) => setF({ ...f, fee: e.target.value })} required /></label>
                 <label>Người trả cước
                   <select value={f.payer} onChange={(e) => setF({ ...f, payer: e.target.value as 'nguoi_gui' | 'nguoi_nhan' })}>
                     <option value="nguoi_gui">Người gửi (thu ngay)</option>

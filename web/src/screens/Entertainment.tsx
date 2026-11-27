@@ -57,12 +57,39 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
       .then((r) => setList(Array.isArray(r.data?.value) ? (r.data!.value as Vid[]).filter((x) => x && /^[\w-]{11}$/.test(x.id)) : []));
   }, []);
 
+  // Lưu tạm kết quả tìm kiếm 12 tiếng trên máy: tìm lại cùng từ khóa không tốn lượt API YouTube.
+  const CACHE = 'tms.yt.tim';
+  const TTL = 12 * 3600 * 1000;
+  const ckey = (qq: string, page?: string) => `${qq.trim().toLowerCase()}|${page ?? ''}`;
+  function readCache(k: string): { items: Vid[]; next: string | null } | null {
+    try {
+      const all = JSON.parse(localStorage.getItem(CACHE) ?? '{}') as Record<string, { t: number; items: Vid[]; next: string | null }>;
+      const e = all[k];
+      return e && Date.now() - e.t < TTL ? e : null;
+    } catch { return null; }
+  }
+  function writeCache(k: string, items: Vid[], next: string | null) {
+    try {
+      const all = JSON.parse(localStorage.getItem(CACHE) ?? '{}') as Record<string, { t: number; items: Vid[]; next: string | null }>;
+      const now = Date.now();
+      for (const [x, e] of Object.entries(all)) if (now - e.t >= TTL) delete all[x];
+      all[k] = { t: now, items, next };
+      const keys = Object.keys(all).sort((a, b) => all[b]!.t - all[a]!.t);
+      for (const x of keys.slice(60)) delete all[x];
+      localStorage.setItem(CACHE, JSON.stringify(all));
+    } catch { /* máy không cho lưu thì thôi */ }
+  }
+
   async function search(page?: string, term?: string) {
     const qq = term ?? q;
     const id = ytId(qq);
     if (id) { setPlay({ id, title: qq.trim() }); return; }
     if (!qq.trim()) return;
-    setBusy(true); setNote('');
+    setNote('');
+    const k = ckey(qq, page);
+    const c = readCache(k);
+    if (c) { setHits((h) => (page ? [...(h ?? []), ...c.items] : c.items)); setNext(c.next); return; }
+    setBusy(true);
     try {
       const { data, error } = await supabase.functions.invoke('youtube', { body: { q: qq, page: page ?? '' } });
       const d = data as { items?: Vid[]; next?: string | null; error?: string; no_key?: boolean } | null;
@@ -71,6 +98,7 @@ export function EntertainmentScreen({ canEdit }: { canEdit: boolean }) {
         try { m = m || ((await (error as { context?: Response })?.context?.json()) as { error?: string })?.error || ''; } catch { /* bỏ qua */ }
         setNote(m || errMsg(error)); if (!page) setHits([]); return;
       }
+      writeCache(k, d.items, d.next ?? null);
       setHits((h) => (page ? [...(h ?? []), ...d.items!] : d.items!)); setNext(d.next ?? null);
     } catch (e) { setNote(errMsg(e)); } finally { setBusy(false); }
   }

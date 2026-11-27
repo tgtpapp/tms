@@ -4,6 +4,7 @@ import { VehicleLeases } from '../components/VehicleLeases';
 import { BulkPaperSave, type Me } from '../components/ProfilePapers';
 import { DeleteButton } from '../components/DeleteButton';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
+import { personColor } from '../lib/personColor';
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
   DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
@@ -244,6 +245,16 @@ export function VehicleList(props: {
   const tabs = [...new Set(shown.map((v) => v.vehicle_type_id))].map((id) => ({ key: id, label: typeName(id), n: shown.filter((v) => v.vehicle_type_id === id).length }))
     .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
   const cur = tabs.some((t) => t.key === tab) ? tab : '';
+  const [kieu, setKieuS] = useState<'bang' | 'the'>(() => { try { return localStorage.getItem('tms.xe.kieu') === 'the' ? 'the' : 'bang'; } catch { return 'bang'; } });
+  const setKieu = (v: 'bang' | 'the') => { setKieuS(v); try { localStorage.setItem('tms.xe.kieu', v); } catch { /* chỉ đổi trong phiên */ } };
+  const list = shown.filter((v) => !cur || v.vehicle_type_id === cur);
+  const cur0 = open ? vehicles.find((v) => v.id === open) ?? null : null;
+  const info = (v: Vehicle) => ({
+    bad: vehicleProblems(v, docs, warnDays).length,
+    kd: docs.find((d) => d.vehicle_id === v.id && d.doc_type === 'kiem_dinh' && d.is_current),
+    life: lifeLimit(v.manufacture_year),
+  });
+  const openBtn = (v: Vehicle) => <button className="btn small" aria-label={`Sửa xe ${v.plate}`} onClick={() => setOpen(v.id)}>{canEdit ? 'Sửa' : 'Xem'}</button>;
   const openCard = (id: string) => { setTab(''); setOpen(id); setTimeout(() => document.getElementById(`xe-${id}`)?.scrollIntoView({ behavior: 'smooth' }), 50); };
 
   return (
@@ -262,54 +273,82 @@ export function VehicleList(props: {
         <VehicleAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} avas={avas} typeName={typeName} onOpen={openCard} />
       </div>
       <section className="card">
-        <div className="item-head">
+        <div className="hd-bar">
           <h2>Xe ({vehicles.filter((v) => v.is_active).length})</h2>
-          {inactive > 0 && (
-            <button className="btn small" onClick={() => setShowInactive(!showInactive)}>
-              {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
-            </button>
-          )}
+          <div className="hd-tools">
+            {inactive > 0 && (
+              <button className="btn small" onClick={() => setShowInactive(!showInactive)}>
+                {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
+              </button>
+            )}
+            <div className="seg" role="group" aria-label="Kiểu xem">
+              <button type="button" className={kieu === 'bang' ? 'on' : ''} aria-pressed={kieu === 'bang'} onClick={() => setKieu('bang')}>Bảng</button>
+              <button type="button" className={kieu === 'the' ? 'on' : ''} aria-pressed={kieu === 'the'} onClick={() => setKieu('the')}>Thẻ</button>
+            </div>
+          </div>
         </div>
         {vehicles.length === 0 && <p className="muted">Chưa có xe.</p>}
-        <div className="staff-cards">
-          {shown.filter((v) => !cur || v.vehicle_type_id === cur).map((v) => {
-            const bad = vehicleProblems(v, docs, warnDays).length;
-            const kd = docs.find((d) => d.vehicle_id === v.id && d.doc_type === 'kiem_dinh' && d.is_current);
-            const life = lifeLimit(v.manufacture_year);
-            return (
-              <div key={v.id} id={`xe-${v.id}`} className={`staff-card veh-card${v.is_active ? '' : ' off'}`}>
-                <div className="sc-top">
-                  <Avatar name={v.plate} url={avas[v.id]} text="🚌" />
-                  <div className="sc-name">
-                    <b>{v.plate}</b>
-                    <span className="sc-job">{typeName(v.vehicle_type_id)}</span>
-                  </div>
+        {list.length > 0 && (kieu === 'bang' ? (
+          <div className="nsx-tblw">
+            <table className="nsx-tbl">
+              <thead><tr><th>Biển số</th><th>Năm SX</th><th>Niên hạn</th><th>Đăng kiểm</th><th>Loại hình</th><th>Sở hữu</th><th>Tình trạng</th><th /></tr></thead>
+              <tbody>
+                {list.map((v) => {
+                  const { bad, kd, life } = info(v);
+                  return (
+                    <tr key={v.id} id={`xe-${v.id}`} className={`veh-card${v.is_active ? '' : ' off'}`}>
+                      <td><div className="nsx-who"><Avatar name={v.plate} url={avas[v.id]} text="🚌" size={36} /><div><b>{v.plate}</b><span className="sc-job">{typeName(v.vehicle_type_id)}</span></div></div></td>
+                      <td>{v.manufacture_year ?? '—'}</td>
+                      <td className={life ? `state-${life.state}` : 'muted'}>{life?.text ?? '—'}</td>
+                      <td>{kd?.expires_on ? fmtDate(kd.expires_on) : <span className="muted">Chưa có</span>}</td>
+                      <td>{BUSINESS[v.business_type]}</td>
+                      <td>{OWNERSHIP[v.ownership]}</td>
+                      <td>{!v.is_active ? <span className="nsx-stag off">Ngừng dùng</span> : bad > 0 ? <span className="nsx-stag warn">{bad} việc cần xử lý</span> : <span className="nsx-stag ok">Bình thường</span>}</td>
+                      <td className="actions">{openBtn(v)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="nsx-emps">
+            {list.map((v) => {
+              const { bad, kd, life } = info(v);
+              return (
+                <div key={v.id} id={`xe-${v.id}`} className={`nsx-emp nsx-emp-main veh-card${v.is_active ? '' : ' off'}`} style={{ ['--gc' as string]: personColor(v.id) }}>
+                  <span className="nsx-emp-cov" />
+                  <span className="nsx-emp-ph"><Avatar name={v.plate} url={avas[v.id]} text="🚌" size={112} /></span>
+                  <b className="nsx-emp-nm">{v.plate}</b>
+                  <span className="nsx-emp-rl">{typeName(v.vehicle_type_id)}</span>
+                  <span className="nsx-emp-tags">
+                    <span className="nsx-stag">{OWNERSHIP[v.ownership]}</span>
+                    {!v.is_active && <span className="nsx-stag off">Ngừng dùng</span>}
+                    {bad > 0 && <span className="nsx-stag warn">{bad} việc cần xử lý</span>}
+                  </span>
+                  <span className="nsx-emp-ct">
+                    <span>{v.manufacture_year ? `Năm SX ${v.manufacture_year}` : 'Chưa nhập năm SX'}</span>
+                    <span>{BUSINESS[v.business_type]}</span>
+                  </span>
+                  <span className="nsx-emp-ft">
+                    <span><small>Đăng kiểm</small>{kd?.expires_on ? fmtDate(kd.expires_on) : 'Chưa có'}</span>
+                    <span><small>Niên hạn</small>{life?.text ?? '—'}</span>
+                  </span>
+                  <span className="nsx-emp-acts"><span className="actions">{openBtn(v)}</span></span>
                 </div>
-                <div className="sc-info small">
-                  <span>{v.manufacture_year ? `Năm SX ${v.manufacture_year}` : 'Chưa nhập năm SX'}{life ? ` · ${life.text}` : ''}</span>
-                  <span>Đăng kiểm: {kd?.expires_on ? `đến ${fmtDate(kd.expires_on)}` : 'Chưa có'}</span>
-                  <span>{BUSINESS[v.business_type]}</span>
-                  {v.owner_name && <span className="muted">Chủ xe: {v.owner_name}</span>}
-                </div>
-                <div className="sc-badges">
-                  <span className="badge">{OWNERSHIP[v.ownership]}</span>
-                  {!v.is_active && <span className="badge locked">Ngừng dùng</span>}
-                  {bad > 0 && <span className="badge warn-badge">{bad} việc cần xử lý</span>}
-                </div>
-                <button className="btn small sc-open" aria-label={`Sửa xe ${v.plate}`} onClick={() => setOpen(v.id)}>{canEdit ? 'Sửa' : 'Xem'}</button>
-                {open === v.id && (
-                  <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${v.plate}`} onClose={() => setOpen(null)}>
-                    <div className="sub"><StaffAvatar tenantId={props.tenantId} staffId={v.id} name={v.plate} canEdit={canEdit} dir="anh_xe" /></div>
-                    <VehicleDetail vehicle={v} {...props} canEdit={canEdit} />
-                    <VehicleProfile v={v} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
-                    {v.ownership !== 'so_huu' && <VehicleLeases v={v} vehicles={vehicles} tenantId={props.tenantId} me={props.me} canEdit={canEdit} onSaved={props.reload} />}
-                    {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(v.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(v.vehicle_type_id)}</div>}
-                  </Modal>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ))}
+        {cur0 && (
+          <Modal wide title={`${canEdit ? 'Sửa' : 'Xem'} xe ${cur0.plate}`} onClose={() => setOpen(null)}>
+            <div className="sub"><StaffAvatar tenantId={props.tenantId} staffId={cur0.id} name={cur0.plate} canEdit={canEdit} dir="anh_xe" /></div>
+            <VehicleDetail vehicle={cur0} {...props} canEdit={canEdit} />
+            <VehicleProfile v={cur0} canEdit={canEdit} tenantId={props.tenantId} me={props.me} canSave={props.canArchive} />
+            {cur0.ownership !== 'so_huu' && <VehicleLeases v={cur0} vehicles={vehicles} tenantId={props.tenantId} me={props.me} canEdit={canEdit} onSaved={props.reload} />}
+            {props.layout && <div className="sub"><p className="muted small">Sơ đồ ghế theo loại xe {typeName(cur0.vehicle_type_id)} (dùng chung cho các xe cùng loại)</p>{props.layout(cur0.vehicle_type_id)}</div>}
+          </Modal>
+        )}
       </section>
     </>
   );

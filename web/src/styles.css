@@ -1915,6 +1915,7 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 
 /* ===== Trợ lý giọng nói (app lái xe): nút lớn + màn phủ kín, chạm bất kỳ đâu để nói ===== */
 .va-btn { width: 100%; min-height: 56px; font-size: 1.1rem; font-weight: 700; margin: 8px 0; background: var(--primary); color: #fff; border: 0; }
+.va-btn.on { background: #16a34a; }
 .va-pane { position: fixed; inset: 0; z-index: 1200; background: #0b1220; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 18px; padding: 24px; text-align: center; -webkit-user-select: none; user-select: none; cursor: pointer; }
 .va-x { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; width: 52px; height: 52px; border-radius: 50%; border: 0;

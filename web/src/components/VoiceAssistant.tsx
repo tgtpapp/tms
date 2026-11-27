@@ -2,7 +2,7 @@
 // Bấm nút lớn → lần đầu đọc tình hình chuyến + điểm tới rồi hỏi "Anh cần gì?"; các lần sau chỉ bíp rồi nghe.
 // Màn trợ lý phủ kín: chạm bất kỳ đâu để nói tiếp (không cần nhìn), nút Đóng ở góc.
 import { useEffect, useRef, useState } from 'react';
-import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, litersOf, mentioned, musicOf, dropBad, hasBad, learnedOf, menuOf, phraseKey, MENU_ASK, mentionedParcels, moneyOf, nextStopText,
+import { beep, callResultOf, canListen, canSpeak, clean, codText, voiceCfg, whoOf, currentStop, intentOf, isYes, listen, hotword, wakeOf, litersOf, mentioned, musicOf, dropBad, hasBad, learnedOf, menuOf, phraseKey, MENU_ASK, mentionedParcels, moneyOf, nextStopText,
   parcelDue, parcelsOpen, receiverList, sayMoney, speak, stopSpeak, tripText, whoList, type Intent, type LearnIntent, type MusicCmd, type Phrase, type VParcel, type VTicket, type VTrip } from '../lib/voice';
 import { rpc, supabase } from '../lib/supabase';
 import { hold, musicState, next as nextSong, pause as pauseSong, playList, prev as prevSong, release, resume as resumeSong, searchSongs, stopMusic, tenantPlaylist, volume } from '../lib/music';
@@ -84,6 +84,25 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     }, () => undefined, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
     return () => navigator.geolocation.clearWatch(id);
   }, [active, trip.departed_at, trip.arrived_at]);
+  // Chế độ rảnh tay: chạm 1 lần để bật, sau đó nói "Trợ lý ơi" + lệnh, không phải chạm nữa (màn hình giữ sáng)
+  const [free, setFree] = useState(false);
+  const hw = useRef<ReturnType<typeof hotword> | null>(null);
+  const wakeRef = useRef<(cmd: string) => void>(() => undefined);
+  useEffect(() => () => { hw.current?.stop(); hw.current = null; }, []);
+  useEffect(() => {
+    if (!free) return;
+    type Lock = { release: () => Promise<void> };
+    const wl = (navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<Lock> } }).wakeLock;
+    if (!wl) return;
+    let lock: Lock | null = null, off = false;
+    const grab = () => {
+      if (off || document.visibilityState !== 'visible') return;
+      void wl.request('screen').then((l) => { if (off) void l.release().catch(() => undefined); else lock = l; }).catch(() => undefined);
+    };
+    grab();
+    document.addEventListener('visibilitychange', grab);
+    return () => { off = true; document.removeEventListener('visibilitychange', grab); void lock?.release().catch(() => undefined); };
+  }, [free]);
   useEffect(() => () => { stopSpeak(); stopRef.current(); }, []);
   if (!canSpeak()) return null;
 
@@ -283,24 +302,27 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       default: return 'Em chưa hiểu. Anh hỏi điểm tới, thu hộ, hoặc báo đã đón, đã trả, khách vắng, đã giao hàng, đổ dầu, sự cố, hoặc nói mở nhạc.';
     }
   }
-  async function turn() {
+  async function turn(pre?: string) {
     stopSpeak(); stopRef.current();
     if (!canListen()) {
       await say('Máy này chưa nghe được giọng nói. Em đọc điểm tới. ' + nextStopText(data.current.tickets, data.current.parcels, data.current.stopName));
       setPhase('cho'); return;
     }
-    beep();
-    setHeard(''); setPhase('nghe');
-    const l = listen();
-    stopRef.current = l.stop;
-    const q = await l.done;
+    let q = pre ?? '';
+    if (!pre) {
+      beep();
+      setHeard(''); setPhase('nghe');
+      const l = listen();
+      stopRef.current = l.stop;
+      q = await l.done;
+    }
     setHeard(q);
     const it: Intent = q ? intentOf(dropBad(q)) : 'khong_ro';
     const mc = q && !callBack.current ? musicOf(dropBad(q)) : null;
     let out: string;
     try {
       out = q && callBack.current ? await callResult(q)
-        : !q ? 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.'
+        : !q ? (free ? 'Em chưa nghe rõ. Anh nói trợ lý ơi rồi nói lại.' : 'Em chưa nghe rõ. Anh chạm màn hình rồi nói lại.')
         : mc ? await music(mc)
         : it !== 'khong_ro' ? await run(it, q)
         : await learnTurn(q);
@@ -317,11 +339,37 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     }
     await turn();
   }
+  /** Rảnh tay: nghe thấy "Trợ lý ơi" (kèm lệnh thì làm luôn, chưa có lệnh thì bíp rồi nghe) */
+  async function onWake(cmd: string) {
+    if (busyRef.current) return;
+    hw.current?.pause();   // máy chỉ nghe được 1 lần một lúc: tạm dừng nghe nền khi trợ lý làm việc
+    try {
+      setOpen(true); setActive(true);
+      if (!greeted.has(tripId)) {
+        greeted.add(tripId);
+        const d = data.current;
+        await say(`${tripText(d.trip, d.tickets, d.cap)} ${d.trip.arrived_at ? '' : nextStopText(d.tickets, d.parcels, d.stopName)}${cmd ? '' : ' Anh cần gì?'}`);
+      }
+      await turn(cmd || undefined);
+    } finally { hw.current?.resume(); }
+  }
+  wakeRef.current = (cmd) => { void onWake(cmd); };
+  function freeToggle() {
+    if (free) { hw.current?.stop(); hw.current = null; setFree(false); void speak('Đã tắt rảnh tay.'); return; }
+    if (!canListen()) { void speak('Máy này chưa nghe được giọng nói, chưa bật được rảnh tay.'); return; }
+    setFree(true); setActive(true);
+    hw.current = hotword((t) => { const c = wakeOf(t); if (c !== null) wakeRef.current(c); }, () => {
+      hw.current = null; setFree(false);
+      void speak('Máy chưa cho dùng micro. Anh cho phép micro rồi bật lại rảnh tay.');
+    });
+    void speak('Đã bật rảnh tay. Anh nói trợ lý ơi, rồi nói lệnh.');
+  }
   function close() { stopSpeak(); stopRef.current(); setOpen(false); setPhase('cho'); setDial(null); callBack.current = null; release(); }
 
   return (
     <>
       <button type="button" className="btn va-btn" onClick={() => void start()} aria-label="Trợ lý giọng nói">🎙 Trợ lý giọng nói</button>
+      <button type="button" className={`btn va-btn${free ? ' on' : ''}`} aria-pressed={free} onClick={freeToggle}>{free ? '👂 Đang rảnh tay · bấm để tắt' : '👂 Rảnh tay'}</button>
       {open && (
         <div className="va-pane" role="dialog" aria-label="Trợ lý giọng nói" onClick={() => {
           if (phase === 'nghe') return;

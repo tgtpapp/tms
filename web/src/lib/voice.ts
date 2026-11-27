@@ -193,7 +193,7 @@ export function menuOf(answer: string): LearnIntent | null {
 
 /* ---------------- Đọc / nghe bằng trình duyệt ---------------- */
 interface Rec { lang: string; interimResults: boolean; maxAlternatives: number; continuous: boolean; start(): void; abort(): void;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: ((e: { error: string }) => void) | null; onend: (() => void) | null }
+  onresult: ((e: { resultIndex?: number; results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onerror: ((e: { error: string }) => void) | null; onend: (() => void) | null }
 type RecCtor = new () => Rec;
 const recCtor = (): RecCtor | null => {
   const w = window as unknown as { SpeechRecognition?: RecCtor; webkitSpeechRecognition?: RecCtor };
@@ -214,6 +214,7 @@ function viVoice(): SpeechSynthesisVoice | null {
   const vs = viVoices(), want = voiceCfg().voice;
   return vs.find((v) => v.voiceURI === want) ?? vs[0] ?? null;
 }
+let speaking = 0, spokeAt = 0;   // trợ lý đang đọc / vừa đọc xong: chế độ rảnh tay bỏ qua tiếng của chính trợ lý
 /** Đọc to (hơi chậm, âm lượng tối đa); xong thì resolve */
 export function speak(text: string): Promise<void> {
   return new Promise((res) => {
@@ -225,7 +226,8 @@ export function speak(text: string): Promise<void> {
     const v = viVoice(); if (v) u.voice = v;
     duck();   // nhạc nhỏ lại khi trợ lý đọc
     let done = false;
-    const fin = () => { if (done) return; done = true; clearTimeout(t); unduck(); res(); };
+    speaking++;
+    const fin = () => { if (done) return; done = true; clearTimeout(t); speaking--; spokeAt = Date.now(); unduck(); res(); };
     const t = setTimeout(fin, 8000 + text.length * 150);   // máy không báo đọc xong (lỗi một số máy Android): không để nhạc nhỏ mãi
     u.onend = fin; u.onerror = fin;
     window.speechSynthesis.speak(u);
@@ -338,3 +340,49 @@ export function callResultOf(heard: string): 'nghe_may' | 'thue_bao' | 'bao_huy'
   return null;
 }
 export const whoOf = (name: string | null | undefined, phone: string | null | undefined) => who(name, phone);
+
+
+/* ---------------- Chế độ rảnh tay: nghe liên tục, nói "Trợ lý ơi" + lệnh ---------------- */
+/** Tìm câu gọi "trợ lý" trong câu nghe được; null = không gọi, '' = gọi nhưng chưa nói lệnh, còn lại = lệnh (câu gốc còn dấu) */
+export function wakeOf(heard: string): string | null {
+  const orig = heard.normalize('NFC').replace(/[.,!?]/g, ' ').trim().split(/\s+/), ws = orig.map((w) => fold(w));
+  let i = -1;
+  for (let k = 0; k < ws.length - 1; k++) if (ws[k] === 'tro' && (ws[k + 1] === 'ly' || ws[k + 1] === 'li')) { i = k + 2; break; }
+  if (i < 0) return null;
+  while (i < ws.length && /^(oi|a|em|nhe|nay|ne)$/.test(ws[i]!)) i++;
+  return orig.slice(i).join(' ');
+}
+/** Nghe liên tục trên nền (tự bật lại khi máy dừng nghe); bỏ qua lúc trợ lý đang đọc. Gọi onText với từng câu nghe được */
+export function hotword(onText: (t: string) => void, onFail: (err: string) => void): { stop: () => void; pause: () => void; resume: () => void } {
+  const C = recCtor();
+  if (!C) { onFail('khong_ho_tro'); return { stop: () => undefined, pause: () => undefined, resume: () => undefined }; }
+  let on = true, paused = false, r: Rec | null = null, timer: ReturnType<typeof setTimeout> | undefined, began = 0, wait = 300;
+  const begin = () => {
+    if (!on || paused || r) return;
+    const x = new C();
+    x.lang = 'vi-VN'; x.continuous = true; x.interimResults = false; x.maxAlternatives = 1;
+    x.onresult = (e) => {
+      if (speaking > 0 || Date.now() - spokeAt < 700) return;   // tiếng của chính trợ lý
+      const parts: string[] = [];
+      for (let k = e.resultIndex ?? 0; k < e.results.length; k++) parts.push(e.results[k]?.[0]?.transcript ?? '');
+      const t = parts.join(' ').trim();
+      if (t) onText(t);
+    };
+    x.onerror = (e) => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { on = false; onFail(e.error); } };
+    x.onend = () => {
+      r = null;
+      if (!on || paused) return;
+      // máy dừng nghe liền (lỗi mạng…) thì chờ lâu dần, tránh bật tắt liên tục
+      wait = Date.now() - began < 1500 ? Math.min(wait * 2, 8000) : 300;
+      timer = setTimeout(begin, wait);
+    };
+    try { began = Date.now(); x.start(); r = x; } catch { timer = setTimeout(begin, 1000); }
+  };
+  begin();
+  const halt = () => { clearTimeout(timer); const x = r; r = null; try { x?.abort(); } catch { /* bỏ qua */ } };
+  return {
+    stop: () => { on = false; halt(); },
+    pause: () => { paused = true; halt(); },
+    resume: () => { if (!on) return; paused = false; wait = 300; timer = setTimeout(begin, 300); },
+  };
+}

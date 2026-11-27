@@ -1994,3 +1994,11 @@ button.nsx-emp-nm { border: 0; background: none; font: inherit; font-weight: 700
 table.cc { width: 100%; }
 /* Khung xem bản in: mỗi trang có viền + bóng để thấy rõ mép giấy trên nền tối (không in ra giấy) */
 @media screen { .print-stack > .lenh { border: 1px solid #94a3b8; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); } }
+/* Khung xem bản in: thanh tiêu đề + phần trang giấy là 1 khung liền (đủ viền trái, phải, dưới), trang giấy nằm giữa khung */
+@media screen {
+  .lenh-overlay > .print-stack { box-sizing: border-box; width: max-content; max-width: none; padding: 11mm; background: var(--surface, #fff);
+    border-radius: 0 0 16px 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+  .lenh-overlay > .print-stack > .lenh { box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
+  .lenh-overlay > .print-stack > .lenh:last-child { margin-bottom: 0; }
+  .lenh-overlay:has(> .print-stack) > .lenh-bar { width: max-content; min-width: min(232mm, 100%); max-width: none; box-sizing: border-box; }
+}

@@ -29,8 +29,9 @@ export function PaperView({ title, pages, onClose, onPrint }: { title: string; p
         if (sw > w + 1) x.style.zoom = String(Math.max(0.45, w / sw));
       });
       const page = Math.max(...[...el.querySelectorAll<HTMLElement>(':scope > .lenh')].map((x) => x.offsetWidth), 1);
+      const cs = getComputedStyle(el), padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);   // khung trắng quanh trang
       const room = (el.parentElement?.clientWidth ?? window.innerWidth) - 8;
-      el.style.zoom = String(Math.min(1, room / page));
+      el.style.zoom = String(Math.min(1, room / (page + padX)));
     };
     fit();
     const imgs = [...el.querySelectorAll('img')];

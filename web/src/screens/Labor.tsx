@@ -8,6 +8,8 @@ import { KIND_NAME, loadTerms, type Contract, type Terms } from '../lib/laborCon
 import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
+import { Avatar, useAvatars } from '../components/StaffAvatar';
+import { personColor } from '../lib/personColor';
 
 interface Staff { id: string; user_id: string | null; full_name: string; position: string; job_title: string | null; joined_on: string; left_on: string | null; is_active: boolean }
 const POSITION: Record<string, string> = { lai_xe: 'Lái xe', phu_xe: 'Phụ xe', nhan_vien: 'Nhân viên' };
@@ -32,6 +34,7 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
   const C = useContracts(tenantId, me, canArchive);
   const busy = busy0 || C.busy;
   const [showOld, setShowOld] = useState(false);
+  const avas = useAvatars(ctx.tenant_id ?? null);
   const [kieu, setKieuS] = useState<'bang' | 'the'>(() => { try { return localStorage.getItem('tms.hdld.kieu') === 'the' ? 'the' : 'bang'; } catch { return 'bang'; } });
   const setKieu = (v: 'bang' | 'the') => { setKieuS(v); try { localStorage.setItem('tms.hdld.kieu', v); } catch { /* chỉ đổi trong phiên */ } };
 
@@ -129,20 +132,21 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
       </div>
       {busy && <p className="small muted">{busy}</p>}
       {kieu === 'bang' ? (
-      <div className="table-wrap">
-        <table className="plist hd-tbl">
+      <div className="nsx-tblw">
+        <table className="nsx-tbl hd-tbl">
           <thead><tr><th>Số HĐLĐ</th><th>Họ và tên</th><th>Loại HĐ</th><th>Từ ngày</th><th>Đến ngày</th><th>Lương</th><th>Tình trạng</th><th /></tr></thead>
           <tbody>
             {people.map((s) => {
               const k = active(s.id);
               if (!k) return (
-                <tr key={s.id}><td className="muted">Chưa lập</td><td><b>{s.full_name}</b><div className="small muted">{s.job_title || POSITION[s.position]}</div></td><td colSpan={5} />
+                <tr key={s.id} className={`pos-${s.position}`}><td className="muted">Chưa lập</td>
+                  <td><div className="nsx-who"><Avatar name={s.full_name} url={avas[s.id]} size={36} /><div><b>{s.full_name}</b><span className="sc-job">{s.job_title || POSITION[s.position]}</span></div></div></td><td colSpan={5} />
                   <td className="actions">{acts(s, k)}</td></tr>
               );
               const [st, cls] = state(k);
               return (
-                <tr key={s.id}>
-                  <td><b>{k.number}</b></td><td><b>{s.full_name}</b><div className="small muted">{k.position}</div></td><td>{KIND_NAME[k.kind]}</td>
+                <tr key={s.id} className={`pos-${s.position}`}>
+                  <td><b>{k.number}</b></td><td><div className="nsx-who"><Avatar name={s.full_name} url={avas[s.id]} size={36} /><div><b>{s.full_name}</b><span className="sc-job">{k.position}</span></div></div></td><td>{KIND_NAME[k.kind]}</td>
                   <td>{fmtDate(k.start_on)}</td><td>{k.end_on ? fmtDate(k.end_on) : '—'}</td><td className="r">{num(Number(k.salary))}</td><td className={cls}>{st}</td>
                   <td className="actions">{acts(s, k)}</td>
                 </tr>
@@ -155,25 +159,36 @@ export function LaborScreen({ ctx, perms }: { ctx: AccountContext; perms: Permis
         </table>
       </div>
       ) : (
-      <div className="hd-cards">
+      <div className="nsx-emps">
         {people.map((s) => {
           const k = active(s.id);
-          const [st, cls] = k ? state(k) : ['Chưa lập', 'muted'];
+          const [st, cls] = k ? state(k) : ['Chưa lập', ''];
+          const pay = k ? Number(k.salary) : 0;
           return (
-            <div key={s.id} className="hd-card">
-              <div className="hd-card-h"><b>{s.full_name}</b><span className={`small ${cls}`}>{st}</span></div>
-              <div className="small muted">{k ? k.position : (s.job_title || POSITION[s.position])}</div>
-              {k ? <div className="small">
-                <div><b>{k.number}</b> · {KIND_NAME[k.kind]}</div>
-                <div>{fmtDate(k.start_on)} → {k.end_on ? fmtDate(k.end_on) : 'không thời hạn'} · Lương {num(Number(k.salary))}</div>
-              </div> : <div className="small muted">Chưa lập hợp đồng năm {year}</div>}
-              <div className="actions">{acts(s, k)}</div>
+            <div key={s.id} className={`nsx-emp nsx-emp-main pos-${s.position}`} style={{ ['--gc' as string]: personColor(s.id) }}>
+              <span className="nsx-emp-cov" />
+              <span className="nsx-emp-ph"><Avatar name={s.full_name} url={avas[s.id]} size={112} /></span>
+              <b className="nsx-emp-nm">{s.full_name}</b>
+              <span className="nsx-emp-rl">{k ? k.position : (s.job_title || POSITION[s.position])}</span>
+              <span className="nsx-emp-tags">
+                {k ? <span className={`nsx-stag ${cls === 'state-con_han' ? 'ok' : cls === 'state-het_han' ? 'off' : 'warn'}`}>{st}</span>
+                  : <span className="nsx-stag warn">Chưa lập HĐ</span>}
+              </span>
+              <span className="nsx-emp-ct">
+                {k ? <><span><b>{k.number}</b></span><span>{KIND_NAME[k.kind]}</span></> : <span>Năm {year}</span>}
+              </span>
+              <span className="nsx-emp-ft">
+                <span><small>Thời hạn</small>{k ? `${fmtDate(k.start_on)} → ${k.end_on ? fmtDate(k.end_on) : 'không thời hạn'}` : '—'}</span>
+                <span><small>Lương</small>{k ? (pay >= 1e6 ? `${(pay / 1e6).toFixed(2).replace(/\.?0+$/, '').replace('.', ',')} tr` : num(pay)) : '—'}</span>
+              </span>
+              <span className="nsx-emp-acts"><span className="actions">{acts(s, k)}</span></span>
             </div>
           );
         })}
         {showOld && list.filter((k) => k.status === 'da_huy').map((k) => (
-          <div key={k.id} className="hd-card muted"><div className="hd-card-h"><b>{nameOf(k.staff_id)}</b><span className="small">{k.number}</span></div>
-            <div className="error-text small">Đã hủy: {k.cancel_reason}</div></div>
+          <div key={k.id} className="nsx-emp nsx-emp-main off"><span className="nsx-emp-cov" />
+            <b className="nsx-emp-nm">{nameOf(k.staff_id)}</b><span className="nsx-emp-rl">{k.number}</span>
+            <span className="nsx-emp-ct error-text">Đã hủy: {k.cancel_reason}</span></div>
         ))}
       </div>
       )}

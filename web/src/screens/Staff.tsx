@@ -16,6 +16,7 @@ import { DeleteButton } from '../components/DeleteButton';
 import { MyCarPapers } from '../components/MyCarPapers';
 import { TimesheetScreen } from './Timesheet';
 import { LaborScreen } from './Labor';
+import { personColor } from '../lib/personColor';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   DeleteDupButton, DOC_COLS, DocFields, DocRow, docState, FilesButton, isDupDoc, paperNo, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned,
@@ -257,13 +258,6 @@ function applyToForm(f: Form, v: Values): Form {
 }
 
 interface Pending { key: string; def: DocTypeDef; scanned: Scanned }
-/** Màu riêng mỗi người (ngẫu nhiên theo mã hồ sơ, cố định giữa các lần mở): đầu thẻ hồ sơ + đầu trang hồ sơ */
-const PERSON_COLORS = ['#2563eb', '#16a34a', '#ea580c', '#7c3aed', '#0891b2', '#db2777', '#b45309', '#0d9488', '#be123c', '#4f46e5', '#15803d', '#9333ea'];
-function personColor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return PERSON_COLORS[h % PERSON_COLORS.length]!;
-}
 
 interface Common {
   tenantId: string; priv: StaffPrivate[]; docs: Doc[]; papers: Doc[]; users: Option[]; branches: Option[]; warnDays: number; canEdit: boolean;

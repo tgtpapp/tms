@@ -4,19 +4,24 @@ import { attachFrame, embedSrc, musicState, next, onMusic, pause, prev, resume, 
 
 export function MusicDock() {
   const [s, setS] = useState(musicState());
+  const [big, setBig] = useState(false);   // mặc định thu thành thanh ở cuối màn hình; bấm ▲ để xem video
   useEffect(() => onMusic(setS), []);
   const on = s.list.length > 0;
   // chừa chỗ cuối trang để khung nhạc không che nút của màn hình đang mở
-  useEffect(() => { document.body.classList.toggle('has-music', on); return () => document.body.classList.remove('has-music'); }, [on]);
+  useEffect(() => {
+    document.body.classList.toggle('has-music', on); document.body.classList.toggle('has-music-big', on && big);
+    return () => { document.body.classList.remove('has-music'); document.body.classList.remove('has-music-big'); };
+  }, [on, big]);
   if (!on) return null;
   return (
-    <div className="music-dock" role="region" aria-label="Đang phát nhạc">
+    <div className={`music-dock${big ? ' big' : ''}`} role="region" aria-label="Đang phát nhạc">
       <iframe key={s.ver} src={embedSrc(s.list)} title={s.label || 'Nhạc'} allow="autoplay; encrypted-media" onLoad={(e) => attachFrame(e.currentTarget)} />
       <div className="music-bar">
         <span className="music-t">{s.label}</span>
         <button type="button" className="btn small" aria-label="Bài trước" onClick={prev}>⏮</button>
         <button type="button" className="btn small" aria-label={s.playing ? 'Tạm dừng' : 'Phát'} onClick={s.playing ? pause : resume}>{s.playing ? '⏸' : '▶'}</button>
         <button type="button" className="btn small" aria-label="Bài tiếp" onClick={next}>⏭</button>
+        <button type="button" className="btn small" aria-label={big ? 'Thu gọn' : 'Xem video'} onClick={() => setBig(!big)}>{big ? '▼' : '▲'}</button>
         <button type="button" className="btn small" aria-label="Tắt nhạc" onClick={() => { attachFrame(null); stopMusic(); }}>✕</button>
       </div>
     </div>

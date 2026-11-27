@@ -1,12 +1,12 @@
-// Vị trí xe (kiểu Google Maps): bản đồ chiếm gần hết màn hình, luôn hiện; danh sách xe đang chạy trong thẻ kéo lên ở dưới,
+// Vị trí xe (mô phỏng màn Skysoft): cột danh sách xe bên trái (tự ẩn khi chọn xe / chạm bản đồ, nút ‹ › để thu / mở), bản đồ bên phải;
 // bấm xe nào bản đồ bay tới xe đó. Vị trí mới nhất do app lái xe gửi về; tự tải lại 30 giây / lần.
 // Bản đồ vẽ bằng ảnh nền (VITE_MAP_TILES, vd OpenStreetMap), không cài thêm thư viện. Kéo / chụm 2 ngón / lăn chuột để xem.
 import { useEffect, useRef, useState } from 'react';
 import { config } from '../config';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 
-interface Live { trip_id: string; depart_at: string; route_id: string; direction: 'di' | 've'; plate: string | null; driver: string | null;
-  at: string | null; lat: number | null; lng: number | null; speed: number | null; heading: number | null }
+interface Live { trip_id: string; depart_at: string; route_id: string; direction: 'di' | 've'; plate: string | null; driver: string | null; driver_phone: string | null;
+  at: string | null; lat: number | null; lng: number | null; speed: number | null; heading: number | null; moved_at: string | null }
 interface View { z: number; lat: number; lng: number }
 const T = 256;
 const toPx = (lat: number, lng: number, z: number) => {
@@ -33,13 +33,21 @@ function fitView(pts: { lat: number; lng: number }[], w: number, h: number): Vie
   return { z: 5, lat: 16, lng: 106 };
 }
 
+/** Trạng thái xe: chạy (≥ 3 km/h) · dừng · mất tín hiệu (quá 10 phút không gửi) · chưa có vị trí */
+type St = 'chay' | 'dung' | 'mat' | 'chua';
+const stOf = (l: Live): St => !l.at ? 'chua' : Date.now() - new Date(l.at).getTime() > 10 * 60000 ? 'mat' : Number(l.speed ?? 0) >= 3 ? 'chay' : 'dung';
+const ST: Record<St, string> = { chay: 'Đang chạy', dung: 'Đang dừng', mat: 'Mất tín hiệu', chua: 'Chưa có vị trí' };
+const dur = (from: string) => { const m = Math.max(0, Math.round((Date.now() - new Date(from).getTime()) / 60000)); return m < 60 ? `${m}p` : `${Math.floor(m / 60)}h${m % 60}p`; };
+
 export function LiveMapScreen() {
   const [list, setList] = useState<Live[] | null>(null);
   const [routes, setRoutes] = useState<Record<string, { name: string; name_ve: string | null }>>({});
   const [stops, setStops] = useState<{ lat: number; lng: number }[]>([]);
   const [err, setErr] = useState('');
   const [sel, setSel] = useState<string | null>(null);
-  const [sheet, setSheet] = useState(false);   // thẻ danh sách đang mở rộng
+  const [hide, setHide] = useState(false);   // cột danh sách đang thu lại
+  const [q, setQ] = useState('');
+  const [only, setOnly] = useState<St | ''>('');
   async function load() {
     try {
       setList((await rpc<Live[]>('live_vehicles', {})).map((x) => ({ ...x, lat: x.lat == null ? null : Number(x.lat), lng: x.lng == null ? null : Number(x.lng) })));
@@ -55,39 +63,62 @@ export function LiveMapScreen() {
     return () => clearInterval(t);
   }, []);
   const routeOf = (l: Live) => { const r = routes[l.route_id]; return r ? (l.direction === 've' && r.name_ve ? r.name_ve : r.name) : ''; };
-  const pts = (list ?? []).filter((l) => l.lat != null && l.lng != null);
-  const n = list?.length ?? 0;
+  const all = list ?? [];
+  const pts = all.filter((l) => l.lat != null && l.lng != null);
+  const cnt = (k: St) => all.filter((l) => stOf(l) === k).length;
+  const key = q.replace(/[^0-9a-z]/gi, '').toLowerCase();
+  const shown = all.filter((l) => (!only || stOf(l) === only) && (!key || (l.plate ?? '').replace(/[^0-9a-z]/gi, '').toLowerCase().includes(key)));
+  const pick = (id: string) => { setSel(id); setHide(true); };
 
   return (
-    <section className="lm-page">
-      {config.mapTiles
-        ? <TileMap pts={pts} home={pts.length ? pts.map((l) => ({ lat: l.lat!, lng: l.lng! })) : stops} sel={sel} onSel={(id) => { setSel(id); setSheet(false); }} />
-        : <div className="lm-map lm-none muted">Chưa cài ảnh nền bản đồ (VITE_MAP_TILES)</div>}
-      <div className={`lm-sheet${sheet ? ' open' : ''}`}>
-        <button type="button" className="lm-grip" onClick={() => setSheet(!sheet)} aria-expanded={sheet}>
-          <span className="lm-handle" />
-          <b>{list === null ? 'Đang tải…' : n ? `${n} xe đang chạy · ${pts.length} xe có vị trí` : 'Không có xe nào đang chạy'}</b>
-        </button>
-        {err && <p className="error-text">{err}</p>}
-        <div className="lm-list">
-          {(list ?? []).map((l) => (
-            <button key={l.trip_id} type="button" className={`lm-item${sel === l.trip_id ? ' on' : ''}`} disabled={l.lat == null}
-                    onClick={() => { setSel(l.trip_id); setSheet(false); }}>
-              <span className={`lm-dot${l.at ? '' : ' off'}`} />
-              <span className="lm-it">
-                <span><b>{l.plate ?? 'chưa có xe'}</b> · {hhmm(l.depart_at)} {routeOf(l)}</span>
-                <span className="small muted">{l.driver ?? ''}{l.at ? ` · ${ago(l.at)}` : ' · chưa có vị trí'}{l.speed != null && l.at ? ` · ${Math.round(Number(l.speed))} km/h` : ''}</span>
-              </span>
-            </button>
-          ))}
+    <section className={`lm-page sk${hide ? ' hide' : ''}`}>
+      <aside className="sk-side">
+        <input type="search" className="sk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm biển số xe…" aria-label="Tìm biển số xe" />
+        {err && <p className="error-text small">{err}</p>}
+        <div className="sk-list">
+          {list === null && <p className="muted small">Đang tải…</p>}
+          {list && !shown.length && <p className="muted small">Không có xe nào đang chạy</p>}
+          {shown.map((l) => {
+            const st = stOf(l);
+            return (
+              <button key={l.trip_id} type="button" className={`sk-item${sel === l.trip_id ? ' on' : ''}`} onClick={() => pick(l.trip_id)}>
+                <span className="sk-left">
+                  <i className={`sk-arr ${st}`} style={{ transform: `rotate(${(l.heading ?? 0) - 90}deg)` }}>➤</i>
+                  <b className="sk-spd">{st === 'chua' || st === 'mat' ? 'NOK' : Math.round(Number(l.speed ?? 0))}</b>
+                  <span className="sk-u">{st === 'chua' || st === 'mat' ? '' : 'km/h'}</span>
+                  {st === 'dung' && <span className="sk-u">{dur(l.moved_at ?? l.at!)}</span>}
+                  {st === 'mat' && <span className="sk-u">{dur(l.at!)}</span>}
+                </span>
+                <span className="sk-info">
+                  <b className="sk-plate">{l.plate ?? 'chưa có xe'}</b>
+                  <span>🕘 {hhmm(l.depart_at)} {routeOf(l)}</span>
+                  <span>👤 {l.driver ?? ''}</span>
+                  {l.driver_phone && <a href={`tel:${l.driver_phone}`} onClick={(e) => e.stopPropagation()}>📞 {l.driver_phone}</a>}
+                  <span className="muted">⟳ {l.at ? `${hhmm(l.at)} · ${ago(l.at)}` : ST.chua}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
+        <div className="sk-count">
+          {(['chay', 'dung', 'mat', 'chua'] as St[]).map((k) => (
+            <button key={k} type="button" className={`${k}${only === k ? ' on' : ''}`} title={ST[k]} aria-label={ST[k]} onClick={() => setOnly(only === k ? '' : k)}>{cnt(k)}</button>
+          ))}
+          <button type="button" className={`tong${only === '' ? ' on' : ''}`} title="Tất cả" aria-label="Tất cả" onClick={() => setOnly('')}>{all.length}</button>
+        </div>
+      </aside>
+      <button type="button" className="sk-tog" onClick={() => setHide(!hide)} aria-label={hide ? 'Mở danh sách xe' : 'Thu danh sách xe'}>{hide ? '›' : '‹'}</button>
+      <div className="sk-map">
+        {config.mapTiles
+          ? <TileMap pts={pts} home={pts.length ? pts.map((l) => ({ lat: l.lat!, lng: l.lng! })) : stops} sel={sel} onSel={pick} onTouch={() => setHide(true)} />
+          : <div className="lm-map lm-none muted">Chưa cài ảnh nền bản đồ (VITE_MAP_TILES)</div>}
       </div>
     </section>
   );
 }
 
 /** Bản đồ ảnh nền: kéo để di chuyển, chụm 2 ngón / lăn chuột / nút +− để phóng to thu nhỏ, bấm xe để bay tới */
-function TileMap({ pts, home, sel, onSel }: { pts: Live[]; home: { lat: number; lng: number }[]; sel: string | null; onSel: (id: string) => void }) {
+function TileMap({ pts, home, sel, onSel, onTouch }: { pts: Live[]; home: { lat: number; lng: number }[]; sel: string | null; onSel: (id: string) => void; onTouch: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 600, h: 500 });
   const [view, setView] = useState<View | null>(null);
@@ -146,7 +177,7 @@ function TileMap({ pts, home, sel, onSel }: { pts: Live[]; home: { lat: number; 
     <div className="lm-map" ref={box}
          onWheel={(e) => { const r = e.currentTarget.getBoundingClientRect(); zoomAt(e.deltaY < 0 ? 1 : -1, e.clientX - r.left, e.clientY - r.top); }}
          onPointerDown={(e) => {
-           cancelAnimationFrame(anim.current); touched.current = true;
+           cancelAnimationFrame(anim.current); touched.current = true; onTouch();   // chạm bản đồ: tự thu danh sách
            (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
            ptr.current.set(e.pointerId, { x: e.clientX, y: e.clientY }); begin();
          }}
@@ -174,9 +205,9 @@ function TileMap({ pts, home, sel, onSel }: { pts: Live[]; home: { lat: number; 
       {pts.map((l) => {
         const p = toPx(l.lat!, l.lng!, v.z);
         return (
-          <button key={l.trip_id} type="button" className={`lm-pin${sel === l.trip_id ? ' on' : ''}`} style={{ left: p.x - left, top: p.y - top }}
+          <button key={l.trip_id} type="button" className={`lm-pin ${stOf(l)}${sel === l.trip_id ? ' on' : ''}`} style={{ left: p.x - left, top: p.y - top }}
                   onPointerDown={stop} onClick={() => onSel(l.trip_id)} aria-label={`Xe ${l.plate ?? ''}`}>
-            {l.heading != null && <i style={{ transform: `rotate(${l.heading}deg)` }}>▲</i>}{l.plate ?? '?'}
+            <i className={`sk-arr ${stOf(l)}`} style={{ transform: `rotate(${(l.heading ?? 0) - 90}deg)` }}>➤</i>{l.plate ?? '?'}
           </button>
         );
       })}

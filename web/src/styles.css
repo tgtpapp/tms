@@ -2078,10 +2078,12 @@ body.has-music-big .content { padding-bottom: 270px; }
 .lm-zoom button + button { border-top: 1px solid #e5e7eb; }
 .lm-fit { position: absolute; right: 12px; bottom: 16px; width: 48px; height: 48px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 1px 6px rgba(0, 0, 0, .3); font-size: 1.5rem; color: #1a73e8; cursor: pointer; }
 .lm-attr { position: absolute; left: 8px; top: 8px; font-size: 10px; background: rgba(255, 255, 255, .8); padding: 1px 4px; border-radius: 4px; color: #555; }
-.lm-page.sk { display: flex; position: relative; background: var(--surface, #fff); }
-.sk-side { flex: 0 0 min(44%, 320px); width: min(44%, 320px); display: flex; flex-direction: column; border-right: 1px solid var(--line); height: max(420px, calc(100dvh - 230px)); transition: margin-left .25s ease; background: var(--surface, #fff); }
+.lm-page.sk { display: flex; position: relative; background: var(--surface, #fff); height: max(420px, calc(100dvh - 230px)); }
+.lm-page.sk .lm-map { height: 100%; }
+@media (max-width: 480px) { .lm-page.sk { margin: -12px -10px -40px; border-radius: 0; box-shadow: none; } }
+.sk-side { flex: 0 0 min(44%, 320px); width: min(44%, 320px); display: flex; flex-direction: column; border-right: 1px solid var(--line); height: 100%; transition: margin-left .25s ease; background: var(--surface, #fff); }
 .sk.hide .sk-side { margin-left: calc(-1 * min(44%, 320px)); }
-.sk-map { flex: 1 1 auto; min-width: 0; }
+.sk-map { flex: 1 1 auto; min-width: 0; height: 100%; }
 .sk-q { margin: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: .85rem; }
 .sk-list { flex: 1 1 auto; overflow-y: auto; }
 .sk-item { display: flex; gap: 6px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 8px 6px; font: inherit; font-size: .78rem; color: inherit; cursor: pointer; }

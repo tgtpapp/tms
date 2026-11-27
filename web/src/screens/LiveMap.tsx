@@ -69,9 +69,19 @@ export function LiveMapScreen() {
   const key = q.replace(/[^0-9a-z]/gi, '').toLowerCase();
   const shown = all.filter((l) => (!only || stOf(l) === only) && (!key || (l.plate ?? '').replace(/[^0-9a-z]/gi, '').toLowerCase().includes(key)));
   const pick = (id: string) => { setSel(id); setHide(true); };
+  // Bản đồ kín màn hình: cao từ dưới thanh menu tới đáy màn hình (đo theo máy, xoay máy / đổi cỡ thì đo lại)
+  const page = useRef<HTMLElement>(null);
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+    const on = () => { const el = page.current; if (el) setH(Math.max(360, Math.floor(window.innerHeight - (el.getBoundingClientRect().top + window.scrollY)))); };
+    on();
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
 
   return (
-    <section className={`lm-page sk${hide ? ' hide' : ''}`}>
+    <section ref={page} className={`lm-page sk${hide ? ' hide' : ''}`} style={h ? { height: h } : undefined}>
       <aside className="sk-side">
         <input type="search" className="sk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm biển số xe…" aria-label="Tìm biển số xe" />
         {err && <p className="error-text small">{err}</p>}

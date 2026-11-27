@@ -17,6 +17,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [staffId, setStaffId] = useState<string | null | undefined>(undefined);
+  const [tab, setTab] = useState<'tt' | 'gd' | 'tb' | 'bm'>('tt');
 
   useEffect(() => {
     if (!ctx.user_id) return;
@@ -41,11 +42,19 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
     toast('ok', 'Đã đổi mật khẩu');
   }
 
+  const TABS: { k: typeof tab; label: string }[] = [
+    { k: 'tt', label: 'Thông tin' }, { k: 'gd', label: 'Giao diện' }, { k: 'tb', label: 'Thông báo' }, { k: 'bm', label: 'Bảo mật' },
+  ];
   return (
     <>
-      <NotifySettings />
-      <UiSettings />
-      <section className="card">
+      <div className="nsx-mtabs" role="tablist" aria-label="Tài khoản của tôi">
+        {TABS.map((t) => (
+          <button key={t.k} type="button" role="tab" aria-selected={tab === t.k} className={tab === t.k ? 'on' : ''} onClick={() => setTab(t.k)}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'gd' && <UiSettings />}
+      {tab === 'tb' && <NotifySettings />}
+      {tab === 'tt' && <section className="card">
         <div className="item-head">
           <div>
             <h2>Thông tin</h2>
@@ -64,7 +73,8 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
           <dt>Số điện thoại</dt><dd>{phone}</dd>
           <dt>Nhà xe</dt><dd>{ctx.tenant_name}</dd>
         </dl>
-      </section>
+      </section>}
+      {tab === 'bm' && <>
       <form className="card form" onSubmit={submit}>
         <h2>Đổi mật khẩu</h2>
         <label>Mật khẩu mới
@@ -76,6 +86,7 @@ export function AccountScreen({ ctx, canManage = false }: { ctx: AccountContext;
         <button className="btn primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Đổi mật khẩu'}</button>
       </form>
       <MyDevices />
+      </>}
     </>
   );
 }

@@ -281,7 +281,7 @@ export function VehicleList(props: {
                 {showInactive ? 'Ẩn xe ngừng dùng' : `Hiện xe ngừng dùng (${inactive})`}
               </button>
             )}
-            <div className="seg" role="group" aria-label="Kiểu xem">
+            <div className="seg" role="group" aria-label="Kiểu hiển thị">
               <button type="button" className={kieu === 'bang' ? 'on' : ''} aria-pressed={kieu === 'bang'} onClick={() => setKieu('bang')}>Bảng</button>
               <button type="button" className={kieu === 'the' ? 'on' : ''} aria-pressed={kieu === 'the'} onClick={() => setKieu('the')}>Thẻ</button>
             </div>

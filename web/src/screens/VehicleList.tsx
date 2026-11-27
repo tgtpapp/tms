@@ -39,7 +39,7 @@ export function lifeLimit(year: number | null): { text: string; short: string; s
   const y15 = year + 15;
   const y20 = year + 20;
   const text = `Niên hạn: tuyến trên 300 km đến hết ${y15}, tuyến từ 300 km trở xuống đến hết ${y20}`;
-  return { text, short: `${y15} / ${y20}`, state: now > y20 ? 'het_han' : now > y15 || now === y20 ? 'sap_het' : 'con_han' };
+  return { text, short: String(y20), state: now > y20 ? 'het_han' : now > y15 || now === y20 ? 'sap_het' : 'con_han' };
 }
 
 /* ------------------------------------------------------------------ Thêm xe (đọc nhanh từ giấy tờ) */

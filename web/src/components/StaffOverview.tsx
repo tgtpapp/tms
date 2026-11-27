@@ -526,18 +526,26 @@ export function StaffCards({ staff, avas, branches = [] }: Common & { branches?:
   };
   /** Màu đậm hơn (dải trái của thẻ) */
   const shade = (hex: string, k: number) => `#${[1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('')}`;
+  /** Tên công ty 2 dòng: loại hình (CÔNG TY TNHH MỘT THÀNH VIÊN…) rồi xuống dòng tên riêng */
+  const coLines = (() => {
+    const u = co.toUpperCase().replace(/\s+/g, ' ').trim();
+    const m = /^(CÔNG TY (?:TNHH|TRÁCH NHIỆM HỮU HẠN|CỔ PHẦN|CP|HỢP DANH)(?: (?:MỘT|1) THÀNH VIÊN| HAI THÀNH VIÊN(?: TRỞ LÊN)?)?|HỢP TÁC XÃ|DOANH NGHIỆP TƯ NHÂN|HỘ KINH DOANH)\s+(.+)$/.exec(u);
+    return m ? [m[1]!, m[2]!] : [u];
+  })();
+  /** Họ tên luôn 1 dòng: tên dài thì chữ nhỏ lại */
+  const nameSize = (n: string) => Math.max(8, Math.min(12.5, (12.5 * 17) / Math.max(1, n.trim().length)));
   const card = (s: OvStaff, photo: string | null) => {
     const c = color(s);
-    return `<div style="width:85.6mm;height:54mm;border-radius:3.2mm;overflow:hidden;display:flex;background:#fff;border:1px solid #d9dfeb;box-shadow:0 6px 20px rgba(16,24,40,.12);font-family:Arial,sans-serif;color:#1b2333;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+    return `<div style="width:85.6mm;height:54mm;border-radius:3.2mm;overflow:hidden;display:flex;background:#fff;border:1px solid #d9dfeb;box-shadow:0 6px 20px rgba(16,24,40,.12);font-family:'Segoe UI',Tahoma,Roboto,'Helvetica Neue',Arial,sans-serif;color:#1b2333;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact">
     <div style="flex:0 0 31mm;width:31mm;background:radial-gradient(circle at 20% 0,rgba(255,255,255,.25),transparent 55%),linear-gradient(165deg,${shade(c, 0.45)},${c});display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.8mm;color:#fff;padding:2.5mm 2mm">
       ${photo ? `<img src="${photo}" alt="" style="width:20mm;height:25mm;border-radius:2.5mm;object-fit:cover;object-position:50% 0;border:0.8mm solid #fff;background:#fff">`
         : `<div style="width:20mm;height:25mm;border-radius:2.5mm;border:0.8mm solid #fff;display:flex;align-items:center;justify-content:center;font-size:9mm;font-weight:bold">${esc(s.full_name.trim().split(/\s+/).slice(-2).map((w) => w[0]).join('').toUpperCase())}</div>`}
       ${fold(job(s)) === fold(POS[s.position]) ? '' : `<div style="font-weight:bold;font-size:7.5pt;letter-spacing:.5px;background:rgba(255,255,255,.2);border-radius:10px;padding:.3mm 3mm">${esc(POS[s.position])}</div>`}</div>
     <div style="position:relative;flex:1 1 auto;min-width:0;padding:3.4mm 4mm 3mm;display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(circle at 100% 0,${c}22,#fff 55%)">
       ${logo ? `<img src="${logo}" alt="" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:34mm;max-height:40mm;object-fit:contain;opacity:.09;pointer-events:none">` : ''}
-      <div style="font-size:5.6pt;font-weight:bold;color:#6b7488;letter-spacing:.2px;line-height:1.3;max-height:2.6em;overflow:hidden">${esc(co.toUpperCase())}</div>
-      <div style="font-size:7pt;font-weight:800;color:${c};letter-spacing:1.6px;margin-top:1.6mm">THẺ NHÂN VIÊN</div>
-      <div style="font-size:12.5pt;font-weight:800;line-height:1.15;margin-top:2mm">${esc(s.full_name)}</div>
+      <div style="font-size:5.6pt;font-weight:700;color:#6b7488;letter-spacing:.2px;line-height:1.3">${coLines.map((l) => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(l)}</div>`).join('')}</div>
+      <div style="font-size:7pt;font-weight:700;color:${c};letter-spacing:1.2px;margin-top:1.6mm">THẺ NHÂN VIÊN</div>
+      <div style="font-size:${nameSize(s.full_name).toFixed(1)}pt;font-weight:700;line-height:1.15;margin-top:2mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.full_name.trim())}</div>
       ${s.department?.trim() && fold(s.department) !== fold(job(s)) ? `<div style="font-size:7.5pt;color:${c};font-weight:bold;margin-top:1.2mm">${esc(s.department.trim())}</div>` : ''}
       <div style="font-size:7.5pt;font-weight:600;margin-top:.6mm;line-height:1.25">${esc(job(s))}</div>
       <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;gap:2mm">

@@ -64,9 +64,12 @@ export async function pdfImages(u: Uint8Array): Promise<string[]> {
     if (isBanner(w, h)) continue;
     try {
       if (/\/DCTDecode/.test(dict)) {
-        let e = data.length;
-        while (e > 2 && data[e - 1] !== 0xd9) e--;
-        out.push({ w, h, url: `data:image/jpeg;base64,${b64(data.subarray(0, e))}` });
+        // Bộ lọc kép [/FlateDecode /DCTDecode]: ảnh JPEG được nén thêm 1 lớp → giải nén trước
+        const jpg = /\/FlateDecode[\s\S]*\/DCTDecode/.test(dict) ? await pipe(data, new DecompressionStream('deflate')) : data;
+        if (jpg[0] !== 0xff || jpg[1] !== 0xd8) continue;   // không phải JPEG đọc được: bỏ qua
+        let e = jpg.length;
+        while (e > 2 && jpg[e - 1] !== 0xd9) e--;
+        out.push({ w, h, url: `data:image/jpeg;base64,${b64(jpg.subarray(0, e))}` });
       } else if (/\/FlateDecode/.test(dict) && !/\/Predictor/.test(dict) && w && h) {
         const raw = await pipe(data, new DecompressionStream('deflate'));
         const idx = /\/Indexed\s*\/DeviceRGB\s*(\d+)\s*<([0-9a-fA-F\s]+)>/.exec(dict);

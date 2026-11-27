@@ -38,6 +38,12 @@ export function FilePreviews({ files = [], blobs = [] }: { files?: string[]; blo
     setLocal(urls.map((u, i) => ({ url: u, thumb: blobs[i].type.startsWith('image/') ? u : null, pages: blobs[i].type.startsWith('image/') ? [u] : [], pdf: !blobs[i].type.startsWith('image/'), name: `Tệp ${i + 1}` })));
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, [blobKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Máy không hiện được ảnh trang (ảnh trong PDF lạ): bỏ ảnh, hiện chữ PDF và xem lớn bằng khung PDF thay vì ảnh vỡ
+  const broken = (it: Item) => {
+    if (!it.pdf) return;
+    const fix = (l: Item[]) => l.map((x) => (x === it ? { ...x, thumb: null, pages: [] } : x));
+    setItems(fix); setLocal(fix);
+  };
   const all = [...items, ...local];
   if (!all.length) return null;
   return (
@@ -45,7 +51,7 @@ export function FilePreviews({ files = [], blobs = [] }: { files?: string[]; blo
       <div className="fp-grid">
         {all.map((it, i) => (
           <button key={i} type="button" className="fp-thumb" title="Xem lớn" onClick={() => setBig(it)}>
-            {it.thumb ? <img src={it.thumb} alt={it.name} /> : <span>{it.pdf ? 'PDF' : 'Tệp'}</span>}
+            {it.thumb ? <img src={it.thumb} alt={it.name} onError={() => broken(it)} /> : <span>{it.pdf ? 'PDF' : 'Tệp'}</span>}
             {it.pages.length > 1 && <em>{it.pages.length} trang</em>}
           </button>
         ))}

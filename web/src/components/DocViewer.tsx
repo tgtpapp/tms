@@ -69,7 +69,7 @@ export function DocViewer({ title, name, mime, b64, onClose }: { title: string; 
       <div className="doc-view">
         {pages.length ? (
           <button type="button" className="doc-thumb" onClick={openBig} aria-label="Xem lớn">
-            <img src={pages[0]} alt={title} />
+            <img src={pages[0]} alt={title} onError={() => { if (isPdf) setPages([]); }} />
             {pages.length > 1 && <span className="doc-pages">{pages.length} trang</span>}
           </button>
         ) : <div className="doc-thumb empty"><span>{isPdf ? 'PDF' : (name.split('.').pop() ?? '').toUpperCase() || 'Tệp'}</span><small>{name}</small></div>}

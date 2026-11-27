@@ -19,6 +19,8 @@ export interface AppConfig {
   fileLimitMb: number;
   neonLimitMb: number;
   geocodeUrl: string;
+  /** Ảnh nền bản đồ (dạng https://…/{z}/{x}/{y}.png) cho màn Vị trí xe; để trống = chỉ hiện danh sách */
+  mapTiles: string;
 }
 
 export interface ConfigResult {
@@ -41,6 +43,7 @@ const RAW = {
   VITE_NEON_LIMIT_MB: import.meta.env.VITE_NEON_LIMIT_MB as string | undefined,
   VITE_CREDIT: import.meta.env.VITE_CREDIT as string | undefined,
   VITE_GEOCODE_URL: import.meta.env.VITE_GEOCODE_URL as string | undefined,
+  VITE_MAP_TILES: import.meta.env.VITE_MAP_TILES as string | undefined,
 };
 
 type RawKey = keyof typeof RAW;
@@ -61,6 +64,7 @@ export function loadConfig(): ConfigResult {
     credit: read('VITE_CREDIT', null),
     // tra tọa độ tạm theo tên / địa chỉ điểm dừng (dịch vụ kiểu Nominatim); để trống = không tra, chỉ học từ GPS lái xe
     geocodeUrl: read('VITE_GEOCODE_URL', null).replace(/\/+$/, ''),
+    mapTiles: read('VITE_MAP_TILES', null),
     appEnv,
     // 'same-origin': máy chủ dự phòng trên máy tính (giao diện + hệ thống cùng 1 địa chỉ, địa chỉ đổi theo tên miền / đường hầm)
     supabaseUrl: read('VITE_SUPABASE_URL', missing) === 'same-origin' ? window.location.origin : read('VITE_SUPABASE_URL', missing),

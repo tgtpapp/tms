@@ -16,6 +16,7 @@ import { Modal } from '../components/Modal';
 import { ScanScreen } from './Scan';
 import { VoiceAssistant } from '../components/VoiceAssistant';
 import { learnStop, lookupMissing, type StopGeo } from '../lib/geo';
+import { TripTracking } from '../components/TripTracking';
 
 interface MyTrip {
   trip_id: string; service_date: string; depart_at: string; arrive_at: string; route_id: string; direction: 'di' | 've'; status: 'mo' | 'huy';
@@ -411,6 +412,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
           {tickets.length - boarded - tickets.filter((t) => t.no_show).length > 0 && <div className="warn small">{tickets.length - boarded - tickets.filter((t) => t.no_show).length} khách chưa đánh dấu lên xe hoặc vắng</div>}
           {due > 0 && <div className="warn small">Còn {money(due)} chưa thu</div>}</div>
       )}
+      {trip.my_role && <TripTracking tripId={trip.trip_id} running={trip.status === 'mo' && !!trip.departed_at && !trip.arrived_at} />}
       {trip.status === 'mo' && !trip.arrived_at && (
         <VoiceAssistant tripId={trip.trip_id} cap={cap} stopName={stopName} tickets={tickets} parcels={parcels}
                         onChanged={load} geo={geo} learn={!!trip.my_role}

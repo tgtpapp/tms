@@ -2064,3 +2064,12 @@ body.has-music-big .content { padding-bottom: 270px; }
 .qr-ok-acts { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 24px; max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; }
 .qr-ok-acts .btn { min-height: 54px; font-size: 1.05rem; width: 100%; }
 .doc-big .doc-loading { color: #e2e8f0; text-align: center; padding: 32px 12px; }
+/* Vị trí xe: bản đồ ảnh nền tự vẽ */
+.lm-map { position: relative; overflow: hidden; border-radius: 12px; background: #e5e7eb; margin-bottom: 10px; touch-action: none; cursor: grab; user-select: none; }
+.lm-map > img { position: absolute; width: 256px; height: 256px; pointer-events: none; }
+.lm-pin { position: absolute; transform: translate(-50%, -100%); border: 2px solid #fff; border-radius: 999px; padding: 3px 8px; background: var(--primary); color: #fff; font: inherit; font-size: .8rem; font-weight: 700; white-space: nowrap; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.lm-pin.on { background: #dc2626; z-index: 2; }
+.lm-pin i { font-style: normal; display: inline-block; font-size: .7rem; }
+.lm-zoom { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.lm-zoom .btn { min-width: 36px; }
+tr.lm-on td { background: #fef3c7; }

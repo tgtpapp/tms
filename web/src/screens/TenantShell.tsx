@@ -43,8 +43,9 @@ import { VehiclesScreen } from './Vehicles';
 import { SupportScreen } from './Support';
 import { ScreenGuard } from '../components/ScreenGuard';
 import { MusicDock } from '../components/MusicDock';
+import { LiveMapScreen } from './LiveMap';
 
-type Tab = 'scan' | 'driver' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
+type Tab = 'scan' | 'driver' | 'vitri' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 /** Màu ô biểu tượng menu (như app cũ): mỗi mục 1 màu cố định theo mã mục */
@@ -178,6 +179,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'sell', label: 'Bán vé', icon: 'ticket', group: 'Bán vé & điều hành', show: perms.has('sell.view') },
     { key: 'parcels', label: 'Gửi hàng', icon: 'box', group: 'Bán vé & điều hành', show: perms.has('parcel.view') },
     { key: 'charters', label: 'Hợp đồng', icon: 'document', group: 'Bán vé & điều hành', show: perms.has('charter.view') },
+    { key: 'vitri', label: 'Vị trí xe', icon: 'marker', group: 'Bán vé & điều hành', show: perms.has('trip.view') || isAdmin },
     { key: 'trips', label: 'Điều hành', icon: 'calendar', group: 'Bán vé & điều hành', show: perms.has('trip.view') || perms.has('order.add') },
     { key: 'safety', label: 'Giám sát ATGT', icon: 'shield-exclamation', group: 'Bán vé & điều hành', show: perms.has('safety.view') },
     { key: 'routes', label: 'Tuyến', icon: 'route', group: 'Danh mục', show: perms.has('route.view') },
@@ -253,6 +255,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
                        onReport={(text) => { setLastScreen(tab ?? ''); setReport(text); setTab('support'); }}>
           {shareMsg && <p className="card error-text" role="alert">{shareMsg} <button type="button" className="btn small link" onClick={() => setShareMsg('')}>Đóng</button></p>}
           {tab === 'driver' && <DriverScreen admin={isAdmin} tenantId={ctx.tenant_id} staffId={myStaff} shareFiles={share?.to === 'driver' ? share.files : null} onShareDone={() => setShare(null)} />}
+          {tab === 'vitri' && <LiveMapScreen />}
           {tab === 'parcels' && <ParcelsScreen ctx={ctx} />}
           {tab === 'charters' && <ChartersScreen tenantId={ctx.tenant_id ?? ''} />}
           {tab === 'archive' && <ArchiveScreen perms={perms} />}

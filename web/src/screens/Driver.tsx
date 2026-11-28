@@ -464,7 +464,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
         <>
           {tickets.length > 0 && groups('to').map(([k, L]) => <div key={k} className="dt-stop">{stopHead(k, L, 'tra')}{L.map((t) => row(t, 'tra'))}</div>)}
           <h3 className="section-title">Hàng gửi ({parcels.length})</h3>
-          {parcels.length ? <ul className="list">{parcels.map((p) => <ParcelRow key={p.id} s={p} stopName={stopName} tripName={() => ''} trips={null} reload={load} manage={false} />)}</ul>
+          {parcels.length ? <ul className="list">{parcels.map((p) => <ParcelRow key={p.id} s={p} stopName={(id) => (id ? stopName(id) : '')} tripName={() => ''} trips={null} reload={load} manage={false} />)}</ul>
             : <p className="muted small">Không có hàng gửi.</p>}
         </>
       )}

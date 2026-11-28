@@ -15,8 +15,8 @@ import { zaloKick } from '../lib/zalo';
 
 type Status = 'nhan' | 'tren_xe' | 'den' | 'giao' | 'huy';
 export interface Shipment {
-  id: string; code: string; trip_id: string | null; service_date: string; from_stop_id: string; to_stop_id: string;
-  sender_name: string | null; sender_phone: string; receiver_name: string | null; receiver_phone: string; description: string;
+  id: string; code: string; trip_id: string | null; service_date: string; from_stop_id: string | null; to_stop_id: string;
+  sender_name: string | null; sender_phone: string | null; receiver_name: string | null; receiver_phone: string | null; description: string | null;
   packages: number; weight_kg: number | null; fee: number; fee_payer: 'nguoi_gui' | 'nguoi_nhan'; fee_paid_at: string | null;
   cod_amount: number; cod_collected_at: string | null; cod_paid_out_at: string | null; status: Status; note: string | null;
   delivered_to: string | null;
@@ -121,7 +121,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
   }, [ctx.tenant_id, ctx.tenant_name]);
   useEffect(() => { let on = true; void tripInfo(f.trip_id || null).then((x) => { if (on) setTi(x); }).catch(() => undefined); return () => { on = false; }; }, [f.trip_id]);
 
-  const stopName = (id: string) => stops.find((s) => s.id === id)?.name ?? '?';
+  const stopName = (id: string | null) => (id ? stops.find((s) => s.id === id)?.name ?? '?' : '');
   const routeName = (t: Trip) => dirName(routes.find((r) => r.id === t.route_id), t.direction);
   const tripName = (id: string | null) => {
     const t = trips.find((x) => x.id === id);
@@ -180,7 +180,9 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     return list.filter((x) => {
       const t = x.trip_id ? trips.find((y) => y.id === x.trip_id) : null;
       if (t) return t.route_id === rid && t.direction === d;
-      const fi = ids.indexOf(x.from_stop_id), ti = ids.indexOf(x.to_stop_id);
+      const ti = ids.indexOf(x.to_stop_id);
+      if (!x.from_stop_id) return ti > 0;
+      const fi = ids.indexOf(x.from_stop_id);
       return fi >= 0 && ti >= 0 && fi < ti;
     });
   }, [list, rfOk, trips, ordered]);
@@ -207,15 +209,16 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     fee: Number(f.fee) || 0, payer: f.payer, cod: Number(f.cod) || 0, note: f.note, at: new Date().toISOString() });
   async function printSaved(s: Shipment) {
     const info = await tripInfo(s.trip_id).catch(() => ({ plate: '', driver: '', phone: '' }));
-    setPrinting([slipOf({ code: s.code, trip_id: s.trip_id, from: upper(stopName(s.from_stop_id)), to: upper(stopName(s.to_stop_id)), sender_name: s.sender_name ?? '', sender_phone: s.sender_phone,
-      receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone, description: s.description, packages: s.packages, weight: s.weight_kg, value: null,
+    setPrinting([slipOf({ code: s.code, trip_id: s.trip_id, from: upper(stopName(s.from_stop_id)), to: upper(stopName(s.to_stop_id)), sender_name: s.sender_name ?? '', sender_phone: s.sender_phone ?? '',
+      receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone ?? '', description: s.description ?? '', packages: s.packages, weight: s.weight_kg, value: null,
       fee: s.fee, payer: s.fee_payer, cod: s.cod_amount, note: s.note ?? '', at: new Date().toISOString() }, info)]);
   }
 
+  const stopIdOf = async (name: string) => stops.find((x) => norm(x.name) === norm(name))?.id ?? await rpc<string>('parcel_stop', { p_name: upper(name) });
   async function create(e: FormEvent | null, print: boolean) {
     e?.preventDefault();
     if (!formRef.current?.reportValidity()) return;
-    if (norm(f.from) === norm(f.to)) return toast('error', 'Nơi gửi và nơi nhận phải khác nhau');
+    if (f.from.trim() && norm(f.from) === norm(f.to)) return toast('error', 'Nơi gửi và nơi nhận phải khác nhau');
     if (cur) {
       const names = ordered(cur.route_id, cur.direction).map((id) => norm(stopName(id)));
       const fi = names.indexOf(norm(f.from)), ti = names.indexOf(norm(f.to));
@@ -224,8 +227,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     setBusy(true);
     try {
       // Nơi gửi / nhận chưa có thì thêm mới (chữ in hoa)
-      const idOf = async (name: string) => stops.find((x) => norm(x.name) === norm(name))?.id ?? await rpc<string>('parcel_stop', { p_name: upper(name) });
-      const [fromId, toId] = [await idOf(f.from), await idOf(f.to)];
+      const [fromId, toId] = [f.from.trim() ? await stopIdOf(f.from) : null, await stopIdOf(f.to)];
       const r = await rpc<{ code: string; repeated: boolean }>('create_shipment', {
         p: {
           trip_id: f.trip_id || null, service_date: day, from_stop_id: fromId, to_stop_id: toId, sender_name: f.sender_name, sender_phone: f.sender_phone,
@@ -298,17 +300,17 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
             <div className="gh-wrap">
               <div className="grid2">
                 <label>Gửi tại
-                  <input list="gh-diem" className="upper" value={f.from} onChange={(e) => setF({ ...f, from: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI GỬI" required />
+                  <input list="gh-diem" className="upper" value={f.from} onChange={(e) => setF({ ...f, from: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI GỬI" />
                 </label>
                 <label>Nhận tại
                   <input list="gh-diem" className="upper" value={f.to} onChange={(e) => setF({ ...f, to: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI NHẬN" required />
                 </label>
                 <datalist id="gh-diem">{[...new Set([...stopOpts, ...stops].map((s) => upper(s.name)))].map((n) => <option key={n} value={n} />)}</datalist>
-                <label>SĐT người gửi<input inputMode="tel" value={f.sender_phone} onChange={(e) => setF({ ...f, sender_phone: e.target.value })} required /></label>
+                <label>SĐT người gửi<input inputMode="tel" value={f.sender_phone} onChange={(e) => setF({ ...f, sender_phone: e.target.value })} /></label>
                 <label>Tên người gửi<input value={f.sender_name} onChange={(e) => setF({ ...f, sender_name: e.target.value })} /></label>
-                <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} required /></label>
+                <label>SĐT người nhận<input inputMode="tel" value={f.receiver_phone} onChange={(e) => setF({ ...f, receiver_phone: e.target.value })} /></label>
                 <label>Tên người nhận<input value={f.receiver_name} onChange={(e) => setF({ ...f, receiver_name: e.target.value })} /></label>
-                <label>Hàng gì<input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="vd 1 thùng trái cây" required /></label>
+                <label>Hàng gì<input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="vd 1 thùng trái cây" /></label>
                 <label>Số kiện<input type="number" min={1} inputMode="numeric" value={f.packages}
                   onChange={(e) => setF({ ...f, packages: e.target.value, fee: f.unit ? String((Number(e.target.value) || 0) * (Number(f.unit) || 0)) : f.fee })} /></label>
                 <label>Đơn giá / kiện (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={f.unit}
@@ -348,7 +350,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
             <h2>Phiếu gửi hàng ngày {fmtDate(day)} ({routeList.length})</h2>
             {routeList.length === 0 && <p className="muted">Chưa có phiếu.</p>}
             <ul className="list">
-              {routeList.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} manage onPrint={() => void printSaved(s)} />)}
+              {routeList.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} stopIdOf={stopIdOf} manage onPrint={() => void printSaved(s)} />)}
             </ul>
           </section>
         </div>
@@ -418,16 +420,16 @@ function ParcelSearch({ q, stopName, onPick }: { q: string; stopName: (id: strin
 }
 
 /** Một phiếu: dùng ở màn Gửi hàng và màn lái xe (manage = false: chỉ báo đến, giao hàng) */
-export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint, hl }: {
-  s: Shipment; stopName: (id: string) => string; tripName: (id: string | null) => string; trips: Trip[] | null;
+export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint, hl, stopIdOf }: {
+  s: Shipment; stopName: (id: string | null) => string; stopIdOf?: (name: string) => Promise<string>; tripName: (id: string | null) => string; trips: Trip[] | null;
   reload: () => Promise<void>; manage: boolean; onPrint?: () => void;
   hl?: boolean;
 }) {
   const toast = useToast();
   const [act, setAct] = useState<'' | 'xe' | 'doi' | 'giao' | 'huy' | 'sua'>('');
   const [v, setV] = useState({ trip: s.trip_id ?? '', receiver: s.receiver_name ?? '', method: 'tien_mat', reason: '' });
-  const editOf = () => ({ sender_name: s.sender_name ?? '', sender_phone: s.sender_phone, receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone,
-    description: s.description, packages: String(s.packages), unit: '', weight: s.weight_kg ? String(s.weight_kg) : '', fee: String(s.fee),
+  const editOf = () => ({ from: s.from_stop_id ? upper(stopName(s.from_stop_id)) : '', sender_name: s.sender_name ?? '', sender_phone: s.sender_phone ?? '', receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone ?? '',
+    description: s.description ?? '', packages: String(s.packages), unit: '', weight: s.weight_kg ? String(s.weight_kg) : '', fee: String(s.fee),
     payer: s.fee_payer, cod: s.cod_amount ? String(s.cod_amount) : '', note: s.note ?? '', method: 'tien_mat' });
   const [ed, setEd] = useState(editOf);
   // Tiền chênh lệch khi lưu: đã thu cước thì thu thêm / hoàn bớt; đổi sang người gửi trả thì thu cả cước
@@ -450,8 +452,8 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
         <div>
           <b>{s.code}</b> <span className={`badge ${cls}`}>{lb}</span>
           {onPrint && <button type="button" className="btn small link" aria-label={`In phiếu ${s.code}`} onClick={onPrint}>🖨 In K80</button>}
-          <div className="small">{s.description} · {s.packages} kiện{s.weight_kg ? ` · ${s.weight_kg} kg` : ''} · {stopName(s.from_stop_id)} → {stopName(s.to_stop_id)}</div>
-          <div className="small">Nhận: {s.receiver_name ?? ''} <a href={`tel:${s.receiver_phone}`}>{s.receiver_phone}</a> · Gửi: {s.sender_name ?? ''} <a href={`tel:${s.sender_phone}`}>{s.sender_phone}</a></div>
+          <div className="small">{s.description ? `${s.description} · ` : ''}{s.packages} kiện{s.weight_kg ? ` · ${s.weight_kg} kg` : ''} · {s.from_stop_id ? `${stopName(s.from_stop_id)} → ` : '→ '}{stopName(s.to_stop_id)}</div>
+          <div className="small">Nhận: {s.receiver_name ?? ''} {s.receiver_phone && <a href={`tel:${s.receiver_phone}`}>{s.receiver_phone}</a>} · Gửi: {s.sender_name ?? ''} {s.sender_phone && <a href={`tel:${s.sender_phone}`}>{s.sender_phone}</a>}</div>
           <div className="small muted">
             Cước {money(s.fee)} ({s.fee_paid_at ? 'đã thu' : 'người nhận trả'}){s.cod_amount ? ` · Thu hộ ${money(s.cod_amount)}${s.cod_paid_out_at ? ' (đã trả người gửi)' : s.cod_collected_at ? ' (đã thu, chưa trả người gửi)' : ''}` : ''}
             {s.trip_id ? ` · Chuyến ${tripName(s.trip_id)}` : ''}{s.delivered_to ? ` · Giao cho ${s.delivered_to}` : ''}
@@ -513,17 +515,19 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
       {act === 'sua' && (
         <form className="inline-form gh-edit" onSubmit={(e) => {
           e.preventDefault();
-          void run(() => rpc('update_shipment', { p_id: s.id, p_method: edDiff ? ed.method : null, p: {
+          void run(async () => rpc('update_shipment', { p_id: s.id, p_method: edDiff ? ed.method : null, p: {
+            ...(stopIdOf && ed.from.trim() ? { from_stop_id: await stopIdOf(ed.from) } : {}),
             sender_name: ed.sender_name, sender_phone: ed.sender_phone, receiver_name: ed.receiver_name, receiver_phone: ed.receiver_phone,
             description: ed.description, packages: Number(ed.packages) || 1, weight_kg: ed.weight || null,
             fee: Number(ed.fee) || 0, fee_payer: ed.payer, cod_amount: Number(ed.cod) || 0, note: ed.note } }),
             `Đã sửa phiếu ${s.code}${edDiff > 0 ? ` · thu thêm ${money(edDiff)}` : edDiff < 0 ? ` · hoàn ${money(-edDiff)}` : ''}`);
         }}>
-          <label>SĐT người gửi<input inputMode="tel" value={ed.sender_phone} onChange={(e) => setEd({ ...ed, sender_phone: e.target.value })} required /></label>
+          {stopIdOf && <label>Gửi tại<input list="gh-diem" className="upper" value={ed.from} onChange={(e) => setEd({ ...ed, from: upper(e.target.value) })} placeholder="CHỌN HOẶC GÕ NƠI GỬI" /></label>}
+          <label>SĐT người gửi<input inputMode="tel" value={ed.sender_phone} onChange={(e) => setEd({ ...ed, sender_phone: e.target.value })} /></label>
           <label>Tên người gửi<input value={ed.sender_name} onChange={(e) => setEd({ ...ed, sender_name: e.target.value })} /></label>
-          <label>SĐT người nhận<input inputMode="tel" value={ed.receiver_phone} onChange={(e) => setEd({ ...ed, receiver_phone: e.target.value })} required /></label>
+          <label>SĐT người nhận<input inputMode="tel" value={ed.receiver_phone} onChange={(e) => setEd({ ...ed, receiver_phone: e.target.value })} /></label>
           <label>Tên người nhận<input value={ed.receiver_name} onChange={(e) => setEd({ ...ed, receiver_name: e.target.value })} /></label>
-          <label>Hàng gì<input value={ed.description} onChange={(e) => setEd({ ...ed, description: e.target.value })} required /></label>
+          <label>Hàng gì<input value={ed.description} onChange={(e) => setEd({ ...ed, description: e.target.value })} /></label>
           <label>Số kiện<input type="number" min={1} inputMode="numeric" value={ed.packages}
             onChange={(e) => setEd({ ...ed, packages: e.target.value, fee: ed.unit ? String((Number(e.target.value) || 0) * (Number(ed.unit) || 0)) : ed.fee })} /></label>
           <label>Đơn giá / kiện (đồng)<input type="number" min={0} step={1000} inputMode="numeric" value={ed.unit}

@@ -9,7 +9,7 @@ export interface VTicket {
   passenger_name: string | null; passenger_phone: string | null; boarded: boolean; no_show: boolean; dropped: boolean;
 }
 export interface VParcel {
-  id: string; from_stop_id: string; to_stop_id: string; packages: number; receiver_name: string | null; receiver_phone: string;
+  id: string; from_stop_id: string | null; to_stop_id: string; packages: number; receiver_name: string | null; receiver_phone: string | null;
   fee: number; fee_payer: 'nguoi_gui' | 'nguoi_nhan'; fee_paid_at: string | null; cod_amount: number; cod_collected_at: string | null; status: string;
 }
 export interface VTrip { depart_at: string; departed_at: string | null; arrived_at: string | null; plate: string | null; routeName: string }
@@ -317,7 +317,7 @@ export function litersOf(heard: string): number {
 export function mentionedParcels(heard: string, pool: VParcel[]): VParcel[] {
   const digits = heard.replace(/\D/g, '');
   if (digits.length >= 3) {
-    const by = pool.filter((p) => p.receiver_phone.replace(/\D/g, '').endsWith(digits.slice(-3)));
+    const by = pool.filter((p) => (p.receiver_phone ?? '').replace(/\D/g, '').endsWith(digits.slice(-3)));
     if (by.length) return by;
   }
   const s = ` ${fold(heard)} `;

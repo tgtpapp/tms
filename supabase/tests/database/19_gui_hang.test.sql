@@ -251,5 +251,24 @@ select throws_ok($$ select public.move_shipment((select v from t.ids where k = '
   'P0002', null, 'Chủ B dời phiếu nhà xe A: không tìm thấy');
 reset role;
 
+-- ---------------------------------------------------------------- Để trống Gửi tại, SĐT gửi / nhận, Hàng gì; sửa phiếu điền sau
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.create_shipment(jsonb_build_object('to_stop_id', (select id from public.stops where code = 'VT'),
+  'sender_phone', '', 'receiver_phone', '', 'description', '', 'fee', 20000, 'fee_payer', 'nguoi_nhan'), null, '88888888-8888-8888-8888-8888888888a1') $$,
+  'Nhận hàng để trống Gửi tại, SĐT, Hàng gì');
+select ok((select from_stop_id is null and sender_phone is null and receiver_phone is null and description is null
+  from public.shipments where request_id = '88888888-8888-8888-8888-8888888888a1'), 'Ô trống lưu là trống');
+select throws_ok($$ select public.create_shipment(jsonb_build_object('to_stop_id', (select id from public.stops where code = 'VT'),
+  'sender_phone', '0911', 'fee', 20000, 'fee_payer', 'nguoi_nhan'), null, null) $$, '22023', null, 'Có nhập SĐT thì vẫn phải đủ 10 số');
+select throws_ok($$ select public.create_shipment(jsonb_build_object('fee', 20000, 'fee_payer', 'nguoi_nhan'), null, null) $$,
+  '22023', null, 'Nhận tại vẫn bắt buộc');
+select lives_ok($$ select public.update_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-8888888888a1'),
+  jsonb_build_object('from_stop_id', (select id from public.stops where code = 'HN'), 'sender_phone', '0911111111', 'receiver_phone', '0966666666',
+  'description', 'Thùng điền sau', 'fee', 20000, 'fee_payer', 'nguoi_nhan'), null) $$, 'Sửa phiếu điền sau');
+select ok((select from_stop_id = (select id from public.stops where code = 'HN') and sender_phone = '0911111111' and receiver_phone = '0966666666'
+  and description = 'Thùng điền sau' from public.shipments where request_id = '88888888-8888-8888-8888-8888888888a1'), 'Đã điền đủ sau khi sửa');
+reset role;
+
 select * from finish();
 rollback;

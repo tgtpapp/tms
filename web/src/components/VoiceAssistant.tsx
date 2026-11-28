@@ -208,7 +208,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
   async function call(q: string): Promise<string> {
     const d = data.current, live = d.tickets.filter((t) => !t.no_show && !t.dropped);
     let tk = mentioned(q, live).filter((t) => t.passenger_phone);
-    let ps = tk.length ? [] : mentionedParcels(q, parcelsOpen(d.parcels));
+    let ps = tk.length ? [] : mentionedParcels(q, parcelsOpen(d.parcels)).filter((p) => p.receiver_phone);
     if (!tk.length && !ps.length) {
       const stop = currentStop(d.tickets, 'don');
       const here = live.filter((t) => !t.boarded && t.from_stop_id === stop && t.passenger_phone);
@@ -216,7 +216,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
       else {
         const a = await ask('Gọi ai ạ? Anh nói tên hoặc 3 số cuối điện thoại.');
         tk = mentioned(a, live).filter((t) => t.passenger_phone);
-        if (!tk.length) ps = mentionedParcels(a, parcelsOpen(d.parcels));
+        if (!tk.length) ps = mentionedParcels(a, parcelsOpen(d.parcels)).filter((p) => p.receiver_phone);
       }
     }
     if (tk.length) {
@@ -226,7 +226,7 @@ export function VoiceAssistant({ tripId, trip, tickets, parcels, cap, stopName, 
     }
     if (ps.length) {
       const p = ps[0], name = whoOf(p.receiver_name, p.receiver_phone);
-      setDial({ phone: p.receiver_phone, ticketId: null, name });
+      setDial({ phone: p.receiver_phone!, ticketId: null, name });
       return `Chạm màn hình để gọi ${name}.`;
     }
     return 'Em không tìm thấy người đó trên chuyến.';

@@ -13,7 +13,27 @@ jobs:
       SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
       SUPABASE_REGION: ap-southeast-1
       PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
+      - name: Gọi thử Edge Function tep (không đăng nhập) – xem hàm có chạy không
+        run: |
+          key=$(grep '^VITE_SUPABASE_PUBLISHABLE_KEY=' <(curl -sS "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/web/.env.production") | cut -d= -f2-)
+          for f in tep drive; do
+            code=$(curl -sS -o r.txt -w '%{http_code}' --max-time 60 -X POST -H "apikey: $key" -H 'Content-Type: application/json' -d '{"action":"get_many","names":[]}' "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/$f")
+            echo "$f: HTTP $code · $(head -c 200 r.txt)"
+          done
+      - name: Nhật ký Edge Function 24 giờ qua (mã trạng thái + lỗi, không in nội dung)
+        run: |
+          q() { curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}/analytics/endpoints/logs.all" \
+                  --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$(date -u -d '-24 hours' +%Y-%m-%dT%H:%M:%SZ)" --data-urlencode "iso_timestamp_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)"; }
+          echo "== Số lần gọi theo hàm / mã trạng thái"
+          q "select regexp_extract(r.pathname, '/functions/v1/([^/?]+)') as fn, resp.status_code as st, count(*) as n
+             from function_edge_logs cross join unnest(metadata) as m cross join unnest(m.request) as r cross join unnest(m.response) as resp
+             group by fn, st order by fn, st" | jq -c '.result[]?, .error?' | head -40
+          echo "== Lỗi trong hàm (50 dòng gần nhất, cắt 200 ký tự)"
+          q "select format_timestamp('%d/%m %H:%M', timestamp, 'Asia/Ho_Chi_Minh') as t, m.function_id as fid, m.level as lv, substr(event_message, 1, 200) as msg
+             from function_logs cross join unnest(metadata) as m where m.level in ('error', 'warning') order by timestamp desc limit 50" \
+            | jq -r '.result[]? | "\(.t) \(.lv) \(.msg)"' | sed -E 's/[A-Za-z0-9_-]{30,}/***/g' | head -50
       - name: Kết nối database (Session pooler, IPv4)
         run: |
           export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGDATABASE=postgres PGPORT=5432

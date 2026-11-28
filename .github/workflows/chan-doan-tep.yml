@@ -85,3 +85,28 @@ jobs:
           echo "HTTP: $code"
           jq -r '"ok: \(.ok) · mo_ta: \(.description // "-") · co_du_lieu: \((.data // "") | length > 0) · do_dai: \((.data // "") | length)"' out.json 2>/dev/null \
             || { echo "Không phải JSON. 300 ký tự đầu:"; head -c 300 out.json | tr -d '\n' | sed -E 's/[A-Za-z0-9_-]{25,}/***/g'; echo; }
+      - name: Thử quyền lưu ảnh báo đổ dầu theo từng tài khoản có hồ sơ (giao dịch hủy, không ghi gì)
+        run: |
+          psql -P pager=off -c "select policyname, cmd from pg_policies where tablename = 'file_store' and policyname like '%bao_dau%' order by 1"
+          psql -P pager=off -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          do $$
+          declare s record; ok int := 0; bad int := 0; e text; pos text;
+          begin
+            for s in select st.id, st.user_id, st.tenant_id, st.position from public.staff_members st
+                     join public.app_users u on u.id = st.user_id and u.tenant_id = st.tenant_id and u.status = 'active' loop
+              perform set_config('request.jwt.claims', json_build_object('sub', s.user_id, 'role', 'authenticated')::text, true);
+              perform set_config('role', 'authenticated', true);
+              begin
+                insert into public.file_store (tenant_id, name, mime, size_bytes, updated_at)
+                values (s.tenant_id, s.tenant_id::text || '/bao_dau/' || s.id::text || '/chan_doan.jpg', 'image/jpeg', 1, now())
+                on conflict (tenant_id, name) do update set mime = excluded.mime;
+                ok := ok + 1;
+              exception when others then bad := bad + 1; e := sqlerrm; pos := s.position;
+              end;
+              perform set_config('role', 'none', true);
+            end loop;
+            raise notice 'Lưu được: %, bị chặn: %, lỗi cuối: % (chức vụ %)', ok, bad, e, pos;
+          end $$;
+          rollback;
+          SQL

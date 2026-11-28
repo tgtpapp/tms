@@ -7,6 +7,7 @@ import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { cachedRows } from '../lib/rowCache';
 import { profileChanged } from '../lib/profileAutoArchive';
+import { reloadSeatNames, saveSeatStyle, useSeatNames, type SeatStyle } from '../lib/seatNames';
 import { AddVehicle, DOC_COLS, VEHICLE_COLS, VehicleList, type Doc, type Vehicle } from './VehicleList';
 
 type BodyStyle = 'ghe_ngoi' | 'giuong_nam' | 'limousine' | 'phong_nam' | 'khac';
@@ -267,6 +268,13 @@ function renumber(cells: Map<string, Cell>, decks: number, rows: number, cols: n
 
 function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean; reload: () => Promise<void>; types: VehicleType[]; allSeats: Seat[] }) {
   const { type, seats, canEdit, reload, types, allSeats } = props;
+  const names = useSeatNames();
+  const sn = names.byType(type.id);   // tên ghế hiện theo kiểu cả nhà xe chọn (lúc sửa sơ đồ thì hiện tên thật)
+  async function pickStyle(st: SeatStyle) {
+    if (st === names.style) return;
+    try { await saveSeatStyle(st); toast('ok', st === 'so' ? 'Cả nhà xe hiện ghế theo số 1, 2, 3' : 'Cả nhà xe hiện ghế theo chữ và số'); }
+    catch (e) { toast('error', errMsg(e)); }
+  }
   const sources = types.filter((t) => t.id !== type.id && allSeats.some((s) => s.vehicle_type_id === t.id));
   const toast = useToast();
   const initial = useMemo(() => new Map<string, Cell>(seats.map((s): [string, Cell] => [key(s.deck, s.row_no, s.col_no),
@@ -383,6 +391,7 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
       setEditing(false);
       setRenaming(null);
       await reload();
+      void reloadSeatNames();
     } catch (e) {
       toast('error', errMsg(e));
     } finally {
@@ -402,6 +411,12 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
         <h3>Sơ đồ ghế · {ghe} ghế, {giuong} giường</h3>
         {canEdit && !editing && <button className="btn small" onClick={() => { setRows(type.layout_rows || 6); setCols(type.layout_cols || 3); setEditing(true); }}>Sửa sơ đồ</button>}
       </div>
+      {canEdit && !editing && (
+        <div className="seg" role="group" aria-label="Kiểu tên ghế (cả nhà xe)">
+          <button type="button" className={names.style === 'so' ? 'on' : ''} aria-pressed={names.style === 'so'} onClick={() => void pickStyle('so')}>Số 1, 2, 3</button>
+          <button type="button" className={names.style === 'chu_so' ? 'on' : ''} aria-pressed={names.style === 'chu_so'} onClick={() => void pickStyle('chu_so')}>Chữ và số</button>
+        </div>
+      )}
 
       {editing && (
         <div className="form">
@@ -456,7 +471,7 @@ function SeatLayout(props: { type: VehicleType; seats: Seat[]; canEdit: boolean;
                             aria-label={`Tầng ${d} hàng ${r} cột ${c}${cell ? `: ${KIND[cell.kind]} ${cell.label}` : ': trống'}`}
                             onClick={() => tap(d, r, c)}>
                       {cell && <SeatIcon kind={cell.kind} size={isExtra(cell.kind) ? 18 : 14} />}
-                      {cell && <span className="cap">{cell.kind === 'tai_xe' ? 'Tài xế' : cell.kind === 'cua' ? 'Cửa' : cell.label}</span>}
+                      {cell && <span className="cap">{cell.kind === 'tai_xe' ? 'Tài xế' : cell.kind === 'cua' ? 'Cửa' : editing ? cell.label : sn(cell.label)}</span>}
                     </button>
                   );
                 })}

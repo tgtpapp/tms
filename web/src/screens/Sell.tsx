@@ -1,5 +1,6 @@
 // Bán vé tại quầy: chọn chuyến → chọn chặng → bấm ghế (giữ ngay, chống bán trùng) → thông tin khách →
 // thu tiền ngay hoặc đặt chỗ trả sau → in vé. Danh sách khách theo chuyến, tiền mặt đã thu hôm nay.
+import { SeatNameCtx, useSeatName, useSeatNames } from '../lib/seatNames';
 import { TripColorPicker } from '../components/TripColorPicker';
 import { tripColorVars, useTripColorCfg } from '../lib/tripColor';
 import { PrintHead } from '../components/PrintHead';
@@ -82,6 +83,7 @@ const queuedTickets = (q: OfflineSale[], tripId: string, stopIds: string[]): Tic
 
 
 export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permissions }) {
+  const names = useSeatNames();
   const toast = useToast();
   const canSell = perms.has('ticket.sell');
   const [day, setDay] = useState(today());
@@ -318,13 +320,15 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
         <div className="vx-right" ref={rightRef}>
           {!trip && <section className="card"><p className="muted">Chọn chuyến bên trái để bán vé.</p>{online && <CashToday userId={ctx.user_id} version={version} />}</section>}
           {trip && (
-            <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOrder={perms.has('order.add') || perms.has('trip.edit')} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
+            <SeatNameCtx.Provider value={names.byType(trip.vehicle_type_id)}>
+              <TripSell key={trip.id} trip={trip} ctx={ctx} canSell={canSell} canOrder={perms.has('order.add') || perms.has('trip.edit')} canOverride={perms.has('settings.manage')} changeFee={changeFee} routeName={dirName(routes.find((r) => r.id === trip.route_id), trip.direction)}
                       stopIds={orderedStops(trip.route_id, trip.direction)} stopName={stopName} type={types.find((x) => x.id === trip.vehicle_type_id) ?? null}
                       seats={seats.filter((s) => s.vehicle_type_id === trip.vehicle_type_id)} plate={trip.vehicle_id ? plates[trip.vehicle_id] : null}
                       otherTrips={trips.filter((x) => x.route_id === trip.route_id && x.direction === trip.direction)}
                       footer={footer} logo={logo} bank={bank} online={online && !cachedAt} queue={mine} onChanged={async () => { setVersion((v) => v + 1); await loadBase(); }}
                       sold={counts[trip.id] ?? 0} total={sellable(trip.vehicle_type_id)} day={day}
                       cash={online ? <CashToday userId={ctx.user_id} version={version} /> : null} focus={focus} onFocused={() => setFocus(null)} />
+            </SeatNameCtx.Provider>
           )}
         </div>
       </div>
@@ -349,11 +353,12 @@ export function SellScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
 interface Hit {
   id: string; trip_id: string; seat_label: string; status: SeatStatus; price: number; passenger_name: string | null; passenger_phone: string | null;
   from_stop_id: string; to_stop_id: string; created_at: string; service_date: string; route_id: string; direction: Dir; depart_at: string; code: string | null;
-  cancel_reason: string | null; pickup_note: string | null; dropoff_note: string | null;
+  vehicle_id: string | null; cancel_reason: string | null; pickup_note: string | null; dropoff_note: string | null;
 }
 
 function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Route[]; stopName: (id: string | null) => string; onPick: (x: Hit) => void }) {
   const toast = useToast();
+  const names = useSeatNames();
   const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
   const [lim, setLim] = useState(100);
   const [hits, setHits] = useState<Hit[] | null>(null);
@@ -367,7 +372,7 @@ function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Rout
     if (short) { setHits(null); return; }
     let on = true;
     const t = setTimeout(() => void (async () => {
-      const cols = 'id, trip_id, seat_label, status, price, passenger_name, passenger_phone, from_stop_id, to_stop_id, created_at, cancel_reason, pickup_note, dropoff_note, trips!inner(service_date, route_id, direction, depart_at), bookings(code)';
+      const cols = 'id, trip_id, seat_label, status, price, passenger_name, passenger_phone, from_stop_id, to_stop_id, created_at, cancel_reason, pickup_note, dropoff_note, trips!inner(service_date, route_id, direction, depart_at, vehicle_id), bookings(code)';
       let qb = supabase.from('seat_inventory').select(cols).neq('status', 'giu');
       const code = raw.toUpperCase().replace(/\s/g, '');
       if (raw && isNum) qb = qb.ilike('passenger_phone', `%${dg}%`);
@@ -381,7 +386,7 @@ function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Rout
       const { data, error } = await qb.limit(lim + 1);
       if (!on) return;
       if (error) { toast('error', error.message); return; }
-      type Row = Omit<Hit, 'service_date' | 'route_id' | 'direction' | 'depart_at' | 'code'> & { trips: { service_date: string; route_id: string; direction: Dir; depart_at: string }; bookings: { code: string } | null };
+      type Row = Omit<Hit, 'service_date' | 'route_id' | 'direction' | 'depart_at' | 'code' | 'vehicle_id'> & { trips: { service_date: string; route_id: string; direction: Dir; depart_at: string; vehicle_id: string | null }; bookings: { code: string } | null };
       const l = ((data ?? []) as unknown as Row[]).map(({ trips, bookings, ...x }) => ({ ...x, ...trips, code: bookings?.code ?? null }));
       if (sortBy === 'chay') l.sort((a, b) => b.depart_at.localeCompare(a.depart_at));
       setHits(l);
@@ -409,7 +414,7 @@ function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Rout
         {shown.map((x) => (
           <button type="button" key={x.id} className={`qh${x.status === 'huy' || x.status === 'het_han' ? ' x' : ''}`} onClick={() => onPick(x)}>
             <div className="qh-t"><b>{fmtDate(x.service_date)} · {hhmm(x.depart_at)}</b><span>{rName(x)}</span></div>
-            <div className="qh-m">{x.code ? <>Mã <b>{x.code}</b> · </> : null}Ghế <b>{x.seat_label}</b> · {x.passenger_name || KHACH_LE} · {x.passenger_phone ?? ''}</div>
+            <div className="qh-m">{x.code ? <>Mã <b>{x.code}</b> · </> : null}Ghế <b>{names.byVehicle(x.vehicle_id)(x.seat_label)}</b> · {x.passenger_name || KHACH_LE} · {x.passenger_phone ?? ''}</div>
             <div className="qh-m muted">Đặt lúc: {when(x.created_at)}</div>
             <div className="qh-m">{stopName(x.from_stop_id)} → {stopName(x.to_stop_id)} · {money(x.price)}{' '}
               {x.status === 'huy' || x.status === 'het_han' ? <em className="qh-b r">Đã hủy</em> : x.status === 'da_tt' ? <em className="qh-b g">Đã thu</em> : <em className="qh-b">Chưa thu</em>}</div>
@@ -424,6 +429,7 @@ function TicketSearch({ q, routes, stopName, onPick }: { q: string; routes: Rout
 /** Vé đã hủy (mở từ Tìm vé): quản trị sửa thông tin khách hoặc xóa hẳn; người khác chỉ xem */
 function CancelledTicket({ t, admin, stopName, routeName, onClose }: { t: Hit; admin: boolean; stopName: (id: string | null) => string; routeName: string; onClose: () => void }) {
   const toast = useToast();
+  const names = useSeatNames();
   const [info, setInfo] = useState({ name: t.passenger_name ?? '', phone: t.passenger_phone ?? '', pickup: t.pickup_note ?? '', dropoff: t.dropoff_note ?? '' });
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -434,7 +440,7 @@ function CancelledTicket({ t, admin, stopName, routeName, onClose }: { t: Hit; a
   return (
     <Modal title={`${hhmm(t.depart_at)} · ${fmtDate(t.service_date)} · ${routeName}`} onClose={onClose}>
       <section className="form">
-        <h2>Vé {t.code ?? ''} · ghế {t.seat_label} · <span className="state-het_han">Đã hủy</span></h2>
+        <h2>Vé {t.code ?? ''} · ghế {names.byVehicle(t.vehicle_id)(t.seat_label)} · <span className="state-het_han">Đã hủy</span></h2>
         <p className="small">{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)} · {money(t.price)}{t.cancel_reason ? ` · Lý do hủy: ${t.cancel_reason}` : ''}</p>
         <div className="grid2">
           <label>Tên khách<input value={info.name} disabled={!admin} onChange={(e) => setInfo({ ...info, name: e.target.value })} /></label>
@@ -502,6 +508,7 @@ interface TripSellProps {
 }
 
 function TripSell(props: TripSellProps) {
+  const sn = useSeatName();
   const { trip, ctx, canSell, stopIds, stopName, type, seats, onChanged, online, queue } = props;
   const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -536,7 +543,7 @@ function TripSell(props: TripSellProps) {
     const prev = seen.current;
     seen.current = new Map(tickets.map((x) => [x.id, { b: x.boarded, c: x.crew_call ?? null }]));
     if (!prev || !loadUi().anim) return;
-    const nm = (x: Ticket) => `Ghế ${x.seat_label}${x.passenger_name ? ` · ${x.passenger_name}` : ''}`;
+    const nm = (x: Ticket) => `Ghế ${sn(x.seat_label)}${x.passenger_name ? ` · ${x.passenger_name}` : ''}`;
     const up = tickets.filter((x) => x.boarded && prev.has(x.id) && !prev.get(x.id)!.b);
     const hm = new Date(trip.depart_at).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false });
     if (up.length) { void import('../lib/hoatCanh').then((h) => h.playScene({ cap: `${hm} · ${up.length > 1 ? `${up.length} khách` : nm(up[0]!)} đã lên xe` })); return; }
@@ -713,7 +720,7 @@ function TripSell(props: TripSellProps) {
     code, tenant: ctx.tenant_name ?? '', routeName: props.routeName, departAt: trip.depart_at, plate: props.plate, seller: ctx.full_name ?? '',
     footer: props.footer, logo: props.logo,
     tickets: list.map((t) => ({
-      seat: t.seat_label, from: stopName(t.from_stop_id), to: stopName(t.to_stop_id), price: t.price,
+      seat: sn(t.seat_label), from: stopName(t.from_stop_id), to: stopName(t.to_stop_id), price: t.price,
       name: t.passenger_name, phone: t.passenger_phone, pickup: t.pickup_note, dropoff: t.dropoff_note,
       paid: t.status === 'da_tt', holdUntil: t.status === 'dat' ? t.hold_until : null,
     })),
@@ -845,7 +852,7 @@ function TripSell(props: TripSellProps) {
           <div className="chips">
             {waiting.map((t) => (
               <button key={t.id} className="btn small" onClick={() => setSelected(t)}>
-                Ghế {t.seat_label} · {t.passenger_name ?? t.passenger_phone ?? 'khách'} · {bookingOf(t.booking_id)?.code}
+                Ghế {sn(t.seat_label)} · {t.passenger_name ?? t.passenger_phone ?? 'khách'} · {bookingOf(t.booking_id)?.code}
               </button>
             ))}
           </div>
@@ -864,7 +871,7 @@ function TripSell(props: TripSellProps) {
       )}
       {myHolds.length > 0 && bookingId && !ckOpen && (
         <div className="pick-bar">
-          <span><b>{myHolds.length}</b> vé đã chọn · ghế {myHolds.map((h) => h.seat_label).join(', ')} <span className="small">(bấm thêm ghế để chọn tiếp, bấm lại ghế để bỏ)</span></span>
+          <span><b>{myHolds.length}</b> vé đã chọn · ghế {myHolds.map((h) => sn(h.seat_label)).join(', ')} <span className="small">(bấm thêm ghế để chọn tiếp, bấm lại ghế để bỏ)</span></span>
           <span className="actions">
             <button className="btn small" onClick={() => void (async () => { for (const h of myHolds) await rpc('unhold_seat', { p_ticket_id: h.id }).catch(() => undefined); setBookingId(null); await load(); })()}>Bỏ chọn</button>
             <button className="btn small primary" onClick={() => setCkOpen(true)}>Tiếp tục</button>
@@ -913,6 +920,7 @@ const shortStop = (n: string) => n.replace(/^(bến xe|bx|văn phòng|vp)\s+/i, 
 function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | null) => string; bookingOf: (id: string) => Booking | undefined;
                           depOf: (bookingId: string) => { paid: number; due: number } | null;
                           statusOf: (label: string) => { cls: string; t?: Ticket }; onClick: (label: string) => void }) {
+  const sn = useSeatName();
   const { type, seats, statusOf, onClick, stopName, bookingOf, depOf } = props;
   return (
     <div className="decks">
@@ -926,14 +934,14 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
               const s = seats.find((x) => x.deck === d && x.row_no === r && x.col_no === c);
               if (!s) return <div key={idx} />;
               if (s.kind === 'tai_xe' || s.kind === 'cua') return <div key={idx} className="vxs-fix">{s.kind === 'tai_xe' ? 'TÀI XẾ' : 'CỬA'}</div>;
-              if (!s.is_sellable) return <div key={idx} className="vxs off"><b>{s.label}</b></div>;
+              if (!s.is_sellable) return <div key={idx} className="vxs off"><b>{sn(s.label)}</b></div>;
               const st = statusOf(s.label);
               const t = st.t && st.t.status !== 'giu' ? st.t : null;
               return (
                 <button key={idx} type="button" className={`vxs ${st.cls}${s.is_priority ? ' prio' : ''}`}
-                        aria-label={`Ghế ${s.label}${st.cls === 'free' ? ' trống' : ''}`} onClick={() => onClick(s.label)}>
+                        aria-label={`Ghế ${sn(s.label)}${st.cls === 'free' ? ' trống' : ''}`} onClick={() => onClick(s.label)}>
                   {s.is_priority && <span className="vxs-wm" aria-hidden="true">Ghế ưu tiên</span>}
-                  <span className="vxs-h"><b>{s.label}</b>
+                  <span className="vxs-h"><b>{sn(s.label)}</b>
                     {t?.printed_at && <span className="printed" title={`Đã in vé ${t.print_count ?? 1} lần`} aria-label="Đã in vé"><PrinterIcon /></span>}
                     {t?.pickup_note && <span className="vxs-tag">{t.pickup_note}</span>}</span>
                   {t ? (
@@ -959,6 +967,7 @@ function SeatMap(props: { type: VType; seats: Seat[]; stopName: (id: string | nu
 /** Phơi in dạng sơ đồ ghế, tự co giãn cho vừa đúng 1 trang A4 dọc (xe 2 tầng: 2 tầng cạnh nhau). */
 function PhoiPrint(p: { company: string; route: string; time: string; day: string; plate: string | null; type: VType; seats: Seat[];
                         crew: { role: string; name: string; phone: string | null }[]; me: string; stopName: (id: string | null) => string; tickets: Ticket[] }) {
+  const sn = useSeatName();
   const { type, seats, tickets } = p;
   const rows = type.layout_rows, cols = type.layout_cols;
   const fs = rows <= 5 ? 13 : rows <= 7 ? 11.5 : rows <= 9 ? 10 : 8.5;   // chữ nhỏ dần khi nhiều hàng ghế
@@ -986,7 +995,7 @@ function PhoiPrint(p: { company: string; route: string; time: string; day: strin
                 const ts = tickets.filter((t) => t.seat_label === s.label);
                 return (
                   <div key={idx} className={`phoi-seat${ts.length ? ' on' : ''}`}>
-                    <b className="phoi-no">{s.label}</b>
+                    <b className="phoi-no">{sn(s.label)}</b>
                     {ts.map((t) => (
                       <div key={t.id} className="phoi-t">
                         <div className="phoi-row"><b>{t.passenger_name ?? ''}</b><span>{t.passenger_phone ?? ''}</span></div>
@@ -1013,6 +1022,7 @@ function PhoiPrint(p: { company: string; route: string; time: string; day: strin
 
 /** Đón / trả (hoặc trung chuyển): gom khách theo ghi chú điểm đón và điểm trả. */
 function PickDrop({ tickets, onOpen, tc }: { tickets: Ticket[]; onOpen: (t: Ticket) => void; tc?: boolean }) {
+  const sn = useSeatName();
   const col = (title: string, list: Ticket[], note: (t: Ticket) => string | null) => {
     const groups = new Map<string, Ticket[]>();
     for (const t of list) { const k = note(t) || '(không ghi)'; groups.set(k, [...(groups.get(k) ?? []), t]); }
@@ -1021,7 +1031,7 @@ function PickDrop({ tickets, onOpen, tc }: { tickets: Ticket[]; onOpen: (t: Tick
         <h3>{title} ({list.length})</h3>
         {[...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'vi')).map(([k, l]) => (
           <div key={k} className="pd-group"><b>{k}</b>
-            <ul className="list small">{l.map((t) => <li key={t.id}><button className="btn small link" onClick={() => onOpen(t)}>Ghế {t.seat_label}</button> {t.passenger_name ?? ''} {t.passenger_phone && <a href={`tel:${t.passenger_phone}`}>{t.passenger_phone}</a>}</li>)}</ul>
+            <ul className="list small">{l.map((t) => <li key={t.id}><button className="btn small link" onClick={() => onOpen(t)}>Ghế {sn(t.seat_label)}</button> {t.passenger_name ?? ''} {t.passenger_phone && <a href={`tel:${t.passenger_phone}`}>{t.passenger_phone}</a>}</li>)}</ul>
           </div>
         ))}
         {list.length === 0 && <p className="muted small">Không có.</p>}
@@ -1075,6 +1085,7 @@ function Checkout(props: {
   segs: Fare[]; fareOf: (a: string, b: string) => number | null; onSegment: (from: string, to: string) => Promise<void>;
   onDone: (code: string, printList: Ticket[] | null) => Promise<void>; onCancelAll: () => Promise<void>; onMore: () => void;
 }) {
+  const sn = useSeatName();
   const { holds, bookingId, stopName, onDone, onCancelAll, bank, onMore } = props;
   const toast = useToast();
   const [f, setF] = useState({ phone: '', name: '', pickup: '', dropoff: '', note: '', mode: 'thu_tien' as 'thu_tien' | 'dat_cho' | 'chuyen_khoan' | 'coc', keep: false, reason: '', tcDon: false, tcTra: false,
@@ -1172,7 +1183,7 @@ function Checkout(props: {
       </div>
       <div className="gh-wrap">
       <div className="form">
-      <p className="small seg-line">Ghế {holds.map((h) => h.seat_label).join(', ')} ·{' '}
+      <p className="small seg-line">Ghế {holds.map((h) => sn(h.seat_label)).join(', ')} ·{' '}
         <SegSelect segs={props.segs} from={props.from} to={props.to} stopName={stopName} fareOf={props.fareOf} disabled={busy}
                    onPick={(a, b) => void (async () => {
                      setBusy(true);
@@ -1252,9 +1263,10 @@ function Checkout(props: {
 
 function PassengerList(props: { tickets: Ticket[]; stopName: (id: string | null) => string; bookingOf: (id: string) => Booking | undefined;
                                 onOpen: (t: Ticket) => void; reload: () => Promise<void>; onPrinted: () => void }) {
+  const sn = useSeatName();
   const { tickets, stopName, bookingOf, onOpen, reload, onPrinted } = props;
   const toast = useToast();
-  const list = useMemo(() => [...tickets].sort((a, b) => a.seat_label.localeCompare(b.seat_label, 'vi', { numeric: true }) || a.from_idx - b.from_idx), [tickets]);
+  const list = useMemo(() => [...tickets].sort((a, b) => sn(a.seat_label).localeCompare(sn(b.seat_label), 'vi', { numeric: true }) || a.from_idx - b.from_idx), [tickets, sn]);
   const sum = (f: (t: Ticket) => boolean) => list.filter(f).reduce((a, t) => a + t.price, 0);
   return (
     <>
@@ -1266,7 +1278,7 @@ function PassengerList(props: { tickets: Ticket[]; stopName: (id: string | null)
         <tbody>
           {list.map((t) => (
             <tr key={t.id} className={t.boarded ? 'boarded' : ''}>
-              <td><button className="btn small link" onClick={() => onOpen(t)}>{t.seat_label}</button></td>
+              <td><button className="btn small link" onClick={() => onOpen(t)}>{sn(t.seat_label)}</button></td>
               <td>{t.passenger_name ?? ''}<br /><a href={t.passenger_phone ? `tel:${t.passenger_phone}` : undefined}>{t.passenger_phone ?? ''}</a>
                 <span className="muted small"> {bookingOf(t.booking_id)?.code}</span>
                 {(() => { const c = crewNote(t); return c && <><br /><span className={`vxs-crew ${c.cls}`}>{c.text}</span></>; })()}</td>
@@ -1274,7 +1286,7 @@ function PassengerList(props: { tickets: Ticket[]; stopName: (id: string | null)
               <td>{t.id.startsWith('q:') ? <b className="state-sap_het">Chờ gửi</b> : t.status === 'cho_xep' ? <b className="state-het_han">Chờ xếp ghế</b>
                 : paid(t) ? (t.pay_method === 'chuyen_khoan' ? 'Đã thu (CK)' : 'Đã thu')
                 : <b className="state-sap_het">{t.pay_method === 'chuyen_khoan' ? 'Chờ CK' : 'Chưa thu'}</b>}<br />{money(t.price)}</td>
-              <td><input type="checkbox" aria-label={`Ghế ${t.seat_label} đã lên xe`} checked={t.boarded} disabled={t.id.startsWith('q:')} onChange={async (e) => {
+              <td><input type="checkbox" aria-label={`Ghế ${sn(t.seat_label)} đã lên xe`} checked={t.boarded} disabled={t.id.startsWith('q:')} onChange={async (e) => {
                 try {
                   await rpc('set_boarded', { p_ticket_id: t.id, p_boarded: e.target.checked });
                   await reload();
@@ -1297,6 +1309,7 @@ function TicketDetail(props: {
   bank: BankAccount | null; canOverride: boolean; changeFee: number;
   currentTrip: Trip; onClose: () => void; onPrint: (list: Ticket[], code: string) => void; reload: () => Promise<void>;
 }) {
+  const sn = useSeatName();
   const { ticket: t, booking, siblings, stopName, otherTrips, currentTrip, onClose, onPrint, reload, bank, canOverride, changeFee } = props;
   const [cancel, setCancel] = useState(false);
   const [feeMethod, setFeeMethod] = useState<'tien_mat' | 'chuyen_khoan'>('tien_mat');
@@ -1323,7 +1336,7 @@ function TicketDetail(props: {
   return (
     <section className="form ticket-detail">
       <div className="item-head">
-        <h2>Vé {booking?.code} · ghế {t.seat_label}</h2>
+        <h2>Vé {booking?.code} · ghế {sn(t.seat_label)}</h2>
         <button className="btn small link" onClick={onClose}>Đóng</button>
       </div>
       <p className="small">{stopName(t.from_stop_id)} → {stopName(t.to_stop_id)} · {money(t.price)} ·{' '}
@@ -1413,6 +1426,7 @@ interface Quote { ticket_id: string; seat_label: string; status: string; price: 
 
 function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: boolean; bank: boolean;
                               onDone: (msg: string) => Promise<void>; onClose: () => void }) {
+  const sn = useSeatName();
   const { siblings, current, canOverride, bank, onDone, onClose } = props;
   const toast = useToast();
   const active = siblings.filter((x) => x.status === 'dat' || paid(x));
@@ -1463,7 +1477,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
           {active.map((x) => (
             <label key={x.id} className="check">
               <input type="checkbox" checked={pick.includes(x.id)}
-                     onChange={(e) => setPick(e.target.checked ? [...pick, x.id] : pick.filter((p) => p !== x.id))} /> Ghế {x.seat_label}
+                     onChange={(e) => setPick(e.target.checked ? [...pick, x.id] : pick.filter((p) => p !== x.id))} /> Ghế {sn(x.seat_label)}
             </label>
           ))}
         </div>
@@ -1473,7 +1487,7 @@ function CancelPanel(props: { siblings: Ticket[]; current: Ticket; canOverride: 
         <tbody>
           {quote.map((q) => (
             <tr key={q.ticket_id}>
-              <td>{q.seat_label}</td>
+              <td>{sn(q.seat_label)}</td>
               <td>{q.status !== 'dat' ? money(q.price) : depOf(q.ticket_id) > 0 ? `cọc ${money(depOf(q.ticket_id))}` : 'chưa thu'}</td>
               <td>{q.status !== 'dat' ? `${q.fee_pct}% · ${money(q.fee)}` : '—'}</td>
               <td>{q.status !== 'dat' ? money(q.refund) : '—'}</td>
@@ -1609,6 +1623,7 @@ function PaperForm(props: {
   tenantId: string; userId: string; trip: Trip; tripLabel: string; stopIds: string[]; stopName: (id: string | null) => string; seats: string[];
   fareOf: (a: string, b: string) => number | null; bank: boolean; online: boolean; onDone: () => Promise<void>;
 }) {
+  const sn = useSeatName();
   const { stopIds, stopName, fareOf } = props;
   const toast = useToast();
   const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -1672,7 +1687,7 @@ function PaperForm(props: {
         <label>Ghế
           <select aria-label="Ghế vé giấy" value={f.seat} onChange={(e) => setF({ ...f, seat: e.target.value })} required>
             <option value="">Chọn ghế</option>
-            {props.seats.map((x) => <option key={x} value={x}>{x}</option>)}
+            {props.seats.map((x) => <option key={x} value={x}>{sn(x)}</option>)}
           </select>
         </label>
         <label>Đón tại
@@ -1750,6 +1765,7 @@ function show(k: string, v: unknown, stopName: (id: string | null) => string): s
 }
 
 function TicketHistory({ bookingId, stopName }: { bookingId: string; stopName: (id: string | null) => string }) {
+  const sn = useSeatName();
   const [list, setList] = useState<HistEvent[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -1777,15 +1793,15 @@ function TicketHistory({ bookingId, stopName }: { bookingId: string; stopName: (
       const how = (e.method ?? '').includes('ngan_hang') ? 'chuyển khoản' : 'tiền mặt';
       text = `${KIND_TIEN[e.action] ?? e.action}: ${amt >= 0 ? 'thu' : 'chi'} ${money(Math.abs(amt))} (${how})${e.note ? ` · ${e.note}` : ''}`;
     } else if (e.action === 'insert') {
-      text = e.entity === 'bookings' ? `Tạo đơn vé ${String(e.new?.code ?? '')}` : `Thêm ghế ${String(e.new?.seat_label ?? '')}`;
+      text = e.entity === 'bookings' ? `Tạo đơn vé ${String(e.new?.code ?? '')}` : `Thêm ghế ${sn(String(e.new?.seat_label ?? ''))}`;
     } else if (e.action === 'delete') {
-      text = `Xóa ${e.entity === 'bookings' ? 'đơn vé' : `ghế ${String(e.old?.seat_label ?? '')}`}`;
+      text = `Xóa ${e.entity === 'bookings' ? 'đơn vé' : `ghế ${sn(String(e.old?.seat_label ?? ''))}`}`;
     } else {
       const o = e.old ?? {}, n = e.new ?? {};
       const diff = Object.keys(FIELDS).filter((k) => JSON.stringify(o[k] ?? null) !== JSON.stringify(n[k] ?? null))
         .map((k) => `${FIELDS[k]}: ${show(k, o[k], stopName)} → ${show(k, n[k], stopName)}`);
       if (diff.length === 0) return null;
-      text = `${e.entity === 'seat_inventory' ? `Ghế ${String(n.seat_label ?? o.seat_label ?? '')}` : 'Đơn vé'} · ${diff.join('; ')}`;
+      text = `${e.entity === 'seat_inventory' ? `Ghế ${sn(String(n.seat_label ?? o.seat_label ?? ''))}` : 'Đơn vé'} · ${diff.join('; ')}`;
     }
     return { at: e.at, actor: e.actor, text };
   }).filter((x): x is { at: string; actor: string | null; text: string } => x !== null)

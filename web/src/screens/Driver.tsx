@@ -16,6 +16,7 @@ import { Modal } from '../components/Modal';
 import { ScanScreen } from './Scan';
 import { VoiceAssistant } from '../components/VoiceAssistant';
 import { learnStop, lookupMissing, type StopGeo } from '../lib/geo';
+import { useSeatNames } from '../lib/seatNames';
 import { TripTracking } from '../components/TripTracking';
 
 interface MyTrip {
@@ -218,6 +219,7 @@ function MyMonthTrips({ routes, onPick, tripsFn }: { routes: Record<string, { na
 
 /** Một chuyến (như app cũ): Đón khách theo điểm đón · Sơ đồ ghế có tên khách · Trả khách & hàng. Gọi khách ghi trạng thái báo về quầy bán vé. */
 function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { trip: MyTrip; stopName: (id: string) => string; reload: () => Promise<void>; scanned: boolean; onScan: () => void; routeName: string; geo: Record<string, StopGeo> }) {
+  const sn = useSeatNames().byPlate(trip.plate);   // tên ghế hiện theo kiểu nhà xe chọn (số / chữ và số)
   const toast = useToast();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [codes, setCodes] = useState<Record<string, string>>({});
@@ -319,14 +321,14 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
   function board(t: Ticket) {
     const on = !t.boarded;
     const g = on ? tickets.filter((x) => x.booking_id === t.booking_id && x.from_stop_id === t.from_stop_id && !x.boarded && !x.no_show) : [t];
-    if (g.length > 1) toast('ok', `Đã đánh dấu lên xe cả đoàn ${g.length} khách (ghế ${g.map((x) => x.seat_label).join(', ')})`);
+    if (g.length > 1) toast('ok', `Đã đánh dấu lên xe cả đoàn ${g.length} khách (ghế ${g.map((x) => sn(x.seat_label)).join(', ')})`);
     void act(g, on ? 'len' : 'bo_len', on ? { boarded: true, no_show: false } : { boarded: false, dropped: false });
   }
   async function collect(t: Ticket, method: 'tien_mat' | 'chuyen_khoan') {
     setPay(null);
     try {
       const n = await rpc<number>('crew_collect', { p_ticket_id: t.id, p_method: method });
-      toast('ok', n ? `Đã thu ${money(n)} ghế ${t.seat_label}${method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}` : 'Vé này đã thu rồi');
+      toast('ok', n ? `Đã thu ${money(n)} ghế ${sn(t.seat_label)}${method === 'chuyen_khoan' ? ' (chuyển khoản)' : ''}` : 'Vé này đã thu rồi');
       await load();
     } catch (e) {
       toast('error', errMsg(e));
@@ -339,7 +341,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
     const m = new Map<string, Ticket[]>();
     for (const t of [...tickets].sort((a, b) => a.from_idx - b.from_idx)) { const k = key === 'from' ? t.from_stop_id : t.to_stop_id; m.set(k, [...(m.get(k) ?? []), t]); }
     return [...m.entries()].map(([k, L]) => [k, L.sort((a, b) => Number(key === 'from' ? a.boarded || a.no_show : a.dropped || a.no_show) - Number(key === 'from' ? b.boarded || b.no_show : b.dropped || b.no_show)
-      || a.seat_label.localeCompare(b.seat_label, 'vi', { numeric: true }))] as const);
+      || sn(a.seat_label).localeCompare(sn(b.seat_label), 'vi', { numeric: true }))] as const);
   };
   const toTab = (t: Ticket) => { setTab('don'); setHl(t.id); setTimeout(() => document.getElementById(`pax-${t.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60); };
 
@@ -348,33 +350,33 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
     return (
       <div key={t.id} id={`pax-${t.id}`} className={`dt-p${done ? ' on' : ''}${t.no_show ? ' vang' : ''}${hl === t.id ? ' hl' : ''}`}>
         <div className="dt-pt">
-          <span className="dt-seat">{t.seat_label}</span>
+          <span className="dt-seat">{sn(t.seat_label)}</span>
           <div className="grow">
             <b>{t.passenger_name || 'Khách'}</b>
             {t.no_show && <span className="dt-tag vang">Vắng</span>}
             {t.dropped && <span className="dt-tag">Đã trả</span>}
-            {t.crew_call && <button type="button" className={`dt-tag call ${t.crew_call}`} onClick={() => setAsk(ask === t.id ? null : t.id)} aria-label={`Kết quả gọi ghế ${t.seat_label}: ${CALL[t.crew_call]}`}>{CALL[t.crew_call]}</button>}
+            {t.crew_call && <button type="button" className={`dt-tag call ${t.crew_call}`} onClick={() => setAsk(ask === t.id ? null : t.id)} aria-label={`Kết quả gọi ghế ${sn(t.seat_label)}: ${CALL[t.crew_call]}`}>{CALL[t.crew_call]}</button>}
             {mode === 'don' && t.pickup_note && <div className="dt-gc">Đón: {t.pickup_note}</div>}
             <div className="dt-pm">{mode === 'don' ? `→ ${stopName(t.to_stop_id)}${t.dropoff_note ? ` · Trả: ${t.dropoff_note}` : ''}` : `Trả: ${t.dropoff_note || stopName(t.to_stop_id)}`}{codes[t.booking_id] ? ` · ${codes[t.booking_id]}` : ''}</div>
           </div>
           <div className="dt-money">{t.status === 'da_tt' ? <span className="ok-text">Đã thu{t.pay_method === 'chuyen_khoan' ? ' CK' : ''}</span> : <><b>{money(t.price)}</b><small>cần thu</small></>}</div>
         </div>
         {ask === t.id && (
-          <div className="dt-ask" role="group" aria-label={`Kết quả gọi ghế ${t.seat_label}`}>
+          <div className="dt-ask" role="group" aria-label={`Kết quả gọi ghế ${sn(t.seat_label)}`}>
             {(['nghe_may', 'thue_bao', 'bao_huy'] as const).map((c) => (
               <button key={c} type="button" className={`btn small${t.crew_call === c ? ' primary' : ''}`} onClick={() => result(t, c)}>{CALL[c]}</button>))}
             {t.crew_call && <button type="button" className="btn small link" onClick={() => result(t, null)}>Xóa</button>}
           </div>
         )}
         <div className="dt-acts">
-          {t.passenger_phone ? <a className="btn dt-b" href={`tel:${t.passenger_phone}`} onClick={() => call(t)} aria-label={`Gọi ghế ${t.seat_label}`}>📞 Gọi</a> : <span />}
+          {t.passenger_phone ? <a className="btn dt-b" href={`tel:${t.passenger_phone}`} onClick={() => call(t)} aria-label={`Gọi ghế ${sn(t.seat_label)}`}>📞 Gọi</a> : <span />}
           {mode === 'don' ? <>
-            <button type="button" className={`btn dt-b${t.boarded ? ' done' : ''}`} disabled={t.no_show} onClick={() => board(t)} aria-label={`Ghế ${t.seat_label} lên xe`}>✓ {t.boarded ? 'Đã lên' : 'Lên xe'}</button>
-            <button type="button" className={`btn dt-b${t.no_show ? ' warn' : ''}`} disabled={t.boarded} onClick={() => void act([t], t.no_show ? 'bo_vang' : 'vang', { no_show: !t.no_show })} aria-label={`Ghế ${t.seat_label} vắng`}>✕ {t.no_show ? 'Đã vắng' : 'Vắng'}</button>
+            <button type="button" className={`btn dt-b${t.boarded ? ' done' : ''}`} disabled={t.no_show} onClick={() => board(t)} aria-label={`Ghế ${sn(t.seat_label)} lên xe`}>✓ {t.boarded ? 'Đã lên' : 'Lên xe'}</button>
+            <button type="button" className={`btn dt-b${t.no_show ? ' warn' : ''}`} disabled={t.boarded} onClick={() => void act([t], t.no_show ? 'bo_vang' : 'vang', { no_show: !t.no_show })} aria-label={`Ghế ${sn(t.seat_label)} vắng`}>✕ {t.no_show ? 'Đã vắng' : 'Vắng'}</button>
           </> : (
-            <button type="button" className={`btn dt-b${t.dropped ? ' done' : ''}`} disabled={t.no_show} onClick={() => void act([t], t.dropped ? 'bo_tra' : 'tra', { dropped: !t.dropped, boarded: true })} aria-label={`Trả khách ghế ${t.seat_label}`}>✓ {t.dropped ? 'Đã trả' : 'Trả khách'}</button>
+            <button type="button" className={`btn dt-b${t.dropped ? ' done' : ''}`} disabled={t.no_show} onClick={() => void act([t], t.dropped ? 'bo_tra' : 'tra', { dropped: !t.dropped, boarded: true })} aria-label={`Trả khách ghế ${sn(t.seat_label)}`}>✓ {t.dropped ? 'Đã trả' : 'Trả khách'}</button>
           )}
-          <button type="button" className={`btn dt-b${t.status === 'da_tt' ? ' done' : ' pay'}`} disabled={t.no_show || t.status === 'da_tt'} onClick={() => setPay(t)} aria-label={`Thu tiền ghế ${t.seat_label}`}>💵 {t.status === 'da_tt' ? 'Đã thu' : 'Thu'}</button>
+          <button type="button" className={`btn dt-b${t.status === 'da_tt' ? ' done' : ' pay'}`} disabled={t.no_show || t.status === 'da_tt'} onClick={() => setPay(t)} aria-label={`Thu tiền ghế ${sn(t.seat_label)}`}>💵 {t.status === 'da_tt' ? 'Đã thu' : 'Thu'}</button>
         </div>
       </div>
     );
@@ -439,11 +441,11 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
                   if (!st) return <div key={idx} />;
                   if (st.kind === 'tai_xe' || st.kind === 'cua') return <div key={idx} className="dt-g lbl">{st.kind === 'tai_xe' ? 'Tài xế' : 'Cửa'}</div>;
                   const ts = tickets.filter((x) => x.seat_label === st.label), t = ts[0];
-                  if (!t) return <div key={idx} className="dt-g" aria-label={`Ghế ${st.label} trống`}><b>{st.label}</b></div>;
+                  if (!t) return <div key={idx} className="dt-g" aria-label={`Ghế ${sn(st.label)} trống`}><b>{sn(st.label)}</b></div>;
                   const cls = t.no_show ? 'vang' : t.crew_call === 'bao_huy' ? 'huy' : t.boarded ? 'len' : t.status === 'da_tt' ? 'pd' : 'bk';
                   return (
-                    <button key={idx} type="button" className={`dt-g ${cls}`} onClick={() => toTab(t)} aria-label={`Ghế ${st.label} ${t.passenger_name ?? 'khách'}`}>
-                      <b>{st.label}{ts.length > 1 ? ` ·${ts.length}` : ''}</b>
+                    <button key={idx} type="button" className={`dt-g ${cls}`} onClick={() => toTab(t)} aria-label={`Ghế ${sn(st.label)} ${t.passenger_name ?? 'khách'}`}>
+                      <b>{sn(st.label)}{ts.length > 1 ? ` ·${ts.length}` : ''}</b>
                       <span className="dt-gn">{t.passenger_name || t.passenger_phone || 'Khách'}</span>
                       <small>{t.pickup_note || stopName(t.from_stop_id)}</small>
                       {t.status === 'dat' && !t.no_show && <small className="dt-gm">{money(t.price)}</small>}
@@ -470,7 +472,7 @@ function TripRun({ trip, stopName, reload, scanned, onScan, routeName, geo }: { 
       <div className="dt-foot"><div><small>Đã thu</small><b>{money(paid)}</b></div><div><small>Còn phải thu</small><b className={due ? 'danger-text' : ''}>{money(due)}</b></div></div>
 
       {pay && (
-        <Modal title={`Thu tiền ghế ${pay.seat_label}${pay.passenger_name ? ` · ${pay.passenger_name}` : ''}`} onClose={() => setPay(null)}>
+        <Modal title={`Thu tiền ghế ${sn(pay.seat_label)}${pay.passenger_name ? ` · ${pay.passenger_name}` : ''}`} onClose={() => setPay(null)}>
           <div className="dt-paybox">
             <div className="dt-amount">{money(pay.price)}</div>
             <div className="dt-pay2">

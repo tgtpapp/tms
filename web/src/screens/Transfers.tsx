@@ -1,4 +1,5 @@
 // Giai đoạn 6.2 – Trung chuyển: gom vé cần đón / trả tận nơi vào lượt, giao người chạy; người chạy đánh dấu đã đón / trả.
+import { useSeatNames } from '../lib/seatNames';
 import { useCallback, useEffect, useState } from 'react';
 import { errMsg, rpc, supabase } from '../lib/supabase';
 import { useToast } from '../lib/toast';
@@ -9,6 +10,7 @@ interface StaffLite { id: string; full_name: string; is_active: boolean }
 export interface TcTicket {
   id: string; trip_id: string; seat_label: string; passenger_name: string | null; passenger_phone: string | null;
   pickup_note: string | null; dropoff_note: string | null; tc_don: boolean; tc_tra: boolean; from_stop_id: string; to_stop_id: string;
+  trips?: { vehicle_id: string | null } | null;   // xe của chuyến: để hiện tên ghế theo kiểu nhà xe chọn
 }
 export interface Run { id: string; service_date: string; kind: Kind; staff_id: string | null; vehicle_note: string | null; start_time: string | null; note: string | null }
 export interface Item { run_id: string; ticket_id: string; kind: Kind; seq: number; done_at: string | null }
@@ -16,13 +18,14 @@ export interface Item { run_id: string; ticket_id: string; kind: Kind; seq: numb
 const TZ = 'Asia/Ho_Chi_Minh';
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
 const KIND: Record<Kind, string> = { don: 'Đón', tra: 'Trả' };
-export const TC_COLS = 'id, trip_id, seat_label, passenger_name, passenger_phone, pickup_note, dropoff_note, tc_don, tc_tra, from_stop_id, to_stop_id';
+export const TC_COLS = 'id, trip_id, seat_label, passenger_name, passenger_phone, pickup_note, dropoff_note, tc_don, tc_tra, from_stop_id, to_stop_id, trips(vehicle_id)';
 export const addr = (t: TcTicket, k: Kind) => (k === 'don' ? t.pickup_note : t.dropoff_note) || '(chưa ghi địa chỉ)';
 
 /** Điều hành: trung chuyển trong ngày */
 export function Transfers({ day, trips, staff, ends, canEdit }: {
   day: string; trips: TripLite[]; staff: StaffLite[]; ends: (routeId: string, dir: 'di' | 've') => string; canEdit: boolean;
 }) {
+  const names = useSeatNames();
   const toast = useToast();
   const [tickets, setTickets] = useState<TcTicket[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -51,7 +54,7 @@ export function Transfers({ day, trips, staff, ends, canEdit }: {
   const tripOf = (id: string) => trips.find((t) => t.id === id);
   const label = (t: TcTicket) => {
     const tr = tripOf(t.trip_id);
-    return `${tr ? `${hhmm(tr.depart_at)} ${ends(tr.route_id, tr.direction)}` : ''} · ghế ${t.seat_label} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
+    return `${tr ? `${hhmm(tr.depart_at)} ${ends(tr.route_id, tr.direction)}` : ''} · ghế ${names.byVehicle(t.trips?.vehicle_id)(t.seat_label)} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
   };
   const assigned = (k: Kind) => new Set(items.filter((i) => i.kind === k).map((i) => i.ticket_id));
   const waiting = (k: Kind) => tickets.filter((t) => (k === 'don' ? t.tc_don : t.tc_tra) && !assigned(k).has(t.id));
@@ -169,6 +172,7 @@ export function Transfers({ day, trips, staff, ends, canEdit }: {
 
 /** Người chạy trung chuyển: lượt của tôi */
 export function MyTransfers({ day }: { day: string }) {
+  const names = useSeatNames();
   const toast = useToast();
   const [runs, setRuns] = useState<Run[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -220,7 +224,7 @@ export function MyTransfers({ day }: { day: string }) {
                   </label>
                   <div className="drv-info">
                     <div>{t?.passenger_name ?? 'Khách'} {t?.passenger_phone && <a className="drv-call" href={`tel:${t.passenger_phone}`}>{t.passenger_phone}</a>}</div>
-                    <div className="small"><b>{t ? addr(t, r.kind) : ''}</b> · ghế {t?.seat_label}</div>
+                    <div className="small"><b>{t ? addr(t, r.kind) : ''}</b> · ghế {t ? names.byVehicle(t.trips?.vehicle_id)(t.seat_label) : ''}</div>
                   </div>
                   <span />
                 </li>

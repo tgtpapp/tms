@@ -106,7 +106,19 @@ async function buildData(db: SupabaseClient, tenant: string, kind: string, ref: 
       .eq('tenant_id', tenant).eq('booking_id', ref).in('status', ['dat', 'da_tt']).order('seat_label');
     const list = seats.data ?? [];
     if (!b.data || list.length === 0) return 'Vé không còn hiệu lực';
-    const trip = await db.from('trips').select('depart_at, route_id').eq('tenant_id', tenant).eq('id', list[0].trip_id).maybeSingle();
+    const trip = await db.from('trips').select('depart_at, route_id, vehicle_id').eq('tenant_id', tenant).eq('id', list[0].trip_id).maybeSingle();
+    // Tên ghế theo kiểu nhà xe chọn: 'so' (mặc định) = số thứ tự 1, 2, 3… theo sơ đồ (tầng → hàng → cột); 'chu_so' = tên đã lưu
+    let seatName = (l: string) => l;
+    const style = await db.from('tenant_settings').select('value').eq('tenant_id', tenant).eq('key', 'ban_ve.kieu_ten_ghe').maybeSingle();
+    if (style.data?.value !== 'chu_so' && trip.data?.vehicle_id) {
+      const v = await db.from('vehicles').select('vehicle_type_id').eq('tenant_id', tenant).eq('id', trip.data.vehicle_id).maybeSingle();
+      if (v.data?.vehicle_type_id) {
+        const ss = await db.from('vehicle_type_seats').select('label, deck, row_no, col_no').eq('tenant_id', tenant).eq('vehicle_type_id', v.data.vehicle_type_id).in('kind', ['ghe', 'giuong']);
+        const no = new Map(((ss.data ?? []) as { label: string; deck: number; row_no: number; col_no: number }[])
+          .sort((a, b) => a.deck - b.deck || a.row_no - b.row_no || a.col_no - b.col_no).map((x, i) => [x.label, String(i + 1)]));
+        seatName = (l) => no.get(l) ?? l;
+      }
+    }
     const route = trip.data ? await db.from('routes').select('name').eq('tenant_id', tenant).eq('id', trip.data.route_id).maybeSingle() : null;
     const stop = await db.from('stops').select('name').eq('tenant_id', tenant).eq('id', list[0].from_stop_id).maybeSingle();
     return {
@@ -114,7 +126,7 @@ async function buildData(db: SupabaseClient, tenant: string, kind: string, ref: 
       ten_khach: String(b.data.customer_name || list[0].passenger_name || 'Quý khách'),
       tuyen: String(route?.data?.name ?? ''),
       gio_chay: trip.data ? fmtTime(trip.data.depart_at as string) : '',
-      ghe: list.map((s) => s.seat_label).join(', '),
+      ghe: list.map((s) => seatName(String(s.seat_label))).sort((a, b) => a.localeCompare(b, 'vi', { numeric: true })).join(', '),
       diem_don: String(list[0].pickup_note || stop.data?.name || ''),
       so_tien: fmtMoney(list.reduce((a, s) => a + Number(s.price), 0)),
     };

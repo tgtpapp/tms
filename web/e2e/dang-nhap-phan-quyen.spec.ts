@@ -173,6 +173,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByRole('button', { name: 'Lưu sơ đồ' }).click();
   await expect(page.getByText('Đã lưu sơ đồ ghế')).toBeVisible();
   await expect(page.getByText('Sơ đồ: 6 giường · 6 chỗ bán · 1 chỗ ưu tiên')).toBeVisible();
+  // Tên ghế (cả nhà xe): mặc định hiện số 1, 2, 3 như app cũ; chọn "Chữ và số" thì hiện đúng tên ghế đã lưu (A01…)
+  await expect(page.getByRole('button', { name: 'Số 1, 2, 3' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Chữ và số' }).click();
+  await expect(page.getByText('Cả nhà xe hiện ghế theo chữ và số')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Chữ và số' })).toHaveAttribute('aria-pressed', 'true');
 
   // 5g. Thêm xe: tải ảnh giấy đăng ký (CI không có AI → báo nhập tay), nhập tay, lưu kèm giấy tờ
   const png = { name: 'giay.png', mimeType: 'image/png',

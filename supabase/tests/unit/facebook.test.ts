@@ -1,7 +1,7 @@
-// Kiểm thử lõi Facebook bằng fetch giả (không gọi Facebook thật): phiên bản API, nội dung, link, đăng bài, tên trang, link bài.
+// Kiểm thử lõi Facebook bằng fetch giả (không gọi Facebook thật): phiên bản API, nội dung, link, đăng bài (kèm ảnh), tên trang, link bài.
 import { assert, assertEquals, assertRejects } from 'jsr:@std/assert@1';
 import {
-  apiVersion, FacebookError, graphUrl, pageName, postUrl, publishPost, sanitizeLink, sanitizeMessage,
+  apiVersion, FacebookError, graphUrl, pageName, postUrl, publishPost, sanitizeLink, sanitizeMessage, uploadPhoto,
 } from '../../functions/_shared/facebook.ts';
 
 Deno.test('Phiên bản Graph API: chuẩn hóa về dạng v*, sai / trống → mặc định', () => {
@@ -65,6 +65,51 @@ Deno.test('Đăng bài không kèm link: không gửi tham số link', async () 
   });
   try {
     await publishPost('v22.0', '123', 'tok', 'Chào', null);
+    assertEquals(form.get('link'), null);
+  } finally { restore(); }
+});
+
+Deno.test('Đăng ảnh (chưa công khai): đúng địa chỉ, mã trang trong thân, ảnh đúng loại, đọc mã ảnh', async () => {
+  let url = '';
+  let form = new FormData();
+  const restore = fakeFetch((u, init) => {
+    url = u;
+    form = init.body as FormData;
+    return { id: '999' };
+  });
+  try {
+    const id = await uploadPhoto('v22.0', '123', 'tok', 'image/png', new Uint8Array([1, 2, 3]));
+    assertEquals(id, '999');
+    assertEquals(url, 'https://graph.facebook.com/v22.0/123/photos');
+    assertEquals(form.get('access_token'), 'tok');
+    assertEquals(form.get('published'), 'false');
+    assertEquals((form.get('source') as File).type, 'image/png');
+  } finally { restore(); }
+});
+
+Deno.test('Đăng ảnh loại không rõ → gửi như ảnh JPEG', async () => {
+  let form = new FormData();
+  const restore = fakeFetch((_u, init) => {
+    form = init.body as FormData;
+    return { id: '998' };
+  });
+  try {
+    await uploadPhoto('v22.0', '123', 'tok', 'application/octet-stream', new Uint8Array([1]));
+    assertEquals((form.get('source') as File).type, 'image/jpeg');
+  } finally { restore(); }
+});
+
+Deno.test('Đăng bài nhiều ảnh: gộp các mã ảnh đã tải thành 1 bài, không kèm link', async () => {
+  let form = new URLSearchParams();
+  const restore = fakeFetch((_u, init) => {
+    form = new URLSearchParams(String(init.body));
+    return { id: '123_456' };
+  });
+  try {
+    await publishPost('v22.0', '123', 'tok', 'Chào', null, ['111', '222']);
+    assertEquals(form.get('attached_media[0]'), '{"media_fbid":"111"}');
+    assertEquals(form.get('attached_media[1]'), '{"media_fbid":"222"}');
+    assertEquals(form.get('attached_media[2]'), null);
     assertEquals(form.get('link'), null);
   } finally { restore(); }
 });

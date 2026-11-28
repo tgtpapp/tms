@@ -48,10 +48,24 @@ async function graphFetch(url: string, init: RequestInit): Promise<Record<string
   return j;
 }
 
-/** Đăng bài văn bản (kèm link tùy chọn) lên trang; trả id bài dạng "PAGEID_POSTID". */
-export async function publishPost(version: string, pageId: string, pageToken: string, message: string, link: string | null): Promise<string> {
+/** Đăng ảnh lên trang ở dạng CHƯA công khai → mã ảnh để gộp nhiều ảnh vào 1 bài (bài đa ảnh). */
+export async function uploadPhoto(version: string, pageId: string, pageToken: string, mime: string, bytes: Uint8Array): Promise<string> {
+  const form = new FormData();
+  form.set('access_token', pageToken);
+  form.set('published', 'false');
+  form.append('source', new Blob([bytes as BlobPart], { type: mime.startsWith('image/') ? mime : 'image/jpeg' }), 'anh');
+  const j = await graphFetch(graphUrl(version, `${pageId}/photos`), { method: 'POST', body: form });
+  if (typeof j.id !== 'string') throw new FacebookError(0, 'Facebook không trả mã ảnh');
+  return j.id;
+}
+
+/** Đăng bài lên trang (văn bản + link tùy chọn + các ảnh đã tải bằng uploadPhoto gộp thành 1 bài đa ảnh);
+    trả id bài dạng "PAGEID_POSTID". */
+export async function publishPost(version: string, pageId: string, pageToken: string, message: string, link: string | null,
+                                  mediaIds: string[] = []): Promise<string> {
   const form = new URLSearchParams({ message, access_token: pageToken });
   if (link) form.set('link', link);
+  mediaIds.forEach((id, i) => form.set(`attached_media[${i}]`, JSON.stringify({ media_fbid: id })));
   const j = await graphFetch(graphUrl(version, `${pageId}/feed`), { method: 'POST', body: form });
   if (typeof j.id !== 'string') throw new FacebookError(0, 'Facebook không trả mã bài đăng');
   return j.id;

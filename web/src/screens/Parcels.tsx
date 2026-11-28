@@ -424,7 +424,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
   hl?: boolean;
 }) {
   const toast = useToast();
-  const [act, setAct] = useState<'' | 'xe' | 'giao' | 'huy' | 'sua'>('');
+  const [act, setAct] = useState<'' | 'xe' | 'doi' | 'giao' | 'huy' | 'sua'>('');
   const [v, setV] = useState({ trip: s.trip_id ?? '', receiver: s.receiver_name ?? '', method: 'tien_mat', reason: '' });
   const editOf = () => ({ sender_name: s.sender_name ?? '', sender_phone: s.sender_phone, receiver_name: s.receiver_name ?? '', receiver_phone: s.receiver_phone,
     description: s.description, packages: String(s.packages), unit: '', weight: s.weight_kg ? String(s.weight_kg) : '', fee: String(s.fee),
@@ -460,6 +460,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
         {s.status !== 'giao' && s.status !== 'huy' && (
           <div className="actions">
             {manage && s.status === 'nhan' && <button className="btn small" onClick={() => setAct('xe')}>Lên xe</button>}
+            {manage && s.trip_id && <button className="btn small" onClick={() => { setV({ ...v, trip: '' }); setAct('doi'); }}>Dời sang xe khác</button>}
             {(s.status === 'nhan' || s.status === 'tren_xe') && (
               <button className="btn small" onClick={() => void run(() => rpc('set_shipment_status', { p_id: s.id, p_status: 'den', p_trip_id: null, p_reason: null }).then(zaloKick), `Phiếu ${s.code} đã đến`)}>Đã đến</button>
             )}
@@ -481,6 +482,17 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
             {trips.map((t) => <option key={t.id} value={t.id}>{tripName(t.id)}</option>)}
           </select></label>
           <button className="btn small primary" disabled={!v.trip} onClick={() => void run(() => rpc('set_shipment_status', { p_id: s.id, p_status: 'tren_xe', p_trip_id: v.trip, p_reason: null }), `Phiếu ${s.code} đã lên xe`)}>Xác nhận</button>
+          <button className="btn small link" onClick={() => setAct('')}>Thôi</button>
+        </div>
+      )}
+      {act === 'doi' && trips && (
+        <div className="inline-form">
+          <label>Dời sang chuyến<select value={v.trip} onChange={(e) => setV({ ...v, trip: e.target.value })}>
+            <option value="">Chọn chuyến</option>
+            {[...trips].filter((t) => t.id !== s.trip_id).sort((a, b) => a.depart_at.localeCompare(b.depart_at))
+              .map((t) => <option key={t.id} value={t.id}>{tripName(t.id)}</option>)}
+          </select></label>
+          <button className="btn small primary" disabled={!v.trip} onClick={() => void run(() => rpc('move_shipment', { p_id: s.id, p_trip_id: v.trip }), `Đã dời phiếu ${s.code} sang chuyến ${tripName(v.trip)}`)}>Xác nhận</button>
           <button className="btn small link" onClick={() => setAct('')}>Thôi</button>
         </div>
       )}

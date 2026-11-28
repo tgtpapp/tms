@@ -222,5 +222,34 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","r
 select throws_ok($$ select public.update_shipment(current_setting('t.p4')::uuid, current_setting('t.sp')::jsonb, 'tien_mat') $$, 'P0002', null, 'Lái xe không sửa được phiếu');
 reset role;
 
+-- ---------------------------------------------------------------- Dời phiếu sang xe (chuyến) khác, kể cả tuyến khác / ngày khác
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select lives_ok($$ select public.create_shipment(jsonb_build_object('trip_id', (select v from t.ids where k = 'T1'), 'from_stop_id', (select id from public.stops where code = 'HN'),
+  'to_stop_id', (select id from public.stops where code = 'VT'), 'sender_phone', '0911111111', 'receiver_phone', '0966666666', 'description', 'Thùng dời',
+  'fee', 20000, 'fee_payer', 'nguoi_nhan'), null, '88888888-8888-8888-8888-888888888899') $$, 'Phiếu dời: tạo ở chuyến T1');
+select lives_ok($$ select public.set_shipment_status((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), 'tren_xe', null, null) $$, 'Phiếu dời: lên xe T1');
+select lives_ok($$ select public.move_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), (select v from t.ids where k = 'T3')) $$,
+  'Dời sang chuyến khác (ngày khác)');
+select is((select trip_id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), (select v from t.ids where k = 'T3'), 'Phiếu nằm ở chuyến mới');
+select is((select status from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), 'tren_xe', 'Giữ nguyên trạng thái đã lên xe');
+select is((select service_date from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), app.local_today() + 2, 'Ngày của phiếu theo chuyến mới');
+select throws_ok($$ select public.move_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), (select v from t.ids where k = 'T3')) $$,
+  '22023', null, 'Dời vào đúng chuyến đang ở: báo lỗi');
+select throws_ok($$ select public.move_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), gen_random_uuid()) $$,
+  'P0002', null, 'Chuyến không có: không tìm thấy');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b5","role":"authenticated"}';
+select throws_ok($$ select public.move_shipment((select id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899'), (select v from t.ids where k = 'T1')) $$,
+  'P0002', null, 'Lái xe không dời được phiếu');
+reset role;
+insert into t.ids select 'PD', id from public.shipments where request_id = '88888888-8888-8888-8888-888888888899';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select throws_ok($$ select public.move_shipment((select v from t.ids where k = 'PD'), (select v from t.ids where k = 'T1')) $$,
+  'P0002', null, 'Chủ B dời phiếu nhà xe A: không tìm thấy');
+reset role;
+
 select * from finish();
 rollback;

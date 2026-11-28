@@ -927,7 +927,11 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   await page.getByLabel('Số lít').fill('50');
   await page.getByLabel('Đơn giá (đ/lít)').fill('27000');
   await page.getByRole('button', { name: 'Gửi điều hành duyệt' }).click();
-  await expect(page.getByText('Đã gửi phiếu đổ dầu cho điều hành duyệt')).toBeVisible();
+  // Gửi xong: khung tóm tắt + nút gửi vào nhóm Zalo
+  await expect(page.getByText('✅ Đã gửi điều hành, kế toán duyệt')).toBeVisible();
+  await expect(page.getByText(/⛽ BÁO ĐỔ DẦU\s+Xe: 51B-123.45/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '📤 Gửi vào nhóm Zalo' })).toBeVisible();
+  await page.getByRole('button', { name: 'Đóng', exact: true }).click();
   await expect(page.getByText('Chờ duyệt', { exact: true })).toBeVisible();
   // App lái xe như app cũ: chuyến hôm nay có 3 thẻ Đón khách / Sơ đồ ghế / Trả & hàng; sơ đồ ghế vừa màn hình điện thoại
   // Tất cả chuyến của tôi trong tháng (như app cũ), có dòng chuyến hôm nay

@@ -9,6 +9,7 @@ const KINDS: [string, string][] = [
   ['xep_chuyen', 'Được xếp / bỏ khỏi chuyến hôm nay, ngày mai'],
   ['lai_xe_bao', 'Lái xe báo khách thuê bao / khách báo hủy (vé tôi bán)'],
   ['su_co', 'Sự cố người dùng báo / trả lời sự cố tôi báo'],
+  ['dau', 'Lái xe gửi phiếu đổ dầu chờ duyệt'],
 ];
 const ST = { bat: 'Đang nhận thông báo trên máy này', tat: 'Máy này chưa nhận thông báo', bi_chan: 'Máy này đang chặn thông báo của app',
   khong_ho_tro: 'Trình duyệt này không nhận được thông báo đẩy' } as const;

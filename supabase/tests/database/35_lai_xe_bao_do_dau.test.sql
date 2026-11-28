@@ -71,12 +71,15 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
 select throws_ok($$ select public.report_fuel('{"key":"k6","plate":"60F-004.39","liters":20,"unit_price":27000}') $$, '42501', null, 'Không có hồ sơ thì không báo đổ dầu');
 select is((select count(*)::int from public.fuel_reports), 0, 'Bán vé không thấy phiếu lái xe gửi');
+select is((select count(*)::int from public.notifications where kind = 'dau'), 0, 'Người không có quyền nhiên liệu không nhận thông báo đổ dầu');
 reset role;
 
 -- Chủ duyệt / bỏ
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select count(*)::int from public.fuel_reports where status = 'cho'), 2, 'Điều hành thấy 2 phiếu chờ duyệt');
+select is((select count(*)::int from public.notifications where kind = 'dau' and user_id = auth.uid()), 2, 'Người duyệt nhận thông báo 2 phiếu đổ dầu chờ duyệt');
+select ok(exists (select 1 from public.notifications where kind = 'dau' and user_id = auth.uid() and body like '%44,737 lít · 1.200.000 đ'), 'Nội dung: số lít, số tiền');
 select ok(public.approve_fuel_report((select id from public.fuel_reports where client_key = 'k1'),
   '{"entry_date":"2026-11-20","vehicle_id":"00000000-0000-0000-0000-0000000000e2","driver_id":"00000000-0000-0000-0000-00000000aa01","liters":44.74,"unit_price":26824,"supplier":"CX Long Thành"}') is not null, 'Duyệt');
 select is((select kind || '|' || liters || '|' || array_length(files, 1) || '|' || (note like '%Lái Một gửi qua app%') from public.fuel_entries), 'ngoai|44.74|1|true', 'Thành phiếu Đổ ngoài kèm ảnh, ghi người gửi');

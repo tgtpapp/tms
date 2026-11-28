@@ -2109,3 +2109,4 @@ body.has-music-big .content { padding-bottom: 270px; }
 .lm-pin.dung { background: #dc2626; } .lm-pin.dung::after { border-top-color: #dc2626; }
 .lm-pin.mat { background: #7c3aed; } .lm-pin.mat::after { border-top-color: #7c3aed; }
 .lm-pin.on { outline: 3px solid #fbbf24; z-index: 2; }
+.fr-sum { white-space: pre-wrap; font-family: inherit; background: var(--bg, #f6f8fa); border-radius: 10px; padding: 10px 12px; margin: 0; font-size: 0.95rem; }

@@ -10,7 +10,7 @@ export interface Note {
   created_at: string; read_at: string | null; opened_at: string | null; acked_at: string | null;
 }
 const COLS = 'id, kind, title, body, priority, ack_required, created_at, read_at, opened_at, acked_at';
-const KIND: Record<string, string> = { khach: 'Khách', xep_chuyen: 'Chuyến', lai_xe_bao: 'Lái xe báo', su_co: 'Sự cố', thiet_bi: 'Thiết bị' };
+const KIND: Record<string, string> = { khach: 'Khách', xep_chuyen: 'Chuyến', lai_xe_bao: 'Lái xe báo', su_co: 'Sự cố', thiet_bi: 'Thiết bị', dau: 'Đổ dầu' };
 const PRI: Record<string, string> = { quan_trong: 'Quan trọng', khan_cap: 'Khẩn cấp' };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', hour12: false }) : '—');
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/gi, 'd').toLowerCase();

@@ -987,6 +987,9 @@ table.cc { border-collapse: separate; border-spacing: 0; font-size: 12px; }
 .fr-big { width: 100%; justify-content: center; padding: 12px; font-size: 16px; }
 .fr-list { display: grid; gap: 6px; margin-top: 8px; }
 .fr-list > div { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border-top: 1px solid #eef1f6; padding-top: 6px; }
+/* Bài chờ duyệt Facebook: ô ảnh nhỏ trong khung soạn bài */
+.fb-thumb { position: relative; width: 72px; height: 72px; border-radius: 10px; border: 1px solid #e2e8f0; background-color: #f1f5f9; background-position: center; background-size: cover; background-repeat: no-repeat; }
+.fb-thumb .btn { position: absolute; top: -8px; right: -8px; width: 24px; height: 24px; padding: 0; border-radius: 50%; background: #ef4444; color: #fff; line-height: 22px; }
 .staff-card.veh-card { border-top-color: #0ea5e9; }
 
 /* App lái xe: một chuyến (như app cũ) */

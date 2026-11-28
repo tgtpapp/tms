@@ -82,7 +82,7 @@ jobs:
           cache: true
       - name: Kiểm tra kiểu Edge Function
         if: steps.chg.outputs.sb == 'true'
-        run: deno check supabase/functions/admin-users/index.ts supabase/functions/doc-reader/index.ts supabase/functions/zalo/index.ts supabase/functions/drive/index.ts supabase/functions/doc-writer/index.ts supabase/functions/app-install/index.ts supabase/functions/push/index.ts supabase/functions/support/index.ts supabase/functions/lenh/index.ts supabase/functions/tep/index.ts supabase/functions/youtube/index.ts supabase/functions/qr-login/index.ts supabase/tests/e2e/admin_users.e2e.ts
+        run: deno check supabase/functions/admin-users/index.ts supabase/functions/doc-reader/index.ts supabase/functions/zalo/index.ts supabase/functions/drive/index.ts supabase/functions/doc-writer/index.ts supabase/functions/app-install/index.ts supabase/functions/push/index.ts supabase/functions/support/index.ts supabase/functions/lenh/index.ts supabase/functions/tep/index.ts supabase/functions/youtube/index.ts supabase/functions/qr-login/index.ts supabase/functions/facebook/index.ts supabase/tests/e2e/admin_users.e2e.ts
       - name: Danh mục giấy tờ ở giao diện và Edge Function phải giống hệt
         run: cmp supabase/functions/_shared/doc_types.ts web/src/lib/docTypes.ts
       - name: Kiểm thử AI đọc giấy tờ (fetch giả, không gọi AI thật)
@@ -225,6 +225,20 @@ jobs:
           else
             echo "GitHub không có secret YOUTUBE_API_KEY (bỏ qua)"
           fi
+      - name: Khóa trang Facebook (nếu khai báo ở GitHub thì chép sang Supabase)
+        env:
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          FACEBOOK_PAGE_ACCESS_TOKEN: ${{ secrets.FACEBOOK_PAGE_ACCESS_TOKEN }}
+        run: |
+          for k in FACEBOOK_PAGE_ID FACEBOOK_PAGE_ACCESS_TOKEN; do
+            v=$(printenv "$k")
+            if [ -n "$v" ]; then
+              if supabase secrets set "$k=$v" --yes >/dev/null 2>/tmp/err; then echo "Đã chép $k sang Supabase"
+              else echo "::warning::Không chép được $k sang Supabase: $(grep -v "^Target:" /tmp/err | tr "\n" " " | head -c 400)"; fi
+            else
+              echo "GitHub không có secret $k (bỏ qua)"
+            fi
+          done
       - name: Đưa Edge Function lên
         run: |
           supabase functions deploy admin-users --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
@@ -239,6 +253,7 @@ jobs:
           supabase functions deploy lenh --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy tep --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
           supabase functions deploy youtube --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
+          supabase functions deploy facebook --remote="$SUPABASE_PROJECT_REF" --no-verify-jwt --yes
 
   web:
     # Giao diện chỉ lên Cloudflare Pages SAU KHI database + Edge Function đã cập nhật (tránh giao diện mới gọi cột / hàm chưa có).

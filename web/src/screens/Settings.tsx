@@ -9,6 +9,7 @@ import { DesktopQrPolicy } from '../components/DesktopQrPolicy';
 import { AppLinkQr } from '../components/AppLinkQr';
 import { StorageUsage } from '../components/StorageUsage';
 import { ZaloSettings } from '../components/ZaloSettings';
+import { FacebookSettings } from '../components/FacebookSettings';
 import { DriveSettings } from '../components/DriveSettings';
 import { BANKS } from '../lib/vietqr';
 import { supabase } from '../lib/supabase';
@@ -35,7 +36,7 @@ const DISPATCH_SETTINGS = [
 /** Cấu hình nhà xe: thông tin doanh nghiệp + thông số bán vé. */
 interface Tier { truoc_gio: number; phi_pt: number }
 
-export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenantId: string; me: Me; canSalary: boolean; canArchive: boolean }) {
+export function SettingsScreen({ tenantId, me, canSalary, canArchive, canSettings }: { tenantId: string; me: Me; canSalary: boolean; canArchive: boolean; canSettings: boolean }) {
   const [tab, setTab] = useState<'cty' | 'bm' | 'bv' | 'dh' | 'luong' | 'dl'>('cty');   // chia thẻ cho gọn
   const toast = useToast();
   const [sale, setSale] = useState<Record<string, string>>({});
@@ -201,6 +202,7 @@ export function SettingsScreen({ tenantId, me, canSalary, canArchive }: { tenant
       {tab === 'cty' && <>
       <CompanyInfo tenantId={tenantId} />
       <ZaloSettings />
+      {canSettings && <FacebookSettings />}
       <DriveSettings />
       <AppLinkQr />
       </>}

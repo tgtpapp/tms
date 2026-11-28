@@ -39,6 +39,10 @@ verify_jwt = false
 [functions.tep]
 verify_jwt = false
 
+# Đăng bài lên trang (fanpage) Facebook của nhà xe: tự kiểm tra phiên + quyền bên trong
+[functions.facebook]
+verify_jwt = false
+
 [functions.qr-login]
 verify_jwt = false
 

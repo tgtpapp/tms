@@ -27,6 +27,7 @@ import { FuelReportAlert } from '../components/FuelReportAlert';
 import { hasShare, takeSharedFiles } from '../lib/shareIn';
 import { brandApp, iosIconFrom } from '../lib/pwa';
 import { EntertainmentScreen } from './Entertainment';
+import { FacebookDraftsScreen } from './FacebookDrafts';
 import { autoArchiveSafety } from '../lib/safety';
 import { RepairsScreen } from './Repairs';
 import { FuelScreen } from './Fuel';
@@ -45,7 +46,7 @@ import { ScreenGuard } from '../components/ScreenGuard';
 import { MusicDock } from '../components/MusicDock';
 import { LiveMapScreen } from './LiveMap';
 
-type Tab = 'scan' | 'driver' | 'vitri' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
+type Tab = 'scan' | 'driver' | 'vitri' | 'parcels' | 'charters' | 'archive' | 'docs' | 'labor' | 'timesheet' | 'safety' | 'repairs' | 'fuel' | 'km' | 'reports' | 'users' | 'sell' | 'trips' | 'routes' | 'vehicles' | 'staff' | 'branches' | 'roles' | 'fbdrafts' | 'settings' | 'audit' | 'account' | 'support' | 'giaitri';
 
 /** Khung trang của nhân viên nhà xe: thanh trên + các mục theo quyền. */
 /** Màu ô biểu tượng menu (như app cũ): mỗi mục 1 màu cố định theo mã mục */
@@ -216,6 +217,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     { key: 'scan', label: 'Scan tài liệu', icon: 'camera', group: 'Quản trị', show: perms.has('archive.view') || perms.has('archive.add') || isCrew },
     { key: 'users', label: 'Người dùng', icon: 'users', group: 'Quản trị', show: perms.hasAnywhere('user.view') },
     { key: 'roles', label: 'Vai trò', icon: 'shield-check', group: 'Quản trị', show: perms.has('role.view') },
+    { key: 'fbdrafts', label: 'Bài chờ duyệt', icon: 'eye', group: 'Quản trị', show: perms.has('settings.manage') },
     { key: 'settings', label: 'Cấu hình', icon: 'settings', group: 'Quản trị', show: perms.has('settings.view') },
     { key: 'audit', label: 'Nhật ký', icon: 'time-past', group: 'Quản trị', show: perms.has('audit.view') },
     { key: 'giaitri', label: 'Giải trí', icon: 'play', group: 'Cá nhân', show: true },
@@ -298,7 +300,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
           {tab === 'branches' && <BranchesScreen perms={perms} />}
           {tab === 'roles' && <RolesScreen perms={perms} />}
-          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} />}
+          {tab === 'fbdrafts' && ctx.tenant_id && <FacebookDraftsScreen tenantId={ctx.tenant_id} />}
+          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} canSettings={perms.has('settings.manage')} />}
           {tab === 'audit' && <AuditScreen />}
           {tab === 'account' && <AccountScreen ctx={ctx} canManage={perms.has('staff.edit')} />}
           {tab === 'support' && <SupportScreen me={ctx.user_id} canHandle={perms.has('user.edit')} lastKey={lastScreen || undefined}

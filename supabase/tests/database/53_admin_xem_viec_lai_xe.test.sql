@@ -59,6 +59,16 @@ select is(public.my_is_admin(), true, 'Chủ nhà xe là Admin');
 select is((select count(*)::int from public.admin_trips(app.local_today(), app.local_today() + 7)), (select count(*)::int from public.trips),
   'Chủ nhà xe thấy mọi chuyến của nhà xe');
 select is((select count(*)::int from public.admin_trips(app.local_today(), app.local_today() + 7) where my_role is not null), 0, 'Chủ nhà xe không chạy chuyến nào: vai trò trống');
+reset role;
+update public.trips set status = 'huy', cancel_reason = 'thử' where id = (select v from t.ids where k = 'T1');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select is((select count(*)::int from public.admin_trips(app.local_today(), app.local_today() + 7) where trip_id = (select v from t.ids where k = 'T1')), 0, 'Chuyến đã hủy không hiện');
+select is((select count(*)::int from public.admin_trips(app.local_today(), app.local_today() + 7)), (select count(*)::int from public.trips where status <> 'huy'), 'Chỉ còn chuyến chưa hủy');
+reset role;
+update public.trips set status = 'mo', cancel_reason = null where id = (select v from t.ids where k = 'T1');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
 select is((select count(*)::int from public.my_trips(app.local_today(), app.local_today() + 7)), 0, 'my_trips giữ nguyên: chỉ chuyến của mình');
 reset role;
 

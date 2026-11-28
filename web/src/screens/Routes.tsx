@@ -1,4 +1,5 @@
 import { Modal } from '../components/Modal';
+import { PriceNotice } from '../components/PriceNotice';
 import { dirName, reverseItinerary, reverseName } from '../lib/routes';
 import { DeleteButton } from '../components/DeleteButton';
 import { FareTables } from './Fares';
@@ -59,6 +60,7 @@ export function RoutesScreen({ perms }: { perms: Permissions }) {
   return (
     <>
       <RoutesSection data={data} canRoute={canRoute} perms={perms} reload={load} />
+      {perms.has('fare.view') && <PriceNotice perms={perms} />}
       <StopsSection stops={data.stops} canEdit={canRoute} reload={load} />
     </>
   );

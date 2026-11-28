@@ -140,6 +140,8 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
     return keys.map((k) => { const [rid, d] = k.split('|'); const r = routes.find((x) => x.id === rid); return { key: k, label: dirName(r, d as Dir), pair: r?.name ?? '', d }; })
       .sort((x, y) => x.pair.localeCompare(y.pair, 'vi') || (x.d === 'di' ? 0 : 1) - (y.d === 'di' ? 0 : 1));
   }, [trips, routes]);
+  // Thứ tự tuyến như danh sách tuyến (từng cặp, chiều đi rồi chiều về): dùng cho ô Dời sang xe khác
+  const routeRank = useCallback((t: Trip) => { const i = routeOpts.findIndex((o) => o.key === `${t.route_id}|${t.direction}`); return i < 0 ? 999 : i; }, [routeOpts]);
   // Luôn đang ở 1 tuyến (không có "Tất cả tuyến" để tránh đặt nhầm tuyến)
   const rfOk = routeOpts.some((o) => o.key === rf) ? rf : (routeOpts[0]?.key ?? '');
   const [rview, setRview] = useRouteView();
@@ -350,7 +352,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
             <h2>Phiếu gửi hàng ngày {fmtDate(day)} ({routeList.length})</h2>
             {routeList.length === 0 && <p className="muted">Chưa có phiếu.</p>}
             <ul className="list">
-              {routeList.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} reload={load} stopIdOf={stopIdOf} manage onPrint={() => void printSaved(s)} />)}
+              {routeList.map((s) => <ParcelRow key={s.id} hl={focus === s.id} s={s} stopName={stopName} tripName={tripName} trips={trips} routeRank={routeRank} reload={load} stopIdOf={stopIdOf} manage onPrint={() => void printSaved(s)} />)}
             </ul>
           </section>
         </div>
@@ -420,8 +422,8 @@ function ParcelSearch({ q, stopName, onPick }: { q: string; stopName: (id: strin
 }
 
 /** Một phiếu: dùng ở màn Gửi hàng và màn lái xe (manage = false: chỉ báo đến, giao hàng) */
-export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint, hl, stopIdOf }: {
-  s: Shipment; stopName: (id: string | null) => string; stopIdOf?: (name: string) => Promise<string>; tripName: (id: string | null) => string; trips: Trip[] | null;
+export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrint, hl, stopIdOf, routeRank }: {
+  s: Shipment; stopName: (id: string | null) => string; stopIdOf?: (name: string) => Promise<string>; routeRank?: (t: Trip) => number; tripName: (id: string | null) => string; trips: Trip[] | null;
   reload: () => Promise<void>; manage: boolean; onPrint?: () => void;
   hl?: boolean;
 }) {
@@ -491,7 +493,7 @@ export function ParcelRow({ s, stopName, tripName, trips, reload, manage, onPrin
         <div className="inline-form">
           <label>Dời sang chuyến<select value={v.trip} onChange={(e) => setV({ ...v, trip: e.target.value })}>
             <option value="">Chọn chuyến</option>
-            {[...trips].filter((t) => t.id !== s.trip_id).sort((a, b) => a.depart_at.localeCompare(b.depart_at))
+            {[...trips].filter((t) => t.id !== s.trip_id).sort((a, b) => (routeRank ? routeRank(a) - routeRank(b) : 0) || a.depart_at.localeCompare(b.depart_at))
               .map((t) => <option key={t.id} value={t.id}>{tripName(t.id)}</option>)}
           </select></label>
           <button className="btn small primary" disabled={!v.trip} onClick={() => void run(() => rpc('move_shipment', { p_id: s.id, p_trip_id: v.trip }), `Đã dời phiếu ${s.code} sang chuyến ${tripName(v.trip)}`)}>Xác nhận</button>

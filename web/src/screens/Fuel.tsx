@@ -144,6 +144,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
       const p = { ...f, add: undefined, report: undefined, files, market_price: f.kind !== 'nhap' && !!mp && Number(f.unit_price) === mp };
       const id = f.report ? await rpc<string>('approve_fuel_report', { p_id: f.report.id, p })
         : await rpc<string>('save_fuel', { p_id: f.id, p });
+      if (f.report) window.dispatchEvent(new Event('tms-fuel-changed'));
       toast('ok', f.report ? `Đã duyệt phiếu đổ dầu của ${f.report.who}` : f.id ? 'Đã lưu phiếu' : `Đã thêm phiếu ${FUEL_KIND[f.kind].short.toLowerCase()}`);
       setF(null);
       const fresh = await load();
@@ -207,7 +208,7 @@ export function FuelScreen({ ctx, perms, shareFiles, onShareDone }: { ctx: Accou
     const why = window.prompt(`Bỏ phiếu đổ dầu của ${f.report.who} (không tạo phiếu). Lý do (lái xe sẽ thấy):`, '');
     if (why === null) return;
     setBusy(true);
-    try { await rpc('reject_fuel_report', { p_id: f.report.id, p_reason: why }); toast('ok', 'Đã bỏ phiếu'); setF(null); await load(); }
+    try { await rpc('reject_fuel_report', { p_id: f.report.id, p_reason: why }); toast('ok', 'Đã bỏ phiếu'); setF(null); window.dispatchEvent(new Event('tms-fuel-changed')); await load(); }
     catch (e) { toast('error', errMsg(e)); }
     finally { setBusy(false); }
   }

@@ -54,6 +54,24 @@ select ok(public.report_fuel(jsonb_build_object('key', 'k1', 'plate', '60f00439'
 select lives_ok($$ select public.report_fuel('{"key":"k1","plate":"60F-004.39","liters":44.737,"amount":1200000}') $$, 'Gửi lại cùng mã');
 select is((select count(*)::int from public.fuel_reports), 1, 'Không sinh phiếu trùng');
 select is((select unit_price from public.fuel_reports), 26823::bigint, 'Đơn giá tính từ thành tiền / số lít');
+select throws_ok($$ select public.report_fuel('{"key":"k1b","plate":"60F-004.39","entry_date":"2026-11-20","liters":44.737,"amount":1200000}') $$, '23505', null,
+  'Gửi lại phiếu cùng xe, ngày, số lít, số tiền (mã khác): báo đã gửi rồi');
+select lives_ok($$ select public.report_fuel('{"key":"k8","plate":"60F-004.39","liters":30,"unit_price":27000,"hashes":["h1","h2","h3"]}') $$, 'Gửi phiếu kèm mã ảnh');
+select ok(public.fuel_photos_sent(array['h9', 'h2']) like 'Phiếu đổ dầu này đã gửi rồi%', 'Chọn lại ảnh đã gửi: báo trước khi đọc');
+select is(public.fuel_photos_sent(array['h9']), null, 'Ảnh mới: chưa gửi');
+select throws_ok($$ select public.report_fuel('{"key":"k9","plate":"60F-004.39","liters":31,"unit_price":27000,"hashes":["h3"]}') $$, '23505', null, 'Cùng ảnh: chặn gửi trùng');
+select lives_ok(format($$ select public.attach_fuel_photos('k8', '["%s/bao_dau/00000000-0000-0000-0000-00000000aa01/k8_1.jpg"]') $$, (select id from public.tenants where code = 'nha-xe-a')),
+  'Ảnh tải ngầm xong: gắn vào phiếu');
+select is((select cardinality(files) from public.fuel_reports where client_key = 'k8'), 1, 'Phiếu có ảnh');
+select throws_ok(format($$ select public.attach_fuel_photos('k8', '["%s/bao_dau/00000000-0000-0000-0000-00000000aa02/x.jpg"]') $$, (select id from public.tenants where code = 'nha-xe-a')),
+  '22023', null, 'Không gắn ảnh của người khác');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b4","role":"authenticated"}';
+select throws_ok($$ select public.attach_fuel_photos('k8', '[]') $$, 'P0002', null, 'Lái xe khác không gắn ảnh vào phiếu người khác');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select throws_ok($$ select public.report_fuel('{"key":"k2","plate":"99Z-999.99","liters":10,"unit_price":27000}') $$, 'P0002', null, 'Biển số không có');
 select throws_ok($$ select public.report_fuel('{"key":"k3","plate":"60F-004.39","liters":0,"unit_price":27000}') $$, '22023', null, 'Chặn số lít 0');
 select throws_ok($$ select public.report_fuel('{"key":"k7","plate":"51B-999.99","liters":10,"unit_price":27000}') $$, '42501', null,
@@ -83,8 +101,8 @@ reset role;
 -- Chủ duyệt / bỏ
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
-select is((select count(*)::int from public.fuel_reports where status = 'cho'), 2, 'Điều hành thấy 2 phiếu chờ duyệt');
-select is((select count(*)::int from public.notifications where kind = 'dau' and user_id = auth.uid()), 2, 'Người duyệt nhận thông báo 2 phiếu đổ dầu chờ duyệt');
+select is((select count(*)::int from public.fuel_reports where status = 'cho'), 3, 'Điều hành thấy 3 phiếu chờ duyệt');
+select is((select count(*)::int from public.notifications where kind = 'dau' and user_id = auth.uid()), 3, 'Người duyệt nhận thông báo 3 phiếu đổ dầu chờ duyệt');
 select ok(exists (select 1 from public.notifications where kind = 'dau' and user_id = auth.uid() and body like '%44,737 lít · 1.200.000 đ'), 'Nội dung: số lít, số tiền');
 select ok(public.approve_fuel_report((select id from public.fuel_reports where client_key = 'k1'),
   '{"entry_date":"2026-11-20","vehicle_id":"00000000-0000-0000-0000-0000000000e2","driver_id":"00000000-0000-0000-0000-00000000aa01","liters":44.74,"unit_price":26824,"supplier":"CX Long Thành"}') is not null, 'Duyệt');

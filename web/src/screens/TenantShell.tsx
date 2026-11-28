@@ -74,6 +74,8 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
   const [isDriver, setIsDriver] = useState(false);   // hồ sơ là lái xe: có mục Việc của tôi
   const [isAdmin, setIsAdmin] = useState(false);   // Admin của nhà xe (Chủ nhà xe / Quản trị): xem được mọi thứ, kể cả Việc của tôi
   const [myStaff, setMyStaff] = useState<string | null>(null);
+  // Phiếu đổ dầu lái xe gửi đang chờ duyệt: biểu tượng Nhiên liệu nhấp nháy đỏ đến khi duyệt / bỏ hết
+  const [fuelWait, setFuelWait] = useState(0);
   const avas = useAvatars(ctx.tenant_id);
   // Ảnh chia sẻ từ Zalo vào app: văn phòng (quyền thêm phiếu nhiên liệu) → tạo phiếu từ ảnh; lái xe → báo đổ dầu
   const [share, setShare] = useState<{ to: 'fuel' | 'driver'; files: File[] } | null>(null);
@@ -170,6 +172,21 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
     return () => { window.clearTimeout(t); window.clearTimeout(deb); window.clearInterval(iv); window.removeEventListener('tms-hs-doi', changed); };
   }, [canDrv, canVeh, canCt, canDoc, canPay, canRep, canLv, ctx.tenant_id, ctx.user_id, ctx.full_name]);
 
+  const canFuel = !!perms?.has('fuel.add');
+  useEffect(() => {
+    if (!canFuel) { setFuelWait(0); return; }
+    let stop = false;
+    const check = async () => {
+      const q = await supabase.from('fuel_reports').select('id', { count: 'exact', head: true }).eq('status', 'cho');
+      if (!stop && !q.error) setFuelWait(q.count ?? 0);
+    };
+    void check();
+    const iv = window.setInterval(() => { if (!document.hidden) void check(); }, 30_000);
+    const vis = () => { if (!document.hidden) void check(); };
+    document.addEventListener('visibilitychange', vis);
+    window.addEventListener('tms-fuel-changed', vis);
+    return () => { stop = true; window.clearInterval(iv); document.removeEventListener('visibilitychange', vis); window.removeEventListener('tms-fuel-changed', vis); };
+  }, [canFuel, tab]);
   if (error) return <Centered><p className="error-text">{error}</p></Centered>;
   if (!perms || !tab) return <Centered><p className="muted">Đang tải…</p></Centered>;
 
@@ -237,11 +254,13 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
             <div key={g} className="side-group">
               <div className="side-group-title">{g}</div>
               {shown.filter((t) => t.group === g).map((t) => (
-                <button key={t.key} className={tab === t.key ? 'side-link on' : 'side-link'} aria-current={tab === t.key ? 'page' : undefined}
+                <button key={t.key} className={[tab === t.key ? 'side-link on' : 'side-link', t.key === 'fuel' && fuelWait > 0 && 'nav-alert'].filter(Boolean).join(' ')}
+                        aria-current={tab === t.key ? 'page' : undefined} title={t.key === 'fuel' && fuelWait > 0 ? `${fuelWait} phiếu đổ dầu chờ duyệt` : undefined}
                         style={{ ['--ic' as string]: navColor(t.key) }}
                         onClick={(e) => { ripple(e); if (t.key === 'support' && tab !== 'support') setLastScreen(tab ?? ''); setTab(t.key); window.scrollTo({ top: 0 }); }}>
                   <i className={`fi fi-rr-${t.icon}`} aria-hidden="true" />
                   <span>{t.label}</span>
+                  {t.key === 'fuel' && fuelWait > 0 && <b className="nav-badge" aria-label={`${fuelWait} phiếu đổ dầu chờ duyệt`}>{fuelWait}</b>}
                 </button>
               ))}
             </div>

@@ -2110,3 +2110,10 @@ body.has-music-big .content { padding-bottom: 270px; }
 .lm-pin.mat { background: #7c3aed; } .lm-pin.mat::after { border-top-color: #7c3aed; }
 .lm-pin.on { outline: 3px solid #fbbf24; z-index: 2; }
 .fr-sum { white-space: pre-wrap; font-family: inherit; background: var(--bg, #f6f8fa); border-radius: 10px; padding: 10px 12px; margin: 0; font-size: 0.95rem; }
+/* Nhiên liệu: có phiếu đổ dầu chờ duyệt → biểu tượng nhấp nháy đỏ + số phiếu */
+.side-link.nav-alert { position: relative; }
+.side-link.nav-alert i { color: #dc2626 !important; animation: nav-blink 1s ease-in-out infinite; }
+.nav-badge { position: absolute; top: 2px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #dc2626; color: #fff;
+  font-size: 11px; line-height: 18px; text-align: center; animation: nav-blink 1s ease-in-out infinite; }
+@keyframes nav-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .side-link.nav-alert i, .nav-badge { animation: none; } }

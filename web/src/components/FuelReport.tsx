@@ -18,6 +18,11 @@ interface Form { key: string; plate: string; entry_date: string; entry_time: str
 const num = (n: number, d = 0) => n.toLocaleString('vi-VN', { maximumFractionDigits: d });
 const nowTime = () => new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false });
 const MAX = 6;
+/** Mã băm ảnh gốc (SHA-256): cùng ảnh gửi lại thì nhận ra */
+async function sha(f: File): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()));
+  return Array.from(h, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 /** Dòng tóm tắt gửi nhóm Zalo (dòng nào không có số liệu thì bỏ). */
 function summary(f: Form, driver: string): string {
   const lit = Number(f.liters) || 0, gia = Number(f.unit_price) || 0, tien = Number(f.amount) || Math.round(lit * gia), km = Number(f.odo_km) || 0;
@@ -48,6 +53,7 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
   const [done, setDone] = useState<{ text: string; files: File[] } | null>(null);
   const [driver, setDriver] = useState('');
   const upRef = useRef<Promise<string[]> | null>(null);              // ảnh tải lên song song lúc AI đang đọc
+  const hashRef = useRef<string[]>([]);                              // mã băm ảnh gốc: chống gửi trùng
   useEffect(() => { void supabase.from('staff_members').select('full_name').eq('id', staffId).maybeSingle().then(({ data }) => setDriver((data as { full_name?: string } | null)?.full_name ?? '')); }, [staffId]);
 
   const load = useCallback(async () => {
@@ -73,7 +79,14 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
     void read(all);
   };
   async function read(files: File[]) {
-    setBusy('AI đang đọc trụ bơm, hóa đơn, biển số… (khoảng 10–30 giây)');
+    // Chống trùng: ảnh này đã gửi ở phiếu khác thì báo ngay, không đọc / gửi nữa
+    setPick(null);
+    setBusy('Đang kiểm tra ảnh…');
+    const hashes = await Promise.all(files.map(sha)).catch(() => [] as string[]);
+    hashRef.current = hashes;
+    const dup = hashes.length ? await rpc<string | null>('fuel_photos_sent', { p_hashes: hashes }).catch(() => null) : null;
+    if (dup) { setBusy(''); toast('error', dup); return; }
+    setBusy('AI đang đọc ảnh, đọc xong tự gửi…');
     const base: Form = { key: crypto.randomUUID(), plate: plates[0] ?? '', entry_date: today(), entry_time: nowTime(), liters: '', unit_price: '', amount: '', odo_km: '',
       supplier: '', invoice_no: '', note: '' };
     let p: PreparedFile[] = [];
@@ -120,21 +133,34 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
     if (!(gia > 0) && !(tien > 0)) return toast('error', 'Nhập đơn giá hoặc thành tiền');
     setBusy('Đang gửi ảnh…');
     try {
+      // Gửi phiếu ngay (chưa chờ ảnh); ảnh lưu lên Drive chạy ngầm, xong thì tự gắn vào phiếu
+      await rpc('report_fuel', { p: { key: f.key, plate: f.plate, entry_date: f.entry_date, entry_time: f.entry_time, liters: lit, unit_price: gia || null,
+        amount: tien || null, odo_km: f.odo_km, supplier: f.supplier, invoice_no: f.invoice_no, note: f.note, files: [], hashes: hashRef.current } });
       const early = upRef.current;
       upRef.current = null;
-      // ảnh đã tải song song lúc đọc: dùng luôn; lỗi thì tải lại 1 lần
-      const up = !p.length ? [] : early ? await early.catch(() => uploadReportPhotos(tenantId, staffId, f.plate, p)) : await uploadReportPhotos(tenantId, staffId, f.plate, p);
-      await rpc('report_fuel', { p: { key: f.key, plate: f.plate, entry_date: f.entry_date, entry_time: f.entry_time, liters: lit, unit_price: gia || null,
-        amount: tien || null, odo_km: f.odo_km, supplier: f.supplier, invoice_no: f.invoice_no, note: f.note, files: up } });
+      void attachLater(f.key, f.plate, p, early);
       setDone({ text: summary(f, driver), files });
       setF(null); setPrep([]); setOrig([]);
       await load();
     } catch (e) {
+      const m = errMsg(e);
+      if (/đã gửi rồi/.test(m)) { setF(null); toast('error', m); return; }   // gửi trùng: không mở lại khung
       if (!form) setF(f);   // gửi tự động bị lỗi: mở khung để bấm Gửi lại
-      toast('error', `Chưa gửi được: ${errMsg(e)}. Bấm Gửi lại.`);
+      toast('error', `Chưa gửi được: ${m}. Bấm Gửi lại.`);
     } finally { setBusy(''); }
   }
 
+  /** Ảnh tải ngầm: dùng lượt tải đã chạy lúc AI đọc (lỗi thì tải lại 1 lần) rồi gắn vào phiếu */
+  async function attachLater(key: string, plate: string, p: PreparedFile[], early: Promise<string[]> | null) {
+    if (!p.length) return;
+    try {
+      const up = early ? await early.catch(() => uploadReportPhotos(tenantId, staffId, plate, p)) : await uploadReportPhotos(tenantId, staffId, plate, p);
+      await rpc('attach_fuel_photos', { p_key: key, p_files: up });
+      void load();
+    } catch (e) {
+      toast('error', `Phiếu đã gửi nhưng ảnh chưa lưu được: ${errMsg(e)}`);
+    }
+  }
   /** Chia sẻ ảnh + tóm tắt sang Zalo (khung chia sẻ của điện thoại); chép sẵn nội dung phòng khi Zalo bỏ phần chữ. */
   async function shareZalo(d: { text: string; files: File[] }) {
     try { await navigator.clipboard?.writeText(d.text); } catch { /* không chép được: vẫn chia sẻ */ }

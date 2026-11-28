@@ -10,8 +10,9 @@ interface StaffLite { id: string; full_name: string; is_active: boolean }
 export interface TcTicket {
   id: string; trip_id: string; seat_label: string; passenger_name: string | null; passenger_phone: string | null;
   pickup_note: string | null; dropoff_note: string | null; tc_don: boolean; tc_tra: boolean; from_stop_id: string; to_stop_id: string;
-  trips?: { vehicle_id: string | null } | null;   // xe của chuyến: để hiện tên ghế theo kiểu nhà xe chọn
+  trips?: { vehicle_id: string | null } | { vehicle_id: string | null }[] | null;   // xe của chuyến: để hiện tên ghế theo kiểu nhà xe chọn
 }
+const vehOf = (t: TcTicket) => { const x = Array.isArray(t.trips) ? t.trips[0] : t.trips; return x?.vehicle_id ?? null; };
 export interface Run { id: string; service_date: string; kind: Kind; staff_id: string | null; vehicle_note: string | null; start_time: string | null; note: string | null }
 export interface Item { run_id: string; ticket_id: string; kind: Kind; seq: number; done_at: string | null }
 
@@ -54,7 +55,7 @@ export function Transfers({ day, trips, staff, ends, canEdit }: {
   const tripOf = (id: string) => trips.find((t) => t.id === id);
   const label = (t: TcTicket) => {
     const tr = tripOf(t.trip_id);
-    return `${tr ? `${hhmm(tr.depart_at)} ${ends(tr.route_id, tr.direction)}` : ''} · ghế ${names.byVehicle(t.trips?.vehicle_id)(t.seat_label)} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
+    return `${tr ? `${hhmm(tr.depart_at)} ${ends(tr.route_id, tr.direction)}` : ''} · ghế ${names.byVehicle(vehOf(t))(t.seat_label)} · ${t.passenger_name ?? 'Khách'}${t.passenger_phone ? ` ${t.passenger_phone}` : ''}`;
   };
   const assigned = (k: Kind) => new Set(items.filter((i) => i.kind === k).map((i) => i.ticket_id));
   const waiting = (k: Kind) => tickets.filter((t) => (k === 'don' ? t.tc_don : t.tc_tra) && !assigned(k).has(t.id));
@@ -224,7 +225,7 @@ export function MyTransfers({ day }: { day: string }) {
                   </label>
                   <div className="drv-info">
                     <div>{t?.passenger_name ?? 'Khách'} {t?.passenger_phone && <a className="drv-call" href={`tel:${t.passenger_phone}`}>{t.passenger_phone}</a>}</div>
-                    <div className="small"><b>{t ? addr(t, r.kind) : ''}</b> · ghế {t ? names.byVehicle(t.trips?.vehicle_id)(t.seat_label) : ''}</div>
+                    <div className="small"><b>{t ? addr(t, r.kind) : ''}</b> · ghế {t ? names.byVehicle(vehOf(t))(t.seat_label) : ''}</div>
                   </div>
                   <span />
                 </li>

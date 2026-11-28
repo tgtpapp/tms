@@ -1,0 +1,54 @@
+name: Chẩn đoán tệp / ảnh (chỉ đọc)
+on:
+  workflow_dispatch:
+# Chỉ đọc database và đọc thử 1 tệp trên Drive; nhật ký chỉ in số đếm và lời báo lỗi (không in tên, mã, địa chỉ, khóa)
+permissions:
+  contents: read
+
+jobs:
+  tep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_PROJECT_REF: vnqkmaauqygnckgtshus
+      SUPABASE_REGION: ap-southeast-1
+      PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - name: Kết nối database (Session pooler, IPv4)
+        run: |
+          export PGUSER="postgres.${SUPABASE_PROJECT_REF}" PGDATABASE=postgres PGPORT=5432
+          for host in "aws-1-${SUPABASE_REGION}.pooler.supabase.com" "aws-0-${SUPABASE_REGION}.pooler.supabase.com"; do
+            if PGHOST="$host" psql -tAc 'select 1' >/dev/null 2>&1; then
+              { echo "PGHOST=$host"; echo "PGUSER=$PGUSER"; echo "PGDATABASE=postgres"; echo "PGPORT=5432"; } >> "$GITHUB_ENV"; exit 0
+            fi
+          done
+          echo "Không kết nối được database"; exit 1
+      - name: Số liệu ảnh đại diện / tệp (chỉ số đếm)
+        run: |
+          psql -P pager=off -c "
+            select split_part(name, '/', 2) as thu_muc, count(*) as so_tep,
+                   count(*) filter (where drive_id is not null) as tren_drive, count(*) filter (where drive_id is null) as kho_cu,
+                   count(*) filter (where move_fail > 0) as chuyen_loi,
+                   to_char(max(updated_at) at time zone 'Asia/Ho_Chi_Minh', 'DD/MM HH24:MI') as sua_cuoi,
+                   count(*) filter (where updated_at > now() - interval '2 days') as sua_2_ngay
+            from public.file_store group by 1 order by 2 desc"
+          psql -P pager=off -c "
+            select count(*) as nhan_vien,
+                   count(*) filter (where exists (select 1 from public.file_store f where f.tenant_id = s.tenant_id
+                                                  and f.name = s.tenant_id::text || '/anh_dai_dien/' || s.id::text || '.jpg')) as co_anh
+            from public.staff_members s"
+          psql -P pager=off -c "select count(*) as nha_xe_co_drive from public.tenant_drive"
+          psql -P pager=off -c "select count(*) as anh_trong_kho_cu from storage.objects where bucket_id = 'giay-to' and name like '%/anh_dai_dien/%'"
+      - name: Đọc thử 1 ảnh đại diện trên Drive (chỉ in kết quả)
+        run: |
+          row=$(psql -tA -F '|' -c "
+            select d.url, d.key, f.drive_id from public.file_store f join public.tenant_drive d on d.tenant_id = f.tenant_id
+            where f.name like '%/anh_dai_dien/%' and f.drive_id is not null order by f.updated_at desc limit 1")
+          [ -n "$row" ] || { echo "Không có ảnh đại diện nào trên Drive để thử"; exit 0; }
+          IFS='|' read -r url key id <<< "$row"
+          echo "::add-mask::$url"; echo "::add-mask::$key"; echo "::add-mask::$id"
+          body=$(jq -cn --arg k "$key" --arg i "$id" '{action:"hs_get", id:$i, key:$k}')
+          code=$(curl -sS -L -o out.json -w '%{http_code}' --max-time 120 -H 'Content-Type: text/plain;charset=utf-8' --data "$body" "$url" || echo "curl_loi")
+          echo "HTTP: $code"
+          jq -r '"ok: \(.ok) · mo_ta: \(.description // "-") · co_du_lieu: \((.data // "") | length > 0) · do_dai: \((.data // "") | length)"' out.json 2>/dev/null \
+            || { echo "Không phải JSON. 300 ký tự đầu:"; head -c 300 out.json | tr -d '\n' | sed -E 's/[A-Za-z0-9_-]{25,}/***/g'; echo; }

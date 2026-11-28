@@ -920,8 +920,8 @@ test('Khởi tạo → tạo nhà xe → chủ xe tạo chi nhánh, nhân viên 
   console.log('Lỗi cài app:', JSON.stringify(inst.installabilityErrors), 'manifest:', JSON.stringify(await cdp.send('Page.getAppManifest')).slice(0, 300));
   expect(inst.installabilityErrors.map((x) => x.errorId)).toEqual([]);
   await page.getByRole('button', { name: '⛽ Báo đổ dầu' }).click();
+  // Chọn ảnh có sẵn xong là tự đọc + gửi, không cần bấm thêm
   await page.getByLabel('Chọn ảnh đổ dầu').setInputFiles(png);
-  await page.getByRole('button', { name: 'Đọc ảnh & gửi (1 ảnh)' }).click();
   await expect(page.getByText(/AI chưa đọc được/)).toBeVisible();
   await page.getByLabel('Biển số xe').fill('51B-123.45');
   await page.getByLabel('Số lít').fill('50');

@@ -1,7 +1,7 @@
 // Lái xe báo đổ dầu từ app (như app cũ): chụp trụ bơm, hóa đơn, biển số, đồng hồ km → AI đọc → số liệu khớp thì gửi duyệt luôn
 // (điều hành, kế toán nhận thông báo), không khớp thì mở khung kiểm tra → gửi xong bấm 1 nút gửi ảnh + tóm tắt vào nhóm Zalo.
 // Ảnh chia sẻ từ Zalo vào app (tài khoản lái xe) cũng mở thẳng khung này.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from './Modal';
 import { FilesViewButton } from './FilePreview';
 import { fmtDate, today } from './Documents';
@@ -47,6 +47,7 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
   const [orig, setOrig] = useState<File[]>([]);                      // ảnh gốc để chia sẻ vào nhóm Zalo
   const [done, setDone] = useState<{ text: string; files: File[] } | null>(null);
   const [driver, setDriver] = useState('');
+  const upRef = useRef<Promise<string[]> | null>(null);              // ảnh tải lên song song lúc AI đang đọc
   useEffect(() => { void supabase.from('staff_members').select('full_name').eq('id', staffId).maybeSingle().then(({ data }) => setDriver((data as { full_name?: string } | null)?.full_name ?? '')); }, [staffId]);
 
   const load = useCallback(async () => {
@@ -64,6 +65,13 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
     setPick((cur) => { const all = [...(cur ?? []), ...img]; if (all.length > MAX) toast('error', `Tối đa ${MAX} ảnh mỗi lần đổ dầu`); return all.slice(0, MAX); });
   };
 
+  /** Chọn ảnh có sẵn (bấm Xong) → đọc + gửi luôn, không cần bấm thêm */
+  const pickAndRead = (fs: File[]) => {
+    const all = [...(pick ?? []), ...fs.filter((x) => x.type.startsWith('image/'))].slice(0, MAX);
+    if (!all.length) return;
+    setPick(all);
+    void read(all);
+  };
   async function read(files: File[]) {
     setBusy('AI đang đọc trụ bơm, hóa đơn, biển số… (khoảng 10–30 giây)');
     const base: Form = { key: crypto.randomUUID(), plate: plates[0] ?? '', entry_date: today(), entry_time: nowTime(), liters: '', unit_price: '', amount: '', odo_km: '',
@@ -73,6 +81,10 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
     try {
       p = await Promise.all(files.map(prepareFile));
       setPrep(p);
+      // Tải ảnh lên ngay, song song với AI đọc (không phải chờ đọc xong mới tải)
+      const up = uploadReportPhotos(tenantId, staffId, plates[0] ?? '', p);
+      up.catch(() => undefined);
+      upRef.current = up;
       const v = await readFuelPhotos(p);
       const k = plateKey(v.plate), mine = k.length >= 4 ? plates.find((x) => plateKey(x) === k || plateKey(x).endsWith(k.slice(-5))) : undefined;
       const nf: Form = { ...base, plate: mine ?? (v.plate || base.plate), entry_date: v.date || base.entry_date, entry_time: v.time || base.entry_time, liters: v.liters ? String(v.liters) : '',
@@ -108,7 +120,10 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
     if (!(gia > 0) && !(tien > 0)) return toast('error', 'Nhập đơn giá hoặc thành tiền');
     setBusy('Đang gửi ảnh…');
     try {
-      const up = p.length ? await uploadReportPhotos(tenantId, staffId, f.plate, p) : [];
+      const early = upRef.current;
+      upRef.current = null;
+      // ảnh đã tải song song lúc đọc: dùng luôn; lỗi thì tải lại 1 lần
+      const up = !p.length ? [] : early ? await early.catch(() => uploadReportPhotos(tenantId, staffId, f.plate, p)) : await uploadReportPhotos(tenantId, staffId, f.plate, p);
       await rpc('report_fuel', { p: { key: f.key, plate: f.plate, entry_date: f.entry_date, entry_time: f.entry_time, liters: lit, unit_price: gia || null,
         amount: tien || null, odo_km: f.odo_km, supplier: f.supplier, invoice_no: f.invoice_no, note: f.note, files: up } });
       setDone({ text: summary(f, driver), files });
@@ -163,10 +178,11 @@ export function FuelReportCard({ tenantId, staffId, plates, shareFiles, onShareD
                   <button type="button" aria-label={`Bỏ ảnh ${i + 1}`} onClick={() => setPick(pick.filter((_, k) => k !== i))}>×</button></div>
               ))}
             </div>
+            {busy && <p className="small"><b>{busy}</b></p>}
             <label className="btn fr-big">📷 {pick.length ? 'Chụp thêm ảnh' : 'Chụp ảnh'}
               <input type="file" accept="image/*" capture="environment" hidden aria-label="Chụp ảnh đổ dầu" onChange={(e) => { add(Array.from(e.target.files ?? [])); e.target.value = ''; }} /></label>
             <label className="btn fr-big">🖼 Chọn ảnh có sẵn
-              <input type="file" accept="image/*" multiple hidden aria-label="Chọn ảnh đổ dầu" onChange={(e) => { add(Array.from(e.target.files ?? [])); e.target.value = ''; }} /></label>
+              <input type="file" accept="image/*" multiple hidden aria-label="Chọn ảnh đổ dầu" onChange={(e) => { pickAndRead(Array.from(e.target.files ?? [])); e.target.value = ''; }} /></label>
             <div className="actions">
               <button type="button" className="btn primary" disabled={!pick.length || !!busy} onClick={() => void read(pick)}>Đọc ảnh & gửi{pick.length ? ` (${pick.length} ảnh)` : ''}</button>
               <button type="button" className="btn link" onClick={() => setPick(null)}>Đóng</button>

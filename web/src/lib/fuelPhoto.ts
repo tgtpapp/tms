@@ -33,22 +33,18 @@ export function matchPlate<T extends { plate: string }>(list: T[], raw: string):
   return list.find((x) => plateKey(x.plate) === k) ?? list.find((x) => plateKey(x.plate).endsWith(k.slice(-5))) ?? list.find((x) => k.endsWith(plateKey(x.plate).slice(-5)));
 }
 
-/** Ảnh lái xe gửi: <nhà xe>/bao_dau/<hồ sơ lái xe>/… (chỉ chính lái xe tải lên, điều hành xem được). */
+/** Ảnh lái xe gửi: <nhà xe>/bao_dau/<hồ sơ lái xe>/… (chỉ chính lái xe tải lên, điều hành xem được).
+    Tải song song các ảnh; mạng chập chờn thì thử lại cùng tên (ghi đè, không sinh tệp trùng); lỗi quyền / tệp hỏng thì báo ngay. */
 export async function uploadReportPhotos(tenantId: string, staffId: string, plate: string, files: PreparedFile[]): Promise<string[]> {
   const d = new Date(), p = (n: number) => String(n).padStart(2, '0');
   const base = `${safeName(plate) || 'XE'}_bao_dau_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${crypto.randomUUID().slice(0, 4)}`;
-  const out: string[] = [];
-  for (let i = 0; i < files.length; i++) {
-    const path = `${tenantId}/bao_dau/${staffId}/${base}_${i + 1}.${files[i]!.ext}`;
-    let err: Error | null = null;
-    for (let t = 0; t < 3; t++) {   // sóng yếu ở cây xăng: thử lại
-      const error = await putFile(path, files[i]!.blob, files[i]!.mime).then(() => null, (e: unknown) => (e instanceof Error ? e : new Error(String(e))));
-      if (!error) { err = null; break; }
-      err = new Error(`Chưa tải được ảnh lên (mạng yếu?): ${error.message}`);
-      await new Promise((r) => setTimeout(r, 1500 * (t + 1)));
+  return Promise.all(files.map(async (f, i) => {
+    const path = `${tenantId}/bao_dau/${staffId}/${base}_${i + 1}.${f.ext}`;
+    for (let t = 0; ; t++) {
+      const error = await putFile(path, f.blob, f.mime).then(() => null, (e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+      if (!error) return path;
+      if (t >= 2 || /quyền|không hợp lệ|lớn hơn|chưa đăng nhập/i.test(error.message)) throw new Error(`Chưa tải được ảnh lên: ${error.message}`);
+      await new Promise((r) => setTimeout(r, 1500 * (t + 1)));   // sóng yếu ở cây xăng: thử lại
     }
-    if (err) throw err;
-    out.push(path);
-  }
-  return out;
+  }));
 }

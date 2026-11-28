@@ -43,6 +43,12 @@ from (values ('lai_xe_1', '00000000-0000-0000-0000-00000000aa01'::uuid), ('lai_x
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
 select is(public.my_staff_id(), '00000000-0000-0000-0000-00000000aa01'::uuid, 'Lái xe biết hồ sơ của mình');
+select lives_ok(format($$ insert into public.file_store (tenant_id, name, drive_id, mime, size_bytes, updated_at) values (app.current_tenant_id(), '%s/bao_dau/00000000-0000-0000-0000-00000000aa01/t1.jpg', 'x', 'image/jpeg', 10, now()) $$,
+  (select id from public.tenants where code = 'nha-xe-a')), 'Lái xe lưu ảnh báo dầu');
+select lives_ok(format($$ insert into public.file_store (tenant_id, name, drive_id, mime, size_bytes, updated_at) values (app.current_tenant_id(), '%s/bao_dau/00000000-0000-0000-0000-00000000aa01/t1.jpg', 'y', 'image/jpeg', 11, now())
+  on conflict (tenant_id, name) do update set drive_id = excluded.drive_id $$, (select id from public.tenants where code = 'nha-xe-a')), 'Gửi lại cùng tên (mạng chập chờn): ghi đè được');
+select throws_ok(format($$ insert into public.file_store (tenant_id, name, drive_id, mime, size_bytes, updated_at) values (app.current_tenant_id(), '%s/bao_dau/00000000-0000-0000-0000-00000000aa02/t1.jpg', 'y', 'image/jpeg', 11, now()) $$,
+  (select id from public.tenants where code = 'nha-xe-a')), '42501', null, 'Không lưu ảnh vào thư mục lái xe khác');
 select ok(public.report_fuel(jsonb_build_object('key', 'k1', 'plate', '60f00439', 'entry_date', '2026-11-20', 'liters', 44.737, 'amount', 1200000,
   'files', jsonb_build_array((select id from public.tenants where code = 'nha-xe-a')::text || '/bao_dau/00000000-0000-0000-0000-00000000aa01/a.jpg'))) is not null, 'Gửi báo đổ dầu (biển số viết liền)');
 select lives_ok($$ select public.report_fuel('{"key":"k1","plate":"60F-004.39","liters":44.737,"amount":1200000}') $$, 'Gửi lại cùng mã');

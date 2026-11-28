@@ -25,6 +25,9 @@ select is(public.save_official_doc(null, 'qd_thoi_viec', '2026-03-02', 'Về vi�
 select is(public.save_official_doc(null, 'qd_thoi_viec', '2026-03-05', 'Về việc chấm dứt hợp đồng lao động', '00000000-0000-0000-0000-00000000aa01', '{}', null) ->> 'number',
   '002/2026/QĐTV-TGTP', 'Tự tăng 002');
 select is(public.save_official_doc(null, 'quyet_dinh', '2026-03-06', 'Về việc khác 2', null, '{}', null) ->> 'number', '002/2026/QĐ-TGTP', 'Dãy QĐ không bị ảnh hưởng');
+select is(public.save_official_doc(null, 'hd_bai_xe', '2026-03-07', 'Thuê bãi đậu xe', null, '{"vai_tro":"thue","ben_ten":"Bến xe Biên Hòa"}', null) ->> 'number',
+  '001/2026/HĐBX-TGTP', 'Hợp đồng thuê bãi đậu xe: dãy riêng HĐBX');
+select is(public.save_official_doc(null, 'hd_bai_xe', '2026-03-08', 'Thuê bãi đậu xe 2', null, '{}', null) ->> 'number', '002/2026/HĐBX-TGTP', 'HĐBX tự tăng 002');
 select throws_ok(format('select public.save_official_doc(%L, %L, %L, %L, null, %L, null)', (select id from public.official_docs where number = '001/2026/QĐTV-TGTP'), 'quyet_dinh', '2026-03-02', 'Đổi loại', '{}'),
   '22023', null, 'Không đổi sang loại khác sau khi cấp số');
 select throws_ok($$ select public.mark_staff_left('00000000-0000-0000-0000-00000000aa01', '2023-12-31') $$, '22023', null, 'Ngày nghỉ trước ngày vào làm bị từ chối');
@@ -36,6 +39,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000b3","role":"authenticated"}';
 select throws_ok($$ select public.mark_staff_left('00000000-0000-0000-0000-00000000aa01', '2026-04-01') $$, '42501', null, 'Bán vé không sửa hồ sơ nhân viên');
 select throws_ok($$ select public.save_official_doc(null, 'qd_thoi_viec', '2026-06-01', 'x', null, '{}', null) $$, '42501', null, 'Bán vé không soạn quyết định');
+select throws_ok($$ select public.save_official_doc(null, 'hd_bai_xe', '2026-06-01', 'x', null, '{}', null) $$, '42501', null, 'Bán vé không soạn hợp đồng bãi xe');
 reset role;
 
 set local role authenticated;

@@ -20,6 +20,7 @@ const MENU: [string, [Template, string][]][] = [
   ['Quyết định', [['qd_bo_nhiem', 'Bổ nhiệm người điều hành vận tải'], ['qd_atgt', 'Thành lập Ban An toàn giao thông'],
     ['qd_giam_sat', 'Giao nhiệm vụ giám sát ATGT (kèm hồ sơ theo dõi)'], ['qd_thoi_viec', 'Thôi việc (kèm đơn xin nghỉ việc)'], ['quyet_dinh', 'Quyết định khác']]],
   ['Công văn, thông báo', [['cong_van', 'Công văn'], ['thong_bao', 'Thông báo']]],
+  ['Hợp đồng', [['hd_bai_xe', 'Thuê bãi đậu xe']]],
   ['Tự soạn từ file Word / AI', [['word_qd', 'Quyết định'], ['word_cv', 'Công văn'], ['word_tb', 'Thông báo']]],
 ];
 function NewDocMenu({ onPick }: { onPick: (t: Template) => void }) {
@@ -54,7 +55,7 @@ function NewDocMenu({ onPick }: { onPick: (t: Template) => void }) {
 const addDay = (s: string) => { const d = new Date(`${s}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
 interface Staff { id: string; full_name: string; is_active: boolean; department: string | null }
 interface Form { id: string | null; number: string | null; template: Template; signed_on: string; title: string; titleAuto: boolean; staff_id: string; content: Content; req: string; archive: boolean }
-type Field = { key: string; label: string; area?: number; type?: string; ph?: string; hint?: string };
+type Field = { key: string; label: string; area?: number; type?: string; ph?: string; hint?: string; options?: [string, string][] };
 
 const FIELDS: Record<Template, Field[]> = {
   qd_bo_nhiem: [
@@ -81,6 +82,18 @@ const FIELDS: Record<Template, Field[]> = {
     { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
   ],
   word_qd: [], word_cv: [], word_tb: [], qd_thoi_viec: [],
+  hd_bai_xe: [
+    { key: 'vai_tro', label: 'Nhà xe là', options: [['thue', 'Bên thuê bãi (Bên B)'], ['cho_thue', 'Bên cho thuê bãi (Bên A)']] },
+    { key: 'ben_ten', label: 'Tên bên kia (đơn vị / cá nhân)', ph: 'vd: Bến xe khách Biên Hòa' }, { key: 'ben_dia_chi', label: 'Địa chỉ bên kia' },
+    { key: 'ben_mst', label: 'Mã số thuế / Số CCCD bên kia' }, { key: 'ben_dt', label: 'Điện thoại bên kia', type: 'tel' },
+    { key: 'ben_dai_dien', label: 'Người đại diện bên kia' }, { key: 'ben_chuc_vu', label: 'Chức vụ người đại diện' },
+    { key: 'ben_tk', label: 'Tài khoản ngân hàng bên kia' },
+    { key: 'bai_dia_chi', label: 'Địa chỉ bãi đậu xe' }, { key: 'bai_quy_mo', label: 'Diện tích / số chỗ đậu', ph: 'vd: 1.000 m², 20 chỗ' },
+    { key: 'so_xe', label: 'Biển số xe đậu (mỗi dòng một xe, để trống nếu không ghi)', area: 3 },
+    { key: 'gia', label: 'Giá thuê (đồng/tháng)', type: 'number' }, { key: 'thanh_toan', label: 'Cách thanh toán', area: 2 },
+    { key: 'tu_ngay', label: 'Hiệu lực từ ngày', type: 'date', hint: 'Để trống thì lấy ngày ký' }, { key: 'den_ngay', label: 'Đến ngày', type: 'date' },
+    { key: 'khac', label: 'Thỏa thuận khác (mỗi dòng một ý, nếu có)', area: 3 },
+  ],
   thong_bao: [
     { key: 'noi_dung', label: 'Nội dung (mỗi dòng một đoạn)', area: 8 }, { key: 'noi_nhan', label: 'Nơi nhận (mỗi dòng một nơi)', area: 3 },
   ],
@@ -340,7 +353,7 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
               <label>Số văn bản<input value={f.number ?? 'Tự cấp khi lưu (001 trở đi)'} disabled /></label>
               <label>Ngày ký<input type="date" value={f.signed_on} onChange={(e) => setF({ ...f, signed_on: e.target.value })} /></label>
               <label>Nơi ký<input value={f.content.noi ?? ''} onChange={(e) => setC('noi', e.target.value)} placeholder="vd: Đồng Nai" /></label>
-              {f.template !== 'qd_atgt' && (
+              {f.template !== 'qd_atgt' && f.template !== 'hd_bai_xe' && (
                 <label>{f.template === 'qd_bo_nhiem' ? 'Người được bổ nhiệm' : f.template === 'qd_giam_sat' ? 'Người được giao nhiệm vụ' : f.template === 'qd_thoi_viec' ? 'Người nghỉ việc' : 'Người liên quan (nếu có)'}
                   <select value={f.staff_id} onChange={(e) => setF({ ...f, staff_id: e.target.value })}>
                     <option value="">— Chọn nhân viên —</option>
@@ -355,7 +368,8 @@ export function DocsScreen({ ctx, perms }: { ctx: AccountContext; perms: Permiss
             {isWord(f.template) && <WordEditor html={f.content.html ?? ''} onChange={(h) => setF((x) => (x ? { ...x, content: { ...x.content, html: h } } : x))} />}
             {fields.map((x) => (
               <label key={x.key}>{x.label}
-                {x.area ? <textarea rows={x.area} value={f.content[x.key] ?? ''} onChange={(e) => setC(x.key, e.target.value)} />
+                {x.options ? <select value={f.content[x.key] ?? ''} onChange={(e) => setC(x.key, e.target.value)}>{x.options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                  : x.area ? <textarea rows={x.area} value={f.content[x.key] ?? ''} onChange={(e) => setC(x.key, e.target.value)} />
                   : <input type={x.type ?? 'text'} value={f.content[x.key] ?? ''} onChange={(e) => setC(x.key, e.target.value)} placeholder={x.ph} />}
                 {x.hint && <small className="muted">{x.hint}</small>}
               </label>

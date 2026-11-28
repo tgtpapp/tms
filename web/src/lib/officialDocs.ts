@@ -8,8 +8,10 @@ import { loadSigns, type Sign } from './signatures';
 import { TV_LY_DO, tvBlank, tvDonHtml, tvQdHtml, type TvPerson } from './resignation';
 import { savePdf } from './dispatchPapers';
 import { paginate } from './pdfMaker';
+import { bankName } from './vietqr';
+import { moneyWords } from './vnWords';
 
-export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'qd_giam_sat' | 'cong_van' | 'quyet_dinh' | 'thong_bao' | 'word_qd' | 'word_cv' | 'word_tb' | 'qd_thoi_viec';
+export type Template = 'qd_bo_nhiem' | 'qd_atgt' | 'qd_giam_sat' | 'cong_van' | 'quyet_dinh' | 'thong_bao' | 'word_qd' | 'word_cv' | 'word_tb' | 'qd_thoi_viec' | 'hd_bai_xe';
 export const isWord = (t: Template) => t.startsWith('word_');
 export type Content = Record<string, string>;
 export interface OfficialDoc {
@@ -17,13 +19,14 @@ export interface OfficialDoc {
   staff_id: string | null; content: Content; status: 'hieu_luc' | 'da_huy'; cancel_reason: string | null; created_at: string;
 }
 
-export type DocCode = 'QD' | 'CV' | 'TB' | 'QDTV';
+export type DocCode = 'QD' | 'CV' | 'TB' | 'QDTV' | 'HDBX';
 export const TEMPLATES: { key: Template; name: string; folder: string; code: DocCode }[] = [
   { key: 'qd_bo_nhiem', name: 'Quyết định bổ nhiệm người điều hành vận tải', folder: 'Quyết định bổ nhiệm người điều hành', code: 'QD' },
   { key: 'qd_atgt', name: 'Quyết định thành lập Ban An toàn giao thông', folder: 'Quyết định thành lập Ban ATGT', code: 'QD' },
   { key: 'qd_giam_sat', name: 'Quyết định giao nhiệm vụ giám sát, quản lý ATGT (kèm bộ hồ sơ theo dõi)', folder: 'Quyết định giao nhiệm vụ', code: 'QD' },
   { key: 'quyet_dinh', name: 'Quyết định khác', folder: 'Quyết định', code: 'QD' },
   { key: 'qd_thoi_viec', name: 'Đơn xin nghỉ việc + Quyết định thôi việc', folder: 'Nghỉ việc', code: 'QDTV' },
+  { key: 'hd_bai_xe', name: 'Hợp đồng thuê bãi đậu xe', folder: 'Hợp đồng thuê bãi đậu xe', code: 'HDBX' },
   { key: 'cong_van', name: 'Công văn', folder: 'Công văn', code: 'CV' },
   { key: 'thong_bao', name: 'Thông báo', folder: 'Thông báo', code: 'TB' },
   { key: 'word_qd', name: 'Quyết định tự soạn (từ file Word / AI)', folder: 'Quyết định', code: 'QD' },
@@ -41,9 +44,9 @@ export const FIELDS: [string, string][] = [
   ['{Chữ ký và dấu}', 'Chữ ký giám đốc + con dấu (đặt trong ô ký)'], ['{Chữ ký người làm đơn}', 'Chữ ký của người được chọn'],
 ];
 export const tplOf = (k: Template) => TEMPLATES.find((t) => t.key === k)!;
-export const CODE_NAME: Record<string, string> = { QD: 'Quyết định', QDTV: 'Quyết định thôi việc', CV: 'Công văn', TB: 'Thông báo' };
+export const CODE_NAME: Record<string, string> = { QD: 'Quyết định', QDTV: 'Quyết định thôi việc', CV: 'Công văn', TB: 'Thông báo', HDBX: 'Hợp đồng thuê bãi đậu xe' };
 /** Ký hiệu in trong số văn bản */
-export const codeLabel = (c: DocCode) => (c === 'QD' ? 'QĐ' : c === 'QDTV' ? 'QĐTV' : c);
+export const codeLabel = (c: DocCode) => (c === 'QD' ? 'QĐ' : c === 'QDTV' ? 'QĐTV' : c === 'HDBX' ? 'HĐBX' : c);
 
 /** Nội dung mặc định khi soạn mới (theo app cũ). */
 export function defaults(t: Template, noi: string, director: string): Content {
@@ -61,6 +64,9 @@ export function defaults(t: Template, noi: string, director: string): Content {
       'Thống kê, báo cáo và phối hợp điều tra, giải quyết khi xảy ra tai nạn giao thông.', 'Phối hợp với cơ quan chức năng trong công tác bảo đảm an toàn giao thông.'].join('\n'), noi_nhan: '- Như Điều 4;\n- Lưu: VT.' };
   if (t === 'qd_giam_sat') return { ...base, hieu_luc: '', thoi_han_tu: '', noi_nhan: '- Như Điều 6;\n- Bộ phận điều hành, kỹ thuật, nhân sự;\n- Lưu: VT, HS.' };
   if (t === 'cong_van') return { ...base, kinh_gui: '', noi_dung: '', noi_nhan: '- Như trên;\n- Lưu: VT.' };
+  if (t === 'hd_bai_xe') return { ...base, vai_tro: 'thue', ben_ten: '', ben_dai_dien: '', ben_chuc_vu: '', ben_dia_chi: '', ben_mst: '', ben_dt: '', ben_tk: '',
+    bai_dia_chi: '', bai_quy_mo: '', so_xe: '', gia: '', thanh_toan: 'Thanh toán hằng tháng, chậm nhất ngày 05 của tháng, bằng tiền mặt hoặc chuyển khoản.',
+    tu_ngay: '', den_ngay: '', khac: '' };
   if (t === 'quyet_dinh') return { ...base, can_cu: 'Căn cứ Điều lệ tổ chức và hoạt động của Công ty;', dieu: '', noi_nhan: '- Như Điều …;\n- Lưu: VT.' };
   return { ...base, noi_dung: '', noi_nhan: '- Toàn thể nhân viên;\n- Lưu: VT.' };
 }
@@ -69,7 +75,8 @@ export const autoTitle = (t: Template, c: Content) =>
   t === 'qd_bo_nhiem' ? `Về việc bổ nhiệm ${c.chuc_danh || 'Người trực tiếp điều hành hoạt động vận tải'}`
     : t === 'qd_atgt' ? `Về việc thành lập ${c.ten_ban || 'Ban An toàn giao thông'}`
     : t === 'qd_giam_sat' ? 'Về việc giao nhiệm vụ giám sát, quản lý an toàn giao thông và bộ hồ sơ theo dõi thực hiện'
-    : t === 'qd_thoi_viec' ? 'Về việc chấm dứt hợp đồng lao động' : '';
+    : t === 'qd_thoi_viec' ? 'Về việc chấm dứt hợp đồng lao động'
+    : t === 'hd_bai_xe' ? `Thuê bãi đậu xe${c.bai_dia_chi ? ` tại ${c.bai_dia_chi}` : ''}` : '';
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const lines = (s: string | undefined) => String(s ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
@@ -78,18 +85,22 @@ const dd = (iso: string | null | undefined) => (iso ? iso.split('-').reverse().j
 const dots = (v: string | null | undefined, n = 30) => (v ? `<b>${esc(v)}</b>` : '.'.repeat(n));
 const money = (n: number) => n.toLocaleString('vi-VN');
 
-export interface DocCtx { company: Company; boss: Boss; title: string; person: Person | null; offSat: boolean }
+export interface DocCtx { company: Company; boss: Boss; title: string; person: Person | null; offSat: boolean; tax?: string; phone?: string; bank?: string }
 export interface Person extends TvPerson { address: string | null; current: string | null; hometown?: string | null }
 
 /** Lấy dữ liệu để in: công ty, chữ ký giám đốc + con dấu, người liên quan. */
 export async function loadDocCtx(tenantId: string, me: { id: string | null; name: string }, staffId: string | null): Promise<DocCtx> {
-  const [c, b, ct, person] = await Promise.all([
+  const [c, b, ct, person, tn] = await Promise.all([
     company(), boss(tenantId, me),
-    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.chuc_danh_ky', 'hdld.ngay_nghi']),
+    supabase.from('tenant_settings').select('key, value').in('key', ['cong_ty.chuc_danh_ky', 'hdld.ngay_nghi', 'cong_ty.dien_thoai', 'cong_ty.hotline', 'tt.so_tai_khoan', 'tt.ngan_hang_bin', 'tt.ten_tai_khoan']),
     staffId ? loadPerson(tenantId, staffId) : Promise.resolve(null),
+    supabase.from('tenants').select('tax_code').maybeSingle(),
   ]);
   const set = (k: string) => String(((ct.data ?? []) as { key: string; value: unknown }[]).find((x) => x.key === k)?.value ?? '');
-  return { company: c, boss: b.b, title: set('cong_ty.chuc_danh_ky') || 'Giám đốc', person, offSat: set('hdld.ngay_nghi') === 'T7CN' };
+  const acc = set('tt.so_tai_khoan');
+  return { company: c, boss: b.b, title: set('cong_ty.chuc_danh_ky') || 'Giám đốc', person, offSat: set('hdld.ngay_nghi') === 'T7CN',
+    tax: (tn.data as { tax_code?: string | null } | null)?.tax_code ?? '', phone: set('cong_ty.dien_thoai') || set('cong_ty.hotline'),
+    bank: acc ? [acc, set('tt.ten_tai_khoan'), set('tt.ngan_hang_bin') ? bankName(set('tt.ngan_hang_bin')) : ''].filter(Boolean).join(' - ') : '' };
 }
 async function loadPerson(tenantId: string, id: string): Promise<Person | null> {
   const [s, p, d, k, sg] = await Promise.all([
@@ -156,6 +167,7 @@ export function docPages(t: Template, number: string, signed: string, title: str
       return own?.replace(/<[^>]+>|&nbsp;/g, '').trim() ? wrap(fillFields(own, number, signed, title, c, x)) : tvPage(w, number, signed, title, c, x);
     });
   }
+  if (t === 'hd_bai_xe') return paginate(baiXeBlocks(number, signed, c, x).map((b) => `<div style="font-size:14px;line-height:1.5;text-align:justify">${b}</div>`));
   if (t === 'qd_giam_sat') return paginate(giamSatBlocks(number, signed, title, c, x).map((b) => `<div style="font-size:14px;line-height:1.5;text-align:justify">${b}</div>`));
   if (!isWord(t)) return [docHtml(t, number, signed, title, c, x)];
   const filled = fillFields(c.html || '', number, signed, title, c, x);
@@ -238,8 +250,9 @@ export async function saveDocPdf(d: OfficialDoc, x: DocCtx, sigs?: Map<string, s
   const pages = docPages(d.template, d.number, d.signed_on, d.title, d.content, x).map((html) => ({ html, land: false }));
   const sig = paperSig(pages);
   if (sigs && sigs.get(`vb:${d.id}`) === sig) return false;   // tự cập nhật: nội dung không đổi thì bỏ qua
-  const who = (d.template === 'qd_bo_nhiem' || d.template === 'qd_giam_sat' || d.template === 'qd_thoi_viec') && x.person ? ` · ${x.person.name}` : '';
-  await savePdf(d.template === 'qd_giam_sat' ? [String(d.year), '09. An toàn giao thông', tp.folder] : d.template === 'qd_thoi_viec' ? [String(d.year), 'Nhân sự', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
+  const who = d.template === 'hd_bai_xe' ? (d.content.ben_ten ? ` · ${d.content.ben_ten}` : '')
+    : (d.template === 'qd_bo_nhiem' || d.template === 'qd_giam_sat' || d.template === 'qd_thoi_viec') && x.person ? ` · ${x.person.name}` : '';
+  await savePdf(d.template === 'hd_bai_xe' ? [String(d.year), '03. Phương tiện', tp.folder] : d.template === 'qd_giam_sat' ? [String(d.year), '09. An toàn giao thông', tp.folder] : d.template === 'qd_thoi_viec' ? [String(d.year), 'Nhân sự', tp.folder] : [String(d.year), 'Pháp lý công ty', tp.folder], `${CODE_NAME[d.code]} số ${d.number}${who} · ${d.title}`.slice(0, 200), `${slug(d.number)}.pdf`,
     pages, `Lưu từ Văn bản · sig:${sig}`, `vb:${d.id}`);
   return true;
 }
@@ -352,4 +365,53 @@ export function giamSatBlocks(number: string, signed: string, title: string, c: 
     <p style="margin:2px 0">Điều 11 tập trung yêu cầu đơn vị kinh doanh vận tải có bộ phận quản lý an toàn; nhân sự theo dõi, giám sát xe và lái xe; giao nhiệm vụ; rà soát dữ liệu trước chuyến; tiếp nhận phản ánh; phối hợp bố trí lái xe bảo đảm thời gian lái và nghỉ; giám sát trong hành trình; thống kê, báo cáo sau chuyến/ca; nhiệm vụ định kỳ tháng, quý, năm và lưu trữ.</p>
     <p style="margin:2px 0">Tài liệu này là mẫu quản trị nội bộ, không phải biểu mẫu bắt buộc của cơ quan nhà nước. Công ty cần điều chỉnh tên chức danh, phạm vi xe, loại hình vận tải, phân quyền, quy chế xử lý và quy trình ứng phó sự cố phù hợp thực tế; đối chiếu văn bản pháp luật chính thức khi ký ban hành.</p>`);
   return B;
+}
+
+/** Hợp đồng thuê bãi đậu xe: nhà xe là bên thuê (Bên B) hoặc bên cho thuê (Bên A); bên kia nhập tay, để trống thì in dòng chấm. */
+function baiXeBlocks(number: string, signed: string, c: Content, x: DocCtx): string[] {
+  const P = (t: string) => `<p style="margin:3px 0">${t}</p>`;
+  const H = (t: string) => `<p style="margin:8px 0 3px"><b>${t}</b></p>`;
+  const v = (k: string, n = 30) => dots(c[k], n);
+  const gia = Number(String(c.gia ?? '').replace(/\D/g, '')) || 0;
+  const giaTxt = gia ? `<b>${money(gia)} đồng/tháng</b> (Bằng chữ: <i>${esc(moneyWords(gia))}/tháng</i>)` : '................................ đồng/tháng';
+  const me = `${P(`Tên đơn vị: <b>${esc(x.company.name.toUpperCase())}</b>`)}${P(`Địa chỉ: ${dots(x.company.address, 40)}`)}${P(`Mã số thuế: ${dots(x.tax, 14)} &nbsp; Điện thoại: ${dots(x.phone, 12)}`)}
+    ${P(`Người đại diện: <b>${esc(x.boss.gdName || '……………………')}</b> &nbsp; Chức vụ: ${esc(x.title)}`)}${P(`Tài khoản: ${dots(x.bank, 30)}`)}`;
+  const other = `${P(`Tên đơn vị / cá nhân: ${c.ben_ten ? `<b>${esc(c.ben_ten.toUpperCase())}</b>` : '.'.repeat(40)}`)}${P(`Địa chỉ: ${v('ben_dia_chi', 40)}`)}
+    ${P(`Mã số thuế / Số CCCD: ${v('ben_mst', 14)} &nbsp; Điện thoại: ${v('ben_dt', 12)}`)}${P(`Người đại diện: ${v('ben_dai_dien', 24)} &nbsp; Chức vụ: ${v('ben_chuc_vu', 14)}`)}${P(`Tài khoản: ${v('ben_tk', 30)}`)}`;
+  const weLease = c.vai_tro !== 'cho_thue';   // nhà xe đi thuê → nhà xe là Bên B
+  const A = weLease ? other : me, B = weLease ? me : other;
+  const xe = lines(c.so_xe);
+  const blank = (title: string) => `<td style="width:50%;text-align:center;vertical-align:top"><b>${title}</b><br><i style="font-size:12px">(Ký, ghi rõ họ tên, đóng dấu nếu có)</i><div style="height:96px"></div><b>${esc(c.ben_dai_dien ?? '')}</b></td>`;
+  const sA = weLease ? blank('ĐẠI DIỆN BÊN A') : bossCol(x.boss, 'ĐẠI DIỆN BÊN A', 50);
+  const sB = weLease ? bossCol(x.boss, 'ĐẠI DIỆN BÊN B', 50) : blank('ĐẠI DIỆN BÊN B');
+  return [
+    `<div style="text-align:center"><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b><br><b>Độc lập - Tự do - Hạnh phúc</b><div style="width:150px;border-top:1px solid #000;margin:3px auto"></div></div>
+     <h2 style="text-align:center;margin:14px 0 0;font-size:19px">HỢP ĐỒNG THUÊ BÃI ĐẬU XE</h2><div style="text-align:center;margin-bottom:8px">Số: ${esc(number)}</div>
+     <div style="font-style:italic;margin-left:18px"><div>- Căn cứ Bộ luật Dân sự số 91/2015/QH13 ngày 24 tháng 11 năm 2015;</div><div>- Căn cứ Luật Thương mại số 36/2005/QH11 ngày 14 tháng 6 năm 2005;</div>
+       <div>- Căn cứ nhu cầu và khả năng của hai bên.</div></div>`,
+    P(`Hôm nay, ${dm(signed)}, tại ${esc(c.noi || '……………')}, chúng tôi gồm:`),
+    H('BÊN CHO THUÊ (Sau đây gọi tắt là Bên A):') + A,
+    H('BÊN THUÊ (Sau đây gọi tắt là Bên B):') + B,
+    P('Hai bên thống nhất ký kết hợp đồng thuê bãi đậu xe với các điều khoản sau:'),
+    H('Điều 1. Đối tượng hợp đồng') + P(`1. Bên A đồng ý cho Bên B thuê mặt bằng bãi đậu xe tại: ${v('bai_dia_chi', 50)}.`)
+      + P(`2. Diện tích / số chỗ đậu: ${v('bai_quy_mo', 30)}.`)
+      + P(`3. Mục đích sử dụng: đậu, đỗ xe ô tô kinh doanh vận tải của Bên B${xe.length ? `, gồm các xe: <b>${xe.map(esc).join(', ')}</b>` : ''}.`),
+    H('Điều 2. Giá thuê và phương thức thanh toán') + P(`1. Giá thuê: ${giaTxt}.`) + P(`2. ${esc(c.thanh_toan || 'Phương thức thanh toán: ……………………')}`)
+      + P('3. Giá thuê chưa bao gồm chi phí điện, nước, vệ sinh phát sinh riêng (nếu có) do hai bên thỏa thuận.'),
+    H('Điều 3. Thời hạn hợp đồng') + P(`Hợp đồng có hiệu lực từ ngày ${dd(c.tu_ngay || signed)} đến ngày ${dd(c.den_ngay)}. Hết hạn, nếu hai bên có nhu cầu thì gia hạn hoặc ký hợp đồng mới.`),
+    H('Điều 4. Quyền và nghĩa vụ của Bên A') + P('1. Bàn giao mặt bằng bãi đậu xe đúng vị trí, diện tích, thời gian đã thỏa thuận; bảo đảm Bên B sử dụng ổn định trong thời hạn hợp đồng.')
+      + P('2. Bảo đảm bãi đậu xe đủ điều kiện về phòng cháy, chữa cháy và cứu nạn, cứu hộ theo quy định; có lối ra vào, chiếu sáng phù hợp.')
+      + P('3. Nhận đủ tiền thuê theo Điều 2; thông báo trước cho Bên B khi có thay đổi ảnh hưởng đến việc sử dụng bãi.'),
+    H('Điều 5. Quyền và nghĩa vụ của Bên B') + P('1. Sử dụng bãi đúng mục đích; chấp hành nội quy bãi, quy định về phòng cháy, chữa cháy, vệ sinh môi trường và an ninh trật tự.')
+      + P('2. Thanh toán tiền thuê đầy đủ, đúng hạn theo Điều 2.')
+      + P('3. Tự quản lý tài sản, phương tiện của mình trừ khi hai bên có thỏa thuận khác; không cho bên thứ ba thuê lại khi chưa có sự đồng ý của Bên A.')
+      + P('4. Bồi thường thiệt hại do lỗi của mình gây ra cho mặt bằng, công trình của Bên A.'),
+    H('Điều 6. Chấm dứt hợp đồng') + P('1. Hợp đồng chấm dứt khi hết thời hạn mà không gia hạn, hoặc hai bên thỏa thuận chấm dứt trước thời hạn.')
+      + P('2. Bên muốn chấm dứt trước thời hạn phải thông báo bằng văn bản cho bên kia ít nhất 30 ngày; bên vi phạm nghĩa vụ gây thiệt hại thì phải bồi thường theo quy định pháp luật.'),
+    H('Điều 7. Điều khoản chung') + (c.khac?.trim() ? lines(c.khac).map((l) => P(esc(l))).join('') : '')
+      + P('1. Hai bên cam kết thực hiện đúng các điều khoản của hợp đồng. Mọi sửa đổi, bổ sung phải lập thành văn bản có chữ ký của hai bên.')
+      + P('2. Tranh chấp phát sinh được giải quyết trên tinh thần thương lượng; không thương lượng được thì đưa ra Tòa án có thẩm quyền giải quyết.')
+      + P('3. Hợp đồng lập thành 02 bản có giá trị pháp lý như nhau, mỗi bên giữ 01 bản.'),
+    `<table style="width:100%;border-collapse:collapse;margin-top:14px"><tr>${sA}${sB}</tr></table>`,
+  ];
 }

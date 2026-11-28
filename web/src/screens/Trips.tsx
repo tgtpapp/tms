@@ -364,6 +364,7 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
   const toast = useToast();
   const [open, setOpen] = useState<string | null>(null);
   const [extra, setExtra] = useState<{ route_id: string; direction: Dir; time: string; note: string } | null>(null);
+  const seatsOf = (typeId: string) => { const v = vtypes.find((x) => x.id === typeId); return v ? v.reg_seats + v.reg_berths : 0; };
   const person = (id: string) => staff.find((s) => s.id === id)?.full_name ?? '?';
 
   async function generate() {
@@ -471,6 +472,9 @@ function TripDay(props: Ctx & { day: string; setDay: (d: string) => void }) {
                     {mine.filter((c) => c.role !== 'phu_xe').length > 0 && ` · Lái: ${mine.filter((c) => c.role !== 'phu_xe').map((c) => person(c.staff_id)).join(', ')}`}
                     {mine.find((c) => c.role === 'phu_xe') && ` · Phụ xe: ${person(mine.find((c) => c.role === 'phu_xe')!.staff_id)}`}
                   </div>
+                  {t.status === 'mo' && veh && !mine.some((c) => c.role === 'phu_xe') && seatsOf(veh.vehicle_type_id) > 30 && (
+                    <div className="small state-sap_het">Xe trên 30 chỗ chưa có nhân viên phục vụ (phụ xe)</div>
+                  )}
                   {t.status === 'mo' && !t.vehicle_type_id && (
                     <div className="small state-sap_het">Chưa có sơ đồ ghế (chưa bán vé được)
                       {canEdit && (

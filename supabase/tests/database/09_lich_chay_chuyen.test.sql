@@ -120,6 +120,10 @@ select ok((select (r ->> 'saved') = 'false' and (r -> 'warnings')::text like '%c
             from public.assign_trip((select id from public.trips where schedule_id is null), (select v from t.ids where k = 'X2'),
                                     (select v from t.ids where k = 'D2'), null, null, null) r),
   'Xe thiếu giấy tờ trong hồ sơ: chỉ cảnh báo');
+select ok((public.assign_trip((select id from public.trips where schedule_id is null), (select v from t.ids where k = 'X2'),
+  (select v from t.ids where k = 'D2'), null, null, null) -> 'warnings')::text like '%trên 30 chỗ chưa có nhân viên phục vụ%', 'Xe trên 30 chỗ chưa có phụ xe: cảnh báo');
+select ok((public.assign_trip((select v from t.ids where k = 'T3'), (select v from t.ids where k = 'X1'),
+  (select v from t.ids where k = 'D1'), (select v from t.ids where k = 'D2'), null, null) -> 'warnings')::text not like '%nhân viên phục vụ%', 'Xe 29 chỗ: không cảnh báo phụ xe');
 reset role;
 
 -- Chủ A: giấy kiểm định xe 2 hết hạn → cảnh báo; giờ lái/ngày không còn giới hạn (Luật 118/2025)

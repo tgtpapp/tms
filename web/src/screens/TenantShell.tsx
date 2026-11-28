@@ -298,7 +298,7 @@ export function TenantShell({ ctx }: { ctx: AccountContext }) {
           {tab === 'vehicles' && <VehiclesScreen ctx={ctx} perms={perms} />}
           {tab === 'branches' && <BranchesScreen perms={perms} />}
           {tab === 'roles' && <RolesScreen perms={perms} />}
-          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} />}
+          {tab === 'settings' && <SettingsScreen tenantId={ctx.tenant_id ?? ''} me={{ id: ctx.user_id, name: ctx.full_name ?? '' }} canSalary={perms.has('salary.view')} canArchive={perms.has('archive.add')} canSettings={perms.has('settings.manage')} />}
           {tab === 'audit' && <AuditScreen />}
           {tab === 'account' && <AccountScreen ctx={ctx} canManage={perms.has('staff.edit')} />}
           {tab === 'support' && <SupportScreen me={ctx.user_id} canHandle={perms.has('user.edit')} lastKey={lastScreen || undefined}

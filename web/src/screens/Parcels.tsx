@@ -360,7 +360,7 @@ export function ParcelsScreen({ ctx }: { ctx: AccountContext }) {
 }
 
 /** Tìm phiếu gửi hàng theo số điện thoại người gửi / nhận, tên hoặc mã phiếu (như Tìm vé) */
-function ParcelSearch({ q, stopName, onPick }: { q: string; stopName: (id: string) => string; onPick: (x: Shipment) => void }) {
+function ParcelSearch({ q, stopName, onPick }: { q: string; stopName: (id: string | null) => string; onPick: (x: Shipment) => void }) {
   const toast = useToast();
   const [sortBy, setSortBy] = useState<'dat' | 'chay'>('dat');
   const [lim, setLim] = useState(100);

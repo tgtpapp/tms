@@ -20,6 +20,11 @@ const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&
 const todayIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
 const money = (n: number) => n.toLocaleString('vi-VN');
 const KK_PATH = (y: string) => [y, '01. Pháp lý công ty', 'Kê khai giá cước'];
+const DONE_KEY = 'tms.niemyet.da_in';
+const readDone = (): string[] => { try { return JSON.parse(localStorage.getItem(DONE_KEY) ?? '[]') as string[]; } catch { return []; } };
+const addDone = (ids: string[]) => { try { localStorage.setItem(DONE_KEY, JSON.stringify([...new Set([...readDone(), ...ids])].slice(-200))); } catch { /* chỉ trong phiên */ } };
+const addDays = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+interface Change { id: string; route_id: string; direction: 'di' | 've'; valid_from: string }
 const bare = (x: string) => x.trim().toLowerCase().replace(/^\d+\s*[.)\-]\s*/, '');
 
 async function loadCo(): Promise<Co> {
@@ -98,6 +103,16 @@ export function PriceNotice({ perms }: { perms: Permissions }) {
   const [pick, setPick] = useState<Set<string>>(new Set());
   const [view, setView] = useState<{ title: string; pages: string[]; land: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [changes, setChanges] = useState<Change[]>([]);
+  useEffect(() => {
+    // Giá mới đã có hiệu lực trong 30 ngày qua (có bảng giá trước đó của cùng chiều) mà chưa in lại niêm yết → nhắc
+    const d = todayIso();
+    void supabase.from('fare_tables').select('id, route_id, direction, valid_from').lte('valid_from', d).gte('valid_from', addDays(d, -400)).then(({ data }) => {
+      const all = (data ?? []) as Change[], done = new Set(readDone());
+      setChanges(all.filter((x) => x.valid_from >= addDays(d, -30) && !done.has(x.id)
+        && all.some((y) => y.route_id === x.route_id && y.direction === x.direction && y.valid_from < x.valid_from)));
+    });
+  }, []);
   useEffect(() => {
     void Promise.all([
       supabase.from('routes').select('id, name, name_ve, itinerary, itinerary_ve, is_active').eq('is_active', true).order('code'),
@@ -116,6 +131,8 @@ export function PriceNotice({ perms }: { perms: Permissions }) {
         if (!r) return toast('error', 'Chọn tuyến');
         const fares = await loadFares(r.id);
         setView({ title: `Niêm yết trên xe · ${r.name}`, pages: list.map((v) => noticePage(co, r, v, fares)), land: true });
+        const ids = changes.filter((x) => x.route_id === r.id).map((x) => x.id);
+        if (ids.length) { addDone(ids); setChanges((c) => c.filter((x) => !ids.includes(x.id))); }
       } else setView({ title: 'Hướng dẫn sử dụng thiết bị giám sát hành trình', pages: list.map((v) => gshtPage(co, v)), land: false });
       setDlg('');
     } catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
@@ -131,6 +148,24 @@ export function PriceNotice({ perms }: { perms: Permissions }) {
           {perms.has('archive.view') || perms.has('archive.manage') ? <button className="btn small" onClick={() => setDlg('kk')}>Hồ sơ kê khai giá</button> : null}
         </div>
       </div>
+      {changes.length > 0 && (
+        <ul className="list">
+          {[...new Set(changes.map((x) => x.route_id))].map((rid) => {
+            const r = routes.find((x) => x.id === rid);
+            if (!r) return null;
+            const c = changes.filter((x) => x.route_id === rid);
+            return (
+              <li key={rid} className="item"><div className="item-head">
+                <span className="state-sap_het">Giá mới tuyến <b>{r.name}</b> áp dụng từ {[...new Set(c.map((x) => x.valid_from))].sort().map((v) => v.split('-').reverse().join('/')).join(', ')}: in lại niêm yết trên xe</span>
+                <span className="actions">
+                  <button className="btn small primary" onClick={() => { setRoute(rid); setPick(new Set(vehs.map((v) => v.id))); setDlg('ny'); }}>In lại niêm yết</button>
+                  <button className="btn small link" onClick={() => { addDone(c.map((x) => x.id)); setChanges((all) => all.filter((x) => x.route_id !== rid)); }}>Đã in</button>
+                </span>
+              </div></li>
+            );
+          })}
+        </ul>
+      )}
       {(dlg === 'ny' || dlg === 'gsht') && (
         <Modal title={dlg === 'ny' ? 'In niêm yết trên xe' : 'In hướng dẫn sử dụng thiết bị giám sát hành trình'} onClose={() => setDlg('')}>
           {dlg === 'ny' && <label>Tuyến<select value={route} onChange={(e) => setRoute(e.target.value)}>{routes.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}

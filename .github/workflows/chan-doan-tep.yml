@@ -67,8 +67,9 @@ jobs:
                                where u.status = 'active' group by u.id" > users.txt
           echo "Tài khoản đang hoạt động: $(wc -l < users.txt)"
           while IFS='|' read -r uid roles; do
-            n=$(psql -tA -c "begin; set local role authenticated; select set_config('request.jwt.claims', '{\"sub\":\"$uid\",\"role\":\"authenticated\"}', true) \gset
-                              select count(*) from public.file_store where name like '%/anh_dai_dien/%'; rollback;" 2>&1 | grep -vE '^(BEGIN|ROLLBACK|SET)$' | tail -1)
+            n=$(psql -tA -c "begin" -c "set local role authenticated" \
+                  -c "select set_config('request.jwt.claims', json_build_object('sub', '$uid', 'role', 'authenticated')::text, true)" \
+                  -c "select 'N=' || count(*) from public.file_store where name like '%/anh_dai_dien/%'" -c "rollback" 2>&1 | grep -oE 'N=[0-9]+|ERROR.*' | head -1)
             echo "vai trò [$roles]: thấy $n ảnh đại diện"
           done < users.txt | sort | uniq -c
       - name: Đọc thử 1 ảnh đại diện trên Drive (chỉ in kết quả)

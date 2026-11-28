@@ -59,6 +59,18 @@ jobs:
             from public.staff_members s"
           psql -P pager=off -c "select count(*) as nha_xe_co_drive from public.tenant_drive"
           psql -P pager=off -c "select count(*) as anh_trong_kho_cu from storage.objects where bucket_id = 'giay-to' and name like '%/anh_dai_dien/%'"
+      - name: Mỗi tài khoản thấy được bao nhiêu ảnh đại diện (theo quyền thật, chỉ in vai trò + số đếm)
+        run: |
+          psql -tA -F '|' -c "select u.id, coalesce(string_agg(distinct r.code, ','), '-') from public.app_users u
+                               left join public.user_roles ur on ur.tenant_id = u.tenant_id and ur.user_id = u.id
+                               left join public.roles r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
+                               where u.status = 'active' group by u.id" > users.txt
+          echo "Tài khoản đang hoạt động: $(wc -l < users.txt)"
+          while IFS='|' read -r uid roles; do
+            n=$(psql -tA -c "begin; set local role authenticated; select set_config('request.jwt.claims', '{\"sub\":\"$uid\",\"role\":\"authenticated\"}', true) \gset
+                              select count(*) from public.file_store where name like '%/anh_dai_dien/%'; rollback;" 2>&1 | grep -vE '^(BEGIN|ROLLBACK|SET)$' | tail -1)
+            echo "vai trò [$roles]: thấy $n ảnh đại diện"
+          done < users.txt | sort | uniq -c
       - name: Đọc thử 1 ảnh đại diện trên Drive (chỉ in kết quả)
         run: |
           row=$(psql -tA -F '|' -c "

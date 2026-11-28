@@ -10,6 +10,8 @@ import type { Permissions } from '../lib/permissions';
 import { errMsg, rpc, supabase, type AccountContext } from '../lib/supabase';
 import { useToast } from '../lib/toast';
 import { profileChanged } from '../lib/profileAutoArchive';
+import { PaperView } from '../components/ProfilePapers';
+import { byUrgency, dmy, loadMaint, maintPlanPages, saveMaintCfg, saveMaintPlan, type Maint, type MaintCfg } from '../lib/maintenance';
 
 interface Order { id: string; code: string; vehicle_id: string; driver_id: string | null; repaired_on: string; odo_km: number | null; workshop: string | null; kind: string; note: string | null; files: string[]; created_by: string | null }
 interface Item { order_id: string; seq: number; content: string; unit: string | null; qty: number; unit_price: number }
@@ -34,6 +36,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
   const [f, setF] = useState<Form | null>(null);
   const [busy, setBusy] = useState(false);
   const [prn, setPrn] = useState<Order | null>(null);
+  const [maintTick, setMaintTick] = useState(0);
   const [drivers, setDrivers] = useState<{ id: string; full_name: string; position: string; is_active: boolean }[]>([]);
   useEffect(() => { void supabase.from('staff_members').select('id, full_name, position, is_active').order('full_name').then(({ data }) => setDrivers((data ?? []) as typeof drivers)); }, []);
 
@@ -62,10 +65,10 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
   const itemsOf = (id: string) => items.filter((x) => x.order_id === id);
   const sum = orders.reduce((a, o) => a + total(itemsOf(o.id)), 0);
 
-  function open(o: Order | null) {
+  function open(o: Order | null, preset?: { vehicle_id: string; kind: string }) {
     setF(o ? { id: o.id, vehicle_id: o.vehicle_id, driver_id: o.driver_id ?? '', repaired_on: o.repaired_on, odo_km: o.odo_km?.toString() ?? '', workshop: o.workshop ?? '', kind: o.kind, note: o.note ?? '', files: o.files, add: [],
       lines: [...itemsOf(o.id).map((x) => ({ content: x.content, unit: x.unit ?? '', qty: String(x.qty), unit_price: String(x.unit_price) })), { ...EMPTY_LINE }] }
-      : { id: null, vehicle_id: veh || vehicles.find((v) => v.is_active)?.id || '', driver_id: '', repaired_on: today(), odo_km: '', workshop: '', kind: 'sua_chua', note: '', files: [], add: [], lines: [{ ...EMPTY_LINE }] });
+      : { id: null, vehicle_id: preset?.vehicle_id || veh || vehicles.find((v) => v.is_active)?.id || '', driver_id: '', repaired_on: today(), odo_km: '', workshop: '', kind: preset?.kind ?? 'sua_chua', note: '', files: [], add: [], lines: [{ ...EMPTY_LINE }] });
   }
   async function save() {
     if (!f || !ctx.tenant_id) return;
@@ -80,6 +83,7 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
       await rpc('save_repair', { p_id: f.id, p: { vehicle_id: f.vehicle_id, driver_id: f.driver_id || null, repaired_on: f.repaired_on, odo_km: f.odo_km, workshop: f.workshop, kind: f.kind, note: f.note, files },
         p_items: f.lines.filter((l) => l.content.trim()).map((l) => ({ content: l.content, unit: l.unit.trim(), qty: Number(l.qty) || 1, unit_price: Number(l.unit_price) || 0 })) });
       toast('ok', f.id ? 'Đã lưu phiếu sửa chữa' : 'Đã thêm phiếu sửa chữa');
+      setMaintTick((n) => n + 1);
       profileChanged();   // Lưu trữ hồ sơ tự lưu / lưu đè PDF phiếu này
       setF(null);
       await load();
@@ -115,6 +119,10 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
           {month && <button className="btn small link" onClick={() => setMonth('')}>Xem mọi tháng</button>}
         </div>
       </section>
+      {(canEdit || perms.has('repair.view_all')) && (
+        <MaintPlan ctx={ctx} canEdit={canEdit} canCfg={perms.has('settings.edit')} plate={plate} tick={maintTick}
+          onRecord={(vehicle_id) => open(null, { vehicle_id, kind: 'bao_duong' })} />
+      )}
       <section className="card">
         {orders.length === 0 && <p className="muted">Chưa có phiếu sửa chữa.</p>}
         <div className="table-wrap">
@@ -192,5 +200,90 @@ export function RepairsScreen({ ctx, perms }: { ctx: AccountContext; perms: Perm
         </Modal>
       )}
     </>
+  );
+}
+
+/** Kế hoạch bảo dưỡng: hạn theo km hoặc tháng (cái nào đến trước nhắc trước), in / lưu kế hoạch năm. */
+function MaintPlan({ ctx, canEdit, canCfg, plate, tick, onRecord }: {
+  ctx: AccountContext; canEdit: boolean; canCfg: boolean; plate: (id: string) => string; tick: number; onRecord: (vehicleId: string) => void;
+}) {
+  const toast = useToast();
+  const [data, setData] = useState<{ cfg: MaintCfg; list: Maint[] } | null>(null);
+  const [cfg, setCfg] = useState<Record<keyof MaintCfg, string> | null>(null);
+  const [all, setAll] = useState(false);
+  const [view, setView] = useState<{ pages: string[]; year: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    try { setData(await loadMaint()); } catch (e) { toast('error', errMsg(e)); }
+  }, [toast]);
+  useEffect(() => { void load(); }, [load, tick]);
+  if (!data) return null;
+  const list = [...data.list].sort(byUrgency);
+  const due = list.filter((m) => m.state === 'qua_han' || m.state === 'sap_den');
+  const shown = all ? list : due;
+  const year = Number(today().slice(0, 4));
+  async function saveCfg() {
+    if (!cfg) return;
+    try {
+      await saveMaintCfg({ km: Number(cfg.km), months: Number(cfg.months), warnKm: Number(cfg.warnKm), warnDays: Number(cfg.warnDays) });
+      toast('ok', 'Đã lưu chu kỳ bảo dưỡng');
+      setCfg(null);
+      await load();
+    } catch (e) { toast('error', errMsg(e)); }
+  }
+  async function plan() {
+    if (!ctx.tenant_id || !data) return;
+    setBusy(true);
+    try { setView({ pages: await maintPlanPages(ctx.tenant_id, { id: ctx.user_id, name: ctx.full_name ?? '' }, data.list, plate, data.cfg, year), year }); }
+    catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+  async function archive() {
+    if (!view) return;
+    setBusy(true);
+    try { await saveMaintPlan(view.pages, view.year); toast('ok', `Đã lưu kế hoạch bảo dưỡng năm ${view.year} vào Lưu trữ hồ sơ`); }
+    catch (e) { toast('error', errMsg(e)); } finally { setBusy(false); }
+  }
+  const c = data.cfg;
+  return (
+    <section className="card">
+      <div className="item-head">
+        <h2>Kế hoạch bảo dưỡng · {due.length ? `${due.length} xe cần bảo dưỡng` : 'không có xe đến hạn'}</h2>
+        <div className="actions">
+          <button className="btn small" disabled={busy} onClick={() => void plan()}>In kế hoạch năm {year}</button>
+          {canCfg && <button className="btn small" onClick={() => setCfg({ km: String(c.km), months: String(c.months), warnKm: String(c.warnKm), warnDays: String(c.warnDays) })}>Chu kỳ</button>}
+        </div>
+      </div>
+      <p className="muted small">Mỗi {c.km.toLocaleString('vi-VN')} km hoặc {c.months} tháng, cái nào đến trước nhắc trước · báo trước {c.warnKm.toLocaleString('vi-VN')} km / {c.warnDays} ngày.</p>
+      {cfg && (
+        <div className="inline-form">
+          <label>Chu kỳ (km)<input type="number" min={500} step={500} inputMode="numeric" value={cfg.km} onChange={(e) => setCfg({ ...cfg, km: e.target.value })} /></label>
+          <label>Chu kỳ (tháng)<input type="number" min={1} max={36} inputMode="numeric" value={cfg.months} onChange={(e) => setCfg({ ...cfg, months: e.target.value })} /></label>
+          <label>Báo trước (km)<input type="number" min={0} step={100} inputMode="numeric" value={cfg.warnKm} onChange={(e) => setCfg({ ...cfg, warnKm: e.target.value })} /></label>
+          <label>Báo trước (ngày)<input type="number" min={0} max={180} inputMode="numeric" value={cfg.warnDays} onChange={(e) => setCfg({ ...cfg, warnDays: e.target.value })} /></label>
+          <button className="btn small primary" onClick={() => void saveCfg()}>Lưu</button>
+          <button className="btn small link" onClick={() => setCfg(null)}>Thôi</button>
+        </div>
+      )}
+      {shown.length > 0 && (
+        <ul className="list">
+          {shown.map((m) => (
+            <li key={m.row.vehicle_id} className="item">
+              <div className="item-head">
+                <div>
+                  <b>{plate(m.row.vehicle_id)}</b> <span className={`badge ${m.state === 'qua_han' ? 'locked' : m.state === 'sap_den' ? 'warn-badge' : ''}`}>
+                    {m.state === 'qua_han' ? 'Quá hạn' : m.state === 'sap_den' ? 'Sắp đến hạn' : m.state === 'chua_co' ? 'Chưa có mốc' : 'Còn hạn'}</span>
+                  <div className="small">{m.text}</div>
+                  {m.row.last_on && <div className="small muted">Lần gần nhất {dmy(m.row.last_on)}{m.row.last_code ? ` · ${m.row.last_code}` : ''} · đã chạy {Math.round(Number(m.row.km_since ?? 0)).toLocaleString('vi-VN')} km</div>}
+                </div>
+                {canEdit && <button className="btn small primary" onClick={() => onRecord(m.row.vehicle_id)}>Ghi bảo dưỡng</button>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button className="btn small link" onClick={() => setAll(!all)}>{all ? 'Chỉ hiện xe cần bảo dưỡng' : `Xem tất cả ${list.length} xe`}</button>
+      {view && <PaperView title={`Kế hoạch bảo dưỡng năm ${view.year}`} pages={view.pages.map((html) => ({ html, land: true }))} onClose={() => setView(null)}
+        onPrint={canEdit ? () => void archive() : undefined} />}
+    </section>
   );
 }

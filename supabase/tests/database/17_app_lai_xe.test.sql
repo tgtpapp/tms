@@ -212,6 +212,18 @@ select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_i
 select lives_ok($$ select public.save_repair(null, jsonb_build_object('vehicle_id', (select v from t.ids where k = 'X2'), 'repaired_on', app.local_today()::text, 'kind', 'sua_chua'),
   '[{"content":"Thay lốp","qty":1,"unit_price":900000}]'::jsonb) $$, 'Phiếu sửa xe 2');
 select is((select count(*)::int from public.vehicles), 2, 'Chủ xe thấy mọi xe');
+-- Kế hoạch bảo dưỡng: lần gần nhất = phiếu Bảo dưỡng mới nhất, km đã chạy = km xe sau ngày đó
+select lives_ok($$ insert into public.vehicle_km (vehicle_id, run_date, km) values ((select v from t.ids where k = 'X1'), app.local_today() - 1, 300),
+  ((select v from t.ids where k = 'X1'), app.local_today() + 1, 450), ((select v from t.ids where k = 'X1'), app.local_today() + 2, 50) $$, 'Km xe');
+select is((select last_on from public.vehicle_maintenance() where vehicle_id = (select v from t.ids where k = 'X1')), app.local_today(), 'Lần bảo dưỡng gần nhất');
+select is((select km_since from public.vehicle_maintenance() where vehicle_id = (select v from t.ids where k = 'X1')), 500.0, 'Km đã chạy từ lần bảo dưỡng');
+select is((select last_on from public.vehicle_maintenance() where vehicle_id = (select v from t.ids where k = 'X2')), null, 'Xe chỉ có phiếu sửa chữa: chưa có mốc bảo dưỡng');
+select lives_ok($$ insert into public.tenant_settings (key, value) values ('bao_duong.chu_ky_km', '15000'), ('bao_duong.chu_ky_thang', '6') $$, 'Lưu chu kỳ bảo dưỡng');
+select throws_ok($$ insert into public.tenant_settings (key, value) values ('bao_duong.bao_truoc_ngay', '500') $$, '22023', null, 'Báo trước quá giới hạn bị từ chối');
+reset role;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
+select is((select count(*)::int from public.vehicle_maintenance()), 0, 'Nhà xe khác không thấy kế hoạch bảo dưỡng của nhà xe A');
 reset role;
 -- Nhóm Lái xe được tích ô Xem xe (không Xem tất cả)
 insert into public.role_permissions (tenant_id, role_id, permission_code)

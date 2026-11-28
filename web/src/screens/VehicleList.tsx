@@ -5,7 +5,8 @@ import { BulkPaperSave, type Me } from '../components/ProfilePapers';
 import { DeleteButton } from '../components/DeleteButton';
 import { Avatar, StaffAvatar, useAvatars } from '../components/StaffAvatar';
 import { personColor } from '../lib/personColor';
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { loadMaint, type Maint } from '../lib/maintenance';
 import {
   DocFields, DocRow, docState, fmtDate, OldDocs, Scanner, SHORT, today, toRpc, type Doc, type DocState, type Scanned, type Values,
 } from '../components/Documents';
@@ -238,6 +239,8 @@ export function VehicleList(props: {
   const [bulk, setBulk] = useState(false);
   const [tab, setTab] = useState('');
   const avas = useAvatars(props.tenantId || null, 'anh_xe');
+  const [maint, setMaint] = useState<Map<string, Maint>>(new Map());
+  useEffect(() => { void loadMaint().then((x) => setMaint(new Map(x.list.map((m) => [m.row.vehicle_id, m])))).catch(() => undefined); }, [vehicles]);
   const typeName = (id: string) => types.find((t) => t.id === id)?.name ?? '?';
   const inactive = vehicles.filter((v) => !v.is_active).length;
   const shown = vehicles.filter((v) => showInactive || v.is_active);
@@ -250,7 +253,7 @@ export function VehicleList(props: {
   const list = shown.filter((v) => !cur || v.vehicle_type_id === cur);
   const cur0 = open ? vehicles.find((v) => v.id === open) ?? null : null;
   const info = (v: Vehicle) => ({
-    bad: vehicleProblems(v, docs, warnDays).length,
+    bad: vehicleProblems(v, docs, warnDays, maint).length,
     kd: docs.find((d) => d.vehicle_id === v.id && d.doc_type === 'kiem_dinh' && d.is_current),
     life: lifeLimit(v.manufacture_year),
   });
@@ -270,7 +273,7 @@ export function VehicleList(props: {
         {canEdit && props.canArchive && <button type="button" className="btn small" title="Lưu lý lịch phương tiện của tất cả xe đang dùng vào Lưu trữ hồ sơ" onClick={() => setBulk(true)}>💾 Lưu lý lịch xe</button>}
         {bulk && <BulkPaperSave kind="vehicle" tenantId={props.tenantId} me={props.me} onClose={() => setBulk(false)}
           items={vehicles.filter((v) => v.is_active).map((v) => ({ id: v.id, label: v.plate }))} />}
-        <VehicleAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} avas={avas} typeName={typeName} onOpen={openCard} />
+        <VehicleAlerts vehicles={vehicles} docs={docs} warnDays={warnDays} maint={maint} avas={avas} typeName={typeName} onOpen={openCard} />
       </div>
       <section className="card">
         <div className="hd-bar">
@@ -428,7 +431,7 @@ function VehicleDetail(props: { tenantId: string; vehicle: Vehicle; types: Vehic
 /* ------------------------------------------------------------------ Cảnh báo (như Lái xe & nhân viên) */
 
 type Prob = { text: string; state: DocState | 'nien_han' };
-function vehicleProblems(v: Vehicle, docs: Doc[], warnDays: number): Prob[] {
+function vehicleProblems(v: Vehicle, docs: Doc[], warnDays: number, maint?: Map<string, Maint>): Prob[] {
   const out: Prob[] = [];
   if (!v.is_active) return out;
   for (const def of VEHICLE_DOCS) {
@@ -437,15 +440,17 @@ function vehicleProblems(v: Vehicle, docs: Doc[], warnDays: number): Prob[] {
   }
   const life = lifeLimit(v.manufacture_year);
   if (life && life.state !== 'con_han') out.push({ text: life.text, state: 'nien_han' });
+  const m = maint?.get(v.id);   // bảo dưỡng: km hoặc tháng, cái nào đến trước
+  if (m && (m.state === 'qua_han' || m.state === 'sap_den')) out.push({ text: m.text, state: m.state === 'qua_han' ? 'het_han' : 'sap_het' });
   return out;
 }
 
 /** Cảnh báo dạng chuông: số việc cần xử lý; bấm mở danh sách gộp theo từng xe, bấm biển số mở hồ sơ xe. */
-function VehicleAlerts(props: { vehicles: Vehicle[]; docs: Doc[]; warnDays: number; avas: Record<string, string>; typeName: (id: string) => string; onOpen: (id: string) => void }) {
-  const { vehicles, docs, warnDays, avas, typeName, onOpen } = props;
+function VehicleAlerts(props: { vehicles: Vehicle[]; docs: Doc[]; warnDays: number; maint: Map<string, Maint>; avas: Record<string, string>; typeName: (id: string) => string; onOpen: (id: string) => void }) {
+  const { vehicles, docs, warnDays, maint, avas, typeName, onOpen } = props;
   const [show, setShow] = useState(false);
   const order = { het_han: 0, nien_han: 1, sap_het: 2, thieu: 3, con_han: 4, co: 5 };
-  const list = vehicles.map((v) => ({ v, items: vehicleProblems(v, docs, warnDays).sort((a, b) => order[a.state] - order[b.state]) }))
+  const list = vehicles.map((v) => ({ v, items: vehicleProblems(v, docs, warnDays, maint).sort((a, b) => order[a.state] - order[b.state]) }))
     .filter((x) => x.items.length > 0)
     .sort((a, b) => order[a.items[0]!.state] - order[b.items[0]!.state] || b.items.length - a.items.length || a.v.plate.localeCompare(b.v.plate));
   const total = list.reduce((n, x) => n + x.items.length, 0);
